@@ -47,3 +47,29 @@ Are any of these new ideas very semantically similar in the embedding space? (is
 Where do the new atomic notes go? Do we link to existing projects? Existing ideas? Do we move tasks around?
 
 Display this as a suggestion to the user - a pull request to your second brain.
+
+
+# Journal
+
+### 2025-02-26
+
+Trying to keep this scope small. But the problem is I have a lot of big brain dump voice notes. 
+
+1. Distill them into atomic ideas. 
+
+This is the first step.
+
+I want to explore https://github.com/OpenSPG/KAG and the https://docs.llamaindex.ai/en/stable/api_reference/node_parsers/hierarchical/ to help with this.
+
+I also don't want to make things too complicated. Maybe it's just:
+
+- full text -> summary
+- sections + full text summary -> section summaries
+- 2-3 sentences + section summary -> chunk summaries
+- distill to unique, atomic ideas - look at frequency of ideas and similar concepts
+
+all this might be done with a LLM? no need to embedding similarity search yet?
+
+Then you maybe classify the atomic idea -> note, task, idea, question (as metadata?)
+
+Then do the embeddings and compare to existing vault?
