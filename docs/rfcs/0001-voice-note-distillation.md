@@ -51,6 +51,40 @@ Display this as a suggestion to the user - a pull request to your second brain.
 
 # Journal
 
+### 2025-02-27
+Cutting edge research comes out everyday.
+
+The secret sauce is not in how you distll, summarize, or what model you use.
+
+It's in the community, the UX, the data -> the value you provide for people.
+
+Whatever tech is used to do the distillation and retrival will improve over time, this part needs to be modular and model agnostic.
+
+The value of what I want to build I think is the end-to-end experience, the conection of disparate tools and, the deep understanding of the use case because these are problems we all share here.
+
+For this prototype the "distill engine" and the "graph" will just be done recursively using a LLM. Eventually we can explore more cutting edge techniques as they improve.
+
+But I want to see end-to-end this working.
+
+##### MVPs
+MVP v0
+
+(A) Voice Capture -> (B) Distill into Atomic Ideas -> (C) Connect together into Graph/ separate tasks from ideas
+
+MVP v1
+
+All the above -> (D) Connect to persistent/ existing knowledge repository (PR style UI)
+
+##### Next Steps
+Today I'm working on the v0 B -> C in a notebook using existing transcribed voice notes.
+
+Once that is working I'll make a UI around it where I can paste in the voice note and see the newly created atomic notes and their visual connections.
+
+Then from their add voice transcription - 1 button, Whisper API?, and pass the transcription to the above.
+
+At this point I think we have a cool demo to illustrate this idea of Voice Capture -> Self-Organizing Second Brain
+
+
 ### 2025-02-26
 
 Trying to keep this scope small. But the problem is I have a lot of big brain dump voice notes. 

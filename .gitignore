@@ -1,0 +1,13 @@
+env
+.venv
+*.pyc
+*.npy
+*data/
+.vscode/
+.DS_Store
+*.env
+storage/
+*.log
+*lib/
+*.json
+notes_network.html
