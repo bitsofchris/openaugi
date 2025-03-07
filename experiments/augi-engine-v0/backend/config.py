@@ -6,6 +6,7 @@ OBSIDIAN_VAULT_PATH = "/Users/chris/zk-copy-for-testing"  # Path to Obsidian vau
 
 # LLM Model Settings
 DEFAULT_LLM_MODEL = "gpt-4o-mini-2024-07-18"  # Default model for extraction
+DOT_ENV_PATH = "/Users/chris/repos/openaugi/keys.env"
 
 # File Processing
 SUPPORTED_EXTENSIONS = [".md", ".txt"]

@@ -1,12 +1,13 @@
 # atomic_extractor.py
+import json
+import re
+from dotenv import load_dotenv
 from typing import List, Dict, Any
 from llama_index.core.schema import Document
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.llms.openai import OpenAI
 from interfaces import AtomicExtractor
-import json
-import re
-from dotenv import load_dotenv
+from config import DOT_ENV_PATH
 
 
 class SimpleLLMAtomicExtractor(AtomicExtractor):
@@ -17,7 +18,7 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
         Args:
             llm_model: The model to use for extraction.
         """
-        load_dotenv()  # Load environment variables
+        load_dotenv(DOT_ENV_PATH)  # Load environment variables
         self.llm = OpenAI(model=llm_model, temperature=0.1)
         self.text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=100)
 
@@ -207,6 +208,7 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
         Group similar ideas and provide a merged representation that captures all important details.
 
         Return your answer as a JSON list of deduplicated ideas:
+
         [
           {{
             "title": "Merged idea title",
@@ -216,7 +218,7 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
           }}
         ]
 
-        DEDUPLICATED IDEAS (JSON format):
+        Ensure you return valid JSON.
         """
 
         response = self.llm.complete(prompt.format(ideas_context=ideas_context))
@@ -225,6 +227,7 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
             return json.loads(response.text)
         except json.JSONDecodeError as e:
             print(f"Failed to parse JSON response in deduplication: {str(e)}")
+            print(f"{response.text}")
             return all_ideas  # Return original ideas if deduplication fails
 
     def extract_atomic_ideas(self, documents: List[Document]) -> List[Document]:

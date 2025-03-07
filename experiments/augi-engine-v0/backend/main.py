@@ -9,6 +9,7 @@ def main():
     # 1. Load Documents
     source = ObsidianSource(config.OBSIDIAN_VAULT_PATH)
     documents = source.load_documents()
+    print(f"Loaded {len(documents)} documents")
 
     # 2. Extract atomic ideas from documents
     atomic_extractor = SimpleLLMAtomicExtractor()
