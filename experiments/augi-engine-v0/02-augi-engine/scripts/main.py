@@ -1,6 +1,8 @@
 # main.py
 import config
 from sources import ObsidianSource
+from atomic_extractor import SimpleLLMAtomicExtractor
+from storage import AtomicIdeaStore
 
 
 def main():
@@ -9,10 +11,12 @@ def main():
     documents = source.load_documents()
 
     # 2. Extract atomic ideas from documents
-    # TODO: Implement AtomicExtractor
-    # atomic_extractor = SimpleAtomicExtractor()
-    # atomic_ideas = atomic_extractor.extract_atomic_ideas(documents)
-    # print(f"Extracted {len(atomic_ideas)} atomic ideas")
+    atomic_extractor = SimpleLLMAtomicExtractor()
+    atomic_ideas = atomic_extractor.extract_atomic_ideas(documents)
+    print(f"Extracted {len(atomic_ideas)} atomic ideas")
+
+    store = AtomicIdeaStore(config.LANCEDB_PATH)
+    store.save_atomic_ideas(atomic_ideas)
 
     # 3. Create embeddings for atomic ideas
     # TODO: Implement Embedder
