@@ -16,7 +16,7 @@ EMBEDDING_MODEL = "text-embedding-3-small"  # Default embedding model
 EMBEDDING_DIMENSION = 1536  # Dimension of embeddings
 
 # Vector Database Settings
-VECTOR_DB_PATH = "data/vector_db"  # Path to store vector database files
+LANCE_DB_PATH = "data/vector_db"  # Path to store vector database files
 SIMILARITY_THRESHOLD = 0.75  # Threshold for considering notes similar
 
 # UI Settings
