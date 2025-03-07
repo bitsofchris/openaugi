@@ -75,5 +75,8 @@ class DistilledNote(Document):
 
         # Then convert to a DistilledNote
         return cls.from_document(
-            doc=doc, parent_documents=parent_documents, sibling_notes=sibling_notes
+            doc=doc,
+            parent_documents=parent_documents,
+            sibling_notes=sibling_notes,
+            user_edited=is_user_edited,
         )

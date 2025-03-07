@@ -1,32 +1,43 @@
+# main.py
 import config
-from pipeline import create_pipeline_from_config
+from sources import ObsidianSource
 
 
 def main():
-    # Create a simple configuration
-    pipeline_config = {
-        "source": {
-            "type": "obsidian",
-            "path": config.OBSIDIAN_VAULT_PATH,
-            "config": {"extract_tasks": True, "remove_tasks_from_text": True},
-        }
-    }
+    # 1. Load Documents
+    source = ObsidianSource(config.OBSIDIAN_VAULT_PATH)
+    documents = source.load_documents()
 
-    # Create and run the pipeline
-    pipeline = create_pipeline_from_config(pipeline_config)
-    documents = pipeline.run()
+    # 2. Extract atomic ideas from documents
+    # TODO: Implement AtomicExtractor
+    # atomic_extractor = SimpleAtomicExtractor()
+    # atomic_ideas = atomic_extractor.extract_atomic_ideas(documents)
+    # print(f"Extracted {len(atomic_ideas)} atomic ideas")
 
-    # Print some info about the results
-    print(f"Pipeline completed with {len(documents)} resulting documents")
+    # 3. Create embeddings for atomic ideas
+    # TODO: Implement Embedder
+    # embedder = OpenAIEmbedder()
+    # embedded_ideas = embedder.embed_documents(atomic_ideas)
 
-    # Later steps will be added incrementally:
-    # Skip for now - embeddings and saving them for full documents
-    # - Extract atomic ideas (link to source doc)
-    # - Create Embeddings of atomic ideas and Save embeddings & metadata to lancedb
-    # - Cluster atomic ideas by embedding
-    # - Visualize clusters
-    # - Distill/Summarize clusters into higher level ideas
-    # - Visualize the new map of ideas
+    # 4. Save embeddings and metadata to LanceDB
+    # TODO: Implement storage
+
+    # 5. Cluster atomic ideas by embedding
+    # TODO: Implement Clusterer
+    # clusterer = KMeansClusterer(n_clusters=10)
+    # clusters = clusterer.cluster_documents(embedded_ideas)
+    # print(f"Created {len(clusters)} clusters")
+
+    # 6. Distill/Summarize clusters into higher level ideas
+    # TODO: Implement Distiller
+    # distiller = LLMDistiller()
+    # distilled_notes = distiller.distill_knowledge(clusters)
+    # print(f"Created {len(distilled_notes)} distilled notes")
+
+    # 7. Visualize the map of ideas
+    # TODO: Implement visualization
+
+    print("Pipeline completed successfully")
 
 
 if __name__ == "__main__":

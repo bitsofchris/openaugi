@@ -11,6 +11,13 @@ class DocumentSource(ABC):
         pass
 
 
+class AtomicExtractor(ABC):
+    @abstractmethod
+    def extract_atomic_ideas(self, documents: List[Document]) -> List[Document]:
+        """Extract atomic ideas from documents, linking back to source docs"""
+        pass
+
+
 class Embedder(ABC):
     @abstractmethod
     def embed_documents(self, documents: List[Document]) -> List[Document]:
@@ -26,6 +33,7 @@ class Clusterer(ABC):
 class Distiller(ABC):
     @abstractmethod
     def distill_knowledge(self, clusters: List[List[Document]]) -> List[DistilledNote]:
+        """Distill/summarize clusters into higher-level ideas"""
         pass
 
 
