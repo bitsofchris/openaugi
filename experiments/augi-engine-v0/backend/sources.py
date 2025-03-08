@@ -18,5 +18,9 @@ class ObsidianSource(DocumentSource):
             remove_tasks_from_text=self.remove_tasks,
         )
         documents = reader.load_data()
+        for doc in documents:
+            # Use file path as a deterministic document ID
+            file_path = f"{doc.metadata["folder_path"]}/{doc.metadata["file_name"]}"
+            doc.doc_id = file_path
         print(f"Found {len(documents)} documents in {self.path}")
         return documents

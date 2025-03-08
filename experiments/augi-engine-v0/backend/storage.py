@@ -126,3 +126,72 @@ class AtomicIdeaStore:
         table = self.db.open_table(self.table_name)
         results = table.to_pandas()
         return results.to_dict(orient="records")
+
+    def has_processed_document(self, doc_id: str) -> bool:
+        """
+        Check if a document has already been processed into atomic ideas.
+        Args:
+            doc_id: ID of the source document
+        Returns:
+            True if document has been processed, False otherwise
+        """
+        if self.table_name not in self.db.table_names():
+            return False
+
+        table = self.db.open_table(self.table_name)
+
+        # Fixed: Use search() or where() method for filtering instead of to_arrow() with filter parameter
+        results = table.search().where(f"source_doc_id = '{doc_id}'").to_arrow()
+
+        return len(results) > 0
+
+    def get_atomic_ideas_for_doc(self, doc_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all atomic ideas derived from a specific document.
+
+        Args:
+            doc_id: ID of the source document
+
+        Returns:
+            List of atomic ideas with metadata
+        """
+        if self.table_name not in self.db.table_names():
+            return []
+
+        table = self.db.open_table(self.table_name)
+        results = table.to_pandas(filter=f"source_doc_id = '{doc_id}'")
+        return results.to_dict(orient="records")
+
+    def get_all_atomic_ideas_as_documents(self) -> List[Document]:
+        """
+        Get all atomic ideas from the database as Document objects.
+
+        Returns:
+            List of Document objects representing atomic ideas
+        """
+        from llama_index.core.schema import Document
+
+        if self.table_name not in self.db.table_names():
+            return []
+
+        table = self.db.open_table(self.table_name)
+        results = table.to_pandas()
+
+        documents = []
+        for _, row in results.iterrows():
+            metadata = {
+                "source_doc_id": row.get("source_doc_id", ""),
+                "source_doc_title": row.get("source_doc_title", ""),
+                "source_doc_path": row.get("source_doc_path", ""),
+                "idea_title": row.get("idea_title", ""),
+                "links": row.get("links", []),
+                "is_atomic_idea": True
+            }
+            doc = Document(
+                text=row.get("text", ""),
+                metadata=metadata,
+                doc_id=row.get("id", "")
+            )
+            documents.append(doc)
+
+        return documents
