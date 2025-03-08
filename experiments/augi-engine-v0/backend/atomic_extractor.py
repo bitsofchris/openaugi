@@ -211,19 +211,40 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
             print(f"{response.text}")
             return all_ideas  # Return original ideas if deduplication fails
 
-    def extract_atomic_ideas(self, documents: List[Document]) -> List[Document]:
+    def extract_atomic_ideas(self, documents: List[Document], store=None) -> List[Document]:
         """
         Extract atomic ideas from documents, linking back to source docs.
+        Skip documents that have already been processed if store is provided.
 
         Args:
             documents: List of source Documents
+            store: Optional AtomicIdeaStore to check for already processed documents
 
         Returns:
             List of new Documents, each representing an atomic idea
         """
         all_atomic_documents = []
+        documents_to_process = []
 
-        for doc in documents:
+        # First filter out already processed documents if store is provided
+        if store:
+            for doc in documents:
+                if not store.has_processed_document(doc.doc_id):
+                    documents_to_process.append(doc)
+
+            if len(documents_to_process) < len(documents):
+                print(f"Skipping {len(documents) - len(documents_to_process)} already processed documents")
+        else:
+            documents_to_process = documents
+
+        # If no documents need processing, return empty list
+        if not documents_to_process:
+            print("No new documents to process")
+            return []
+
+        print(f"Processing {len(documents_to_process)} documents")
+
+        for doc in documents_to_process:
             # Generate a global summary
             global_summary = self.generate_global_summary(doc)
 
@@ -248,15 +269,16 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
                     "source_doc_path": doc.metadata.get("file_path", ""),
                     "idea_title": idea["title"],
                     "links": idea.get("links", []),
-                    "is_atomic_idea": True,
+                    "is_atomic_idea": True
                 }
 
                 # Create a new Document for this atomic idea
-                atomic_doc = Document(text=idea["description"], metadata=metadata)
+                atomic_doc = Document(
+                    text=idea["description"],
+                    metadata=metadata
+                )
 
                 all_atomic_documents.append(atomic_doc)
 
-        print(
-            f"Extracted {len(all_atomic_documents)} atomic ideas from {len(documents)} documents"
-        )
+        print(f"Extracted {len(all_atomic_documents)} atomic ideas from {len(documents_to_process)} documents")
         return all_atomic_documents
