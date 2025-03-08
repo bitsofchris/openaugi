@@ -16,7 +16,7 @@ def main():
     atomic_ideas = atomic_extractor.extract_atomic_ideas(documents)
     print(f"Extracted {len(atomic_ideas)} atomic ideas")
 
-    store = AtomicIdeaStore(config.LANCEDB_PATH)
+    store = AtomicIdeaStore(config.LANCE_DB_PATH)
     store.save_atomic_ideas(atomic_ideas)
 
     # 3. Create embeddings for atomic ideas
