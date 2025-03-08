@@ -254,7 +254,7 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
             # Extract ideas from each section
             all_ideas = []
             for section in sections:
-                section_ideas = self.extract_section_ideas(section, global_summary)
+                section_ideas = self.extract_section_ideas(section, global_summary) or []
                 all_ideas.extend(section_ideas)
 
             # Deduplicate ideas
