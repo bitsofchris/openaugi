@@ -22,6 +22,25 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
         self.llm = OpenAI(model=llm_model, temperature=0.1)
         self.text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=100)
 
+    def clean_llm_json_response(self, response_text: str):
+        # Pattern to match JSON content between triple backticks
+        pattern = r"```(?:json)?\s*([\s\S]*?)```"
+
+        # Try to find the pattern
+        match = re.search(pattern, response_text)
+
+        if match:
+            # Extract the JSON content
+            json_str = match.group(1)
+            return json.loads(json_str)
+        else:
+            # If no backticks, try parsing the whole thing
+            try:
+                return json.loads(response_text)
+            except json.JSONDecodeError:
+                # If that fails, raise an error
+                raise ValueError("Could not extract valid JSON from the response")
+
     def split_into_sections(self, text: str) -> List[str]:
         """
         Split document into manageable sections.
@@ -123,57 +142,19 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
 
         try:
             # Try to parse the JSON response
-            ideas = json.loads(response.text)
+            ideas = self.clean_llm_json_response(response.text)
             if ideas and len(ideas) > 0:
                 return ideas
-        except json.JSONDecodeError:
-            # If parsing fails, try with a more structured prompt
-            fallback_prompt = """
-            Extract 3-5 atomic ideas from this text section.
-            The global context is: {global_summary}
-
-            SECTION: {section}
-
-            For each idea, follow this EXACT format with NO deviations:
-
-            ```json
-            [
-              {{
-                "title": "Short idea title",
-                "description": "Brief description",
-                "links": ["concept1", "concept2"]
-              }}
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse JSON response in both attempts: {e}")
+            # Return a minimal valid structure
+            return [
+                {
+                    "title": "Section content",
+                    "description": section[:100] + "...",
+                    "links": [],
+                }
             ]
-            ```
-
-            RESPOND ONLY WITH VALID JSON.
-            """
-
-            fallback_response = self.llm.complete(
-                fallback_prompt.format(global_summary=global_summary, section=section)
-            )
-
-            try:
-                # Extract JSON from the response
-                json_match = re.search(
-                    r"```json\s*([\s\S]*?)\s*```", fallback_response.text
-                )
-                if json_match:
-                    json_str = json_match.group(1)
-                    return json.loads(json_str)
-                else:
-                    # Try to parse the whole response as JSON
-                    return json.loads(fallback_response.text)
-            except json.JSONDecodeError as e:
-                print(f"Failed to parse JSON response in both attempts: {e}")
-                # Return a minimal valid structure
-                return [
-                    {
-                        "title": "Section content",
-                        "description": section[:100] + "...",
-                        "links": [],
-                    }
-                ]
 
     def deduplicate_ideas(
         self, all_ideas: List[Dict[str, Any]]
@@ -224,7 +205,7 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
         response = self.llm.complete(prompt.format(ideas_context=ideas_context))
 
         try:
-            return json.loads(response.text)
+            return self.clean_llm_json_response(response.text)
         except json.JSONDecodeError as e:
             print(f"Failed to parse JSON response in deduplication: {str(e)}")
             print(f"{response.text}")
