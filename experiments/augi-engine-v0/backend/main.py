@@ -2,42 +2,68 @@
 import config
 from sources import ObsidianSource
 from atomic_extractor import SimpleLLMAtomicExtractor
-from storage import AtomicIdeaStore
+from storage import KnowledgeStore
 from embedder import LlamaIndexEmbedder
 
 
 def main():
+    # Initialize components
     source = ObsidianSource(config.OBSIDIAN_VAULT_PATH)
-    store = AtomicIdeaStore(config.LANCE_DB_PATH)
+    store = KnowledgeStore(config.LANCE_DB_PATH)
     extractor = SimpleLLMAtomicExtractor()
     embedder = LlamaIndexEmbedder()
 
-    # 1. Load Documents
-    documents = source.load_documents()
-    print(f"Loaded {len(documents)} source documents")
-    for doc in documents:
-        doc.metadata["is_atomic_idea"] = False
+    # 1. Load raw documents from source
+    raw_documents = source.load_documents()
+    print(f"Loaded {len(raw_documents)} source documents")
 
-    # 2. Extract atomic ideas (will skip already processed documents)
-    new_atomic_ideas = extractor.extract_atomic_ideas(documents, store)
-    print(f"Extracted new {len(new_atomic_ideas)} atomic ideas")
+    # Mark as raw documents
+    for doc in raw_documents:
+        doc.metadata["is_raw_document"] = True
+        doc.metadata["file_path"] = doc.metadata.get("file_path", "")
 
-    # 3. Save new atomic ideas to LanceDB (if any)
-    if new_atomic_ideas:
-        store.save_atomic_ideas(new_atomic_ideas)
+    # 2. Embed raw documents
+    embedded_raw_docs = embedder.embed_documents(raw_documents)
+    print(f"Embedded {len(embedded_raw_docs)} raw documents")
 
-    # 4. Get all documents needing embeddings and embed them, save
-    docs_needing_embeddings = store.get_documents_without_embeddings()
-    for doc in documents:
-        if not store.has_processed_document(doc.doc_id):
-            docs_needing_embeddings.append(doc)
-    print(f"Found {len(docs_needing_embeddings)} documents needing embeddings")
-    if docs_needing_embeddings:
-        embedded_docs = embedder.embed_documents(docs_needing_embeddings)
-        store.save_documents_with_embeddings(embedded_docs)
+    # 3. Save embedded raw documents to database
+    raw_doc_ids = store.save_raw_documents(embedded_raw_docs)
+    print(f"Saved {len(raw_doc_ids)} raw documents to database")
 
+    # 4. Identify documents that haven't been processed into atomic notes
+    unprocessed_docs = []
+    for i, doc_id in enumerate(raw_doc_ids):
+        if not store.has_processed_document(doc_id):
+            unprocessed_docs.append(embedded_raw_docs[i])
 
+    print(f"Found {len(unprocessed_docs)} documents needing processing")
 
+    # 5. Extract atomic notes from unprocessed documents
+    if unprocessed_docs:
+        atomic_notes = extractor.extract_atomic_ideas(unprocessed_docs)
+        print(f"Extracted {len(atomic_notes)} atomic notes")
+
+        # 6. Embed atomic notes
+        embedded_atomic_notes = embedder.embed_documents(atomic_notes)
+        print(f"Embedded {len(embedded_atomic_notes)} atomic notes")
+
+        # 7. Save embedded atomic notes to database
+        atomic_note_ids = store.save_atomic_notes(embedded_atomic_notes)
+        print(f"Saved {len(atomic_note_ids)} atomic notes to database")
+
+        # 8. Mark raw documents as processed
+        for doc in unprocessed_docs:
+            store.mark_raw_document_processed(doc.doc_id)
+
+    # At this point, we have:
+    # - Raw documents saved with embeddings
+    # - Atomic notes extracted, embedded, and saved
+    # - Relationships maintained between raw and atomic notes
+
+    # Future steps (not implemented here):
+    # 9. Cluster atomic notes to find related concepts
+    # 10. Generate clean/distilled notes from clusters
+    # 11. Embed and save clean notes
     # 5. Cluster atomic ideas by embedding
     # TODO: Implement Clusterer
     # clusterer = KMeansClusterer(n_clusters=10)
