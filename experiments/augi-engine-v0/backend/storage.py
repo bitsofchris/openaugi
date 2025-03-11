@@ -5,7 +5,6 @@ import lancedb
 import os
 import uuid
 import json
-import hashlib
 from datetime import datetime
 
 
@@ -42,12 +41,6 @@ class KnowledgeStore:
         # This allows us to dynamically set vector dimensions based on embeddings
         pass
 
-    def _generate_hash(self, content: str) -> str:
-        """Generate a hash of the content for change detection."""
-        return hashlib.md5(content.encode('utf-8')).hexdigest()
-
-    # Raw Documents Methods
-
     def save_raw_document(self, document: Document) -> str:
         """
         Save a single raw document with embedding.
@@ -57,9 +50,9 @@ class KnowledgeStore:
         if "embedding" not in document.metadata:
             raise ValueError("Document must have an embedding before saving to LanceDB")
 
-        content_hash = self._generate_hash(document.text)
+        # Use document ID directly
+        doc_id = document.doc_id
         filepath = document.metadata.get("file_path", "")
-        doc_id = document.doc_id or f"{filepath}_{content_hash}"
 
         # Create or get table
         if self.raw_docs_table not in self.db.table_names():
@@ -73,8 +66,8 @@ class KnowledgeStore:
                 pa.field("text", pa.string()),
                 pa.field("filepath", pa.string()),
                 pa.field("modified_time", pa.timestamp('s')),
-                pa.field("content_hash", pa.string()),
                 pa.field("processed_time", pa.timestamp('s')),
+                pa.field("is_processed", pa.bool_()),
                 pa.field("metadata_json", pa.string()),
                 pa.field("vector", pa.list_(pa.float32(), vector_dim)),
             ])
@@ -83,33 +76,29 @@ class KnowledgeStore:
         else:
             table = self.db.open_table(self.raw_docs_table)
 
-        # Check if document exists and has changed
-        existing = table.search().where(f"filepath = '{filepath}'").limit(1).to_pandas()
+        # Check if document exists by ID
+        existing = table.search().where(f"id = '{doc_id}'").limit(1).to_pandas()
 
-        if len(existing) == 0 or existing.iloc[0]["content_hash"] != content_hash:
-            # New or changed document
+        if len(existing) == 0:
+            # Document is new
             item = {
                 "id": doc_id,
                 "text": document.text,
                 "filepath": filepath,
                 "modified_time": datetime.now().replace(microsecond=0),
-                "content_hash": content_hash,
                 "processed_time": datetime.now().replace(microsecond=0),
+                "is_processed": False,
                 "metadata_json": json.dumps({k: str(v) for k, v in document.metadata.items() if k != "embedding"}),
                 "vector": document.metadata["embedding"]
             }
 
-            # Delete if exists (for update)
-            if len(existing) > 0:
-                table.delete(f"filepath = '{filepath}'")
-
-            # Add the new/updated document
+            # Add the new document
             table.add([item])
-
             return doc_id
-
-        # No change, return existing ID
-        return existing.iloc[0]["id"]
+        else:
+            # Document already exists - no need to update since document ID
+            # already encodes content hash in the source
+            return doc_id
 
     def save_raw_documents(self, documents: List[Document]) -> List[str]:
         """
@@ -160,6 +149,7 @@ class KnowledgeStore:
         # Update the processed time
         row = results.iloc[0].to_dict()
         row["processed_time"] = datetime.now().replace(microsecond=0)
+        row["is_processed"] = True
 
         # Delete and re-add (update)
         table.delete(f"id = '{doc_id}'")
@@ -283,8 +273,6 @@ class KnowledgeStore:
             notes.append(doc)
 
         return notes
-
-    # Clean Notes Methods
 
     def save_clean_note(self, note: Document, atomic_note_ids: List[str]) -> str:
         """
@@ -454,17 +442,15 @@ class KnowledgeStore:
         table.delete(f"id = '{note.doc_id}'")
         table.add([item])
 
-    # Utility Methods
-
     def has_processed_document(self, raw_doc_id: str) -> bool:
         """
         Check if a raw document has been processed into atomic notes.
         """
-        if self.atomic_notes_table not in self.db.table_names():
+        if self.raw_docs_table not in self.db.table_names():
             return False
 
-        table = self.db.open_table(self.atomic_notes_table)
-        results = table.search().where(f"'{raw_doc_id}' IN source_doc_ids").limit(1).to_arrow()
+        table = self.db.open_table(self.raw_docs_table)
+        results = table.search().where(f"id = '{raw_doc_id}' AND is_processed = true").limit(1).to_arrow()
 
         return len(results) > 0
 
@@ -492,3 +478,88 @@ class KnowledgeStore:
         results = table.search(query_embedding).limit(limit).to_pandas()
 
         return results.to_dict(orient="records")
+
+    def get_new_or_changed_documents(self, documents: List[Document]) -> List[Document]:
+        """
+        Compare documents against database to identify new or changed documents.
+
+        Args:
+            documents: List of documents to check
+
+        Returns:
+            List of documents that are new or have changed content
+        """
+        if self.raw_docs_table not in self.db.table_names():
+            # All documents are new if table doesn't exist
+            return documents
+
+        new_or_changed = []
+        table = self.db.open_table(self.raw_docs_table)
+
+        for doc in documents:
+            filepath = doc.metadata.get("file_path", "")
+            content_hash = self._generate_hash(doc.text)
+
+            # Check if document exists with same path and hash
+            results = table.search().where(f"filepath = '{filepath}' AND content_hash = '{content_hash}'").limit(1).to_arrow()
+
+            if len(results) == 0:
+                # Document is new or content has changed
+                new_or_changed.append(doc)
+
+        return new_or_changed
+
+    def get_new_documents(self, documents):
+        """
+        Filter list to only documents not already in the database.
+
+        Args:
+            documents: List of documents with IDs properly set
+
+        Returns:
+            List of documents not in the database
+        """
+        if self.raw_docs_table not in self.db.table_names():
+            return documents
+
+        new_docs = []
+        for doc in documents:
+            if self.get_raw_document(doc.doc_id) is None:
+                new_docs.append(doc)
+
+        return new_docs
+
+    def get_unprocessed_documents(self) -> List[Document]:
+        """
+        Get all raw documents that haven't been processed into atomic notes.
+
+        Returns:
+            List of Documents that need atomic note extraction
+        """
+        if self.raw_docs_table not in self.db.table_names():
+            return []
+
+        table = self.db.open_table(self.raw_docs_table)
+
+        # Direct query for unprocessed documents
+        unprocessed_rows = table.search().where("is_processed = false").to_pandas()
+
+        # Convert rows to Document objects
+        unprocessed = []
+        for _, row in unprocessed_rows.iterrows():
+            try:
+                metadata = json.loads(row.get('metadata_json', '{}'))
+            except json.JSONDecodeError:
+                metadata = {}
+
+            if 'vector' in row and row['vector'] is not None:
+                metadata['embedding'] = row['vector']
+
+            doc = Document(
+                text=row.get('text', ''),
+                metadata=metadata,
+                doc_id=row.get('id', '')
+            )
+            unprocessed.append(doc)
+
+        return unprocessed

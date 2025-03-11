@@ -13,47 +13,42 @@ def main():
     extractor = SimpleLLMAtomicExtractor()
     embedder = LlamaIndexEmbedder()
 
-    # 1. Load raw documents from source
+    # 1. Load raw documents and set IDs properly
     raw_documents = source.load_documents()
     print(f"Loaded {len(raw_documents)} source documents")
 
-    # Mark as raw documents
-    for doc in raw_documents:
-        doc.metadata["is_raw_document"] = True
-        doc.metadata["file_path"] = doc.metadata.get("file_path", "")
+    # 2. Filter to only new documents
+    new_documents = store.get_new_documents(raw_documents)
+    print(f"Found {len(new_documents)} new documents")
 
-    # 2. Embed raw documents
-    embedded_raw_docs = embedder.embed_documents(raw_documents)
-    print(f"Embedded {len(embedded_raw_docs)} raw documents")
+    # 3. Process new documents
+    if new_documents:
+        # Embed and save new documents
+        embedded_docs = embedder.embed_documents(new_documents)
+        store.save_raw_documents(embedded_docs)
+        print(f"Processed and saved {len(embedded_docs)} new documents")
 
-    # 3. Save embedded raw documents to database
-    raw_doc_ids = store.save_raw_documents(embedded_raw_docs)
-    print(f"Saved {len(raw_doc_ids)} raw documents to database")
+    # 4. Get documents needing atomic extraction
+    unprocessed_docs = store.get_unprocessed_documents()
+    print(f"Found {len(unprocessed_docs)} documents needing atomic extraction")
 
-    # 4. Identify documents that haven't been processed into atomic notes
-    unprocessed_docs = []
-    for i, doc_id in enumerate(raw_doc_ids):
-        if not store.has_processed_document(doc_id):
-            unprocessed_docs.append(embedded_raw_docs[i])
-
-    print(f"Found {len(unprocessed_docs)} documents needing processing")
-
-    # 5. Extract atomic notes from unprocessed documents
+    # 5. Extract and save atomic notes
     if unprocessed_docs:
+        # Extract atomic notes
         atomic_notes = extractor.extract_atomic_ideas(unprocessed_docs)
-        print(f"Extracted {len(atomic_notes)} atomic notes")
 
-        # 6. Embed atomic notes
-        embedded_atomic_notes = embedder.embed_documents(atomic_notes)
-        print(f"Embedded {len(embedded_atomic_notes)} atomic notes")
+        # Embed atomic notes
+        embedded_notes = embedder.embed_documents(atomic_notes)
 
-        # 7. Save embedded atomic notes to database
-        atomic_note_ids = store.save_atomic_notes(embedded_atomic_notes)
-        print(f"Saved {len(atomic_note_ids)} atomic notes to database")
+        # Save atomic notes
+        store.save_atomic_notes(embedded_notes)
+        print(f"Extracted and saved {len(embedded_notes)} atomic notes")
 
-        # 8. Mark raw documents as processed
+        # Mark documents as processed
         for doc in unprocessed_docs:
             store.mark_raw_document_processed(doc.doc_id)
+
+    print("Pipeline completed successfully")
 
     # At this point, we have:
     # - Raw documents saved with embeddings
@@ -78,8 +73,6 @@ def main():
 
     # 7. Visualize the map of ideas
     # TODO: Implement visualization
-
-    print("Pipeline completed successfully")
 
 
 if __name__ == "__main__":
