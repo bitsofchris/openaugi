@@ -14,6 +14,7 @@ class ObsidianSource(DocumentSource):
 
     def generate_unique_doc_id(self, doc):
         file_path = f"{doc.metadata["folder_path"]}/{doc.metadata["file_name"]}"
+        doc.metadata["file_path"] = file_path
         content_hash = hashlib.md5(doc.text.encode()).hexdigest()[:10]
         return f"{file_path}_{content_hash}"
 
@@ -27,5 +28,7 @@ class ObsidianSource(DocumentSource):
         for doc in documents:
             # Use file path as a deterministic document ID
             doc.doc_id = self.generate_unique_doc_id(doc)
+            doc.metadata["is_raw_document"] = True
+
         print(f"Found {len(documents)} documents in {self.path}")
         return documents
