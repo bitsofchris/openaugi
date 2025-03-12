@@ -501,7 +501,8 @@ class KnowledgeStore:
             content_hash = self._generate_hash(doc.text)
 
             # Check if document exists with same path and hash
-            results = table.search().where(f"filepath = '{filepath}' AND content_hash = '{content_hash}'").limit(1).to_arrow()
+            results = table.search().where(f"filepath = '{filepath}' AND content_hash = '{content_hash}'") \
+                .limit(1).to_arrow()
 
             if len(results) == 0:
                 # Document is new or content has changed
@@ -563,3 +564,66 @@ class KnowledgeStore:
             unprocessed.append(doc)
 
         return unprocessed
+
+    def get_all_atomic_notes(self) -> List[Document]:
+        """
+        Retrieve all atomic notes with their embeddings.
+        Uses pagination to work around LanceDB query limitations.
+
+        Returns:
+            List of Document objects representing atomic notes
+        """
+        if self.atomic_notes_table not in self.db.table_names():
+            return []
+
+        table = self.db.open_table(self.atomic_notes_table)
+
+        # Use pagination to get all notes
+        batch_size = 1000
+        offset = 0
+        all_documents = []
+
+        while True:
+            # Get a batch of records
+            results = table.search().limit(batch_size).offset(offset).to_pandas()
+
+            # If no results returned, we've reached the end
+            if len(results) == 0:
+                break
+
+            # Convert rows to Documents
+            for _, row in results.iterrows():
+                metadata = {}
+
+                # Try to parse metadata_json if it exists
+                if "metadata_json" in row and row["metadata_json"]:
+                    try:
+                        import json
+                        metadata = json.loads(row["metadata_json"])
+                    except json.JSONDecodeError:
+                        print(f"Error decoding metadata for note {row.get('id', 'unknown')}")
+
+                # Add other metadata fields
+                metadata["idea_title"] = row.get("idea_title", "")
+                metadata["links"] = row.get("links", []) if "links" in row else []
+                metadata["source_doc_ids"] = row.get("source_doc_ids", []) if "source_doc_ids" in row else []
+
+                # Add embedding if available
+                if "vector" in row and row["vector"] is not None:
+                    metadata["embedding"] = row["vector"]
+
+                doc = Document(
+                    text=row.get("text", ""),
+                    metadata=metadata,
+                    doc_id=row.get("id", "")
+                )
+                all_documents.append(doc)
+
+            # Increase offset for next batch
+            offset += len(results)
+
+            # Log progress
+            print(f"Loaded {len(all_documents)} atomic notes so far...")
+
+        print(f"Retrieved {len(all_documents)} atomic notes total")
+        return all_documents
