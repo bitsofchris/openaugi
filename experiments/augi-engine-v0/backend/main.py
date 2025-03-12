@@ -1,9 +1,13 @@
 # main.py
+import os
+
 import config
 from sources import ObsidianSource
 from atomic_extractor import SimpleLLMAtomicExtractor
 from storage import KnowledgeStore
 from embedder import LlamaIndexEmbedder
+from clusterer import UMAPHDBSCANClusterer
+from visualizer import ClusterVisualizer
 
 
 def main():
@@ -48,31 +52,27 @@ def main():
         for doc in unprocessed_docs:
             store.mark_raw_document_processed(doc.doc_id)
 
+    # 6. Cluster atomic ideas
+    print("Clustering atomic notes...")
+    atomic_notes = store.get_all_atomic_notes()
+
+    if atomic_notes:
+        clusterer = UMAPHDBSCANClusterer(hdbscan_min_cluster_size=1)
+        clusters = clusterer.cluster_documents(atomic_notes, store=store)
+        print(f"Created {len(clusters)} clusters")
+
+        # 7. Visualize clusters
+        print("Creating cluster visualization...")
+        visualizer = ClusterVisualizer(output_dir=os.path.join(config.OUTPUT_DIR, "visualizations"))
+        viz_path = visualizer.visualize_clusters(clusters, title="Atomic Notes Clusters")
+        print(f"Cluster visualization saved to {viz_path}")
+
+        # Future: Implement distillation
+        # distiller = LLMDistiller()
+        # distilled_notes = distiller.distill_knowledge(clusters)
+        # store.save_clean_notes(distilled_notes)
+
     print("Pipeline completed successfully")
-
-    # At this point, we have:
-    # - Raw documents saved with embeddings
-    # - Atomic notes extracted, embedded, and saved
-    # - Relationships maintained between raw and atomic notes
-
-    # Future steps (not implemented here):
-    # 9. Cluster atomic notes to find related concepts
-    # 10. Generate clean/distilled notes from clusters
-    # 11. Embed and save clean notes
-    # 5. Cluster atomic ideas by embedding
-    # TODO: Implement Clusterer
-    # clusterer = KMeansClusterer(n_clusters=10)
-    # clusters = clusterer.cluster_documents(embedded_ideas)
-    # print(f"Created {len(clusters)} clusters")
-
-    # 6. Distill/Summarize clusters into higher level ideas
-    # TODO: Implement Distiller
-    # distiller = LLMDistiller()
-    # distilled_notes = distiller.distill_knowledge(clusters)
-    # print(f"Created {len(distilled_notes)} distilled notes")
-
-    # 7. Visualize the map of ideas
-    # TODO: Implement visualization
 
 
 if __name__ == "__main__":

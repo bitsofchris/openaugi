@@ -2,7 +2,6 @@
 from abc import ABC, abstractmethod
 from typing import List
 from llama_index.core.schema import Document
-from models import DistilledNote
 
 
 class DocumentSource(ABC):
@@ -30,10 +29,35 @@ class Clusterer(ABC):
         pass
 
 
+class DistilledNote:
+    def __init__(self, doc: Document, source_ids: List[str]):
+        """
+        Initialize a distilled note with source document IDs.
+
+        Args:
+            doc: The Document object containing the distilled content
+            source_ids: List of source document IDs that contributed to this note
+        """
+        self.doc = doc
+        self.source_ids = source_ids
+
+    @property
+    def doc_id(self) -> str:
+        return self.doc.doc_id
+
+
 class Distiller(ABC):
     @abstractmethod
     def distill_knowledge(self, clusters: List[List[Document]]) -> List[DistilledNote]:
-        """Distill/summarize clusters into higher-level ideas"""
+        """
+        Distill/summarize clusters into higher-level ideas.
+
+        Args:
+            clusters: List of document clusters (each cluster is a list of Documents)
+
+        Returns:
+            List of DistilledNote objects
+        """
         pass
 
 

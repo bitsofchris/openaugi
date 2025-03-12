@@ -565,6 +565,108 @@ class KnowledgeStore:
 
         return unprocessed
 
+    def save_cluster_assignments(self, cluster_assignments: Dict[str, int]):
+        """
+        Save cluster assignments for atomic notes.
+
+        Args:
+            cluster_assignments: Dictionary mapping note_id to cluster_id
+        """
+        import pyarrow as pa
+        import pandas as pd
+
+        # Create or get cluster assignments table
+        table_name = "cluster_assignments"
+        if table_name not in self.db.table_names():
+            schema = pa.schema([
+                pa.field("note_id", pa.string()),
+                pa.field("cluster_id", pa.int32()),
+                pa.field("timestamp", pa.timestamp('s'))
+            ])
+            table = self.db.create_table(table_name, schema=schema)
+        else:
+            table = self.db.open_table(table_name)
+
+        # Convert assignments to dataframe
+        from datetime import datetime
+        now = datetime.now().replace(microsecond=0)
+
+        data = []
+        for note_id, cluster_id in cluster_assignments.items():
+            data.append({
+                "note_id": note_id,
+                "cluster_id": cluster_id,
+                "timestamp": now
+            })
+
+        # Add to table
+        df = pd.DataFrame(data)
+        table.add(df)
+
+    def get_notes_by_cluster(self, cluster_id: int) -> List[Document]:
+        """
+        Get all atomic notes belonging to a specific cluster.
+
+        Args:
+            cluster_id: Cluster ID to retrieve
+
+        Returns:
+            List of Document objects in the cluster
+        """
+        # Check if cluster assignments table exists
+        table_name = "cluster_assignments"
+        if table_name not in self.db.table_names():
+            return []
+
+        # Get note IDs for this cluster
+        assignments_table = self.db.open_table(table_name)
+        results = assignments_table.search().where(f"cluster_id = {cluster_id}").to_pandas()
+
+        if len(results) == 0:
+            return []
+
+        # Get notes
+        note_ids = results["note_id"].tolist()
+        notes = []
+        for note_id in note_ids:
+            note = self.get_atomic_note(note_id)
+            if note:
+                notes.append(note)
+
+        return notes
+
+    def get_all_clusters(self) -> Dict[int, List[str]]:
+        """
+        Get all clusters and their note IDs.
+
+        Returns:
+            Dictionary mapping cluster_id to list of note_ids
+        """
+        # Check if cluster assignments table exists
+        table_name = "cluster_assignments"
+        if table_name not in self.db.table_names():
+            return {}
+
+        # Get all assignments
+        assignments_table = self.db.open_table(table_name)
+        results = assignments_table.search().to_pandas()
+
+        if len(results) == 0:
+            return {}
+
+        # Group by cluster
+        clusters = {}
+        for _, row in results.iterrows():
+            cluster_id = row["cluster_id"]
+            note_id = row["note_id"]
+
+            if cluster_id not in clusters:
+                clusters[cluster_id] = []
+
+            clusters[cluster_id].append(note_id)
+
+        return clusters
+
     def get_all_atomic_notes(self) -> List[Document]:
         """
         Retrieve all atomic notes with their embeddings.
