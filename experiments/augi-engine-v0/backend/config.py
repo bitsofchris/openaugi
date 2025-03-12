@@ -24,3 +24,6 @@ SIMILARITY_THRESHOLD = 0.75  # Threshold for considering notes similar
 # UI Settings
 MAX_DISPLAY_CHARS = 300  # Maximum characters to display in UI previews
 CONFIDENCE_THRESHOLD = 0.7  # Minimum confidence to highlight an idea
+
+# Visualization Settings
+OUTPUT_DIR = "data/visualizations"  # Directory to save visualizations

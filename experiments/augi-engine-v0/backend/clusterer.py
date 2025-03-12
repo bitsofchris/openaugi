@@ -92,10 +92,14 @@ class UMAPHDBSCANClusterer(Clusterer):
 
         return n_components, n_neighbors, min_cluster_size, min_samples
 
-    def cluster_documents(self, documents: List[Document]) -> List[List[Document]]:
+    def cluster_documents(self, documents: List[Document], store=None) -> List[List[Document]]:
         """
         Cluster documents using UMAP and HDBSCAN.
         Parameters are automatically adjusted based on dataset size.
+
+        Args:
+            documents: List of documents to cluster
+            store: Optional KnowledgeStore to save cluster assignments
 
         Returns:
             List of document clusters (each cluster is a list of Documents)
@@ -169,5 +173,15 @@ class UMAPHDBSCANClusterer(Clusterer):
         # Print cluster sizes
         cluster_sizes = [len(cluster) for cluster in result]
         print(f"Created {len(result)} clusters with sizes: {cluster_sizes}")
+
+        # Store cluster assignments if a store is provided
+        if store is not None:
+            cluster_assignments = {}
+            for cluster_id, cluster in enumerate(result):
+                for doc in cluster:
+                    cluster_assignments[doc.doc_id] = cluster_id
+
+            store.save_cluster_assignments(cluster_assignments)
+            print(f"Saved {len(cluster_assignments)} cluster assignments")
 
         return result
