@@ -2,9 +2,268 @@ import os
 import numpy as np
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import umap
-from typing import List
+from typing import List, Optional
 from llama_index.core.schema import Document
+
+
+class KnowledgeMapVisualizer:
+    """Enhanced visualizer that creates a mindmap-like view of knowledge."""
+
+    def __init__(self, output_dir: str = "visualizations"):
+        """Initialize the visualizer."""
+        self.output_dir = output_dir
+        os.makedirs(output_dir, exist_ok=True)
+
+    def create_2d_projection(self, documents: List[Document]) -> np.ndarray:
+        """Create a 2D projection of document embeddings."""
+        # Extract embeddings
+        embeddings = []
+        for doc in documents:
+            if "embedding" not in doc.metadata:
+                raise ValueError(f"Document {doc.doc_id} missing embedding")
+            embeddings.append(doc.metadata["embedding"])
+
+        embeddings = np.array(embeddings)
+
+        # Create 2D projection with UMAP
+        n_neighbors = min(15, len(documents) - 1)
+        reducer = umap.UMAP(
+            n_components=2,
+            n_neighbors=n_neighbors,
+            min_dist=0.1,
+            metric='cosine',
+            random_state=42
+        )
+
+        return reducer.fit_transform(embeddings)
+
+    def _get_short_description(self, doc: Document) -> str:
+        """Get a short 1-3 word description from document title."""
+        # Get title from metadata
+        title = doc.metadata.get("title", "")
+        if not title:
+            title = doc.metadata.get("idea_title", "")
+
+        if not title:
+            return "Untitled"
+
+        # Take first 3 words max
+        words = title.split()
+        if len(words) <= 3:
+            return title
+        else:
+            return " ".join(words[:3]) + "..."
+
+    def _is_distilled_note(self, doc: Document) -> bool:
+        """Check if a document is a distilled note."""
+        # Logic to determine if this is a distilled note
+        # Look for the presence of source atomic note IDs
+        if "atomic_note_ids" in doc.metadata and doc.metadata["atomic_note_ids"]:
+            return True
+        # Or check if it's in the clean notes
+        if "is_clean_note" in doc.metadata and doc.metadata["is_clean_note"]:
+            return True
+        return False
+
+    def create_knowledge_map(self,
+                             atomic_notes: List[Document],
+                             distilled_notes: Optional[List[Document]] = None,
+                             include_connections: bool = True) -> str:
+        """
+        Create an interactive knowledge map visualization.
+
+        Args:
+            atomic_notes: List of atomic notes
+            distilled_notes: Optional list of distilled notes
+            include_connections: Whether to draw connections from distilled notes to source notes
+
+        Returns:
+            Path to the saved visualization
+        """
+        # Combine all documents for projection
+        all_docs = atomic_notes.copy()
+
+        # Track indices of distilled notes
+        distilled_indices = []
+        source_map = {}  # Maps distilled note index to source note indices
+
+        if distilled_notes:
+            start_idx = len(all_docs)
+            for i, note in enumerate(distilled_notes):
+                distilled_idx = start_idx + i
+                distilled_indices.append(distilled_idx)
+
+                # Find source notes
+                source_ids = note.metadata.get("atomic_note_ids", [])
+                # Handle pandas/numpy array types
+                if hasattr(source_ids, '__iter__') and not isinstance(source_ids, (list, str)):
+                    source_ids = [str(id) for id in source_ids if id]
+
+                if isinstance(source_ids, list) and len(source_ids) > 0:
+                    # Find indices of source notes
+                    source_indices = []
+                    for j, atomic in enumerate(atomic_notes):
+                        if atomic.doc_id in source_ids:
+                            source_indices.append(j)
+
+                    source_map[distilled_idx] = source_indices
+
+            all_docs.extend(distilled_notes)
+
+        # Create 2D projection for all documents
+        embeddings_2d = self.create_2d_projection(all_docs)
+
+        # Create visualization data
+        viz_data = []
+        node_types = []  # Track node types (atomic or distilled)
+
+        for i, doc in enumerate(all_docs):
+            is_distilled = i in distilled_indices
+
+            # Get title and description
+            if is_distilled:
+                title = doc.metadata.get("title", "Untitled Distilled Note")
+                description = self._get_short_description(doc)
+                node_type = "distilled"
+            else:
+                title = doc.metadata.get("idea_title", "Untitled")
+                description = title  # For atomic notes, description is the title
+                node_type = "atomic"
+
+            viz_data.append({
+                "x": embeddings_2d[i, 0],
+                "y": embeddings_2d[i, 1],
+                "node_type": node_type,
+                "title": title,
+                "description": description,
+                "id": doc.doc_id,
+                "text_preview": doc.text[:100] + "..." if len(doc.text) > 100 else doc.text
+            })
+
+            node_types.append(node_type)
+
+        df = pd.DataFrame(viz_data)
+
+        # Create figure
+        fig = go.Figure()
+
+        # Add atomic notes as scatter points
+        atomic_df = df[df["node_type"] == "atomic"]
+        atomic_scatter = go.Scatter(
+            x=atomic_df["x"],
+            y=atomic_df["y"],
+            mode="markers",
+            marker=dict(
+                size=10,
+                color="rgba(0, 120, 220, 0.7)",
+                line=dict(width=1, color="DarkSlateGrey")
+            ),
+            text=atomic_df["title"],
+            hovertemplate="<b>%{text}</b><br>ID: %{customdata[0]}<br>%{customdata[1]}",
+            customdata=list(zip(atomic_df["id"], atomic_df["text_preview"])),
+            name="Atomic Ideas"
+        )
+        fig.add_trace(atomic_scatter)
+
+        # Add distilled notes if available
+        if distilled_notes:
+            distilled_df = df[df["node_type"] == "distilled"]
+            distilled_scatter = go.Scatter(
+                x=distilled_df["x"],
+                y=distilled_df["y"],
+                mode="markers+text",
+                marker=dict(
+                    size=20,
+                    color="rgba(220, 50, 50, 0.7)",
+                    symbol="diamond",
+                    line=dict(width=2, color="DarkSlateGrey")
+                ),
+                text=distilled_df["description"],
+                textposition="top center",
+                hovertemplate="<b>%{customdata[0]}</b><br>ID: %{customdata[1]}<br>%{customdata[2]}",
+                customdata=list(zip(distilled_df["title"], distilled_df["id"], distilled_df["text_preview"])),
+                name="Distilled Knowledge"
+            )
+            fig.add_trace(distilled_scatter)
+
+            # Add connections between distilled notes and their sources
+            if include_connections:
+                for distilled_idx, source_indices in source_map.items():
+                    distilled_x = embeddings_2d[distilled_idx, 0]
+                    distilled_y = embeddings_2d[distilled_idx, 1]
+
+                    for source_idx in source_indices:
+                        source_x = embeddings_2d[source_idx, 0]
+                        source_y = embeddings_2d[source_idx, 1]
+
+                        # Create a line connecting distilled note to source
+                        connection = go.Scatter(
+                            x=[distilled_x, source_x],
+                            y=[distilled_y, source_y],
+                            mode="lines",
+                            line=dict(
+                                color="rgba(180, 180, 180, 0.4)",
+                                width=1,
+                                dash="dot"
+                            ),
+                            hoverinfo="none",
+                            showlegend=False
+                        )
+                        fig.add_trace(connection)
+
+        # Update layout
+        fig.update_layout(
+            title="Knowledge Map",
+            plot_bgcolor="white",
+            legend_title_text="Node Type",
+            height=800,
+            width=1100,
+            hoverlabel=dict(
+                bgcolor="white",
+                font_size=12
+            ),
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+        )
+
+        # Save visualization
+        output_path = os.path.join(self.output_dir, "knowledge_map.html")
+        fig.write_html(output_path)
+
+        # Also save a CSV for reference
+        df.to_csv(os.path.join(self.output_dir, "knowledge_map.csv"), index=False)
+
+        return output_path
+
+    def visualize_knowledge_base(self, store, include_connections: bool = True) -> str:
+        """
+        Visualize the entire knowledge base from a KnowledgeStore.
+
+        Args:
+            store: KnowledgeStore instance
+            include_connections: Whether to draw connections between notes
+
+        Returns:
+            Path to the saved visualization
+        """
+        # Load atomic notes
+        atomic_notes = store.get_all_atomic_notes()
+        print(f"Loaded {len(atomic_notes)} atomic notes")
+
+        # Load clean/distilled notes if available
+        distilled_notes = []
+        if hasattr(store, "get_all_clean_notes"):
+            distilled_notes = store.get_all_clean_notes()
+            print(f"Loaded {len(distilled_notes)} distilled notes")
+
+        # Create visualization
+        return self.create_knowledge_map(
+            atomic_notes=atomic_notes,
+            distilled_notes=distilled_notes,
+            include_connections=include_connections
+        )
 
 
 class ClusterVisualizer:
