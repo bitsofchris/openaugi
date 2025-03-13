@@ -2,6 +2,7 @@
 Configuration settings for Augi application.
 """
 
+DISTILLATION_METHOD = "cluster"  # Options: "similarity" or "cluster"
 OBSIDIAN_VAULT_PATH = "/Users/chris/zk-copy-for-testing-small"  # Path to Obsidian vault
 # OBSIDIAN_VAULT_PATH = "/Users/chris/zk-copy-for-testing"  # Path to Obsidian vault
 
