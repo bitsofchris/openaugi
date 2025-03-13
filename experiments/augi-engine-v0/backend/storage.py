@@ -676,6 +676,7 @@ class KnowledgeStore:
             List of Document objects representing atomic notes
         """
         if self.atomic_notes_table not in self.db.table_names():
+            print("No atomic notes found in database")
             return []
 
         table = self.db.open_table(self.atomic_notes_table)
@@ -729,3 +730,30 @@ class KnowledgeStore:
 
         print(f"Retrieved {len(all_documents)} atomic notes total")
         return all_documents
+
+    def get_already_distilled_note_ids(self) -> set:
+        """
+        Get IDs of atomic notes that have already been used in distilled notes.
+
+        Returns:
+            Set of atomic note IDs that have been used in distillation
+        """
+        if self.clean_notes_table not in self.db.table_names():
+            return set()
+
+        table = self.db.open_table(self.clean_notes_table)
+        # TODO - standardize how we check ids in table -> use a KV?
+        results = table.search().limit(10000).to_pandas()
+
+        already_distilled = set()
+        for _, row in results.iterrows():
+            if "atomic_note_ids" in row:
+                # Handle the case where atomic_note_ids is an array/list
+                note_ids = row["atomic_note_ids"]
+                if isinstance(note_ids, list) and len(note_ids) > 0:
+                    already_distilled.update(note_ids)
+                elif hasattr(note_ids, '__iter__') and not isinstance(note_ids, str):
+                    # For pandas/numpy array types
+                    already_distilled.update([str(id) for id in note_ids if id])
+
+        return already_distilled
