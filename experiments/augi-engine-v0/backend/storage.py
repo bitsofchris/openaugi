@@ -757,3 +757,61 @@ class KnowledgeStore:
                     already_distilled.update([str(id) for id in note_ids if id])
 
         return already_distilled
+
+    def get_all_clean_notes(self) -> List[Document]:
+        """
+        Retrieve all clean/distilled notes with their embeddings.
+
+        Returns:
+            List of Document objects representing clean/distilled notes
+        """
+        if self.clean_notes_table not in self.db.table_names():
+            return []
+
+        table = self.db.open_table(self.clean_notes_table)
+
+        # Get all data
+        try:
+            results = table.search().to_pandas()
+        except Exception as e:
+            print(f"Error retrieving clean notes: {e}")
+            return []
+
+        # Convert rows to Documents
+        all_documents = []
+        for _, row in results.iterrows():
+            metadata = {}
+
+            # Try to parse metadata_json if it exists
+            if "metadata_json" in row and row["metadata_json"]:
+                try:
+                    import json
+                    metadata = json.loads(row["metadata_json"])
+                except json.JSONDecodeError:
+                    print(f"Error decoding metadata for note {row.get('id', 'unknown')}")
+
+            # Add specific fields
+            metadata["title"] = row.get("title", "")
+            metadata["is_clean_note"] = True
+
+            # Add source note IDs
+            if "atomic_note_ids" in row:
+                metadata["atomic_note_ids"] = row["atomic_note_ids"]
+
+            # Add sibling notes if available
+            if "sibling_notes" in row:
+                metadata["sibling_notes"] = row["sibling_notes"]
+
+            # Add embedding if available
+            if "vector" in row and row["vector"] is not None:
+                metadata["embedding"] = row["vector"]
+
+            doc = Document(
+                text=row.get("text", ""),
+                metadata=metadata,
+                doc_id=row.get("id", "")
+            )
+            all_documents.append(doc)
+
+        print(f"Retrieved {len(all_documents)} clean/distilled notes")
+        return all_documents

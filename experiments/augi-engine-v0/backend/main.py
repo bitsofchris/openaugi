@@ -7,7 +7,7 @@ from atomic_extractor import SimpleLLMAtomicExtractor
 from storage import KnowledgeStore
 from embedder import LlamaIndexEmbedder
 from clusterer import UMAPHDBSCANClusterer
-from visualizer import ClusterVisualizer
+from visualizer import ClusterVisualizer, KnowledgeMapVisualizer
 from distiller import ConceptDistiller
 from selector import IntraClusterSimilarityFilter
 
@@ -141,7 +141,11 @@ def main():
             store.save_clean_notes(distilled_docs, source_id_map)
             print(f"Saved {len(distilled_notes)} distilled notes")
 
-        # Future steps: Create visualizations of distilled knowledge
+        # Create updated knowledge map with distilled notes
+        print("Creating updated knowledge map with distilled notes...")
+        visualizer = KnowledgeMapVisualizer(output_dir=os.path.join(config.OUTPUT_DIR, "visualizations"))
+        viz_path = visualizer.visualize_knowledge_base(store, include_connections=True)
+        print(f"Updated knowledge map saved to {viz_path}")
 
     print("Pipeline completed successfully")
 
