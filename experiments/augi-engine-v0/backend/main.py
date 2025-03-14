@@ -12,6 +12,11 @@ from distiller import ConceptDistiller
 from selector import IntraClusterSimilarityFilter
 
 
+def _process_in_chunks(documents, chunk_size=20):
+    for i in range(0, len(documents), chunk_size):
+        yield documents[i:i + chunk_size]
+
+
 def main():
     # Initialize components
     source = ObsidianSource(config.OBSIDIAN_VAULT_PATH)
@@ -41,19 +46,21 @@ def main():
 
     # 5. Extract and save atomic notes
     if unprocessed_docs:
-        # Extract atomic notes
-        atomic_notes = extractor.extract_atomic_ideas(unprocessed_docs)
+        chunk_size = 20
+        for chunk in _process_in_chunks(unprocessed_docs, chunk_size):
+            # Extract atomic notes
+            atomic_notes = extractor.extract_atomic_ideas(chunk)
 
-        # Embed atomic notes
-        embedded_notes = embedder.embed_documents(atomic_notes)
+            # Embed atomic notes
+            embedded_notes = embedder.embed_documents(atomic_notes)
 
-        # Save atomic notes
-        store.save_atomic_notes(embedded_notes)
-        print(f"Extracted and saved {len(embedded_notes)} atomic notes")
+            # Save atomic notes
+            store.save_atomic_notes(embedded_notes)
+            print(f"Extracted and saved {len(embedded_notes)} atomic notes")
 
-        # Mark documents as processed
-        for doc in unprocessed_docs:
-            store.mark_raw_document_processed(doc.doc_id)
+            # Mark documents as processed
+            for doc in chunk:
+                store.mark_raw_document_processed(doc.doc_id)
 
     # 6. Cluster atomic ideas
     print("Clustering atomic notes...")
