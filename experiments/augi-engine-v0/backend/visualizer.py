@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import umap
+from datetime import datetime
 from typing import List, Optional, Dict, Tuple
 from llama_index.core.schema import Document
 
@@ -336,11 +337,17 @@ class KnowledgeMapVisualizer:
         )
 
         # Save outputs
-        output_path = os.path.join(self.output_dir, "knowledge_map.html")
-        fig.write_html(output_path)
-        df.to_csv(os.path.join(self.output_dir, "knowledge_map.csv"), index=False)
+        # Generate a unique ID using the current date and time
+        unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
 
-        return output_path
+        # Save outputs with the unique ID
+        output_path_html = os.path.join(self.output_dir, f"knowledge_map_{unique_id}.html")
+        fig.write_html(output_path_html)
+
+        output_path_csv = os.path.join(self.output_dir, f"knowledge_map_{unique_id}.csv")
+        df.to_csv(output_path_csv, index=False)
+
+        return output_path_html
 
     def visualize_knowledge_base(self, store, include_connections: bool = True) -> str:
         """
