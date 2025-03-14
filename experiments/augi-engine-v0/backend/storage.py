@@ -774,7 +774,8 @@ class KnowledgeStore:
 
         # Get all data
         try:
-            results = table.search().to_pandas()
+            # TODO - fix get all data
+            results = table.search().limit(10000).to_pandas()
         except Exception as e:
             print(f"Error retrieving clean notes: {e}")
             return []
