@@ -3,8 +3,8 @@ Configuration settings for Augi application.
 """
 
 DISTILLATION_METHOD = "cluster"  # Options: "similarity" or "cluster"
-OBSIDIAN_VAULT_PATH = "/Users/chris/zk-copy-for-testing-small"  # Path to Obsidian vault
-# OBSIDIAN_VAULT_PATH = "/Users/chris/zk-copy-for-testing"  # Path to Obsidian vault
+# OBSIDIAN_VAULT_PATH = "/Users/chris/zk-copy-for-testing-small"  # Path to Obsidian vault
+OBSIDIAN_VAULT_PATH = "/Users/chris/zk-copy-for-testing"  # Path to Obsidian vault
 
 # LLM Model Settings
 DEFAULT_LLM_MODEL = "gpt-4o-mini-2024-07-18"  # Default model for extraction

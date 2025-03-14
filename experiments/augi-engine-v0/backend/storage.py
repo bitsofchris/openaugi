@@ -105,7 +105,8 @@ class KnowledgeStore:
         Save multiple raw documents, returning list of document IDs.
         All documents must have embeddings.
         """
-        return [self.save_raw_document(doc) for doc in documents]
+        valid_docs = [doc for doc in documents if doc.metadata.get("embedding") is not None]
+        return [self.save_raw_document(doc) for doc in valid_docs]
 
     def get_raw_document(self, doc_id: str) -> Optional[Document]:
         """
@@ -542,8 +543,9 @@ class KnowledgeStore:
 
         table = self.db.open_table(self.raw_docs_table)
 
+        # TODO - standardize how we get all documents
         # Direct query for unprocessed documents
-        unprocessed_rows = table.search().where("is_processed = false").to_pandas()
+        unprocessed_rows = table.search().limit(10000).where("is_processed = false").to_pandas()
 
         # Convert rows to Document objects
         unprocessed = []
