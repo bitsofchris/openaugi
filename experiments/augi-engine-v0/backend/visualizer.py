@@ -7,6 +7,7 @@ import umap
 from datetime import datetime
 from typing import List, Optional, Dict, Tuple
 from llama_index.core.schema import Document
+from scipy.spatial.distance import pdist, squareform
 
 
 class KnowledgeMapVisualizer:
@@ -194,13 +195,14 @@ class KnowledgeMapVisualizer:
             hovertemplate="<b>%{text}</b><br>ID: %{customdata[0]}<br>%{customdata[1]}",
             customdata=list(zip(atomic_df["id"], atomic_df["text_preview"])),
             name="Atomic Ideas",
+            legendgroup="atomic",
         )
         fig.add_trace(atomic_scatter)
         return fig
 
     def _add_distilled_nodes(self, fig: go.Figure, df: pd.DataFrame) -> go.Figure:
         """
-        Add distilled notes to the figure.
+        Add distilled notes to the figure without text labels.
 
         Args:
             fig: Plotly figure
@@ -216,16 +218,17 @@ class KnowledgeMapVisualizer:
         distilled_scatter = go.Scatter(
             x=distilled_df["x"],
             y=distilled_df["y"],
-            mode="markers+text",
+            mode="markers",  # Changed from "markers+text" to just "markers"
             marker=dict(
                 size=20,
                 color="rgba(220, 50, 50, 0.7)",
                 symbol="diamond",
                 line=dict(width=2, color="DarkSlateGrey"),
             ),
-            text=distilled_df["description"],
-            textposition="top center",
-            hovertemplate="<b>%{customdata[0]}</b><br>ID: %{customdata[1]}<br>%{customdata[2]}",
+            # Removed the text parameter
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>ID: %{customdata[1]}<br>%{customdata[2]}"
+            ),
             customdata=list(
                 zip(
                     distilled_df["title"],
@@ -234,6 +237,7 @@ class KnowledgeMapVisualizer:
                 )
             ),
             name="Distilled Knowledge",
+            legendgroup="distilled-nodes",  # Changed from "distilled" to "distilled-nodes"
         )
         fig.add_trace(distilled_scatter)
         return fig
@@ -255,6 +259,13 @@ class KnowledgeMapVisualizer:
         Returns:
             Updated figure
         """
+        # Skip if no connections to make
+        if not source_map:
+            return fig
+
+        # Create a single legend entry for all distilled-to-atomic connections
+        added_to_legend = False
+
         for distilled_idx, source_indices in source_map.items():
             distilled_x = embeddings_2d[distilled_idx, 0]
             distilled_y = embeddings_2d[distilled_idx, 1]
@@ -270,16 +281,122 @@ class KnowledgeMapVisualizer:
                     mode="lines",
                     line=dict(color="rgba(180, 180, 180, 0.4)", width=1, dash="dot"),
                     hoverinfo="none",
-                    showlegend=False,
+                    showlegend=not added_to_legend,  # Only show in legend once
+                    name="Distilled-to-Atomic Links",
+                    legendgroup="distilled-atomic",  # Link to both groups
                 )
                 fig.add_trace(connection)
+                added_to_legend = True
+
+        return fig
+
+    def _add_atomic_connections(
+        self, fig: go.Figure, atomic_indices: List[int], embeddings_2d: np.ndarray
+    ) -> go.Figure:
+        """
+        Add connection lines between atomic notes based on embedding similarity.
+
+        Args:
+            fig: Plotly figure
+            atomic_indices: Indices of atomic notes
+            embeddings_2d: 2D projection of document embeddings
+
+        Returns:
+            Updated figure
+        """
+        # Only add connections if we have enough atomic notes
+        if len(atomic_indices) <= 1:
+            return fig
+
+        # Extract just the atomic note coordinates
+        atomic_coords = embeddings_2d[atomic_indices]
+
+        # Calculate pairwise distances
+        distances = squareform(pdist(atomic_coords))
+
+        # Determine threshold - connect closest 20% of pairs
+        # This avoids cluttering the visualization with too many connections
+        threshold = np.percentile(distances[distances > 0], 20)
+
+        # Create a single legend entry for all atomic-to-atomic connections
+        added_to_legend = False
+
+        for i, idx1 in enumerate(atomic_indices):
+            for j, idx2 in enumerate(atomic_indices[i + 1 :], i + 1):
+                if distances[i, j] <= threshold:
+                    # Create a line connecting these atomic notes
+                    connection = go.Scatter(
+                        x=[embeddings_2d[idx1, 0], embeddings_2d[idx2, 0]],
+                        y=[embeddings_2d[idx1, 1], embeddings_2d[idx2, 1]],
+                        mode="lines",
+                        line=dict(color="rgba(100, 180, 255, 0.3)", width=1),
+                        hoverinfo="none",
+                        showlegend=not added_to_legend,  # Only show in legend once
+                        name="Atomic Connections",
+                        legendgroup="atomic",  # Same group as atomic nodes
+                    )
+                    fig.add_trace(connection)
+                    added_to_legend = True
+
+        return fig
+
+    def _add_distilled_connections(
+        self,
+        fig: go.Figure,
+        distilled_indices: List[int],
+        embeddings_2d: np.ndarray,
+    ) -> go.Figure:
+        """
+        Add connection lines between distilled notes based on embedding similarity.
+
+        Args:
+            fig: Plotly figure
+            distilled_indices: Indices of distilled notes
+            embeddings_2d: 2D projection of document embeddings
+
+        Returns:
+            Updated figure
+        """
+        # Only add connections if we have enough distilled notes
+        if len(distilled_indices) <= 1:
+            return fig
+
+        # Extract just the distilled note coordinates
+        distilled_coords = embeddings_2d[distilled_indices]
+
+        # Calculate pairwise distances
+        distances = squareform(pdist(distilled_coords))
+
+        # Use a more strict threshold for distilled notes to keep it cleaner
+        threshold = np.percentile(distances[distances > 0], 15)
+
+        # Create a single legend entry for all distilled-to-distilled connections
+        added_to_legend = False
+
+        for i, idx1 in enumerate(distilled_indices):
+            for j, idx2 in enumerate(distilled_indices[i + 1 :], i + 1):
+                if distances[i, j] <= threshold:
+                    # Create a line connecting these distilled notes
+                    connection = go.Scatter(
+                        x=[embeddings_2d[idx1, 0], embeddings_2d[idx2, 0]],
+                        y=[embeddings_2d[idx1, 1], embeddings_2d[idx2, 1]],
+                        mode="lines",
+                        line=dict(color="rgba(220, 50, 50, 0.5)", width=1.5),
+                        hoverinfo="none",
+                        showlegend=not added_to_legend,  # Only show in legend once
+                        name="Distilled Connections",
+                        legendgroup="distilled-connections",  # Changed from "distilled" to "distilled-connections"
+                    )
+                    fig.add_trace(connection)
+                    added_to_legend = True
+
         return fig
 
     def create_knowledge_map(
         self,
         atomic_notes: List[Document],
         distilled_notes: Optional[List[Document]] = None,
-        include_connections: bool = True,
+        include_connections: bool = False,
         show_atomic_notes: bool = True,
     ) -> str:
         """
@@ -288,8 +405,10 @@ class KnowledgeMapVisualizer:
         Args:
             atomic_notes: List of atomic notes
             distilled_notes: Optional list of distilled notes
-            include_connections: Whether to draw connections from distilled notes to source notes
-            show_atomic_notes: Whether to display atomic notes (set to False to show only distilled notes)
+            include_connections: Whether to draw connections from distilled notes to
+                source notes
+            show_atomic_notes: Whether to display atomic notes (set to False to show only
+                distilled notes)
 
         Returns:
             Path to the saved visualization
@@ -309,14 +428,28 @@ class KnowledgeMapVisualizer:
         fig = go.Figure()
 
         # Add atomic notes if requested
+        atomic_indices = []
         if show_atomic_notes:
+            atomic_indices = [
+                i for i in range(len(all_docs)) if i not in distilled_indices
+            ]
             fig = self._add_atomic_nodes(fig, df)
+
+            # Add atomic connections when only showing atomic notes (no distilled)
+            if include_connections and not distilled_notes:
+                fig = self._add_atomic_connections(fig, atomic_indices, embeddings_2d)
 
         # Add distilled notes if available
         if distilled_notes:
             fig = self._add_distilled_nodes(fig, df)
 
-            # Add connections if requested and if atomic notes are visible
+            # Add connections between distilled notes
+            if include_connections and len(distilled_indices) > 1:
+                fig = self._add_distilled_connections(
+                    fig, distilled_indices, embeddings_2d
+                )
+
+            # Add connections from distilled to atomic if requested and if atomic notes are visible
             if include_connections and show_atomic_notes:
                 fig = self._add_connections(fig, source_map, embeddings_2d)
 
@@ -341,10 +474,14 @@ class KnowledgeMapVisualizer:
         unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
 
         # Save outputs with the unique ID
-        output_path_html = os.path.join(self.output_dir, f"knowledge_map_{unique_id}.html")
+        output_path_html = os.path.join(
+            self.output_dir, f"knowledge_map_{unique_id}.html"
+        )
         fig.write_html(output_path_html)
 
-        output_path_csv = os.path.join(self.output_dir, f"knowledge_map_{unique_id}.csv")
+        output_path_csv = os.path.join(
+            self.output_dir, f"knowledge_map_{unique_id}.csv"
+        )
         df.to_csv(output_path_csv, index=False)
 
         return output_path_html
