@@ -1,13 +1,26 @@
-# atomic_extractor.py
 import json
 import re
+import os
+import logging
+from datetime import datetime
 from dotenv import load_dotenv
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from llama_index.core.schema import Document
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.llms.openai import OpenAI
 from interfaces import AtomicExtractor
 from config import DOT_ENV_PATH
+
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("atomic_extractor")
+
+# Create logs directory if it doesn't exist
+os.makedirs("logs", exist_ok=True)
 
 
 class SimpleLLMAtomicExtractor(AtomicExtractor):
@@ -22,24 +35,59 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
         self.llm = OpenAI(model=llm_model, temperature=0.1)
         self.text_splitter = SentenceSplitter(chunk_size=1024, chunk_overlap=100)
 
-    def clean_llm_json_response(self, response_text: str):
+        # Create error log file with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.error_log_path = f"logs/json_errors_{timestamp}.log"
+
+    def log_json_error(self, error_type: str, response_text: str, error_details: str = None):
+        """
+        Log JSON parsing errors to a file for later inspection.
+
+        Args:
+            error_type: Type of error (e.g., 'extraction', 'deduplication')
+            response_text: The raw LLM response that failed to parse
+            error_details: Additional error details
+        """
+        with open(self.error_log_path, "a") as f:
+            f.write(f"\n{'='*80}\n")
+            f.write(f"ERROR TYPE: {error_type}\n")
+            f.write(f"TIMESTAMP: {datetime.now().isoformat()}\n")
+            if error_details:
+                f.write(f"DETAILS: {error_details}\n")
+            f.write(f"RAW RESPONSE:\n{response_text}\n")
+            f.write(f"{'='*80}\n")
+
+        logger.warning(f"JSON parsing error in {error_type}. Details logged to {self.error_log_path}")
+
+    def clean_llm_json_response(self, response_text: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Clean and parse JSON from LLM response.
+        Instead of raising exceptions, returns None if parsing fails.
+
+        Args:
+            response_text: Raw response text from LLM
+
+        Returns:
+            Parsed JSON object or None if parsing fails
+        """
         # Pattern to match JSON content between triple backticks
         pattern = r"```(?:json)?\s*([\s\S]*?)```"
 
         # Try to find the pattern
         match = re.search(pattern, response_text)
 
-        if match:
-            # Extract the JSON content
-            json_str = match.group(1)
-            return json.loads(json_str)
-        else:
-            # If no backticks, try parsing the whole thing
-            try:
+        try:
+            if match:
+                # Extract the JSON content
+                json_str = match.group(1)
+                return json.loads(json_str)
+            else:
+                # If no backticks, try parsing the whole thing
                 return json.loads(response_text)
-            except json.JSONDecodeError:
-                # If that fails, raise an error
-                raise ValueError("Could not extract valid JSON from the response")
+        except json.JSONDecodeError as e:
+            # Log the error and return None instead of raising exception
+            self.log_json_error("json_parsing", response_text, str(e))
+            return None
 
     def split_into_sections(self, text: str) -> List[str]:
         """
@@ -107,7 +155,7 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
             global_summary: The global summary for context
 
         Returns:
-            List of atomic ideas with metadata
+            List of atomic ideas with metadata or empty list if extraction fails
         """
         standard_prompt = """
         You are extracting distinct atomic ideas from a section of text.
@@ -136,25 +184,44 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
         ATOMIC IDEAS (JSON format):
         """
 
-        response = self.llm.complete(
-            standard_prompt.format(global_summary=global_summary, section=section)
-        )
-
         try:
+            response = self.llm.complete(
+                standard_prompt.format(global_summary=global_summary, section=section)
+            )
+
             # Try to parse the JSON response
             ideas = self.clean_llm_json_response(response.text)
+
             if ideas and len(ideas) > 0:
                 return ideas
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse JSON response in both attempts: {e}")
-            # Return a minimal valid structure
-            return [
-                {
-                    "title": "Section content",
-                    "description": section[:100] + "...",
-                    "links": [],
-                }
-            ]
+            else:
+                # If parsing failed, log it and return fallback
+                logger.warning(f"Failed to extract ideas from section: {section[:100]}...")
+                return self._create_fallback_idea(section)
+
+        except Exception as e:
+            # Catch any other exceptions during processing
+            logger.error(f"Error in section idea extraction: {str(e)}")
+            self.log_json_error("section_extraction", f"Section: {section[:200]}...", str(e))
+            return self._create_fallback_idea(section)
+
+    def _create_fallback_idea(self, section: str) -> List[Dict[str, Any]]:
+        """
+        Create a fallback idea when extraction fails.
+
+        Args:
+            section: The section text
+
+        Returns:
+            List with one minimal idea
+        """
+        return [
+            {
+                "title": "Section content",
+                "description": section[:100] + "..." if len(section) > 100 else section,
+                "links": [],
+            }
+        ]
 
     def deduplicate_ideas(
         self, all_ideas: List[Dict[str, Any]]
@@ -202,13 +269,21 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
         Ensure you return valid JSON.
         """
 
-        response = self.llm.complete(prompt.format(ideas_context=ideas_context))
-
         try:
-            return self.clean_llm_json_response(response.text)
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse JSON response in deduplication: {str(e)}")
-            print(f"{response.text}")
+            response = self.llm.complete(prompt.format(ideas_context=ideas_context))
+            result = self.clean_llm_json_response(response.text)
+
+            if result:
+                return result
+            else:
+                # If deduplication fails, log it and return original ideas
+                logger.warning("Deduplication failed, returning original ideas")
+                return all_ideas
+
+        except Exception as e:
+            # Catch any other exceptions during deduplication
+            logger.error(f"Error in deduplication: {str(e)}")
+            self.log_json_error("deduplication", str(e))
             return all_ideas  # Return original ideas if deduplication fails
 
     def extract_atomic_ideas(self, documents: List[Document], store=None) -> List[Document]:
@@ -233,52 +308,72 @@ class SimpleLLMAtomicExtractor(AtomicExtractor):
                     documents_to_process.append(doc)
 
             if len(documents_to_process) < len(documents):
-                print(f"Skipping {len(documents) - len(documents_to_process)} already processed documents")
+                logger.info(f"Skipping {len(documents) - len(documents_to_process)} already processed documents")
         else:
             documents_to_process = documents
 
         # If no documents need processing, return empty list
         if not documents_to_process:
-            print("No new documents to process")
+            logger.info("No new documents to process")
             return []
 
-        print(f"Processing {len(documents_to_process)} documents")
+        logger.info(f"Processing {len(documents_to_process)} documents")
 
-        for doc in documents_to_process:
-            # Generate a global summary
-            global_summary = self.generate_global_summary(doc)
+        for i, doc in enumerate(documents_to_process):
+            try:
+                logger.info(f"Processing document {i+1}/{len(documents_to_process)}: {doc.doc_id}")
 
-            # Split into sections
-            sections = self.split_into_sections(doc.text)
+                # Generate a global summary
+                global_summary = self.generate_global_summary(doc)
 
-            # Extract ideas from each section
-            all_ideas = []
-            for section in sections:
-                section_ideas = self.extract_section_ideas(section, global_summary) or []
-                all_ideas.extend(section_ideas)
+                # Split into sections
+                sections = self.split_into_sections(doc.text)
+                logger.info(f"Document split into {len(sections)} sections")
 
-            # Deduplicate ideas
-            deduplicated_ideas = self.deduplicate_ideas(all_ideas)
+                # Extract ideas from each section
+                all_ideas = []
+                for j, section in enumerate(sections):
+                    try:
+                        section_ideas = self.extract_section_ideas(section, global_summary) or []
+                        all_ideas.extend(section_ideas)
+                        logger.info(f"Section {j+1}: Extracted {len(section_ideas)} ideas")
+                    except Exception as e:
+                        logger.error(f"Error processing section {j+1}: {str(e)}")
+                        self.log_json_error(f"section_processing_{doc.doc_id}_{j}", section[:200], str(e))
+                        # Continue with next section instead of failing
 
-            # Convert each idea to a Document
-            for idea in deduplicated_ideas:
-                # Create metadata that links back to the source document
-                metadata = {
-                    "source_doc_id": doc.doc_id,
-                    "source_doc_title": doc.metadata.get("title", ""),
-                    "source_doc_path": doc.metadata.get("file_path", ""),
-                    "idea_title": idea["title"],
-                    "links": idea.get("links", []),
-                    "is_atomic_idea": True
-                }
+                # Deduplicate ideas
+                original_idea_count = len(all_ideas)
+                deduplicated_ideas = self.deduplicate_ideas(all_ideas)
+                logger.info(f"Deduplicated from {original_idea_count} to {len(deduplicated_ideas)} ideas")
 
-                # Create a new Document for this atomic idea
-                atomic_doc = Document(
-                    text=idea["description"],
-                    metadata=metadata
-                )
+                # Convert each idea to a Document
+                for idea in deduplicated_ideas:
+                    # Create metadata that links back to the source document
+                    metadata = {
+                        "source_doc_id": doc.doc_id,
+                        "source_doc_title": doc.metadata.get("title", ""),
+                        "source_doc_path": doc.metadata.get("file_path", ""),
+                        "idea_title": idea["title"],
+                        "links": idea.get("links", []),
+                        "is_atomic_idea": True
+                    }
 
-                all_atomic_documents.append(atomic_doc)
+                    # Create a new Document for this atomic idea
+                    atomic_doc = Document(
+                        text=idea["description"],
+                        metadata=metadata
+                    )
 
-        print(f"Extracted {len(all_atomic_documents)} atomic ideas from {len(documents_to_process)} documents")
+                    all_atomic_documents.append(atomic_doc)
+
+            except Exception as e:
+                # Catch any errors at the document level
+                logger.error(f"Error processing document {doc.doc_id}: {str(e)}")
+                self.log_json_error(f"document_processing_{doc.doc_id}",
+                                    f"Document ID: {doc.doc_id}\nTitle: {doc.metadata.get('title', 'Unknown')}",
+                                    str(e))
+                # Continue with next document instead of failing
+
+        logger.info(f"Extracted {len(all_atomic_documents)} atomic ideas from {len(documents_to_process)} documents")
         return all_atomic_documents
