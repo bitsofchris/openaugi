@@ -16,6 +16,7 @@
   - [ ] Optimize LanceDB integration with improved ID tracking
   - [ ] Create configurable prompt templates for different processing stages
   - [ ] Support customizable LLM model selection for different pipeline steps
+  - [ ] Improve scalability of LLM calls for processing larger data
 - **API & Frontend**
   - [ ] Develop FastAPI backend with file upload capabilities
   - [ ] Build basic web interface for:
