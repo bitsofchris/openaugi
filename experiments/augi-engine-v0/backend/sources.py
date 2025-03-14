@@ -13,10 +13,20 @@ class ObsidianSource(DocumentSource):
         self.remove_tasks = self.config.get("remove_tasks_from_text", True)
 
     def generate_unique_doc_id(self, doc):
-        file_path = f"{doc.metadata["folder_path"]}/{doc.metadata["file_name"]}"
+        """
+        Generate a stable, unique document ID based on file path and content
+        using SHA-256 hashing to avoid special character issues.
+
+        Args:
+            doc: Document object with metadata and text content
+
+        Returns:
+            str: A hexadecimal hash that uniquely identifies the document
+        """
+        file_path = f"{doc.metadata['folder_path']}/{doc.metadata['file_name']}"
         doc.metadata["file_path"] = file_path
-        content_hash = hashlib.md5(doc.text.encode()).hexdigest()[:10]
-        return f"{file_path}_{content_hash}"
+        combined = f"{file_path}:{doc.text}"
+        return hashlib.sha256(combined.encode('utf-8')).hexdigest()
 
     def load_documents(self) -> List[Document]:
         reader = ObsidianReader(
