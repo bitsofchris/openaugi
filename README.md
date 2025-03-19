@@ -8,13 +8,13 @@ Augmented Intelligence for your second brain.
 
 We're building an open, privacy-first ecosystem of knowledge tools that augment human intelligence while keeping users in control of their data and ideas.
 
-We believe knowledge tools should serve the people who use them, not extract value from them. 
+We believe knowledge tools should serve the people who use them, not extract value from them.
 
 We're creating technology that helps people capture, process, connect, and utilize their knowledge while respecting their privacy and ownership.
 
 
 ## Core Values
-- **People First**: Humans over machines. We go further together. 
+- **People First**: Humans over machines. We go further together.
 - **Privacy as Foundation**: Take back your data. Write your own story.
 - **Open by Default**: All code released under MIT license for personal use.
 - **Aligned Incentives**: Business model that balances mission with sustainability - thinking Mozilla's steward model in the future.
@@ -36,7 +36,7 @@ Check the [`experiments/`](./experiments/) folder for our latest prototypes.
 We're building in public and welcome contributors who share our values.
 
 - 🌟 **Star and watch** this repository to stay up to date
-- 🗣️ **Join the discussion** on [Discord](https://discord.gg/xvmJecvx) or on [Github](https://github.com/openaugi/openaugi/issues) 
+- 🗣️ **Join the discussion** on [Discord](https://discord.gg/d26BVBrnRP) or on [Github](https://github.com/openaugi/openaugi/issues)
 - 📣 **Spread the word** about our mission
 
 Follow our progress on @bitsofchris [Youtube](https://www.youtube.com/@bitsofchris).
