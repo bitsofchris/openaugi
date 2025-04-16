@@ -4,6 +4,8 @@
 
 Augmented Intelligence for your second brain.
 
+Check out [OpenAugI Voice on Obsidian](https://github.com/bitsofchris/openaugi-obsidian-voice-plugin)
+
 ## Our Mission
 
 We're building an open, privacy-first ecosystem of knowledge tools that augment human intelligence while keeping users in control of their data and ideas.
