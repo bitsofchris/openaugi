@@ -2,6 +2,8 @@
 
 A Streamlit application that demonstrates the use of the **Mem0 Open Source** library for extracting meaningful memories from large text files using OpenAI.
 
+![Mem0 Extractor Demo](demo.gif)
+
 ## Features
 
 - 🔑 **Secure OpenAI API key management** with session state and environment variable cleanup

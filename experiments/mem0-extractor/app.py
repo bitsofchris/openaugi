@@ -86,65 +86,67 @@ st.header("💭 Extracted Memories")
 
 if extract_button:
     if uploaded_file is not None and api_key:
-        st.info("🔄 Extracting memories...")
+        with st.spinner("Extracting memories..."):
+            try:
+                ### Initialize Mem0 Open Source
+                # Set the OpenAI API key as environment variable (temporary, process-scoped)
+                original_key = os.environ.get("OPENAI_API_KEY", "")
+                os.environ["OPENAI_API_KEY"] = api_key
 
-        try:
-            ### Initialize Mem0 Open Source
-            # Set the OpenAI API key as environment variable (temporary, process-scoped)
-            original_key = os.environ.get("OPENAI_API_KEY", "")
-            os.environ["OPENAI_API_KEY"] = api_key
+                # Initialize the Memory class (open source version)
+                m = Memory()
 
-            # Initialize the Memory class (open source version)
-            m = Memory()
-
-            ### Extract memories
-            messages = [{"role": "user", "content": file_content}]
-            m.add(
-                messages,
-                user_id="default_user",
-                metadata={"source": "streamlit_upload"},
-            )
-
-            st.success("✅ Memories extracted successfully!")
-
-            ### Display extracted memories
-            st.subheader("📋 Extracted Memories")
-            all_memories = m.get_all(user_id="default_user")
-
-            with st.expander("All Memories (JSON)"):
-                st.write(all_memories)
-
-            if all_memories and "results" in all_memories and all_memories["results"]:
-                st.write(
-                    f"**Total memories extracted:** {len(all_memories['results'])}"
+                ### Extract memories
+                messages = [{"role": "user", "content": file_content}]
+                m.add(
+                    messages,
+                    user_id="default_user",
+                    metadata={"source": "streamlit_upload"},
                 )
 
-                for i, memory in enumerate(all_memories["results"], 1):
-                    with st.expander(f"Memory {i}"):
-                        st.write(f"**Memory:** {memory['memory']}")
-                        st.write(f"**Created:** {memory['created_at']}")
-            else:
+                st.success("✅ Memories extracted successfully!")
+
+                ### Display extracted memories
+                all_memories = m.get_all(user_id="default_user")
+
+                with st.expander("All Memories (JSON)"):
+                    st.write(all_memories)
+
+                if (
+                    all_memories
+                    and "results" in all_memories
+                    and all_memories["results"]
+                ):
+                    st.write(
+                        f"**Total memories extracted:** {len(all_memories['results'])}"
+                    )
+
+                    for i, memory in enumerate(all_memories["results"], 1):
+                        with st.expander(f"Memory {i}"):
+                            st.write(f"**Memory:** {memory['memory']}")
+                            st.write(f"**Created:** {memory['created_at']}")
+                else:
+                    st.info(
+                        "No memories were extracted from this document. This might be because the content doesn't contain extractable memories or the extraction process didn't identify any meaningful information."
+                    )
+
+                # Clean up: restore original environment variable
+                if original_key:
+                    os.environ["OPENAI_API_KEY"] = original_key
+                else:
+                    os.environ.pop("OPENAI_API_KEY", None)
+
+            except Exception as e:
+                st.error(f"❌ Error during memory extraction: {str(e)}")
                 st.info(
-                    "No memories were extracted from this document. This might be because the content doesn't contain extractable memories or the extraction process didn't identify any meaningful information."
+                    "💡 Make sure your OpenAI API key is valid and you have sufficient credits."
                 )
 
-            # Clean up: restore original environment variable
-            if original_key:
-                os.environ["OPENAI_API_KEY"] = original_key
-            else:
-                os.environ.pop("OPENAI_API_KEY", None)
-
-        except Exception as e:
-            st.error(f"❌ Error during memory extraction: {str(e)}")
-            st.info(
-                "💡 Make sure your OpenAI API key is valid and you have sufficient credits."
-            )
-
-            # Clean up on error too
-            if original_key:
-                os.environ["OPENAI_API_KEY"] = original_key
-            else:
-                os.environ.pop("OPENAI_API_KEY", None)
+                # Clean up on error too
+                if original_key:
+                    os.environ["OPENAI_API_KEY"] = original_key
+                else:
+                    os.environ.pop("OPENAI_API_KEY", None)
     else:
         st.error("❌ Please upload a file and provide an API key to extract memories.")
 
