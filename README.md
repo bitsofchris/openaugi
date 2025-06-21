@@ -6,20 +6,13 @@ Augmented Intelligence for your second brain.
 
 Check out [OpenAugI Voice on Obsidian](https://github.com/bitsofchris/openaugi-obsidian-voice-plugin)
 
-## Our Mission
+## Mission
 
-We're building an open, privacy-first ecosystem of knowledge tools that augment human intelligence while keeping users in control of their data and ideas.
-
-We believe knowledge tools should serve the people who use them, not extract value from them.
-
-We're creating technology that helps people capture, process, connect, and utilize their knowledge while respecting their privacy and ownership.
+Building an open, privacy-first ecosystem of knowledge tools that augment human intelligence while keeping users in control of their data and ideas.
 
 
 ## Core Values
-- **People First**: Humans over machines. We go further together.
 - **Privacy as Foundation**: Take back your data. Write your own story.
-- **Open by Default**: All code released under MIT license for personal use.
-- **Aligned Incentives**: Business model that balances mission with sustainability - thinking Mozilla's steward model in the future.
 - **Composable Ecosystem**: Building blocks that work together. Innovation happens quick, swap pieces when needed.
 - **Augment, Stay Human**: Amplify your unique self, use LLMs as a tool to go faster.
 
@@ -55,7 +48,3 @@ This project builds on the work of many open source projects and communities. We
 
 Note: OpenAugI is currently maintained by a single developer but is actively seeking contributors who share our vision.
 
-
-## Supporting
-
-Investors if you'd like to sponsor @bitsofchris check out his [OnlyFans]() (launching soon).
