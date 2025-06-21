@@ -8,7 +8,7 @@ hide_decoration_bar_style = """
         header {visibility: hidden;}
     </style>
 """
-# st.markdown(hide_decoration_bar_style, unsafe_allow_html=True)
+st.markdown(hide_decoration_bar_style, unsafe_allow_html=True)
 
 ### Page configuration
 st.set_page_config(page_title="Mem0 Extractor", page_icon="🧠", layout="wide")
