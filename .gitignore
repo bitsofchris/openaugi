@@ -11,7 +11,8 @@ storage/
 *lib/
 *.json
 notes_network.html
-
+*.duckdb*
+*.duckdb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
