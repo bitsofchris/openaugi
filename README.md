@@ -1,4 +1,18 @@
-# OpenAugI (Open Augmented Intelligence)
+# Update coming soon
+
+Moving back to MIT.
+
+I've been working on this in private for the past year. I'll be packaging what I built into a self-hostable personal memory layer.
+
+It's memory for humans, not agents.
+
+
+
+
+----
+
+
+# OpenAugi (Open Augmented Intelligence)
 
 (pronounced "Open Augie")
 
