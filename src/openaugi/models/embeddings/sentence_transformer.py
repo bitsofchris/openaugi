@@ -7,8 +7,19 @@ Default model: all-MiniLM-L6-v2 (384 dims, fast, good quality).
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
+
+# Known dimensions for common models (avoids loading model just to get dims)
+_KNOWN_DIMS: dict[str, int] = {
+    "all-MiniLM-L6-v2": 384,
+    "all-mpnet-base-v2": 768,
+    "all-MiniLM-L12-v2": 384,
+}
 
 
 class SentenceTransformerEmbedding:
@@ -16,29 +27,23 @@ class SentenceTransformerEmbedding:
 
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
         self.name = model_name
-        self._model = None
-        self._dimensions: int | None = None
+        self.dimensions: int = _KNOWN_DIMS.get(model_name, 384)
+        self._model: Any = None
 
-    @property
-    def dimensions(self) -> int:
-        if self._dimensions is None:
-            self._ensure_model()
-        return self._dimensions  # type: ignore[return-value]
-
-    def _ensure_model(self):
+    def _ensure_model(self) -> None:
         if self._model is None:
             try:
-                from sentence_transformers import SentenceTransformer
+                from sentence_transformers import (  # pyright: ignore[reportMissingImports]
+                    SentenceTransformer,
+                )
             except ImportError as e:
                 raise ImportError(
                     "sentence-transformers not installed. "
                     "Run: pip install openaugi[local]"
                 ) from e
             self._model = SentenceTransformer(self.name)
-            self._dimensions = self._model.get_sentence_embedding_dimension()
-            logger.info(
-                f"Loaded {self.name} (dims={self._dimensions})"
-            )
+            self.dimensions = self._model.get_sentence_embedding_dimension()
+            logger.info(f"Loaded {self.name} (dims={self.dimensions})")
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts."""

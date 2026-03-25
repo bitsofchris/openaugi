@@ -7,6 +7,7 @@ Default model: text-embedding-3-small (1536 dims).
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -16,16 +17,14 @@ class OpenAIEmbedding:
 
     def __init__(self, model_name: str = "text-embedding-3-small"):
         self.name = model_name
-        self._client = None
-        # Known dimensions for common models
-        self._dims_map = {
+        self._client: Any = None
+        self.dimensions: int = {
             "text-embedding-3-small": 1536,
             "text-embedding-3-large": 3072,
             "text-embedding-ada-002": 1536,
-        }
-        self.dimensions = self._dims_map.get(model_name, 1536)
+        }.get(model_name, 1536)
 
-    def _ensure_client(self):
+    def _ensure_client(self) -> None:
         if self._client is None:
             try:
                 from openai import OpenAI

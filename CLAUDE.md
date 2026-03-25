@@ -10,7 +10,10 @@ You the agent are constantly improving your ability to work in this codebase - d
 # Install (dev)
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
-# Run tests
+# Run full CI check (lint + types + tests) — ALWAYS run before pushing
+./scripts/check.sh
+
+# Run tests only
 .venv/bin/python -m pytest tests/ -v
 
 # Ingest fixture vault
