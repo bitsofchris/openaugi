@@ -302,3 +302,15 @@ class TestEdgeCases:
         blocks, _ = parse_vault(tmp_path)
         docs = [b for b in blocks if b.kind == "document"]
         assert any("Q&A (draft)" in (b.title or "") for b in docs)
+
+    def test_non_utf8_file_skipped_gracefully(self, tmp_path: Path):
+        """A Latin-1 file is skipped with a warning, not a crash."""
+        good = tmp_path / "good.md"
+        good.write_text("Normal content\n", encoding="utf-8")
+        bad = tmp_path / "bad.md"
+        bad.write_bytes(b"caf\xe9 r\xe9sum\xe9\n")  # Latin-1
+        blocks, _ = parse_vault(tmp_path)
+        # good.md produces a doc + entry; bad.md produces a doc but entry may fail
+        # The key assertion: no crash, and good.md content is present
+        entries = [b for b in blocks if b.kind == "entry"]
+        assert any("Normal content" in (b.content or "") for b in entries)

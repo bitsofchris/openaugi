@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -59,6 +60,9 @@ def parse_vault(
     Returns (blocks, links) ready to insert into the store.
     """
     vault = Path(vault_path)
+    if not vault.is_dir():
+        raise FileNotFoundError(f"Vault path does not exist: {vault}")
+    _check_readable(vault)
     excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
 
     all_files = list(vault.rglob("*.md"))
@@ -67,13 +71,16 @@ def parse_vault(
         f"Found {len(included)} files (excluded {len(all_files) - len(included)})"
     )
 
+    file_index = _build_file_index(included, vault)
+
     all_blocks: list[Block] = []
     all_links: list[Link] = []
     tag_blocks: dict[str, Block] = {}  # dedupe tag blocks globally
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_parse_file, f, vault): f for f in included
+            executor.submit(_parse_file, f, vault, file_index): f
+            for f in included
         }
         for future in as_completed(futures):
             file_path = futures[future]
@@ -117,6 +124,9 @@ def parse_vault_incremental(
         - deleted_paths: relative paths no longer on disk
     """
     vault = Path(vault_path)
+    if not vault.is_dir():
+        raise FileNotFoundError(f"Vault path does not exist: {vault}")
+    _check_readable(vault)
     excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
 
     all_files = list(vault.rglob("*.md"))
@@ -148,6 +158,9 @@ def parse_vault_incremental(
     if not files_to_parse:
         return [], [], current_hashes, deleted_paths
 
+    # Build index from ALL included files (not just changed) for wikilink resolution
+    file_index = _build_file_index(included, vault)
+
     # Parse only changed files
     all_blocks: list[Block] = []
     all_links: list[Link] = []
@@ -155,7 +168,8 @@ def parse_vault_incremental(
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_parse_file, f, vault): f for f in files_to_parse
+            executor.submit(_parse_file, f, vault, file_index): f
+            for f in files_to_parse
         }
         for future in as_completed(futures):
             file_path = futures[future]
@@ -176,8 +190,25 @@ def parse_vault_incremental(
 # ── Internal helpers ───────────────────────────────────────────────
 
 
+def _check_readable(vault: Path) -> None:
+    """Verify the vault directory is actually readable.
+
+    On macOS, Path.rglob silently returns empty when sandbox permissions
+    block access. os.listdir raises PermissionError, so we use it to
+    detect the real problem early.
+    """
+    try:
+        os.listdir(vault)
+    except PermissionError as e:
+        raise PermissionError(
+            f"Cannot read vault directory: {vault}\n"
+            "On macOS, grant Full Disk Access to your terminal app in "
+            "System Settings > Privacy & Security > Full Disk Access."
+        ) from e
+
+
 def _parse_file(
-    file_path: Path, vault_root: Path
+    file_path: Path, vault_root: Path, file_index: dict[str, str]
 ) -> tuple[list[Block], list[Link], dict[str, Block]]:
     """Parse a single .md file into blocks + links.
 
@@ -272,7 +303,7 @@ def _parse_file(
         for link_target in entry_links:
             # Resolve to document block if it exists in this vault
             target_doc_id = Block.make_document_id(
-                _resolve_wikilink_path(link_target, vault_root)
+                _resolve_wikilink(link_target, file_index)
             )
             links.append(
                 Link(
@@ -399,20 +430,26 @@ def _parse_date(date_str: str) -> str | None:
         return None
 
 
-def _resolve_wikilink_path(link_target: str, vault_root: Path) -> str:
-    """Resolve a wikilink title to a relative path.
+def _build_file_index(files: list[Path], vault_root: Path) -> dict[str, str]:
+    """Build {stem → relative_path} index for fast wikilink resolution.
 
-    Tries to find {title}.md in the vault. Falls back to the title itself
-    as a synthetic path (the target may not exist yet).
+    If multiple files share a stem, the first one wins (matches Obsidian behavior
+    for shortest-path resolution).
     """
-    # Simple case: look for exact match
-    candidates = list(vault_root.rglob(f"{link_target}.md"))
-    if candidates:
-        try:
-            return str(candidates[0].relative_to(vault_root))
-        except ValueError:
-            pass
-    return f"{link_target}.md"
+    index: dict[str, str] = {}
+    for f in files:
+        stem = f.stem
+        if stem not in index:
+            index[stem] = str(f.relative_to(vault_root))
+    return index
+
+
+def _resolve_wikilink(link_target: str, file_index: dict[str, str]) -> str:
+    """Resolve a wikilink title to a relative path using pre-built index.
+
+    O(1) lookup instead of rglob per link.
+    """
+    return file_index.get(link_target, f"{link_target}.md")
 
 
 def _hash_file(file_path: Path) -> str:
