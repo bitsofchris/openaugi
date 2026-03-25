@@ -1,7 +1,7 @@
-"""SQLite backend — blocks + links + FTS5.
+"""SQLite backend — blocks + links + FTS5 + sqlite-vec vector search.
 
-Two tables. That's the whole store. WAL mode for concurrent reads
-while the pipeline writes.
+Two core tables (blocks, links) plus a vec0 virtual table for semantic search.
+WAL mode for concurrent reads while the pipeline writes.
 
 See docs/plans/m0.md § Data Model for the canonical schema.
 """
@@ -13,13 +13,15 @@ import logging
 import sqlite3
 from pathlib import Path
 
+import numpy as np
+
 from openaugi.model.block import Block
 from openaugi.model.link import Link
 
 logger = logging.getLogger(__name__)
 
 # Schema version — bump when migrations are needed
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _BLOCKS_DDL = """
 CREATE TABLE IF NOT EXISTS blocks (
@@ -81,6 +83,13 @@ CREATE TRIGGER IF NOT EXISTS blocks_au AFTER UPDATE ON blocks BEGIN
 END;
 """
 
+_META_DDL = """
+CREATE TABLE IF NOT EXISTS meta (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+"""
+
 _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_blocks_kind ON blocks(kind);",
     "CREATE INDEX IF NOT EXISTS idx_blocks_source ON blocks(source);",
@@ -121,6 +130,11 @@ class SQLiteStore:
             self._conn.execute("PRAGMA journal_mode=WAL;")
             self._conn.execute("PRAGMA busy_timeout=5000;")
             self._conn.execute("PRAGMA foreign_keys=ON;")
+            import sqlite_vec
+
+            self._conn.enable_load_extension(True)
+            sqlite_vec.load(self._conn)
+            self._conn.enable_load_extension(False)
         return self._conn
 
     def close(self):
@@ -130,12 +144,13 @@ class SQLiteStore:
             self._conn = None
 
     def _initialize(self):
-        """Create tables, indexes, FTS, and triggers."""
+        """Create tables, indexes, FTS, triggers, and meta table."""
         c = self.conn
         c.executescript(_BLOCKS_DDL)
         c.executescript(_LINKS_DDL)
         c.executescript(_FTS_DDL)
         c.executescript(_FTS_TRIGGERS)
+        c.executescript(_META_DDL)
         for idx_sql in _INDEXES:
             c.execute(idx_sql)
         c.commit()
@@ -370,17 +385,22 @@ class SQLiteStore:
         )
 
     def update_embeddings(self, embeddings: dict[str, bytes]) -> None:
-        """Batch update embeddings. {block_id: blob}."""
+        """Batch update embeddings. {block_id: blob}. Also writes to vec_blocks if it exists."""
         if not embeddings:
             return
         self.conn.executemany(
             "UPDATE blocks SET embedding = ? WHERE id = ?",
             [(blob, bid) for bid, blob in embeddings.items()],
         )
+        if self._vec_table_exists():
+            self.conn.executemany(
+                "INSERT OR REPLACE INTO vec_blocks(block_id, embedding) VALUES (?, ?)",
+                [(bid, _normalize_blob(blob)) for bid, blob in embeddings.items()],
+            )
         self.conn.commit()
 
     def get_blocks_with_embeddings(self, kind: str = "entry") -> list[Block]:
-        """Get all blocks with embeddings for FAISS index building."""
+        """Get all blocks with embeddings (raw blobs for migration purposes)."""
         rows = self.conn.execute(
             """SELECT id, kind, content, summary, embedding, source, title,
                       tags, timestamp, occurred_at, metadata, content_hash, created_at
@@ -388,6 +408,74 @@ class SQLiteStore:
             (kind,),
         ).fetchall()
         return [_row_to_block(r) for r in rows]
+
+    # ── Vector search ──────────────────────────────────────────────
+
+    def ensure_vec_table(self, dim: int) -> None:
+        """Create vec0 virtual table for the given dimension.
+
+        Safe to call repeatedly — no-op if already exists with matching dim.
+        Drops and recreates if dimension changed (model swap).
+        """
+        existing = self._get_meta("vec_dim")
+        if existing == str(dim):
+            return
+        if existing is not None:
+            logger.warning("Embedding dimension changed %s→%d, recreating vec_blocks", existing, dim)
+            self.conn.execute("DROP TABLE IF EXISTS vec_blocks")
+        self.conn.execute(
+            f"CREATE VIRTUAL TABLE vec_blocks USING vec0(block_id TEXT PRIMARY KEY, embedding float[{dim}])"
+        )
+        self._set_meta("vec_dim", str(dim))
+        self.conn.commit()
+        logger.info("Created vec_blocks table (dim=%d)", dim)
+
+    def semantic_search(self, query_vec: list[float], k: int = 20) -> list[tuple[str, float]]:
+        """KNN search over vec_blocks. Returns (block_id, distance) sorted ascending.
+
+        Lower distance = more similar. Returns empty list if vec table doesn't exist.
+        """
+        if not self._vec_table_exists():
+            return []
+        normalized = _normalize_blob(np.array(query_vec, dtype=np.float32).tobytes())
+        rows = self.conn.execute(
+            "SELECT block_id, distance FROM vec_blocks WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+            [normalized, k],
+        ).fetchall()
+        return [(row[0], row[1]) for row in rows]
+
+    def populate_vec_from_blocks(self, dim: int) -> int:
+        """Migrate existing embedding blobs from blocks table into vec_blocks.
+
+        Used for one-time migration of existing databases. Returns count inserted.
+        """
+        self.ensure_vec_table(dim)
+        blocks = self.get_blocks_with_embeddings()
+        if not blocks:
+            return 0
+        self.conn.executemany(
+            "INSERT OR REPLACE INTO vec_blocks(block_id, embedding) VALUES (?, ?)",
+            [(b.id, _normalize_blob(b.embedding)) for b in blocks if b.embedding],
+        )
+        self.conn.commit()
+        count = len([b for b in blocks if b.embedding])
+        logger.info("Migrated %d embeddings to vec_blocks", count)
+        return count
+
+    def _vec_table_exists(self) -> bool:
+        row = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='vec_blocks'"
+        ).fetchone()
+        return row is not None
+
+    def _get_meta(self, key: str) -> str | None:
+        row = self.conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else None
+
+    def _set_meta(self, key: str, value: str) -> None:
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)", (key, value)
+        )
 
     # ── Hub scoring ────────────────────────────────────────────────
 
@@ -472,6 +560,18 @@ class SQLiteStore:
             "links_by_kind": {k: c for k, c in link_counts},
             "embedded_blocks": embedded,
         }
+
+
+# ── Internal helpers ───────────────────────────────────────────────
+
+
+def _normalize_blob(blob: bytes) -> bytes:
+    """Normalize a float32 embedding blob to unit length (for cosine similarity via L2 distance)."""
+    arr = np.frombuffer(blob, dtype=np.float32).copy()
+    norm = np.linalg.norm(arr)
+    if norm > 0:
+        arr = arr / norm
+    return arr.tobytes()
 
 
 # ── Row conversion helpers ─────────────────────────────────────────

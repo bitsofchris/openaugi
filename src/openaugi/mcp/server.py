@@ -1,13 +1,12 @@
 """OpenAugi MCP Server — query + write tools for Claude.
 
 Read tools (readOnlyHint):
-- search: semantic (FAISS) + keyword (FTS5) + filters
+- search: semantic (sqlite-vec KNN) + keyword (FTS5) + filters
 - get_block: full block content by ID
 - get_related: follow links from a block
 - traverse: multi-hop graph walk
 - get_context: compound search → expand → structured result
 - recent: recently created blocks
-- reload_index: force-refresh the FAISS index
 
 Write tools:
 - write_document: create a markdown note in OpenAugi/{subfolder}/
@@ -30,7 +29,6 @@ from mcp.types import ToolAnnotations
 
 from openaugi.config import load_config
 from openaugi.models import get_embedding_model
-from openaugi.pipeline.embed import build_faiss_index
 from openaugi.store.sqlite import SQLiteStore
 
 logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
@@ -41,10 +39,8 @@ mcp = FastMCP("openaugi")
 # ── State (initialized lazily) ─────────────────────────────────────
 
 _store: SQLiteStore | None = None
-_faiss_index = None
 _embedding_model = None
 _db_path: str | None = None
-_db_mtime: float = 0
 
 
 def _get_db_path() -> str:
@@ -75,26 +71,6 @@ def _get_embedding_model():
             config.get("models", {}).get("embedding")
         )
     return _embedding_model
-
-
-def _check_freshness():
-    """Invalidate FAISS if DB was modified."""
-    global _db_mtime, _faiss_index
-    db_path = _get_db_path()
-    if os.path.exists(db_path):
-        current = os.path.getmtime(db_path)
-        if current > _db_mtime:
-            _faiss_index = None
-            _db_mtime = current
-
-
-def _get_faiss():
-    global _faiss_index
-    if _faiss_index is None:
-        store = _get_store()
-        model = _get_embedding_model()
-        _faiss_index = build_faiss_index(store, dim=model.dimensions)
-    return _faiss_index
 
 
 def _release_conn(fn):
@@ -129,7 +105,7 @@ def search(
     source: str | None = None,
 ) -> str:
     """Search knowledge base. Three modes:
-    - Semantic: provide 'query' for FAISS cosine similarity
+    - Semantic: provide 'query' for vector similarity search
     - Keyword: provide 'keyword' for FTS5 full-text search
     - Browse: provide filters (tags, after, before, kind, source)
 
@@ -137,7 +113,6 @@ def search(
     if not query and not keyword and not any([tags, after, before, kind, source]):
         return _json({"error": "Provide query, keyword, or at least one filter"})
 
-    _check_freshness()
     store = _get_store()
 
     if keyword:
@@ -149,12 +124,11 @@ def search(
         })
 
     if query:
-        faiss_index = _get_faiss()
         query_vec = _get_embedding_model().embed_query(query)
-        hits = faiss_index.search(query_vec, k=k * 3)
+        hits = store.semantic_search(query_vec, k=k * 3)
 
         results = []
-        for block_id, score in hits:
+        for block_id, distance in hits:
             block = store.get_block(block_id)
             if block is None:
                 continue
@@ -169,7 +143,7 @@ def search(
             if before and (block.timestamp or "") > before:
                 continue
             summary = _block_summary(block)
-            summary["score"] = score
+            summary["score"] = round(1.0 - distance, 4)
             results.append(summary)
             if len(results) >= k:
                 break
@@ -299,7 +273,6 @@ def get_context(
     """Power tool: multi-prong search → expand via links → structured context.
     Combines semantic + keyword search, then follows links from top results
     to build a rich context package for Claude."""
-    _check_freshness()
     store = _get_store()
 
     blocks_seen: dict[str, dict] = {}
@@ -310,21 +283,19 @@ def get_context(
         if b.id not in blocks_seen:
             blocks_seen[b.id] = {**_block_summary(b), "source": "fts"}
 
-    # Prong 2: semantic (if FAISS available)
+    # Prong 2: semantic search via sqlite-vec
     try:
-        faiss_index = _get_faiss()
-        if faiss_index.size > 0:
-            query_vec = _get_embedding_model().embed_query(query)
-            hits = faiss_index.search(query_vec, k=k)
-            for block_id, score in hits:
-                if block_id not in blocks_seen:
-                    block = store.get_block(block_id)
-                    if block:
-                        blocks_seen[block_id] = {
-                            **_block_summary(block),
-                            "score": score,
-                            "source": "semantic",
-                        }
+        query_vec = _get_embedding_model().embed_query(query)
+        hits = store.semantic_search(query_vec, k=k)
+        for block_id, distance in hits:
+            if block_id not in blocks_seen:
+                block = store.get_block(block_id)
+                if block:
+                    blocks_seen[block_id] = {
+                        **_block_summary(block),
+                        "score": round(1.0 - distance, 4),
+                        "source": "semantic",
+                    }
     except Exception:
         logger.warning("Semantic search unavailable in get_context", exc_info=True)
 
@@ -377,18 +348,6 @@ def recent(
             break
 
     return _json({"results": results, "count": len(results)})
-
-
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-def reload_index() -> str:
-    """Force-refresh the FAISS search index.
-
-    Normally the index auto-reloads when the DB file changes (after
-    'openaugi ingest'). Use this to force an immediate refresh."""
-    global _faiss_index, _db_mtime
-    _faiss_index = None
-    _db_mtime = 0  # Reset so _check_freshness() fires on next search
-    return _json({"status": "ok", "message": "Index cleared; rebuilds on next search"})
 
 
 # ── Write Tools ────────────────────────────────────────────────────

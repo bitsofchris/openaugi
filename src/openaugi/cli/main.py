@@ -245,27 +245,23 @@ def search(
             for b in results:
                 _print_block(b)
         else:
-            # Semantic search
-            try:
-                from openaugi.config import load_config
-                from openaugi.models import get_embedding_model
-                from openaugi.pipeline.embed import build_faiss_index
+            # Semantic search via sqlite-vec
+            from openaugi.config import load_config
+            from openaugi.models import get_embedding_model
 
-                config = load_config()
-                model = get_embedding_model(config.get("models", {}).get("embedding"))
-                index = build_faiss_index(store, dim=model.dimensions)
-                query_vec = model.embed_query(query)
-                hits = index.search(query_vec, k=k)
+            config = load_config()
+            model = get_embedding_model(config.get("models", {}).get("embedding"))
+            query_vec = model.embed_query(query)
+            hits = store.semantic_search(query_vec, k=k)
 
-                for block_id, score in hits:
-                    block = store.get_block(block_id)
-                    if block:
-                        _print_block(block, score=score)
-            except ImportError:
-                console.print("[yellow]No embedding model. Using keyword search.[/yellow]")
-                results = store.search_fts(query, limit=k)
-                for b in results:
-                    _print_block(b)
+            if not hits:
+                console.print(
+                    "[yellow]No semantic search results. Run 'openaugi ingest' first.[/yellow]"
+                )
+            for block_id, distance in hits:
+                block = store.get_block(block_id)
+                if block:
+                    _print_block(block, score=round(1.0 - distance, 4))
     finally:
         store.close()
 
@@ -343,6 +339,45 @@ def status(
                 stats["links_by_kind"].items(), key=lambda x: -x[1]
             ):
                 console.print(f"  {kind}: {count}")
+    finally:
+        store.close()
+
+
+@app.command(name="migrate-vec")
+def migrate_vec(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+):
+    """Migrate existing embeddings into the sqlite-vec vector table.
+
+    Run this once on existing databases after upgrading to sqlite-vec.
+    No re-embedding is needed — copies existing blobs from blocks table.
+    """
+    from openaugi.store.sqlite import SQLiteStore
+
+    db_path = db or str(_default_db())
+
+    if not Path(db_path).exists():
+        console.print(f"[red]Database not found:[/red] {db_path}")
+        raise typer.Exit(1)
+
+    store = SQLiteStore(db_path)
+    try:
+        # Infer dimension from first embedding blob
+        import numpy as np
+
+        blocks = store.get_blocks_with_embeddings()
+        if not blocks:
+            console.print(
+                "[yellow]No embeddings found in database. Run 'openaugi ingest' first.[/yellow]"
+            )
+            return
+
+        dim = len(np.frombuffer(blocks[0].embedding, dtype=np.float32))  # type: ignore[arg-type]
+        console.print(f"Detected embedding dimension: [cyan]{dim}[/cyan]")
+        console.print(f"Migrating [cyan]{len(blocks)}[/cyan] embeddings to vec_blocks...")
+
+        count = store.populate_vec_from_blocks(dim)
+        console.print(f"[green]✓[/green] Migrated {count} embeddings")
     finally:
         store.close()
 

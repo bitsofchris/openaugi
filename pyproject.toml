@@ -27,15 +27,15 @@ dependencies = [
     "mcp>=1.0",
     "numpy>=1.26",
     "openai>=1.0",
+    "sqlite-vec>=0.1.6",
 ]
 
 [project.optional-dependencies]
-local = ["sentence-transformers>=3.0", "faiss-cpu>=1.8"]
+local = ["sentence-transformers>=3.0"]
 openai = []  # kept for backwards compat, openai is now a core dependency
 ollama = ["httpx>=0.27"]
 all = [
     "sentence-transformers>=3.0",
-    "faiss-cpu>=1.8",
     "openai>=1.0",
     "httpx>=0.27",
 ]

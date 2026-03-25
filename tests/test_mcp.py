@@ -133,12 +133,6 @@ class TestMCPTools:
         for r in result["results"]:
             assert r["kind"] == "document"
 
-    def test_reload_index(self):
-        from openaugi.mcp.server import reload_index
-
-        result = json.loads(reload_index())
-        assert result["status"] == "ok"
-
     def test_write_document_no_vault(self, monkeypatch):
         import openaugi.mcp.server as srv
         from openaugi.mcp.server import write_document
