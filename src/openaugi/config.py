@@ -40,6 +40,12 @@ DEFAULT_CONFIG = {
     "hub": {
         "weights": {"in_links": 0.5, "out_links": 0.3, "entry_count": 0.2},
     },
+    "retrieval": {
+        "overfetch_ratio": 3,    # fetch k*ratio candidates before reranking
+        "group_threshold": 0.15, # cosine distance below which chunks are considered duplicates
+        "mmr_lambda": 0.5,       # 1.0 = pure relevance, 0.0 = pure diversity
+        "representative": "centroid",  # "centroid" | "score"
+    },
 }
 
 

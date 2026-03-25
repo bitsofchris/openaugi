@@ -399,6 +399,21 @@ class SQLiteStore:
             )
         self.conn.commit()
 
+    def get_embeddings_for_ids(self, block_ids: list[str]) -> dict[str, bytes | None]:
+        """Fetch embedding blobs for a list of block IDs.
+
+        Returns a dict {block_id: embedding_blob_or_None}.
+        More efficient than get_block() when only embeddings are needed.
+        """
+        if not block_ids:
+            return {}
+        placeholders = ",".join("?" * len(block_ids))
+        rows = self.conn.execute(
+            f"SELECT id, embedding FROM blocks WHERE id IN ({placeholders})",
+            block_ids,
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
     def get_blocks_with_embeddings(self, kind: str = "entry") -> list[Block]:
         """Get all blocks with embeddings (raw blobs for migration purposes)."""
         rows = self.conn.execute(
