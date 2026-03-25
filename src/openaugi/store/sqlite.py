@@ -239,6 +239,27 @@ class SQLiteStore:
         self.conn.commit()
         return cursor.rowcount
 
+    def get_entries_for_document(self, doc_id: str) -> list[Block]:
+        """Get entry blocks linked to a document via split_from."""
+        rows = self.conn.execute(
+            """SELECT b.id, b.kind, b.content, b.summary, b.embedding, b.source,
+                      b.title, b.tags, b.timestamp, b.occurred_at, b.metadata,
+                      b.content_hash, b.created_at
+               FROM blocks b
+               JOIN links l ON l.from_id = b.id
+               WHERE l.to_id = ? AND l.kind = 'split_from'""",
+            (doc_id,),
+        ).fetchall()
+        return [_row_to_block(r) for r in rows]
+
+    def update_block_hash(self, block_id: str, content_hash: str) -> None:
+        """Update a block's content_hash (used for document block file-level hash)."""
+        self.conn.execute(
+            "UPDATE blocks SET content_hash = ? WHERE id = ?",
+            (content_hash, block_id),
+        )
+        self.conn.commit()
+
     # ── Link CRUD ──────────────────────────────────────────────────
 
     def insert_link(self, link: Link) -> None:
