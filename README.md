@@ -1,6 +1,12 @@
 # OpenAugi
 
+This is an evolving personal project, submit issues with ideas or bugs, but expect nothing as I figure out what OpenAugi is :)
+
+
+Today it's:
+
 Self-hostable personal intelligence engine. One `pip install`. One SQLite file. One MCP server.
+
 
 ## What It Does
 
@@ -43,8 +49,8 @@ claude mcp add --transport stdio --scope user openaugi -- openaugi serve
 
 **Processing layers:**
 - **Layer 0**  — split by headings, extract tags/links, FTS5 index, dedup hash
-- **Layer 1**  — embed with local sentence-transformers, hub scoring via link aggregation
-- **Layer 2**  — entity extraction, summaries. LLM required. Coming later.
+- **Layer 1**  — embed with any model, hub scoring via link aggregation
+- **Layer 2**  — Optional, configurable entity extraction, summaries. LLM required. Coming later.
 
 **MCP tools (6):**
 
