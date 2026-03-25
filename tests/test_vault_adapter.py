@@ -13,6 +13,8 @@ Uses the fixture vault at tests/fixtures/vault/ which contains:
 
 from pathlib import Path
 
+import pytest
+
 from openaugi.adapters.vault import (
     _extract_links,
     _extract_tags,
@@ -247,3 +249,56 @@ class TestIncrementalParsing:
             vault_path, known_doc_hashes=fake_hashes
         )
         assert "nonexistent.md" in deleted
+
+
+class TestVaultValidation:
+    def test_nonexistent_vault_raises(self, tmp_path: Path):
+        with pytest.raises(FileNotFoundError, match="does not exist"):
+            parse_vault(tmp_path / "nonexistent")
+
+    def test_nonexistent_vault_incremental_raises(self, tmp_path: Path):
+        with pytest.raises(FileNotFoundError, match="does not exist"):
+            parse_vault_incremental(tmp_path / "nonexistent", {})
+
+    def test_unreadable_vault_raises(self, tmp_path: Path):
+        """Vault dir exists but can't be listed → PermissionError."""
+        blocked = tmp_path / "blocked"
+        blocked.mkdir()
+        blocked.chmod(0o000)
+        try:
+            with pytest.raises(PermissionError, match="Cannot read"):
+                parse_vault(blocked)
+        finally:
+            blocked.chmod(0o755)
+
+
+class TestEdgeCases:
+    def test_unicode_content(self, tmp_path: Path):
+        """Files with emoji and non-ASCII parse without error."""
+        note = tmp_path / "unicode.md"
+        note.write_text(
+            "---\ntags:\n  - café\n---\n\n# 日本語 🎉\n\nContent with émojis 🚀\n",
+            encoding="utf-8",
+        )
+        blocks, links = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "entry"]
+        assert len(entries) == 1
+        assert "🚀" in entries[0].content
+
+    def test_frontmatter_only_file(self, vault_path: Path):
+        """A file with only frontmatter and no body produces no entries."""
+        blocks, _ = parse_vault(vault_path)
+        empty_entries = [
+            b for b in blocks
+            if b.kind == "entry"
+            and b.metadata.get("parent_note_title") == "empty-note"
+        ]
+        assert len(empty_entries) == 0
+
+    def test_special_chars_in_filename(self, tmp_path: Path):
+        """Filenames with parentheses and ampersands parse fine."""
+        note = tmp_path / "Q&A (draft).md"
+        note.write_text("Some content here\n")
+        blocks, _ = parse_vault(tmp_path)
+        docs = [b for b in blocks if b.kind == "document"]
+        assert any("Q&A (draft)" in (b.title or "") for b in docs)
