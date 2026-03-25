@@ -41,20 +41,21 @@ src/openaugi/
 │   └── vault.py          # Obsidian vault → blocks + links
 ├── pipeline/
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
-│   └── embed.py           # Layer 1 embedding step + FAISS build
+│   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
+│   └── rerank.py          # Dedup + MMR re-ranking for get_context
 ├── store/
-│   ├── sqlite.py          # SQLite backend (WAL, FTS5, CASCADE)
-│   └── faiss.py           # FAISS vector index wrapper
+│   └── sqlite.py          # SQLite backend (WAL, FTS5, sqlite-vec vec0, CASCADE)
 ├── models/
 │   ├── __init__.py        # Factory: get_embedding_model(), get_llm_model()
 │   └── embeddings/
 │       ├── sentence_transformer.py  # Local default (free)
 │       └── openai.py               # OpenAI API adapter
 ├── mcp/
-│   └── server.py          # 6 MCP tools for Claude
+│   ├── server.py          # MCP tools (read + write)
+│   └── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
 ├── cli/
 │   └── main.py            # typer CLI
-└── config.py              # TOML config loader
+└── config.py              # TOML config loader + .env loader
 ```
 
 ## Key Flows
@@ -73,18 +74,21 @@ Vault .md files
   → FTS5 auto-indexed via triggers
   → run_embed()  [pipeline/embed.py]
     → embed blocks where embedding IS NULL
-    → build FAISS index
+    → write float32 blobs to blocks.embedding + vec_blocks (sqlite-vec)
 ```
 
 ### Query (MCP)
 
 ```
 Claude → MCP tool call → server.py
-  → search: FAISS (semantic) or FTS5 (keyword) + filters
+  → search: sqlite-vec KNN (semantic) or FTS5 (keyword) + filters
   → get_block: full content by ID
   → get_related: follow links from/to a block
   → traverse: multi-hop graph walk
-  → get_context: compound search → expand → structured result
+  → get_context: FTS + semantic (3× overfetch)
+                 → deduplicate (cosine grouping, rerank.py)
+                 → MMR re-rank
+                 → expand via links
   → recent: recently created blocks
 ```
 
@@ -100,10 +104,11 @@ hub_score = w_in * ln(1 + inbound_links) + w_out * ln(1 + outbound_links) + w_en
 See [docs/plans/m0.md](docs/plans/m0.md) § Key Design Decisions for full rationale.
 
 - **SQLite over DuckDB**: WAL mode concurrent writes. DuckDB is single-writer.
+- **sqlite-vec over FAISS**: KNN via `vec0` virtual table — everything in one file, no separate index management. Embeddings normalized on write so L2 distance ≡ cosine.
 - **Content hash as block identity**: `hash(source_path + content_hash)` — stable across section reordering.
 - **Tags as blocks**: First-class graph nodes. Hub scoring, traversal, entity resolution work uniformly.
 - **Default local embeddings**: sentence-transformers, no API key. Users upgrade via config.
-- **6 MCP tools (down from v1's 13)**: `get_context` is the power tool. `get_related` + `traverse` replace several v1 tools.
+- **`get_context` dedup + MMR**: Over-fetches 3× candidates, collapses near-duplicates via cosine grouping, re-ranks for diversity before returning. See [docs/MCP_SERVER.md](docs/MCP_SERVER.md) for tuning.
 
 ## Plans
 
