@@ -1,7 +1,7 @@
 """OpenAugi MCP Server — query + write tools for Claude.
 
 Read tools (readOnlyHint):
-- search: semantic (sqlite-vec KNN) + keyword (FTS5) + filters
+- search: semantic (sqlite-vec KNN) + title (FTS5 title-only) + keyword (FTS5) + filters
 - get_block: full block content by ID
 - get_related: follow links from a block
 - traverse: multi-hop graph walk
@@ -24,11 +24,13 @@ import os
 import sys
 from pathlib import Path
 
+import numpy as np
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from openaugi.config import load_config
 from openaugi.models import get_embedding_model
+from openaugi.pipeline.rerank import rerank as _rerank
 from openaugi.store.sqlite import SQLiteStore
 
 logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
@@ -97,6 +99,7 @@ def _json(data) -> str:
 def search(
     query: str | None = None,
     keyword: str | None = None,
+    title: str | None = None,
     k: int = 20,
     tags: list[str] | None = None,
     after: str | None = None,
@@ -104,16 +107,27 @@ def search(
     kind: str | None = None,
     source: str | None = None,
 ) -> str:
-    """Search knowledge base. Three modes:
+    """Search knowledge base. Four modes:
+    - Title: provide 'title' to search note/document titles only — use this when
+      looking for a specific note by name (e.g. title="meeting notes", title="project plan")
     - Semantic: provide 'query' for vector similarity search
-    - Keyword: provide 'keyword' for FTS5 full-text search
+    - Keyword: provide 'keyword' for FTS5 full-text search (title + content + tags)
     - Browse: provide filters (tags, after, before, kind, source)
 
-    Must provide at least one of: query, keyword, or a filter."""
-    if not query and not keyword and not any([tags, after, before, kind, source]):
-        return _json({"error": "Provide query, keyword, or at least one filter"})
+    Prefer 'title' over 'keyword' when you know the note name or want to navigate by title.
+    Must provide at least one of: query, keyword, title, or a filter."""
+    if not query and not keyword and not title and not any([tags, after, before, kind, source]):
+        return _json({"error": "Provide query, keyword, title, or at least one filter"})
 
     store = _get_store()
+
+    if title:
+        results = store.search_fts(f"title:{title}", limit=k)
+        return _json({
+            "results": [_block_summary(b) for b in results],
+            "count": len(results),
+            "mode": "title",
+        })
 
     if keyword:
         results = store.search_fts(keyword, limit=k)
@@ -270,39 +284,77 @@ def get_context(
     k: int = 10,
     expand: bool = True,
 ) -> str:
-    """Power tool: multi-prong search → expand via links → structured context.
-    Combines semantic + keyword search, then follows links from top results
-    to build a rich context package for Claude."""
+    """Power tool: multi-prong search → deduplicate → diversity re-rank → expand via links.
+    Combines semantic + keyword search, deduplicates redundant chunks via embedding
+    similarity grouping, re-ranks for diversity (MMR), then follows links from top
+    results to build a rich context package for Claude."""
     store = _get_store()
+    config = load_config()
+    retrieval = config.get("retrieval", {})
+    overfetch_ratio = retrieval.get("overfetch_ratio", 3)
+    group_threshold = retrieval.get("group_threshold", 0.15)
+    mmr_lambda = retrieval.get("mmr_lambda", 0.5)
+    representative = retrieval.get("representative", "centroid")
 
-    blocks_seen: dict[str, dict] = {}
+    fetch_limit = k * overfetch_ratio
 
-    # Prong 1: keyword/FTS
-    fts_results = store.search_fts(query, limit=k)
+    # Collect candidate IDs and their best relevance scores
+    candidate_scores: dict[str, float] = {}
+
+    # Prong 1: FTS — score 1.0 (keyword match = high relevance)
+    fts_results = store.search_fts(query, limit=fetch_limit)
     for b in fts_results:
-        if b.id not in blocks_seen:
-            blocks_seen[b.id] = {**_block_summary(b), "source": "fts"}
+        candidate_scores[b.id] = 1.0
 
-    # Prong 2: semantic search via sqlite-vec
+    # Prong 2: semantic search
+    query_vec: list[float] | None = None
     try:
         query_vec = _get_embedding_model().embed_query(query)
-        hits = store.semantic_search(query_vec, k=k)
+        hits = store.semantic_search(query_vec, k=fetch_limit)
         for block_id, distance in hits:
-            if block_id not in blocks_seen:
-                block = store.get_block(block_id)
-                if block:
-                    blocks_seen[block_id] = {
-                        **_block_summary(block),
-                        "score": round(1.0 - distance, 4),
-                        "source": "semantic",
-                    }
+            score = round(1.0 - distance, 4)
+            candidate_scores[block_id] = max(candidate_scores.get(block_id, 0.0), score)
     except Exception:
         logger.warning("Semantic search unavailable in get_context", exc_info=True)
+
+    if not candidate_scores:
+        return _json({"query": query, "direct_results": [], "expanded": [], "total_blocks": 0})
+
+    all_ids = list(candidate_scores.keys())
+
+    # Batch-fetch embeddings for all candidates (single query, no full block load)
+    emb_map = store.get_embeddings_for_ids(all_ids)
+
+    # Build candidates for reranker: (block_id, embedding_blob_or_None, score)
+    candidates = [(bid, emb_map.get(bid), candidate_scores[bid]) for bid in all_ids]
+
+    # Rerank if we have a query embedding; fall back to score order otherwise
+    if query_vec is not None:
+        query_blob = np.array(query_vec, dtype=np.float32).tobytes()
+        final_ids = _rerank(
+            candidates,
+            query_blob,
+            k,
+            group_threshold=group_threshold,
+            mmr_lambda=mmr_lambda,
+            representative=representative,
+        )
+    else:
+        final_ids = sorted(all_ids, key=lambda bid: candidate_scores[bid], reverse=True)[:k]
+
+    # Fetch full blocks only for the final k IDs
+    blocks_seen: dict[str, dict] = {}
+    for block_id in final_ids:
+        block = store.get_block(block_id)
+        if block:
+            entry = {**_block_summary(block), "score": candidate_scores.get(block_id, 0.0)}
+            entry["source"] = "fts" if block_id in {b.id for b in fts_results} else "semantic"
+            blocks_seen[block_id] = entry
 
     # Expand: follow links from top results
     expanded: list[dict] = []
     if expand:
-        for block_id in list(blocks_seen.keys())[:k]:
+        for block_id in final_ids:
             links = store.get_links_from(block_id)
             for lnk in links[:5]:
                 if lnk.to_id not in blocks_seen:
