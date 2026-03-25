@@ -36,7 +36,7 @@ class FaissIndex:
             dim: Embedding dimension.
         """
         try:
-            import faiss
+            import faiss  # type: ignore[import]
         except ImportError as e:
             raise ImportError(
                 "faiss-cpu not installed. Run: pip install openaugi[local]"
@@ -108,7 +108,7 @@ class FaissIndex:
         if self._index is None:
             return
         try:
-            import faiss
+            import faiss  # type: ignore[import]
 
             faiss.write_index(self._index, str(path))
             logger.info(f"FAISS index saved to {path}")
@@ -118,7 +118,7 @@ class FaissIndex:
     def load(self, path: str | Path, block_ids: list[str]) -> None:
         """Load FAISS index from disk."""
         try:
-            import faiss
+            import faiss  # type: ignore[import]
 
             self._index = faiss.read_index(str(path))
             self._block_ids = list(block_ids)

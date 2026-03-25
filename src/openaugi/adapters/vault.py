@@ -402,7 +402,7 @@ def _get_file_created_time(file_path: Path) -> str | None:
     """Get file creation time as ISO string."""
     try:
         stat = file_path.stat()
-        ts = stat.st_birthtime if hasattr(stat, "st_birthtime") else stat.st_mtime
+        ts = stat.st_mtime
         return datetime.fromtimestamp(ts).strftime("%Y-%m-%dT%H:%M:%SZ")
     except Exception:
         return None
