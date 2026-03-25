@@ -38,7 +38,8 @@ def run_embed(
         logger.info("All entry blocks already have embeddings")
         return 0
 
-    logger.info(f"Embedding {len(blocks)} blocks (model: {model.name})")
+    total_to_embed = len(blocks)
+    logger.info(f"Embedding {total_to_embed} blocks (model: {model.name})")
     start = time.time()
     total = 0
 
@@ -67,8 +68,10 @@ def run_embed(
                 except Exception as e2:
                     logger.warning(f"Block {bid} failed: {e2}")
 
+        logger.info(f"Embedded {total} / {total_to_embed}")
+
     elapsed = time.time() - start
-    logger.info(f"Embedded {total} blocks in {elapsed:.1f}s")
+    logger.info(f"Done embedding {total} blocks in {elapsed:.1f}s")
     return total
 
 
