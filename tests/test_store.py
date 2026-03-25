@@ -1,4 +1,6 @@
-"""Tests for SQLiteStore — block CRUD, link CRUD, FTS, cascade delete."""
+"""Tests for SQLiteStore — block CRUD, link CRUD, FTS, cascade delete, vector search."""
+
+import numpy as np
 
 from openaugi.model.block import Block
 from openaugi.model.link import Link
@@ -238,6 +240,52 @@ class TestEmbeddingHelpers:
         with_emb = store.get_blocks_with_embeddings()
         assert len(with_emb) == 1
         assert with_emb[0].id == "e1"
+
+
+class TestVectorSearch:
+    def _make_blob(self, vec: list[float]) -> bytes:
+        return np.array(vec, dtype=np.float32).tobytes()
+
+    def test_ensure_vec_table_creates_table(self, store: SQLiteStore):
+        store.ensure_vec_table(4)
+        assert store._vec_table_exists()
+
+    def test_semantic_search_returns_empty_without_vec_table(self, store: SQLiteStore):
+        results = store.semantic_search([1.0, 0.0, 0.0, 0.0], k=5)
+        assert results == []
+
+    def test_semantic_search_finds_similar(self, store: SQLiteStore):
+        store.ensure_vec_table(4)
+        store.insert_blocks([
+            Block(id="e1", kind="entry", content="cats"),
+            Block(id="e2", kind="entry", content="dogs"),
+            Block(id="e3", kind="entry", content="cars"),
+        ])
+        store.update_embeddings({
+            "e1": self._make_blob([1.0, 0.0, 0.0, 0.0]),
+            "e2": self._make_blob([0.9, 0.1, 0.0, 0.0]),
+            "e3": self._make_blob([0.0, 0.0, 1.0, 0.0]),
+        })
+        # Query close to e1 and e2
+        results = store.semantic_search([1.0, 0.0, 0.0, 0.0], k=2)
+        assert len(results) == 2
+        ids = [r[0] for r in results]
+        assert "e1" in ids
+        assert "e2" in ids
+        # e3 should not appear
+        assert "e3" not in ids
+
+    def test_populate_vec_from_blocks(self, store: SQLiteStore):
+        store.insert_blocks([
+            Block(id="e1", kind="entry", content="a",
+                  embedding=self._make_blob([1.0, 0.0, 0.0, 0.0])),
+            Block(id="e2", kind="entry", content="b",
+                  embedding=self._make_blob([0.0, 1.0, 0.0, 0.0])),
+        ])
+        count = store.populate_vec_from_blocks(dim=4)
+        assert count == 2
+        results = store.semantic_search([1.0, 0.0, 0.0, 0.0], k=1)
+        assert results[0][0] == "e1"
 
 
 class TestHubScoring:

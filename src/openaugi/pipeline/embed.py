@@ -1,7 +1,7 @@
 """Embedding pipeline step — batch embed blocks via EmbeddingModel.
 
-Processes blocks where embedding IS NULL. Stores embeddings as BLOBs.
-Builds FAISS index from all embedded blocks.
+Processes blocks where embedding IS NULL. Stores embeddings as BLOBs
+in the blocks table and in the sqlite-vec vec_blocks virtual table.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ import time
 import numpy as np
 
 from openaugi.model.protocols import EmbeddingModel
-from openaugi.store.faiss import FaissIndex
 from openaugi.store.sqlite import SQLiteStore
 
 logger = logging.getLogger(__name__)
@@ -37,6 +36,9 @@ def run_embed(
     if not blocks:
         logger.info("All entry blocks already have embeddings")
         return 0
+
+    # Ensure vec_blocks table exists with the correct dimension before writing
+    store.ensure_vec_table(model.dimensions)
 
     total_to_embed = len(blocks)
     logger.info(f"Embedding {total_to_embed} blocks (model: {model.name})")
@@ -73,21 +75,3 @@ def run_embed(
     elapsed = time.time() - start
     logger.info(f"Done embedding {total} blocks in {elapsed:.1f}s")
     return total
-
-
-def build_faiss_index(store: SQLiteStore, dim: int | None = None) -> FaissIndex:
-    """Build FAISS index from all embedded entry blocks."""
-    blocks = store.get_blocks_with_embeddings(kind="entry")
-    if not blocks:
-        logger.warning("No embedded blocks found")
-        return FaissIndex()
-
-    block_ids = [b.id for b in blocks]
-    embeddings = [b.embedding for b in blocks if b.embedding]
-
-    if dim is None and embeddings:
-        dim = len(np.frombuffer(embeddings[0], dtype=np.float32))
-
-    index = FaissIndex()
-    index.build(block_ids, embeddings, dim or 384)
-    return index

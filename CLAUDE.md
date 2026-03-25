@@ -37,12 +37,11 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system map.
 **Key modules:**
 - `src/openaugi/model/` — Block, Link (Pydantic), protocols (EmbeddingModel, LLMModel)
 - `src/openaugi/adapters/vault.py` — Obsidian vault → blocks + links
-- `src/openaugi/store/sqlite.py` — SQLite backend (WAL, FTS5, CASCADE)
-- `src/openaugi/store/faiss.py` — FAISS vector index wrapper
+- `src/openaugi/store/sqlite.py` — SQLite backend (WAL, FTS5, sqlite-vec vec0, CASCADE)
 - `src/openaugi/pipeline/runner.py` — Layer 0 orchestrator
 - `src/openaugi/pipeline/embed.py` — Layer 1 embedding step
-- `src/openaugi/mcp/server.py` — 6 MCP tools for Claude
-- `src/openaugi/cli/main.py` — typer CLI (ingest, serve, search, hubs, status)
+- `src/openaugi/mcp/server.py` — 5 MCP tools for Claude
+- `src/openaugi/cli/main.py` — typer CLI (ingest, serve, search, hubs, status, migrate-vec)
 
 # Document as you go
 Plans go in docs/plans folder. Move them to docs/archive when done.

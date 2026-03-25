@@ -6,14 +6,15 @@ description: Setup and registration guide for the OpenAugi MCP server — Claude
 # OpenAugi MCP Server
 
 The OpenAugi MCP server exposes your knowledge graph as structured tools for Claude.
-All reads hit SQLite + FAISS. Writes go directly to markdown files in your vault.
+All reads hit SQLite (FTS5 + sqlite-vec vector search). Writes go directly to markdown files in your vault.
 
 ## Architecture
 
 ```
 openaugi serve  (stdio transport)
 ├── SQLiteStore (read-only, lazy connection)
-├── FAISS index (lazy, auto-reloads when DB changes)
+│   ├── FTS5 virtual table  (keyword search)
+│   └── vec0 virtual table  (semantic vector search via sqlite-vec)
 └── VaultWriter (writes .md files to OpenAugi/ in vault)
 ```
 
@@ -83,13 +84,12 @@ Both are optional if you've run `openaugi init` — the config file is the defau
 
 | Tool | Purpose |
 |------|---------|
-| `search` | Semantic (FAISS), keyword (FTS5), or browse with filters |
+| `search` | Semantic (sqlite-vec KNN), keyword (FTS5), or browse with filters |
 | `get_block` | Full block content + metadata by ID |
 | `get_related` | Follow links from/to a block (tags, wikilinks, derivations) |
 | `traverse` | Multi-hop graph walk from a starting block |
 | `get_context` | Power tool: semantic + keyword → expand via links → structured context |
 | `recent` | Recently created blocks, filtered by kind/source/tags |
-| `reload_index` | Force-refresh FAISS (auto-reloads on DB change; this is the manual override) |
 
 ### Write tools
 
@@ -103,6 +103,17 @@ the `OpenAugi/` root. This keeps agent output separate from your own notes.
 
 After writing, run `openaugi ingest` to pick up new notes into the knowledge graph.
 
+## Upgrading from a previous version
+
+If you have an existing database created before the sqlite-vec migration, run once:
+
+```bash
+openaugi migrate-vec --db /path/to/openaugi.db
+```
+
+This copies existing embedding blobs from the `blocks` table into the `vec_blocks` virtual table.
+No re-embedding is needed — it's a local data migration only.
+
 ## Resources
 
 `vault://note/{title}` — dynamic resource template. Returns all entries for a note
@@ -112,16 +123,9 @@ plus inbound/outbound link counts. Shows up in Claude Code's `@` autocomplete:
 @openaugi:vault://note/My Note Title
 ```
 
-## Auto-Refresh
-
-The FAISS index auto-reloads when the DB file changes (detected via mtime after
-`openaugi ingest`). The index rebuilds lazily on the next semantic search.
-
-Use `reload_index` to force an immediate refresh without waiting for a search.
-
 ## Troubleshooting
 
 - **Server not showing in `/mcp`**: Run `claude mcp list` to check registration
 - **Import errors**: Verify the venv path in your registration command
 - **write_document fails with "No vault path"**: Run `openaugi init` to set a default vault path, or set `OPENAUGI_VAULT_PATH`
-- **Stale search results after ingest**: Call `reload_index` or wait for the next search (auto-detects DB change)
+- **Semantic search returns no results**: Run `openaugi ingest` (or `openaugi migrate-vec` if upgrading from an older DB)
