@@ -103,17 +103,6 @@ the `OpenAugi/` root. This keeps agent output separate from your own notes.
 
 After writing, run `openaugi ingest` to pick up new notes into the knowledge graph.
 
-## Upgrading from a previous version
-
-If you have an existing database created before the sqlite-vec migration, run once:
-
-```bash
-openaugi migrate-vec --db /path/to/openaugi.db
-```
-
-This copies existing embedding blobs from the `blocks` table into the `vec_blocks` virtual table.
-No re-embedding is needed — it's a local data migration only.
-
 ## Resources
 
 `vault://note/{title}` — dynamic resource template. Returns all entries for a note
@@ -128,4 +117,4 @@ plus inbound/outbound link counts. Shows up in Claude Code's `@` autocomplete:
 - **Server not showing in `/mcp`**: Run `claude mcp list` to check registration
 - **Import errors**: Verify the venv path in your registration command
 - **write_document fails with "No vault path"**: Run `openaugi init` to set a default vault path, or set `OPENAUGI_VAULT_PATH`
-- **Semantic search returns no results**: Run `openaugi ingest` (or `openaugi migrate-vec` if upgrading from an older DB)
+- **Semantic search returns no results**: Run `openaugi ingest` to embed blocks into vec_blocks

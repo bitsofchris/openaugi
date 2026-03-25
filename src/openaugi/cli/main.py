@@ -343,45 +343,6 @@ def status(
         store.close()
 
 
-@app.command(name="migrate-vec")
-def migrate_vec(
-    db: str | None = typer.Option(None, "--db", help="Database path"),
-):
-    """Migrate existing embeddings into the sqlite-vec vector table.
-
-    Run this once on existing databases after upgrading to sqlite-vec.
-    No re-embedding is needed — copies existing blobs from blocks table.
-    """
-    from openaugi.store.sqlite import SQLiteStore
-
-    db_path = db or str(_default_db())
-
-    if not Path(db_path).exists():
-        console.print(f"[red]Database not found:[/red] {db_path}")
-        raise typer.Exit(1)
-
-    store = SQLiteStore(db_path)
-    try:
-        # Infer dimension from first embedding blob
-        import numpy as np
-
-        blocks = store.get_blocks_with_embeddings()
-        if not blocks:
-            console.print(
-                "[yellow]No embeddings found in database. Run 'openaugi ingest' first.[/yellow]"
-            )
-            return
-
-        dim = len(np.frombuffer(blocks[0].embedding, dtype=np.float32))  # type: ignore[arg-type]
-        console.print(f"Detected embedding dimension: [cyan]{dim}[/cyan]")
-        console.print(f"Migrating [cyan]{len(blocks)}[/cyan] embeddings to vec_blocks...")
-
-        count = store.populate_vec_from_blocks(dim)
-        console.print(f"[green]✓[/green] Migrated {count} embeddings")
-    finally:
-        store.close()
-
-
 def _print_block(block, score: float | None = None):
     """Print a block to the console."""
     score_str = f" [cyan]({score:.3f})[/cyan]" if score is not None else ""
