@@ -62,10 +62,11 @@ def parse_vault(
     vault = Path(vault_path)
     if not vault.is_dir():
         raise FileNotFoundError(f"Vault path does not exist: {vault}")
-    _check_readable(vault)
     excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
 
     all_files = list(vault.rglob("*.md"))
+    if not all_files:
+        _check_readable(vault)  # raises PermissionError with guidance if sandbox
     included = [f for f in all_files if _should_include(f, vault, excludes)]
     logger.info(
         f"Found {len(included)} files (excluded {len(all_files) - len(included)})"
@@ -126,10 +127,11 @@ def parse_vault_incremental(
     vault = Path(vault_path)
     if not vault.is_dir():
         raise FileNotFoundError(f"Vault path does not exist: {vault}")
-    _check_readable(vault)
     excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
 
     all_files = list(vault.rglob("*.md"))
+    if not all_files:
+        _check_readable(vault)  # raises PermissionError with guidance if sandbox
     included = [f for f in all_files if _should_include(f, vault, excludes)]
 
     # Hash all files, determine which changed
@@ -191,11 +193,11 @@ def parse_vault_incremental(
 
 
 def _check_readable(vault: Path) -> None:
-    """Verify the vault directory is actually readable.
+    """Diagnose why rglob returned no files.
 
-    On macOS, Path.rglob silently returns empty when sandbox permissions
-    block access. os.listdir raises PermissionError, so we use it to
-    detect the real problem early.
+    Called only when rglob("*.md") returns empty. On macOS, rglob silently
+    returns [] when sandbox permissions block access. os.listdir raises
+    PermissionError, giving us a clear error to surface.
     """
     try:
         os.listdir(vault)
