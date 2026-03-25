@@ -4,7 +4,7 @@ description: Master milestone plan for open-sourcing OpenAugi — porting augi-e
 ---
 
 # OpenAugi — Milestones to Ship
-*Created: 2026-03-19 | Updated: 2026-03-24*
+*Created: 2026-03-19 | Updated: 2026-03-25*
 
 ---
 
@@ -54,13 +54,13 @@ augi-engine-v1 is ~1500 lines across 7 files. It works. The port maps it to the 
 
 ## Milestone Overview
 
-| # | Milestone | Goal |
-|---|-----------|------|
-| **M0** | **Port & Foundation** | Port v1 to blocks+links, SQLite+FAISS, vault adapter, Layer 0+1 pipeline, model abstraction, 6 MCP tools, clean repo. **The milestone.** |
-| M1 | Multi-Source | Second source (ChatGPT JSON export). Adapter abstraction emerges. Cross-source hub scoring. |
-| M2 | Enrichment | Layer 2: entity extraction, hub summaries as summary blocks, clustering. |
-| M3 | Temporal Intelligence | Hub velocity, recurrence, dead streams. New MCP tools. |
-| M4 | Public Launch | README as problem statement, v0.1 tag, PyPI, first post. |
+| # | Milestone | Goal | Status |
+|---|-----------|------|--------|
+| **M0** | **Port & Foundation** | Port v1 to blocks+links, SQLite+FAISS, vault adapter, Layer 0+1 pipeline, model abstraction, 6 MCP tools, clean repo. | **✅ Done** |
+| M1 | Multi-Source | Second source (ChatGPT JSON export). Adapter abstraction emerges. Cross-source hub scoring. | Next |
+| M2 | Enrichment | Layer 2: entity extraction, hub summaries as summary blocks, clustering. | |
+| M3 | Temporal Intelligence | Hub velocity, recurrence, dead streams. New MCP tools. | |
+| M4 | Public Launch | README as problem statement, v0.1 tag, PyPI, first post. | |
 
 ---
 

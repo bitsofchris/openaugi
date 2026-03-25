@@ -49,8 +49,109 @@ def main(
 
 
 @app.command()
+def init():
+    """Set up OpenAugi — choose embedding model, configure API keys, set vault path."""
+    config_dir = Path.home() / ".openaugi"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_path = config_dir / "config.toml"
+    env_path = config_dir / ".env"
+
+    console.print("\n[bold]OpenAugi Setup[/bold]\n")
+
+    # 1. Embedding model
+    console.print("[bold]Embedding model[/bold]")
+    console.print("  1. OpenAI (text-embedding-3-small) — best quality, requires API key")
+    console.print("  2. Local (sentence-transformers) — free, no API key, runs on CPU")
+    console.print("  3. None — skip embeddings, keyword search only")
+
+    choice = typer.prompt("Choose", default="1")
+
+    embedding_provider = None
+    embedding_model = None
+    needs_openai_key = False
+
+    if choice == "1":
+        embedding_provider = "openai"
+        embedding_model = "text-embedding-3-small"
+        needs_openai_key = True
+    elif choice == "2":
+        embedding_provider = "sentence-transformers"
+        embedding_model = "all-MiniLM-L6-v2"
+    # else: no embeddings
+
+    # 2. API key (if needed)
+    env_lines: list[str] = []
+    if needs_openai_key:
+        # Check if already set
+        import os
+
+        existing = os.environ.get("OPENAI_API_KEY", "")
+        if existing:
+            masked = f"{existing[:8]}..."
+            console.print(f"  OPENAI_API_KEY already set in environment [dim]({masked})[/dim]")
+            save_key = typer.confirm("Save to ~/.openaugi/.env for persistence?", default=True)
+            if save_key:
+                env_lines.append(f"OPENAI_API_KEY={existing}")
+        else:
+            key = typer.prompt("  Enter your OpenAI API key", hide_input=True)
+            if key:
+                env_lines.append(f"OPENAI_API_KEY={key}")
+                console.print("  [green]Key saved to ~/.openaugi/.env[/green]")
+
+    # 3. Default vault path
+    vault_path = typer.prompt(
+        "\nDefault vault path (Obsidian vault)",
+        default=str(Path.home() / "Documents" / "vault"),
+    )
+
+    # Write config.toml
+    toml_lines = []
+    if embedding_provider:
+        toml_lines.extend([
+            "[models.embedding]",
+            f'provider = "{embedding_provider}"',
+            f'model = "{embedding_model}"',
+            "",
+        ])
+    toml_lines.extend([
+        "[vault]",
+        f'default_path = "{vault_path}"',
+    ])
+
+    config_path.write_text("\n".join(toml_lines) + "\n")
+    console.print(f"\n  Config written to [cyan]{config_path}[/cyan]")
+
+    # Write .env (append, don't overwrite existing vars)
+    if env_lines:
+        existing_env = env_path.read_text() if env_path.exists() else ""
+        new_vars = {}
+        for line in env_lines:
+            key, _, value = line.partition("=")
+            new_vars[key] = value
+
+        # Parse existing
+        existing_vars: dict[str, str] = {}
+        for line in existing_env.splitlines():
+            if "=" in line and not line.startswith("#"):
+                key, _, value = line.partition("=")
+                existing_vars[key.strip()] = value.strip()
+
+        # Merge (new overrides existing)
+        existing_vars.update(new_vars)
+        env_content = "\n".join(f"{k}={v}" for k, v in existing_vars.items()) + "\n"
+        env_path.write_text(env_content)
+        env_path.chmod(0o600)  # owner-only read/write
+        console.print(f"  Keys written to [cyan]{env_path}[/cyan] (chmod 600)")
+
+    console.print("\n[bold green]Setup complete![/bold green]\n")
+    console.print("Next steps:")
+    console.print("  openaugi ingest          # uses default vault path from config")
+    console.print("  openaugi serve           # start MCP server for Claude")
+
+
+@app.command()
 def ingest(
-    path: str = typer.Option(..., "--path", "-p", help="Path to Obsidian vault"),
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
     db: str | None = typer.Option(None, "--db", help="Database path"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
@@ -61,18 +162,26 @@ def ingest(
     from openaugi.pipeline.runner import run_layer0
     from openaugi.store.sqlite import SQLiteStore
 
+    config = load_config()
+
+    # Resolve vault path: CLI arg > config > error
+    vault_path = path or config.get("vault", {}).get("default_path")
+    if not vault_path:
+        console.print("[red]No vault path specified.[/red]")
+        console.print("Use --path or run 'openaugi init' to set a default.")
+        raise typer.Exit(1)
+
     db_path = db or str(_default_db())
     store = SQLiteStore(db_path)
 
     try:
-        config = load_config()
         exclude = config.get("vault", {}).get("exclude_patterns")
         workers = config.get("vault", {}).get("max_workers", 4)
 
-        console.print(f"[bold]Ingesting vault:[/bold] {path}")
+        console.print(f"[bold]Ingesting vault:[/bold] {vault_path}")
         console.print(f"[bold]Database:[/bold] {db_path}")
 
-        result = run_layer0(path, store, exclude_patterns=exclude, max_workers=workers)
+        result = run_layer0(vault_path, store, exclude_patterns=exclude, max_workers=workers)
 
         stats = result["stats"]
         console.print(f"\n[green]Done.[/green] "
