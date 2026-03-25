@@ -110,7 +110,8 @@ def run_layer0(
                     blocks_added += 1
 
             # Update document block's file hash
-            store.update_block_hash(doc_id, doc_block.content_hash)
+            if doc_block.content_hash:
+                store.update_block_hash(doc_id, doc_block.content_hash)
         else:
             # New file — insert everything
             blocks_to_insert.append(doc_block)

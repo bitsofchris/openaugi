@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from openaugi.config import load_config
 from openaugi.models import get_embedding_model
@@ -99,7 +100,7 @@ def _json(data) -> str:
 # ── Tools ──────────────────────────────────────────────────────────
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 @_release_conn
 def search(
     query: str | None = None,
@@ -184,7 +185,7 @@ def search(
     return _json({"results": results, "count": len(results), "mode": "browse"})
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 @_release_conn
 def get_block(block_id: str) -> str:
     """Get full block content and metadata by ID."""
@@ -195,7 +196,7 @@ def get_block(block_id: str) -> str:
     return _json(_block_full(block))
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 @_release_conn
 def get_related(
     block_id: str,
@@ -234,7 +235,7 @@ def get_related(
     return _json({"block_id": block_id, "related": results, "count": len(results)})
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 @_release_conn
 def traverse(
     start_id: str,
@@ -278,7 +279,7 @@ def traverse(
     })
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 @_release_conn
 def get_context(
     query: str,
@@ -348,7 +349,7 @@ def get_context(
     })
 
 
-@mcp.tool(annotations={"readOnlyHint": True})
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 @_release_conn
 def recent(
     k: int = 20,

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -18,7 +19,7 @@ class FaissIndex:
     """In-memory FAISS index for semantic search over block embeddings."""
 
     def __init__(self):
-        self._index = None
+        self._index: Any = None
         self._block_ids: list[str] = []
         self._dim: int = 0
 
