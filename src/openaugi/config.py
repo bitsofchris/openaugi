@@ -1,17 +1,24 @@
-"""TOML config loader.
+"""TOML config loader + env var loading.
 
-Loads from ~/.openaugi/config.toml or project-local openaugi.toml.
+Config: ~/.openaugi/config.toml or project-local openaugi.toml.
+Keys: ~/.openaugi/.env (loaded into os.environ on first config load).
 Falls back to sensible defaults (local sentence-transformers, no LLM).
+
+API keys follow the industry standard: env vars are primary,
+.env files are the convenience/persistence layer.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import tomllib
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_env_loaded = False
 
 DEFAULT_CONFIG = {
     "models": {
@@ -39,12 +46,15 @@ DEFAULT_CONFIG = {
 def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
     """Load config from TOML file, merging with defaults.
 
+    Also loads API keys from ~/.openaugi/.env into os.environ (once).
+
     Search order:
     1. Explicit path (if provided)
     2. ./openaugi.toml (project-local)
     3. ~/.openaugi/config.toml (user-level)
     4. Defaults only
     """
+    _load_env()
     if config_path:
         path = Path(config_path)
         if path.exists():
@@ -79,3 +89,36 @@ def _merge(base: dict, override: dict) -> dict:
         else:
             result[key] = value
     return result
+
+
+def _load_env() -> None:
+    """Load ~/.openaugi/.env into os.environ (once, won't overwrite existing vars).
+
+    Simple parser — no dependency on python-dotenv. Handles KEY=VALUE lines,
+    ignores comments and blank lines.
+    """
+    global _env_loaded
+    if _env_loaded:
+        return
+    _env_loaded = True
+
+    env_path = Path.home() / ".openaugi" / ".env"
+    if not env_path.exists():
+        return
+
+    try:
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip("'\"")  # strip optional quotes
+            # Don't overwrite existing env vars (env takes priority over file)
+            if key not in os.environ:
+                os.environ[key] = value
+        logger.debug(f"Loaded env from {env_path}")
+    except Exception as e:
+        logger.warning(f"Failed to load {env_path}: {e}")
