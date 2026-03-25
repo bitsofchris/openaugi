@@ -132,3 +132,51 @@ class TestMCPTools:
         assert "results" in result
         for r in result["results"]:
             assert r["kind"] == "document"
+
+    def test_reload_index(self):
+        from openaugi.mcp.server import reload_index
+
+        result = json.loads(reload_index())
+        assert result["status"] == "ok"
+
+    def test_write_document_no_vault(self, monkeypatch):
+        import openaugi.mcp.server as srv
+        from openaugi.mcp.server import write_document
+
+        monkeypatch.delenv("OPENAUGI_VAULT_PATH", raising=False)
+        monkeypatch.setattr(srv, "_get_vault_path", lambda: None)
+        result = json.loads(write_document("Test Note", "content"))
+        assert result["status"] == "error"
+        assert "vault path" in result["reason"].lower()
+
+    def test_write_document_creates_file(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_document
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(write_document("My Research", "# Hello\nSome content.", "Docs"))
+        assert result["status"] == "created"
+        assert (tmp_path / "OpenAugi" / "Docs" / "My Research.md").exists()
+
+    def test_write_document_collision(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_document
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        write_document("Duplicate Note", "first", "Docs")
+        result = json.loads(write_document("Duplicate Note", "second", "Docs"))
+        assert result["status"] == "error"
+        assert "already exists" in result["reason"]
+
+    def test_write_document_subfolder_escape_blocked(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_document
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(write_document("Escape Note", "content", "../../../etc"))
+        assert result["status"] == "error"
+
+    def test_write_document_custom_subfolder(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_document
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(write_document("Summary", "content", "Research"))
+        assert result["status"] == "created"
+        assert (tmp_path / "OpenAugi" / "Research" / "Summary.md").exists()

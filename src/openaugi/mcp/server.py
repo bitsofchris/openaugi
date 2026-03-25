@@ -1,15 +1,19 @@
-"""OpenAugi MCP Server — 6 query tools for Claude.
+"""OpenAugi MCP Server — query + write tools for Claude.
 
-Port of v1's 13-tool MCP server to the blocks+links data model.
-All tools are read-only. Connection released after each call.
-
-Tools:
+Read tools (readOnlyHint):
 - search: semantic (FAISS) + keyword (FTS5) + filters
 - get_block: full block content by ID
 - get_related: follow links from a block
 - traverse: multi-hop graph walk
 - get_context: compound search → expand → structured result
 - recent: recently created blocks
+- reload_index: force-refresh the FAISS index
+
+Write tools:
+- write_document: create a markdown note in OpenAugi/{subfolder}/
+
+Resources:
+- vault://note/{title}: all entries for a note + hub context
 """
 
 from __future__ import annotations
@@ -44,8 +48,16 @@ _db_mtime: float = 0
 
 
 def _get_db_path() -> str:
-    """Resolve DB path from env or default."""
     return os.environ.get("OPENAUGI_DB", str(Path.home() / ".openaugi" / "openaugi.db"))
+
+
+def _get_vault_path() -> str | None:
+    """Resolve vault path: env var > config.toml > None."""
+    vault = os.environ.get("OPENAUGI_VAULT_PATH")
+    if vault:
+        return vault
+    config = load_config()
+    return config.get("vault", {}).get("default_path")
 
 
 def _get_store() -> SQLiteStore:
@@ -53,6 +65,16 @@ def _get_store() -> SQLiteStore:
     if _store is None:
         _store = SQLiteStore(_get_db_path(), read_only=True)
     return _store
+
+
+def _get_embedding_model():
+    global _embedding_model
+    if _embedding_model is None:
+        config = load_config()
+        _embedding_model = get_embedding_model(
+            config.get("models", {}).get("embedding")
+        )
+    return _embedding_model
 
 
 def _check_freshness():
@@ -67,21 +89,16 @@ def _check_freshness():
 
 
 def _get_faiss():
-    global _faiss_index, _embedding_model
+    global _faiss_index
     if _faiss_index is None:
         store = _get_store()
-        config = load_config()
-        if _embedding_model is None:
-            _embedding_model = get_embedding_model(
-                config.get("models", {}).get("embedding")
-            )
-        _faiss_index = build_faiss_index(store, dim=_embedding_model.dimensions)
+        model = _get_embedding_model()
+        _faiss_index = build_faiss_index(store, dim=model.dimensions)
     return _faiss_index
 
 
 def _release_conn(fn):
-    """Close SQLite connection after each tool call."""
-
+    """Close SQLite connection after each tool call (auto-reconnects on next use)."""
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
@@ -89,7 +106,6 @@ def _release_conn(fn):
         finally:
             if _store is not None:
                 _store.close()
-
     return wrapper
 
 
@@ -97,7 +113,7 @@ def _json(data) -> str:
     return json.dumps(data, indent=2, default=str)
 
 
-# ── Tools ──────────────────────────────────────────────────────────
+# ── Read Tools ─────────────────────────────────────────────────────
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -133,14 +149,8 @@ def search(
         })
 
     if query:
-        global _embedding_model
-        config = load_config()
-        if _embedding_model is None:
-            _embedding_model = get_embedding_model(
-                config.get("models", {}).get("embedding")
-            )
         faiss_index = _get_faiss()
-        query_vec = _embedding_model.embed_query(query)
+        query_vec = _get_embedding_model().embed_query(query)
         hits = faiss_index.search(query_vec, k=k * 3)
 
         results = []
@@ -224,10 +234,10 @@ def get_related(
     if direction in ("in", "both"):
         links = store.get_links_to(block_id, kind=kind)
         for lnk in links[:limit]:
-            source = store.get_block(lnk.from_id)
-            if source:
+            source_block = store.get_block(lnk.from_id)
+            if source_block:
                 results.append({
-                    "block": _block_summary(source),
+                    "block": _block_summary(source_block),
                     "link_kind": lnk.kind,
                     "direction": "in",
                 })
@@ -302,15 +312,9 @@ def get_context(
 
     # Prong 2: semantic (if FAISS available)
     try:
-        global _embedding_model
-        config = load_config()
-        if _embedding_model is None:
-            _embedding_model = get_embedding_model(
-                config.get("models", {}).get("embedding")
-            )
         faiss_index = _get_faiss()
         if faiss_index.size > 0:
-            query_vec = _embedding_model.embed_query(query)
+            query_vec = _get_embedding_model().embed_query(query)
             hits = faiss_index.search(query_vec, k=k)
             for block_id, score in hits:
                 if block_id not in blocks_seen:
@@ -322,7 +326,7 @@ def get_context(
                             "source": "semantic",
                         }
     except Exception:
-        pass  # Semantic search is optional
+        logger.warning("Semantic search unavailable in get_context", exc_info=True)
 
     # Expand: follow links from top results
     expanded: list[dict] = []
@@ -375,11 +379,102 @@ def recent(
     return _json({"results": results, "count": len(results)})
 
 
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+def reload_index() -> str:
+    """Force-refresh the FAISS search index.
+
+    Normally the index auto-reloads when the DB file changes (after
+    'openaugi ingest'). Use this to force an immediate refresh."""
+    global _faiss_index, _db_mtime
+    _faiss_index = None
+    _db_mtime = 0  # Reset so _check_freshness() fires on next search
+    return _json({"status": "ok", "message": "Index cleared; rebuilds on next search"})
+
+
+# ── Write Tools ────────────────────────────────────────────────────
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+def write_document(
+    title: str,
+    content: str,
+    subfolder: str = "Docs",
+) -> str:
+    """Create a markdown note in the vault under OpenAugi/{subfolder}/.
+
+    Use for substantial agent output: research notes, summaries, drafts,
+    collected findings, etc.
+
+    - title: Note title (becomes the filename). Must be a valid Obsidian title.
+    - content: Markdown body. Frontmatter (type, created) is auto-generated.
+    - subfolder: Where to write under OpenAugi/. Defaults to 'Docs'.
+      Examples: 'Docs', 'Notes', 'Research', 'Summaries'.
+      Cannot escape the OpenAugi/ root.
+
+    Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""
+    from openaugi.mcp.doc_writer import VaultWriter
+
+    vault_path = _get_vault_path()
+    if not vault_path:
+        return _json({
+            "status": "error",
+            "reason": (
+                "No vault path configured. "
+                "Run 'openaugi init' to set a default vault, "
+                "or set OPENAUGI_VAULT_PATH environment variable."
+            ),
+        })
+
+    writer = VaultWriter(vault_path)
+    return _json(writer.write_document(title, content, subfolder=subfolder))
+
+
+# ── Resources ──────────────────────────────────────────────────────
+
+
+@mcp.resource("vault://note/{title}")
+@_release_conn
+def get_note_resource(title: str) -> str:
+    """All entries for a note by title, plus hub context.
+
+    Shows up in Claude Code's @ autocomplete as @openaugi:vault://note/Title.
+    Use to deep-read a specific note after finding it via search or hubs."""
+    store = _get_store()
+
+    # Find document block by title
+    rows = store.conn.execute(
+        "SELECT id FROM blocks WHERE kind = 'document' AND title = ? LIMIT 1",
+        (title,),
+    ).fetchall()
+
+    if not rows:
+        # Fall back to FTS search on title
+        fts = store.search_fts(title, limit=5)
+        doc_blocks = [b for b in fts if b.kind == "document"]
+        if not doc_blocks:
+            return _json({"error": f"Note not found: {title}"})
+        doc_id = doc_blocks[0].id
+    else:
+        doc_id = rows[0][0]
+
+    entries = store.get_entries_for_document(doc_id)
+    hub_links_in = store.get_links_to(doc_id)
+    hub_links_out = store.get_links_from(doc_id)
+
+    return _json({
+        "note_title": title,
+        "doc_id": doc_id,
+        "entries": [_block_full(e) for e in entries],
+        "entry_count": len(entries),
+        "inbound_links": len(hub_links_in),
+        "outbound_links": len(hub_links_out),
+    })
+
+
 # ── Helpers ────────────────────────────────────────────────────────
 
 
 def _block_summary(block) -> dict:
-    """Compact block representation for tool results."""
     return {
         "id": block.id,
         "kind": block.kind,
@@ -392,7 +487,6 @@ def _block_summary(block) -> dict:
 
 
 def _block_full(block) -> dict:
-    """Full block representation."""
     return {
         "id": block.id,
         "kind": block.kind,
