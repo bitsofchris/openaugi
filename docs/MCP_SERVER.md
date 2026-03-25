@@ -88,8 +88,73 @@ Both are optional if you've run `openaugi init` — the config file is the defau
 | `get_block` | Full block content + metadata by ID |
 | `get_related` | Follow links from/to a block (tags, wikilinks, derivations) |
 | `traverse` | Multi-hop graph walk from a starting block |
-| `get_context` | Power tool: semantic + keyword → expand via links → structured context |
+| `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links |
 | `recent` | Recently created blocks, filtered by kind/source/tags |
+
+### `get_context` — retrieval pipeline
+
+`get_context` is the primary tool for Claude to answer questions against your knowledge
+base. It runs a multi-stage pipeline before returning results:
+
+```
+1. FTS keyword search  →  k × overfetch_ratio candidates
+2. Semantic KNN search →  k × overfetch_ratio candidates
+3. Merge by block_id (deduplicates across prongs)
+4. Group semantically similar chunks (greedy agglomerative, cosine distance)
+5. Pick one representative per group (centroid or highest score)
+6. MMR re-rank representatives for diversity
+7. Fetch full content for final k blocks
+8. Expand via links (unchanged)
+```
+
+Steps 4–6 eliminate near-duplicate chunks — the same idea phrased multiple times — before
+the results reach Claude, saving context window and improving reasoning quality.
+
+#### Tuning via `config.toml`
+
+Add a `[retrieval]` section to `~/.openaugi/config.toml` (or `./openaugi.toml`).
+All keys are optional; defaults are shown:
+
+```toml
+[retrieval]
+overfetch_ratio = 3     # fetch k*3 candidates before dedup (more = better recall, slower)
+group_threshold = 0.15  # cosine distance below which two chunks are considered duplicates
+mmr_lambda = 0.5        # 1.0 = pure relevance, 0.0 = pure diversity
+representative = "centroid"  # "centroid" | "score"
+```
+
+**`group_threshold`** — controls how aggressively near-duplicates are collapsed:
+
+| Value | Effect |
+|-------|--------|
+| `0.10` | Conservative — only near-identical chunks merge |
+| `0.15` | Default — balanced deduplication |
+| `0.20` | Aggressive — topically similar chunks merge |
+
+Raise this if you're still seeing redundant results. Lower it if unrelated chunks
+are being collapsed.
+
+**`mmr_lambda`** — balances relevance vs. diversity in the final ranking:
+
+| Value | Effect |
+|-------|--------|
+| `0.3` | Diversity-focused — maximises topical breadth |
+| `0.5` | Default — balanced |
+| `0.7` | Relevance-focused — stays close to query |
+
+Lower this when you want Claude to survey a broad range of your notes. Raise it
+when you want tight focus on the most relevant content.
+
+**`representative`** — which chunk survives when a group is collapsed:
+
+| Value | Effect |
+|-------|--------|
+| `"centroid"` | Default — keeps the chunk whose embedding is closest to the group mean (most "typical") |
+| `"score"` | Keeps the chunk with the highest original retrieval score (preserves FTS/KNN ranking signal) |
+
+**`overfetch_ratio`** — multiplier on `k` for the initial candidate pool. Higher values
+give the deduplication step more to work with, at the cost of a slightly larger DB query.
+Rarely needs changing.
 
 ### Write tools
 
