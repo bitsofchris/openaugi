@@ -41,7 +41,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system map.
 - `src/openaugi/pipeline/runner.py` — Layer 0 orchestrator
 - `src/openaugi/pipeline/embed.py` — Layer 1 embedding step
 - `src/openaugi/mcp/server.py` — 5 MCP tools for Claude
-- `src/openaugi/cli/main.py` — typer CLI (ingest, serve, search, hubs, status, migrate-vec)
+- `src/openaugi/cli/main.py` — typer CLI (ingest, serve, search, hubs, status)
 
 # Document as you go
 Plans go in docs/plans folder. Move them to docs/archive when done.
