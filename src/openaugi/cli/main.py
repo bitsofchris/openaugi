@@ -103,6 +103,7 @@ def init():
         "\nDefault vault path (Obsidian vault)",
         default=str(Path.home() / "Documents" / "vault"),
     )
+    vault_path = vault_path.strip().strip("'\"")
 
     # Write config.toml
     toml_lines = []
