@@ -3,7 +3,12 @@
 Layer 0 (FREE): ingest → split → extract tags/links/dates → dedup → FTS
 Layer 1 (near-free): embed → hub scoring (query-time)
 
-See docs/plans/m0.md § Pipeline.
+Incremental ingestion uses two levels of hashing:
+- Level 1 (file): skip entirely if file content hash unchanged
+- Level 2 (block): within a changed file, diff entry content hashes —
+  keep unchanged entries (preserving embeddings), insert new, delete removed
+
+See docs/plans/m0.md § Incremental Ingestion Strategy.
 """
 
 from __future__ import annotations
@@ -12,6 +17,7 @@ import logging
 from pathlib import Path
 
 from openaugi.adapters.vault import parse_vault_incremental
+from openaugi.model.block import Block
 from openaugi.store.sqlite import SQLiteStore
 
 logger = logging.getLogger(__name__)
@@ -25,13 +31,15 @@ def run_layer0(
 ) -> dict:
     """Run Layer 0 pipeline: ingest vault → blocks + links → store.
 
-    Supports incremental ingestion via file-level content hashing.
+    Two-level incremental ingestion:
+    1. File-level: skip unchanged files entirely
+    2. Block-level: within changed files, diff entries by content_hash —
+       unchanged entries keep their embeddings, only new/modified get re-embedded
     """
-    # Get known document hashes for change detection
     known_hashes = _get_known_doc_hashes(store)
     logger.info(f"Tracking {len(known_hashes)} previously ingested files")
 
-    # Parse vault (incremental)
+    # Parse vault (file-level incremental — only parses changed/new files)
     blocks, links, current_hashes, deleted_paths = parse_vault_incremental(
         vault_path=vault_path,
         known_doc_hashes=known_hashes,
@@ -39,46 +47,102 @@ def run_layer0(
         max_workers=max_workers,
     )
 
-    # Handle deleted files — remove their document blocks (CASCADE cleans links)
+    # Handle deleted files — CASCADE removes entries and their links
     deleted_count = 0
     for rel_path in deleted_paths:
-        from openaugi.model.block import Block
-
         doc_id = Block.make_document_id(rel_path)
         if store.delete_block(doc_id):
             deleted_count += 1
-
     if deleted_count:
         logger.info(f"Removed {deleted_count} deleted document blocks")
 
-    # Delete existing blocks for changed files before re-inserting
-    changed_paths = set()
+    # Group new blocks by document for block-level diffing
+    doc_blocks: dict[str, Block] = {}  # source_path → document block
+    entry_blocks_by_doc: dict[str, list[Block]] = {}  # source_path → entry blocks
+    tag_blocks: list[Block] = []
+    other_blocks: list[Block] = []
+
     for b in blocks:
-        if b.kind == "document" and b.metadata.get("source_path"):
-            changed_paths.add(b.metadata["source_path"])
+        if b.kind == "document":
+            source_path = b.metadata.get("source_path", "")
+            doc_blocks[source_path] = b
+        elif b.kind == "entry":
+            source_path = b.metadata.get("source_path", "")
+            entry_blocks_by_doc.setdefault(source_path, []).append(b)
+        elif b.kind == "tag":
+            tag_blocks.append(b)
+        else:
+            other_blocks.append(b)
 
-    for rel_path in changed_paths:
-        from openaugi.model.block import Block
+    # Block-level incremental: diff entries within each changed file
+    blocks_to_insert: list[Block] = []
+    blocks_kept = 0
+    blocks_removed = 0
+    blocks_added = 0
 
-        doc_id = Block.make_document_id(rel_path)
-        store.delete_block(doc_id)
+    for source_path, doc_block in doc_blocks.items():
+        doc_id = doc_block.id
+        new_entries = entry_blocks_by_doc.get(source_path, [])
+        new_hashes = {e.content_hash for e in new_entries}
 
-    # Insert new blocks and links
-    if blocks:
-        block_count = store.insert_blocks(blocks)
-        logger.info(f"Inserted {block_count} blocks")
+        # Check if document already exists (changed file vs new file)
+        existing_doc = store.get_block(doc_id)
+        if existing_doc:
+            # Changed file — diff entries
+            old_entries = store.get_entries_for_document(doc_id)
+            old_hashes = {e.content_hash for e in old_entries}
 
+            # Entries to keep (hash in both old and new) — don't touch them
+            kept_hashes = old_hashes & new_hashes
+            blocks_kept += len(kept_hashes)
+
+            # Entries to remove (hash in old but not new)
+            removed_hashes = old_hashes - new_hashes
+            for old_entry in old_entries:
+                if old_entry.content_hash in removed_hashes:
+                    store.delete_block(old_entry.id)
+                    blocks_removed += 1
+
+            # Entries to add (hash in new but not old)
+            for new_entry in new_entries:
+                if new_entry.content_hash not in kept_hashes:
+                    blocks_to_insert.append(new_entry)
+                    blocks_added += 1
+
+            # Update document block's file hash
+            store.update_block_hash(doc_id, doc_block.content_hash)
+        else:
+            # New file — insert everything
+            blocks_to_insert.append(doc_block)
+            blocks_to_insert.extend(new_entries)
+            blocks_added += len(new_entries)
+
+    # Insert tag blocks (always idempotent via INSERT OR IGNORE)
+    blocks_to_insert.extend(tag_blocks)
+    blocks_to_insert.extend(other_blocks)
+
+    if blocks_to_insert:
+        count = store.insert_blocks(blocks_to_insert)
+        logger.info(f"Inserted {count} blocks")
+
+    if blocks_kept or blocks_removed:
+        logger.info(
+            f"Block-level diff: {blocks_kept} kept, {blocks_added} added, "
+            f"{blocks_removed} removed"
+        )
+
+    # Insert links — filter to valid endpoints
     if links:
-        # Filter links to only those where both endpoints exist
-        valid_block_ids = {b.id for b in blocks}
-        # Also include existing blocks in store
-        existing_ids = set()
+        all_block_ids = {b.id for b in blocks_to_insert}
+        # Also need IDs of kept blocks (they exist in store but weren't re-inserted)
+        # Plus any other existing blocks that links point to
+        existing_ids: set[str] = set()
         for link in links:
             for bid in (link.from_id, link.to_id):
-                if bid not in valid_block_ids and store.get_block(bid):
+                if bid not in all_block_ids and store.get_block(bid):
                     existing_ids.add(bid)
 
-        valid_ids = valid_block_ids | existing_ids
+        valid_ids = all_block_ids | existing_ids
         valid_links = [
             lnk for lnk in links
             if lnk.from_id in valid_ids and lnk.to_id in valid_ids
@@ -96,9 +160,12 @@ def run_layer0(
     )
 
     return {
-        "blocks_inserted": len(blocks),
+        "blocks_inserted": len(blocks_to_insert),
+        "blocks_kept": blocks_kept,
+        "blocks_removed": blocks_removed,
+        "blocks_added": blocks_added,
         "links_inserted": len(links),
-        "files_changed": len(changed_paths),
+        "files_changed": len(doc_blocks),
         "files_deleted": len(deleted_paths),
         "stats": stats,
     }
