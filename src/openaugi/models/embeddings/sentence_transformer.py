@@ -38,8 +38,7 @@ class SentenceTransformerEmbedding:
                 )
             except ImportError as e:
                 raise ImportError(
-                    "sentence-transformers not installed. "
-                    "Run: pip install openaugi[local]"
+                    "sentence-transformers not installed. Run: pip install openaugi[local]"
                 ) from e
             self._model = SentenceTransformer(self.name)
             self.dimensions = self._model.get_sentence_embedding_dimension()

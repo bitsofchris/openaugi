@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, date
+from datetime import date, datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

@@ -68,9 +68,7 @@ def parse_vault(
     if not all_files:
         _check_readable(vault)  # raises PermissionError with guidance if sandbox
     included = [f for f in all_files if _should_include(f, vault, excludes)]
-    logger.info(
-        f"Found {len(included)} files (excluded {len(all_files) - len(included)})"
-    )
+    logger.info(f"Found {len(included)} files (excluded {len(all_files) - len(included)})")
 
     file_index = _build_file_index(included, vault)
 
@@ -79,10 +77,7 @@ def parse_vault(
     tag_blocks: dict[str, Block] = {}  # dedupe tag blocks globally
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(_parse_file, f, vault, file_index): f
-            for f in included
-        }
+        futures = {executor.submit(_parse_file, f, vault, file_index): f for f in included}
         for future in as_completed(futures):
             file_path = futures[future]
             try:
@@ -169,10 +164,7 @@ def parse_vault_incremental(
     tag_blocks: dict[str, Block] = {}
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(_parse_file, f, vault, file_index): f
-            for f in files_to_parse
-        }
+        futures = {executor.submit(_parse_file, f, vault, file_index): f for f in files_to_parse}
         for future in as_completed(futures):
             file_path = futures[future]
             try:
@@ -296,17 +288,13 @@ def _parse_file(
         for tag_name in all_tags:
             tag_id = Block.make_tag_id(tag_name)
             if tag_name not in tag_blocks:
-                tag_blocks[tag_name] = Block(
-                    id=tag_id, kind="tag", title=tag_name, source="vault"
-                )
+                tag_blocks[tag_name] = Block(id=tag_id, kind="tag", title=tag_name, source="vault")
             links.append(Link(from_id=entry_id, to_id=tag_id, kind="tagged"))
 
         # Wikilink links
         for link_target in entry_links:
             # Resolve to document block if it exists in this vault
-            target_doc_id = Block.make_document_id(
-                _resolve_wikilink(link_target, file_index)
-            )
+            target_doc_id = Block.make_document_id(_resolve_wikilink(link_target, file_index))
             links.append(
                 Link(
                     from_id=entry_id,
@@ -363,9 +351,7 @@ def _strip_frontmatter(content: str) -> tuple[str, list[str]]:
             rest = stripped[5:].strip()
             if rest.startswith("["):
                 tags.extend(
-                    t.strip().strip("'\"")
-                    for t in rest.strip("[]").split(",")
-                    if t.strip()
+                    t.strip().strip("'\"") for t in rest.strip("[]").split(",") if t.strip()
                 )
                 in_tags = False
             continue
