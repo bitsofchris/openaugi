@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -28,19 +28,21 @@ class VaultWriter:
     def write_document(
         self,
         title: str,
+        description: str,
         content: str,
-        subfolder: str = "Docs",
+        subfolder: str = "Notes",
     ) -> dict:
         """Create a markdown note in OpenAugi/{subfolder}/.
 
         Args:
             title: Note title (becomes filename). Must be valid Obsidian title.
+            description: One-line summary — goes in frontmatter, used for scanning.
             content: Markdown body. Frontmatter is auto-generated.
-            subfolder: Subfolder under OpenAugi/ (e.g. "Docs", "Notes", "Research").
-                       Defaults to "Docs". Cannot escape OpenAugi/ root.
+            subfolder: Subfolder under OpenAugi/ (e.g. "Notes", "Docs", "Research").
+                       Defaults to "Notes". Cannot escape OpenAugi/ root.
 
         Returns:
-            {"status": "created", "path": str, "title": str}
+            {"status": "created", "path": str, "vault_relative": str, "title": str}
             {"status": "error", "reason": str}
         """
         title = title.strip()
@@ -73,6 +75,7 @@ class VaultWriter:
         note = (
             f"---\n"
             f"type: document\n"
+            f"description: {description}\n"
             f"created: {created}\n"
             f"---\n\n"
             f"# {title}\n\n"
@@ -87,6 +90,65 @@ class VaultWriter:
             "vault_relative": str(filepath.relative_to(self.vault_path)),
             "title": title,
         }
+
+    def write_thread(self, topic: str, description: str, content: str) -> dict:
+        """Write a session thread note to OpenAugi/Threads/YYYY-MM-DD - {topic}.md.
+
+        Handles filename collisions by appending -2, -3, etc.
+
+        Returns:
+            {"status": "created", "path": str, "vault_relative": str, "title": str}
+            {"status": "error", "reason": str}
+        """
+        topic = topic.strip()
+        if not topic:
+            return {"status": "error", "reason": "Topic cannot be empty"}
+        if _INVALID_TITLE_RE.search(topic):
+            invalid = _INVALID_TITLE_RE.findall(topic)
+            return {"status": "error", "reason": f"Topic contains invalid characters: {invalid}"}
+
+        folder = self._resolve_folder("Threads")
+        if folder is None:
+            return {"status": "error", "reason": "Could not resolve Threads folder"}
+
+        folder.mkdir(parents=True, exist_ok=True)
+
+        today = date.today().isoformat()
+        base_title = f"{today} - {topic}"
+        filepath = self._unique_path(folder, base_title)
+
+        created = datetime.now().isoformat(timespec="seconds")
+        note = (
+            f"---\n"
+            f"type: thread\n"
+            f"description: {description}\n"
+            f"created: {created}\n"
+            f"---\n\n"
+            f"# {topic}\n\n"
+            f"{content.strip()}\n"
+        )
+        filepath.write_text(note, encoding="utf-8")
+        logger.info("Wrote thread: %s", filepath)
+
+        title = filepath.stem
+        return {
+            "status": "created",
+            "path": str(filepath),
+            "vault_relative": str(filepath.relative_to(self.vault_path)),
+            "title": title,
+        }
+
+    def _unique_path(self, folder: Path, base_title: str) -> Path:
+        """Return a non-colliding path, appending -2, -3 as needed."""
+        candidate = folder / f"{base_title}.md"
+        if not candidate.exists():
+            return candidate
+        counter = 2
+        while True:
+            candidate = folder / f"{base_title}-{counter}.md"
+            if not candidate.exists():
+                return candidate
+            counter += 1
 
     def _resolve_folder(self, subfolder: str) -> Path | None:
         """Resolve subfolder to an absolute path under OpenAugi/.
