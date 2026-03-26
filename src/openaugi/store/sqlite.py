@@ -436,7 +436,9 @@ class SQLiteStore:
         if existing == str(dim):
             return
         if existing is not None:
-            logger.warning("Embedding dimension changed %s→%d, recreating vec_blocks", existing, dim)
+            logger.warning(
+                "Embedding dimension changed %s→%d, recreating vec_blocks", existing, dim
+            )
             self.conn.execute("DROP TABLE IF EXISTS vec_blocks")
         self.conn.execute(
             f"CREATE VIRTUAL TABLE vec_blocks USING vec0(block_id TEXT PRIMARY KEY, embedding float[{dim}])"
@@ -488,9 +490,7 @@ class SQLiteStore:
         return row[0] if row else None
 
     def _set_meta(self, key: str, value: str) -> None:
-        self.conn.execute(
-            "INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)", (key, value)
-        )
+        self.conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)", (key, value))
 
     # ── Hub scoring ────────────────────────────────────────────────
 
@@ -539,16 +539,18 @@ class SQLiteStore:
                 + w_out * math.log(1 + out_l)
                 + w_ent * math.log(1 + ent_c)
             )
-            results.append({
-                "doc_id": doc_id,
-                "title": title,
-                "source": source,
-                "source_path": source_path,
-                "in_links": in_l,
-                "out_links": out_l,
-                "entry_count": ent_c,
-                "hub_score": score,
-            })
+            results.append(
+                {
+                    "doc_id": doc_id,
+                    "title": title,
+                    "source": source,
+                    "source_path": source_path,
+                    "in_links": in_l,
+                    "out_links": out_l,
+                    "entry_count": ent_c,
+                    "hub_score": score,
+                }
+            )
 
         results.sort(key=lambda x: x["hub_score"], reverse=True)
         return results[:limit]
@@ -591,12 +593,23 @@ def _normalize_blob(blob: bytes) -> bytes:
 
 # ── Row conversion helpers ─────────────────────────────────────────
 
+
 def _row_to_block(row: tuple) -> Block:
     """Convert a SQLite row tuple to a Block."""
     (
-        id_, kind, content, summary, embedding, source, title,
-        tags_json_str, timestamp, occurred_at, metadata_json_str,
-        content_hash, created_at,
+        id_,
+        kind,
+        content,
+        summary,
+        embedding,
+        source,
+        title,
+        tags_json_str,
+        timestamp,
+        occurred_at,
+        metadata_json_str,
+        content_hash,
+        created_at,
     ) = row
 
     tags = json.loads(tags_json_str) if tags_json_str else []

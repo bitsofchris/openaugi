@@ -29,9 +29,7 @@ class OpenAIEmbedding:
             try:
                 from openai import OpenAI
             except ImportError as e:
-                raise ImportError(
-                    "openai not installed. Run: pip install openaugi[openai]"
-                ) from e
+                raise ImportError("openai not installed. Run: pip install openaugi[openai]") from e
             self._client = OpenAI()
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:

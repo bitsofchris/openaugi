@@ -4,12 +4,10 @@
 
 set -e
 
-echo "=== Ruff lint ==="
-.venv/bin/ruff check src tests
+echo "=== Pre-commit hooks (lint, format, types) ==="
+.venv/bin/pre-commit run --all-files
 
-echo "=== Pyright type check ==="
-.venv/bin/pyright src
-
+echo ""
 echo "=== Tests ==="
 .venv/bin/python -m pytest tests/ -v --tb=short
 

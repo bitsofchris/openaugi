@@ -13,6 +13,7 @@ from openaugi.pipeline.rerank import (
 
 # ── Helpers ────────────────────────────────────────────────────────
 
+
 def _blob(vec: list[float]) -> bytes:
     return np.array(vec, dtype=np.float32).tobytes()
 
@@ -23,6 +24,7 @@ def _unit(vec: list[float]) -> list[float]:
 
 
 # ── rerank() public interface ───────────────────────────────────────
+
 
 class TestRerankEdgeCases:
     def test_empty_candidates(self):
@@ -54,19 +56,13 @@ class TestRerankEdgeCases:
 
     def test_returns_at_most_k(self):
         query = _blob(_unit([1.0, 0.0]))
-        candidates = [
-            (f"id{i}", _blob(_unit([float(i), 1.0])), 0.5)
-            for i in range(20)
-        ]
+        candidates = [(f"id{i}", _blob(_unit([float(i), 1.0])), 0.5) for i in range(20)]
         result = rerank(candidates, query, k=5)
         assert len(result) <= 5
 
     def test_no_duplicate_ids_in_result(self):
         query = _blob(_unit([1.0, 0.0]))
-        candidates = [
-            (f"id{i}", _blob(_unit([float(i % 3), 1.0])), 0.5)
-            for i in range(12)
-        ]
+        candidates = [(f"id{i}", _blob(_unit([float(i % 3), 1.0])), 0.5) for i in range(12)]
         result = rerank(candidates, query, k=6)
         assert len(result) == len(set(result))
 
@@ -84,6 +80,7 @@ class TestRerankEdgeCases:
 
 # ── Deduplication (grouping) ────────────────────────────────────────
 
+
 class TestGroupBySimilarity:
     def test_identical_vectors_group_together(self):
         embs = np.array([[1.0, 0.0], [1.0, 0.0], [1.0, 0.0]], dtype=np.float32)
@@ -99,19 +96,25 @@ class TestGroupBySimilarity:
 
     def test_near_duplicate_merges(self):
         # cos distance ≈ 0 between these
-        embs = np.array([
-            _unit([1.0, 0.01]),
-            _unit([1.0, 0.02]),
-        ], dtype=np.float32)
+        embs = np.array(
+            [
+                _unit([1.0, 0.01]),
+                _unit([1.0, 0.02]),
+            ],
+            dtype=np.float32,
+        )
         groups = _group_by_similarity(embs, threshold=0.15)
         assert len(groups) == 1
 
     def test_threshold_controls_merge(self):
         # cos distance between [1,0] and [0.9, 0.436] ≈ 0.1
-        embs = np.array([
-            [1.0, 0.0],
-            _unit([0.9, 0.436]),
-        ], dtype=np.float32)
+        embs = np.array(
+            [
+                [1.0, 0.0],
+                _unit([0.9, 0.436]),
+            ],
+            dtype=np.float32,
+        )
         strict = _group_by_similarity(embs, threshold=0.05)
         loose = _group_by_similarity(embs, threshold=0.20)
         assert len(strict) == 2
@@ -125,13 +128,17 @@ class TestGroupBySimilarity:
 
 # ── Representative selection ────────────────────────────────────────
 
+
 class TestPickRepresentatives:
     def _setup(self):
-        embs = np.array([
-            _unit([1.0, 0.0]),   # idx 0 — closest to centroid
-            _unit([0.99, 0.1]),  # idx 1
-            _unit([0.98, 0.2]),  # idx 2
-        ], dtype=np.float32)
+        embs = np.array(
+            [
+                _unit([1.0, 0.0]),  # idx 0 — closest to centroid
+                _unit([0.99, 0.1]),  # idx 1
+                _unit([0.98, 0.2]),  # idx 2
+            ],
+            dtype=np.float32,
+        )
         scores = np.array([0.3, 0.9, 0.5], dtype=np.float32)
         return embs, scores
 
@@ -166,6 +173,7 @@ class TestPickRepresentatives:
 
 # ── MMR diversity re-ranking ────────────────────────────────────────
 
+
 class TestMMR:
     def test_returns_k_items(self):
         embs = np.array([_unit([float(i), 1.0]) for i in range(10)], dtype=np.float32)
@@ -183,11 +191,14 @@ class TestMMR:
 
     def test_pure_relevance_picks_highest_similarity_first(self):
         # With mmr_lambda=1.0, MMR = pure relevance
-        embs = np.array([
-            _unit([1.0, 0.0]),   # most similar to query
-            _unit([0.5, 0.866]), # less similar
-            _unit([0.0, 1.0]),   # least similar
-        ], dtype=np.float32)
+        embs = np.array(
+            [
+                _unit([1.0, 0.0]),  # most similar to query
+                _unit([0.5, 0.866]),  # less similar
+                _unit([0.0, 1.0]),  # least similar
+            ],
+            dtype=np.float32,
+        )
         query = np.array([1.0, 0.0], dtype=np.float32)
         rep_indices = [0, 1, 2]
         result = _mmr(rep_indices, embs, query, k=1, mmr_lambda=1.0)
@@ -201,12 +212,15 @@ class TestMMR:
 
     def test_diversity_spreads_selections(self):
         # Two clusters: {0,1} near [1,0] and {2,3} near [0,1]
-        embs = np.array([
-            _unit([1.0, 0.01]),
-            _unit([1.0, 0.02]),
-            _unit([0.01, 1.0]),
-            _unit([0.02, 1.0]),
-        ], dtype=np.float32)
+        embs = np.array(
+            [
+                _unit([1.0, 0.01]),
+                _unit([1.0, 0.02]),
+                _unit([0.01, 1.0]),
+                _unit([0.02, 1.0]),
+            ],
+            dtype=np.float32,
+        )
         query = np.array(_unit([0.5, 0.5]), dtype=np.float32)
         rep_indices = [0, 1, 2, 3]
         # With high diversity weight, second pick should come from the other cluster
@@ -219,6 +233,7 @@ class TestMMR:
 
 
 # ── Integration: full pipeline ──────────────────────────────────────
+
 
 class TestRerankIntegration:
     def test_deduplicates_near_identical_chunks(self):

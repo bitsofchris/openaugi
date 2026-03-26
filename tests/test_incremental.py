@@ -172,24 +172,18 @@ class TestBlockLevelIncremental:
         assert hashes_before != hashes_after
 
         # Unchanged entries should still have embeddings
-        unchanged_entries = [
-            e for e in entries_after if e.content_hash in hashes_before
-        ]
+        unchanged_entries = [e for e in entries_after if e.content_hash in hashes_before]
         for entry in unchanged_entries:
             assert entry.embedding == fake_embedding, (
                 f"Embedding lost on unchanged entry {entry.id}"
             )
 
         # The new entry should NOT have an embedding (needs re-embed)
-        new_entries = [
-            e for e in entries_after if e.content_hash not in hashes_before
-        ]
+        new_entries = [e for e in entries_after if e.content_hash not in hashes_before]
         assert len(new_entries) == 1
         assert new_entries[0].embedding is None
 
-    def test_delete_file_cascades(
-        self, tmp_path: Path, vault_path: Path, store: SQLiteStore
-    ):
+    def test_delete_file_cascades(self, tmp_path: Path, vault_path: Path, store: SQLiteStore):
         """Deleting a file should remove its document, entries, and links."""
         temp_vault = _make_temp_vault(tmp_path, vault_path)
 
@@ -211,9 +205,7 @@ class TestBlockLevelIncremental:
         doc_id = Block.make_document_id("no-dates-no-h3.md")
         assert store.get_block(doc_id) is None
 
-    def test_new_file_added(
-        self, tmp_path: Path, vault_path: Path, store: SQLiteStore
-    ):
+    def test_new_file_added(self, tmp_path: Path, vault_path: Path, store: SQLiteStore):
         """Adding a new file should create new document + entry blocks."""
         temp_vault = _make_temp_vault(tmp_path, vault_path)
 

@@ -108,16 +108,20 @@ def init():
     # Write config.toml
     toml_lines = []
     if embedding_provider:
-        toml_lines.extend([
-            "[models.embedding]",
-            f'provider = "{embedding_provider}"',
-            f'model = "{embedding_model}"',
-            "",
-        ])
-    toml_lines.extend([
-        "[vault]",
-        f'default_path = "{vault_path}"',
-    ])
+        toml_lines.extend(
+            [
+                "[models.embedding]",
+                f'provider = "{embedding_provider}"',
+                f'model = "{embedding_model}"',
+                "",
+            ]
+        )
+    toml_lines.extend(
+        [
+            "[vault]",
+            f'default_path = "{vault_path}"',
+        ]
+    )
 
     config_path.write_text("\n".join(toml_lines) + "\n")
     console.print(f"\n  Config written to [cyan]{config_path}[/cyan]")
@@ -185,8 +189,9 @@ def ingest(
         result = run_layer0(vault_path, store, exclude_patterns=exclude, max_workers=workers)
 
         stats = result["stats"]
-        console.print(f"\n[green]Done.[/green] "
-                       f"{stats['total_blocks']} blocks, {stats['total_links']} links")
+        console.print(
+            f"\n[green]Done.[/green] {stats['total_blocks']} blocks, {stats['total_links']} links"
+        )
 
         # Layer 1: embedding (optional — requires sentence-transformers or openai)
         try:
@@ -211,8 +216,17 @@ def ingest(
 @app.command()
 def serve(
     db: str | None = typer.Option(None, "--db", help="Database path"),
+    transport: str = typer.Option(
+        "stdio", "--transport", "-t", help="Transport: stdio or streamable-http"
+    ),
+    host: str = typer.Option("127.0.0.1", "--host", help="HTTP host (streamable-http only)"),
+    port: int = typer.Option(8787, "--port", "-p", help="HTTP port (streamable-http only)"),
 ):
-    """Start MCP server (stdio transport)."""
+    """Start MCP server.
+
+    Default: stdio transport for Claude Desktop/Code.
+    Use --transport streamable-http for remote access (Claude mobile, Tailscale, etc.).
+    """
     import os
 
     if db:
@@ -220,7 +234,8 @@ def serve(
 
     from openaugi.mcp.server import run_server
 
-    run_server()
+    resolved = "streamable-http" if transport == "http" else transport
+    run_server(transport=resolved, host=host, port=port)  # type: ignore[arg-type]
 
 
 @app.command()
@@ -328,19 +343,174 @@ def status(
 
         if stats["blocks_by_kind"]:
             console.print("\n[bold]Blocks by kind:[/bold]")
-            for kind, count in sorted(
-                stats["blocks_by_kind"].items(), key=lambda x: -x[1]
-            ):
+            for kind, count in sorted(stats["blocks_by_kind"].items(), key=lambda x: -x[1]):
                 console.print(f"  {kind}: {count}")
 
         if stats["links_by_kind"]:
             console.print("\n[bold]Links by kind:[/bold]")
-            for kind, count in sorted(
-                stats["links_by_kind"].items(), key=lambda x: -x[1]
-            ):
+            for kind, count in sorted(stats["links_by_kind"].items(), key=lambda x: -x[1]):
                 console.print(f"  {kind}: {count}")
     finally:
         store.close()
+
+
+# ── Service management ─────────────────────────────────────────────
+
+service_app = typer.Typer(help="Manage OpenAugi as a launchd service (macOS).")
+app.add_typer(service_app, name="service")
+
+_PLIST_NAME = "com.openaugi.server"
+_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / f"{_PLIST_NAME}.plist"
+_LOG_DIR = Path.home() / ".openaugi" / "logs"
+
+
+def _find_openaugi_bin() -> str:
+    """Find the openaugi executable path."""
+    import shutil
+    import sys
+
+    # Prefer the bin in the same venv as the running Python
+    venv_bin = Path(sys.executable).parent / "openaugi"
+    if venv_bin.exists():
+        return str(venv_bin)
+
+    # Fall back to PATH lookup
+    found = shutil.which("openaugi")
+    if found:
+        return found
+
+    raise FileNotFoundError(
+        "Cannot find 'openaugi' executable. Install with: pipx install openaugi"
+    )
+
+
+def _generate_plist(bin_path: str, port: int = 8787) -> str:
+    """Generate a launchd plist for the OpenAugi HTTP server."""
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{_PLIST_NAME}</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{bin_path}</string>
+        <string>serve</string>
+        <string>--transport</string>
+        <string>streamable-http</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>{port}</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>{_LOG_DIR / "server.log"}</string>
+
+    <key>StandardErrorPath</key>
+    <string>{_LOG_DIR / "server.err"}</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
+"""
+
+
+@service_app.command("install")
+def service_install(
+    port: int = typer.Option(8787, "--port", "-p", help="HTTP port for the server"),
+):
+    """Install OpenAugi as a launchd service (starts on boot, restarts on crash)."""
+    import subprocess
+
+    try:
+        bin_path = _find_openaugi_bin()
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1) from None
+
+    # Unload existing if present
+    if _PLIST_PATH.exists():
+        subprocess.run(
+            ["launchctl", "unload", str(_PLIST_PATH)],
+            capture_output=True,
+        )
+
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+    plist_content = _generate_plist(bin_path, port=port)
+    _PLIST_PATH.write_text(plist_content)
+
+    result = subprocess.run(
+        ["launchctl", "load", str(_PLIST_PATH)],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        console.print(f"[red]Failed to load service:[/red] {result.stderr}")
+        raise typer.Exit(1)
+
+    console.print("[green]Service installed and started.[/green]")
+    console.print(f"  Plist: [cyan]{_PLIST_PATH}[/cyan]")
+    console.print(f"  Logs:  [cyan]{_LOG_DIR}[/cyan]")
+    console.print(f"  URL:   [cyan]http://127.0.0.1:{port}/mcp[/cyan]")
+    console.print("\nThe server will start on boot and restart on crash.")
+
+
+@service_app.command("uninstall")
+def service_uninstall():
+    """Stop and remove the OpenAugi launchd service."""
+    import subprocess
+
+    if not _PLIST_PATH.exists():
+        console.print("[yellow]Service not installed.[/yellow]")
+        raise typer.Exit(0)
+
+    subprocess.run(
+        ["launchctl", "unload", str(_PLIST_PATH)],
+        capture_output=True,
+    )
+    _PLIST_PATH.unlink(missing_ok=True)
+    console.print("[green]Service stopped and removed.[/green]")
+
+
+@service_app.command("status")
+def service_status():
+    """Check if the OpenAugi service is running."""
+    import subprocess
+
+    if not _PLIST_PATH.exists():
+        console.print("[yellow]Service not installed.[/yellow]")
+        console.print("Run: openaugi service install")
+        raise typer.Exit(0)
+
+    result = subprocess.run(
+        ["launchctl", "list", _PLIST_NAME],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode == 0:
+        # Parse PID from output
+        lines = result.stdout.strip().split("\n")
+        console.print("[green]Service is running.[/green]")
+        for line in lines:
+            console.print(f"  {line}")
+    else:
+        console.print("[yellow]Service is installed but not running.[/yellow]")
+        console.print("Check logs: ~/.openaugi/logs/server.err")
 
 
 def _print_block(block, score: float | None = None):

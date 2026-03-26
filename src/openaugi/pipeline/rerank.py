@@ -47,9 +47,7 @@ def rerank(
         return [bid for bid, _, _ in candidates][:k]
 
     ids = [bid for bid, _, _ in with_emb]
-    raw_embs = np.array(
-        [np.frombuffer(blob, dtype=np.float32) for _, blob, _ in with_emb]
-    )
+    raw_embs = np.array([np.frombuffer(blob, dtype=np.float32) for _, blob, _ in with_emb])
     scores = np.array([score for _, _, score in with_emb], dtype=np.float32)
 
     embs_norm = _normalize_rows(raw_embs)

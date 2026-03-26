@@ -31,12 +31,12 @@ def get_embedding_model(config: dict[str, Any] | None = None) -> EmbeddingModel:
         from openaugi.models.embeddings.sentence_transformer import (
             SentenceTransformerEmbedding,
         )
-        return SentenceTransformerEmbedding(
-            model_name=model_name or "all-MiniLM-L6-v2"
-        )
+
+        return SentenceTransformerEmbedding(model_name=model_name or "all-MiniLM-L6-v2")
 
     if provider == "openai":
         from openaugi.models.embeddings.openai import OpenAIEmbedding
+
         return OpenAIEmbedding(model_name=model_name or "text-embedding-3-small")
 
     raise ValueError(f"Unknown embedding provider: {provider}")

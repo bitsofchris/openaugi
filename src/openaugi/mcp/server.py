@@ -23,6 +23,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from mcp.server.fastmcp import FastMCP
@@ -69,14 +70,13 @@ def _get_embedding_model():
     global _embedding_model
     if _embedding_model is None:
         config = load_config()
-        _embedding_model = get_embedding_model(
-            config.get("models", {}).get("embedding")
-        )
+        _embedding_model = get_embedding_model(config.get("models", {}).get("embedding"))
     return _embedding_model
 
 
 def _release_conn(fn):
     """Close SQLite connection after each tool call (auto-reconnects on next use)."""
+
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
@@ -84,6 +84,7 @@ def _release_conn(fn):
         finally:
             if _store is not None:
                 _store.close()
+
     return wrapper
 
 
@@ -123,19 +124,23 @@ def search(
 
     if title:
         results = store.search_fts(f"title:{title}", limit=k)
-        return _json({
-            "results": [_block_summary(b) for b in results],
-            "count": len(results),
-            "mode": "title",
-        })
+        return _json(
+            {
+                "results": [_block_summary(b) for b in results],
+                "count": len(results),
+                "mode": "title",
+            }
+        )
 
     if keyword:
         results = store.search_fts(keyword, limit=k)
-        return _json({
-            "results": [_block_summary(b) for b in results],
-            "count": len(results),
-            "mode": "keyword",
-        })
+        return _json(
+            {
+                "results": [_block_summary(b) for b in results],
+                "count": len(results),
+                "mode": "keyword",
+            }
+        )
 
     if query:
         query_vec = _get_embedding_model().embed_query(query)
@@ -213,22 +218,26 @@ def get_related(
         for lnk in links[:limit]:
             target = store.get_block(lnk.to_id)
             if target:
-                results.append({
-                    "block": _block_summary(target),
-                    "link_kind": lnk.kind,
-                    "direction": "out",
-                })
+                results.append(
+                    {
+                        "block": _block_summary(target),
+                        "link_kind": lnk.kind,
+                        "direction": "out",
+                    }
+                )
 
     if direction in ("in", "both"):
         links = store.get_links_to(block_id, kind=kind)
         for lnk in links[:limit]:
             source_block = store.get_block(lnk.from_id)
             if source_block:
-                results.append({
-                    "block": _block_summary(source_block),
-                    "link_kind": lnk.kind,
-                    "direction": "in",
-                })
+                results.append(
+                    {
+                        "block": _block_summary(source_block),
+                        "link_kind": lnk.kind,
+                        "direction": "in",
+                    }
+                )
 
     return _json({"block_id": block_id, "related": results, "count": len(results)})
 
@@ -269,12 +278,14 @@ def traverse(
                         continue
                     frontier.append((next_id, depth + 1))
 
-    return _json({
-        "start_id": start_id,
-        "results": results,
-        "count": len(results),
-        "max_hops": max_hops,
-    })
+    return _json(
+        {
+            "start_id": start_id,
+            "results": results,
+            "count": len(results),
+            "max_hops": max_hops,
+        }
+    )
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -368,12 +379,14 @@ def get_context(
                         expanded.append(entry)
                         blocks_seen[lnk.to_id] = entry
 
-    return _json({
-        "query": query,
-        "direct_results": list(blocks_seen.values())[:k],
-        "expanded": expanded[:k],
-        "total_blocks": len(blocks_seen),
-    })
+    return _json(
+        {
+            "query": query,
+            "direct_results": list(blocks_seen.values())[:k],
+            "expanded": expanded[:k],
+            "total_blocks": len(blocks_seen),
+        }
+    )
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -432,14 +445,16 @@ def write_document(
 
     vault_path = _get_vault_path()
     if not vault_path:
-        return _json({
-            "status": "error",
-            "reason": (
-                "No vault path configured. "
-                "Run 'openaugi init' to set a default vault, "
-                "or set OPENAUGI_VAULT_PATH environment variable."
-            ),
-        })
+        return _json(
+            {
+                "status": "error",
+                "reason": (
+                    "No vault path configured. "
+                    "Run 'openaugi init' to set a default vault, "
+                    "or set OPENAUGI_VAULT_PATH environment variable."
+                ),
+            }
+        )
 
     writer = VaultWriter(vault_path)
     return _json(writer.write_document(title, description, content, subfolder=subfolder))
@@ -470,14 +485,16 @@ def write_thread(
 
     vault_path = _get_vault_path()
     if not vault_path:
-        return _json({
-            "status": "error",
-            "reason": (
-                "No vault path configured. "
-                "Run 'openaugi init' to set a default vault, "
-                "or set OPENAUGI_VAULT_PATH environment variable."
-            ),
-        })
+        return _json(
+            {
+                "status": "error",
+                "reason": (
+                    "No vault path configured. "
+                    "Run 'openaugi init' to set a default vault, "
+                    "or set OPENAUGI_VAULT_PATH environment variable."
+                ),
+            }
+        )
 
     writer = VaultWriter(vault_path)
     return _json(writer.write_thread(topic, description, content))
@@ -515,14 +532,16 @@ def get_note_resource(title: str) -> str:
     hub_links_in = store.get_links_to(doc_id)
     hub_links_out = store.get_links_from(doc_id)
 
-    return _json({
-        "note_title": title,
-        "doc_id": doc_id,
-        "entries": [_block_full(e) for e in entries],
-        "entry_count": len(entries),
-        "inbound_links": len(hub_links_in),
-        "outbound_links": len(hub_links_out),
-    })
+    return _json(
+        {
+            "note_title": title,
+            "doc_id": doc_id,
+            "entries": [_block_full(e) for e in entries],
+            "entry_count": len(entries),
+            "inbound_links": len(hub_links_in),
+            "outbound_links": len(hub_links_out),
+        }
+    )
 
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -559,9 +578,24 @@ def _block_full(block) -> dict:
 
 # ── Entry point ────────────────────────────────────────────────────
 
-def run_server():
-    """Start the MCP server (stdio transport)."""
-    mcp.run(transport="stdio")
+
+def run_server(
+    transport: Literal["stdio", "sse", "streamable-http"] = "stdio",
+    host: str = "127.0.0.1",
+    port: int = 8787,
+):
+    """Start the MCP server.
+
+    Args:
+        transport: "stdio" for Claude Desktop/Code, "streamable-http" for remote access.
+        host: HTTP host (only used with streamable-http transport).
+        port: HTTP port (only used with streamable-http transport).
+    """
+    if transport != "stdio":
+        mcp.settings.host = host
+        mcp.settings.port = port
+        logger.info("Starting MCP server on http://%s:%d/mcp", host, port)
+    mcp.run(transport=transport)
 
 
 if __name__ == "__main__":

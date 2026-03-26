@@ -28,9 +28,7 @@ class TestPipelineIntegration:
         assert stats["links_by_kind"].get("split_from", 0) > 0
         assert stats["links_by_kind"].get("tagged", 0) > 0
 
-    def test_incremental_second_run_is_noop(
-        self, vault_path: Path, store: SQLiteStore
-    ):
+    def test_incremental_second_run_is_noop(self, vault_path: Path, store: SQLiteStore):
         """Second ingest with no changes should not insert new blocks."""
         result1 = run_layer0(vault_path, store)
         blocks_after_first = result1["stats"]["total_blocks"]
@@ -61,9 +59,7 @@ class TestPipelineIntegration:
         # At least one hub should have entries
         assert any(s["entry_count"] > 0 for s in scores)
 
-    def test_link_traversal_after_ingest(
-        self, vault_path: Path, store: SQLiteStore
-    ):
+    def test_link_traversal_after_ingest(self, vault_path: Path, store: SQLiteStore):
         """Should be able to traverse links after ingestion."""
         run_layer0(vault_path, store)
 

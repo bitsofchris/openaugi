@@ -147,7 +147,9 @@ class TestMCPTools:
         from openaugi.mcp.server import write_document
 
         monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
-        result = json.loads(write_document("My Research", "research on X", "# Hello\nSome content.", "Docs"))
+        result = json.loads(
+            write_document("My Research", "research on X", "# Hello\nSome content.", "Docs")
+        )
         assert result["status"] == "created"
         path = tmp_path / "OpenAugi" / "Docs" / "My Research.md"
         assert path.exists()
@@ -181,11 +183,13 @@ class TestMCPTools:
         from openaugi.mcp.server import write_thread
 
         monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
-        result = json.loads(write_thread(
-            "MCP design session",
-            "Designing write-back tools for OpenAugi MCP",
-            "## Decisions\n- Keep write_thread interface simple",
-        ))
+        result = json.loads(
+            write_thread(
+                "MCP design session",
+                "Designing write-back tools for OpenAugi MCP",
+                "## Decisions\n- Keep write_thread interface simple",
+            )
+        )
         assert result["status"] == "created"
         threads_dir = tmp_path / "OpenAugi" / "Threads"
         files = list(threads_dir.glob("*.md"))
