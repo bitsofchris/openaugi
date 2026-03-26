@@ -160,11 +160,14 @@ Rarely needs changing.
 
 | Tool | Purpose |
 |------|---------|
-| `write_document` | Create a markdown note in `OpenAugi/{subfolder}/` in your vault |
+| `write_document` | Save anything to `OpenAugi/{subfolder}/` — triggered by "save this", "write this to augi", or explicit save requests. Agent infers subfolder from content (`Notes`, `Docs`, `Research`). |
+| `write_thread` | Save a distilled session note to `OpenAugi/Threads/YYYY-MM-DD - {topic}.md`. Triggered by "save this thread", "log this session". Not a transcript — synthesize intent, decisions, and what was learned. |
 
-**Write scope**: All writes are constrained to `{vault_path}/OpenAugi/{subfolder}/`.
-The agent picks the subfolder (`Docs`, `Notes`, `Research`, etc.) but cannot escape
-the `OpenAugi/` root. This keeps agent output separate from your own notes.
+Both tools take a `description` field — a one-liner that goes in frontmatter for scanning.
+
+**Write scope**: All writes are constrained to `{vault_path}/OpenAugi/`.
+The agent picks the subfolder but cannot escape the `OpenAugi/` root.
+This keeps agent output separate from your own notes.
 
 After writing, run `openaugi ingest` to pick up new notes into the knowledge graph.
 

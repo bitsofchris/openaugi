@@ -139,7 +139,7 @@ class TestMCPTools:
 
         monkeypatch.delenv("OPENAUGI_VAULT_PATH", raising=False)
         monkeypatch.setattr(srv, "_get_vault_path", lambda: None)
-        result = json.loads(write_document("Test Note", "content"))
+        result = json.loads(write_document("Test Note", "a test note", "content"))
         assert result["status"] == "error"
         assert "vault path" in result["reason"].lower()
 
@@ -147,16 +147,18 @@ class TestMCPTools:
         from openaugi.mcp.server import write_document
 
         monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
-        result = json.loads(write_document("My Research", "# Hello\nSome content.", "Docs"))
+        result = json.loads(write_document("My Research", "research on X", "# Hello\nSome content.", "Docs"))
         assert result["status"] == "created"
-        assert (tmp_path / "OpenAugi" / "Docs" / "My Research.md").exists()
+        path = tmp_path / "OpenAugi" / "Docs" / "My Research.md"
+        assert path.exists()
+        assert "description: research on X" in path.read_text()
 
     def test_write_document_collision(self, tmp_path, monkeypatch):
         from openaugi.mcp.server import write_document
 
         monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
-        write_document("Duplicate Note", "first", "Docs")
-        result = json.loads(write_document("Duplicate Note", "second", "Docs"))
+        write_document("Duplicate Note", "first note", "first", "Docs")
+        result = json.loads(write_document("Duplicate Note", "second note", "second", "Docs"))
         assert result["status"] == "error"
         assert "already exists" in result["reason"]
 
@@ -164,13 +166,53 @@ class TestMCPTools:
         from openaugi.mcp.server import write_document
 
         monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
-        result = json.loads(write_document("Escape Note", "content", "../../../etc"))
+        result = json.loads(write_document("Escape Note", "desc", "content", "../../../etc"))
         assert result["status"] == "error"
 
     def test_write_document_custom_subfolder(self, tmp_path, monkeypatch):
         from openaugi.mcp.server import write_document
 
         monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
-        result = json.loads(write_document("Summary", "content", "Research"))
+        result = json.loads(write_document("Summary", "a summary", "content", "Research"))
         assert result["status"] == "created"
         assert (tmp_path / "OpenAugi" / "Research" / "Summary.md").exists()
+
+    def test_write_thread_creates_file(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_thread
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(write_thread(
+            "MCP design session",
+            "Designing write-back tools for OpenAugi MCP",
+            "## Decisions\n- Keep write_thread interface simple",
+        ))
+        assert result["status"] == "created"
+        threads_dir = tmp_path / "OpenAugi" / "Threads"
+        files = list(threads_dir.glob("*.md"))
+        assert len(files) == 1
+        text = files[0].read_text()
+        assert "type: thread" in text
+        assert "description: Designing write-back tools" in text
+        assert "# MCP design session" in text
+
+    def test_write_thread_collision(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_thread
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        write_thread("Same Topic", "first", "content one")
+        write_thread("Same Topic", "second", "content two")
+        threads_dir = tmp_path / "OpenAugi" / "Threads"
+        files = list(threads_dir.glob("*.md"))
+        assert len(files) == 2
+        names = {f.name for f in files}
+        assert any("-2.md" in n for n in names)
+
+    def test_write_thread_no_vault(self, monkeypatch):
+        import openaugi.mcp.server as srv
+        from openaugi.mcp.server import write_thread
+
+        monkeypatch.delenv("OPENAUGI_VAULT_PATH", raising=False)
+        monkeypatch.setattr(srv, "_get_vault_path", lambda: None)
+        result = json.loads(write_thread("topic", "desc", "content"))
+        assert result["status"] == "error"
+        assert "vault path" in result["reason"].lower()

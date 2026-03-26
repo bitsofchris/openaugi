@@ -408,18 +408,23 @@ def recent(
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
 def write_document(
     title: str,
+    description: str,
     content: str,
-    subfolder: str = "Docs",
+    subfolder: str = "Notes",
 ) -> str:
-    """Create a markdown note in the vault under OpenAugi/{subfolder}/.
+    """Save something to the user's vault under OpenAugi/{subfolder}/.
 
-    Use for substantial agent output: research notes, summaries, drafts,
-    collected findings, etc.
+    Use any time the user says "save this", "write this to augi / openaugi / auggie",
+    "save this to my vault", or explicitly asks to persist something.
+    Also use for substantial agent output: notes, research, summaries, drafts.
 
     - title: Note title (becomes the filename). Must be a valid Obsidian title.
-    - content: Markdown body. Frontmatter (type, created) is auto-generated.
-    - subfolder: Where to write under OpenAugi/. Defaults to 'Docs'.
-      Examples: 'Docs', 'Notes', 'Research', 'Summaries'.
+    - description: One-line summary — goes in frontmatter, used for scanning.
+    - content: Markdown body. Frontmatter (type, description, created) is auto-generated.
+    - subfolder: Where to write under OpenAugi/. Infer from content:
+        'Notes' for raw ideas or captures (default),
+        'Docs' for structured reference output,
+        'Research' for investigation results.
       Cannot escape the OpenAugi/ root.
 
     Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""
@@ -437,7 +442,45 @@ def write_document(
         })
 
     writer = VaultWriter(vault_path)
-    return _json(writer.write_document(title, content, subfolder=subfolder))
+    return _json(writer.write_document(title, description, content, subfolder=subfolder))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+def write_thread(
+    topic: str,
+    description: str,
+    content: str,
+) -> str:
+    """Save a distilled session note to OpenAugi/Threads/.
+
+    Use when the user says "save this thread", "log this session",
+    "save our conversation", or when finishing a non-trivial task and
+    wanting to capture the output. Not a transcript — synthesize:
+    what was the intent, what was decided, what was learned, what's still open.
+
+    - topic: Short title for the session (becomes part of the filename).
+    - description: One-line summary — goes in frontmatter, used for scanning.
+    - content: Markdown body. Write whatever structure fits the session.
+
+    Writes to OpenAugi/Threads/YYYY-MM-DD - {topic}.md.
+    Handles collisions by appending -2, -3, etc.
+
+    Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""
+    from openaugi.mcp.doc_writer import VaultWriter
+
+    vault_path = _get_vault_path()
+    if not vault_path:
+        return _json({
+            "status": "error",
+            "reason": (
+                "No vault path configured. "
+                "Run 'openaugi init' to set a default vault, "
+                "or set OPENAUGI_VAULT_PATH environment variable."
+            ),
+        })
+
+    writer = VaultWriter(vault_path)
+    return _json(writer.write_thread(topic, description, content))
 
 
 # ── Resources ──────────────────────────────────────────────────────
