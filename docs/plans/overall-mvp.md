@@ -39,9 +39,9 @@ See [ARCHITECTURE.md](../../ARCHITECTURE.md) for the canonical data model and sy
 |---|-----------|------|--------|
 | **M0** | **Port & Foundation** | Port v1 to blocks+links, SQLite+FAISS, vault adapter, Layer 0+1, model abstraction, 6 MCP read tools, CLI. | **✅ Done** |
 | **M1** | **MCP Write + Local Setup** | Write tools (`write_document`), `reload_index`, vault resource, Claude Desktop/Code registration docs. | **✅ Done** |
-| M2 | Enrichment | Layer 2: hub summaries (LLM → summary blocks), `get_summary` MCP tool, `openaugi enrich` CLI. Entity extraction as stretch. | **Next** |
+| **M1.5** | **Ship & Run** | HTTP transport, launchd service, Cloudflare Tunnel for Claude mobile, PyPI release, README. | **Next** |
+| M2 | Enrichment | Layer 2: hub summaries (LLM → summary blocks), `get_summary` MCP tool, `openaugi enrich` CLI. Entity extraction as stretch. | |
 | M3 | Temporal Intelligence | Hub velocity, recurrence, dead streams. New MCP tools. Lens protocol. | |
-| M4 | Public Launch | README as problem statement, v0.1 tag, PyPI, first post. | |
 | M5 | Multi-Source | ChatGPT adapter, adapter base class, cross-source hubs. | Last |
 
 ---

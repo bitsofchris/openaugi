@@ -51,10 +51,10 @@ src/openaugi/
 │       ├── sentence_transformer.py  # Local default (free)
 │       └── openai.py               # OpenAI API adapter
 ├── mcp/
-│   ├── server.py          # MCP tools (read + write)
+│   ├── server.py          # MCP tools (read + write), stdio + streamable-http transport
 │   └── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
 ├── cli/
-│   └── main.py            # typer CLI
+│   └── main.py            # typer CLI (ingest, serve, search, hubs, status, service)
 └── config.py              # TOML config loader + .env loader
 ```
 
@@ -110,8 +110,19 @@ See [docs/plans/m0.md](docs/plans/m0.md) § Key Design Decisions for full ration
 - **Default local embeddings**: sentence-transformers, no API key. Users upgrade via config.
 - **`get_context` dedup + MMR**: Over-fetches 3× candidates, collapses near-duplicates via cosine grouping, re-ranks for diversity before returning. See [docs/MCP_SERVER.md](docs/MCP_SERVER.md) for tuning.
 
+## Deployment
+
+Two transport modes — see [docs/REMOTE_ACCESS.md](docs/REMOTE_ACCESS.md) for full setup.
+
+| Transport | Command | Use Case |
+|-----------|---------|----------|
+| stdio (default) | `openaugi serve` | Claude Desktop/Code on same machine |
+| streamable-http | `openaugi serve --transport http` | Remote clients, Claude mobile via Cloudflare Tunnel |
+
+Service management (macOS): `openaugi service install/uninstall/status` — launchd plist, starts on boot.
+
 ## Plans
 
-- [docs/plans/overall-mvp.md](docs/plans/overall-mvp.md) — Milestones M0–M4
-- [docs/plans/m0.md](docs/plans/m0.md) — M0 detailed plan (current)
+- [docs/plans/overall-mvp.md](docs/plans/overall-mvp.md) — Milestones M0–M5
+- [docs/plans/m1.5-ship-and-run.md](docs/plans/m1.5-ship-and-run.md) — M1.5: Ship & Run (current)
 - [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features

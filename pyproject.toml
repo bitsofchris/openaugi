@@ -44,6 +44,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.4",
     "pyright>=1.1",
+    "pre-commit>=4.0",
 ]
 
 [project.scripts]

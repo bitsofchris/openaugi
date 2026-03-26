@@ -128,8 +128,7 @@ def run_layer0(
 
     if blocks_kept or blocks_removed:
         logger.info(
-            f"Block-level diff: {blocks_kept} kept, {blocks_added} added, "
-            f"{blocks_removed} removed"
+            f"Block-level diff: {blocks_kept} kept, {blocks_added} added, {blocks_removed} removed"
         )
 
     # Insert links — filter to valid endpoints
@@ -144,10 +143,7 @@ def run_layer0(
                     existing_ids.add(bid)
 
         valid_ids = all_block_ids | existing_ids
-        valid_links = [
-            lnk for lnk in links
-            if lnk.from_id in valid_ids and lnk.to_id in valid_ids
-        ]
+        valid_links = [lnk for lnk in links if lnk.from_id in valid_ids and lnk.to_id in valid_ids]
 
         link_count = store.insert_links(valid_links)
         logger.info(
@@ -156,9 +152,7 @@ def run_layer0(
         )
 
     stats = store.get_stats()
-    logger.info(
-        f"Store: {stats['total_blocks']} blocks, {stats['total_links']} links"
-    )
+    logger.info(f"Store: {stats['total_blocks']} blocks, {stats['total_links']} links")
 
     return {
         "blocks_inserted": len(blocks_to_insert),

@@ -105,9 +105,7 @@ class TestExcludePatterns:
         assert not _matches_pattern("notes/daily.md", ".obsidian/**")
 
     def test_nested_path_excluded(self):
-        assert _matches_pattern(
-            ".obsidian/plugins/something.json", ".obsidian/**"
-        )
+        assert _matches_pattern(".obsidian/plugins/something.json", ".obsidian/**")
 
 
 class TestParseVault:
@@ -141,9 +139,9 @@ class TestParseVault:
 
         # daily-2024-03-15.md has 2 H3 dates → should produce 2+ entries
         daily_entries = [
-            b for b in blocks
-            if b.kind == "entry"
-            and b.metadata.get("parent_note_title") == "daily-2024-03-15"
+            b
+            for b in blocks
+            if b.kind == "entry" and b.metadata.get("parent_note_title") == "daily-2024-03-15"
         ]
         assert len(daily_entries) >= 2
 
@@ -152,9 +150,9 @@ class TestParseVault:
 
         # daily-2024-03-15.md has frontmatter tags
         daily_entries = [
-            b for b in blocks
-            if b.kind == "entry"
-            and b.metadata.get("parent_note_title") == "daily-2024-03-15"
+            b
+            for b in blocks
+            if b.kind == "entry" and b.metadata.get("parent_note_title") == "daily-2024-03-15"
         ]
         # At least one entry should have the frontmatter tag
         all_tags = set()
@@ -188,9 +186,9 @@ class TestParseVault:
         blocks, _ = parse_vault(vault_path)
 
         nested = [
-            b for b in blocks
-            if b.kind == "document"
-            and "subdir/" in b.metadata.get("source_path", "")
+            b
+            for b in blocks
+            if b.kind == "document" and "subdir/" in b.metadata.get("source_path", "")
         ]
         assert len(nested) == 1
 
@@ -199,11 +197,10 @@ class TestParseVault:
 
         # 2024-01-15 Book Notes.md should have timestamp from filename
         book_entries = [
-            b for b in blocks
+            b
+            for b in blocks
             if b.kind == "entry"
-            and b.metadata.get("parent_note_title", "").startswith(
-                "2024-01-15"
-            )
+            and b.metadata.get("parent_note_title", "").startswith("2024-01-15")
         ]
         assert len(book_entries) >= 1
         assert book_entries[0].timestamp == "2024-01-15"
@@ -212,9 +209,9 @@ class TestParseVault:
         blocks, _ = parse_vault(vault_path)
 
         simple_entries = [
-            b for b in blocks
-            if b.kind == "entry"
-            and b.metadata.get("parent_note_title") == "no-dates-no-h3"
+            b
+            for b in blocks
+            if b.kind == "entry" and b.metadata.get("parent_note_title") == "no-dates-no-h3"
         ]
         assert len(simple_entries) == 1
 
@@ -230,24 +227,18 @@ class TestParseVault:
 class TestIncrementalParsing:
     def test_incremental_no_changes(self, vault_path: Path):
         # First run — get all hashes
-        blocks1, _, hashes1, _ = parse_vault_incremental(
-            vault_path, known_doc_hashes={}
-        )
+        blocks1, _, hashes1, _ = parse_vault_incremental(vault_path, known_doc_hashes={})
         assert len(blocks1) > 0
 
         # Second run with same hashes — should return nothing
-        blocks2, links2, _, deleted = parse_vault_incremental(
-            vault_path, known_doc_hashes=hashes1
-        )
+        blocks2, links2, _, deleted = parse_vault_incremental(vault_path, known_doc_hashes=hashes1)
         assert len(blocks2) == 0
         assert len(links2) == 0
         assert len(deleted) == 0
 
     def test_incremental_detects_deleted(self, vault_path: Path):
         fake_hashes = {"nonexistent.md": "abc123"}
-        _, _, _, deleted = parse_vault_incremental(
-            vault_path, known_doc_hashes=fake_hashes
-        )
+        _, _, _, deleted = parse_vault_incremental(vault_path, known_doc_hashes=fake_hashes)
         assert "nonexistent.md" in deleted
 
 
@@ -289,9 +280,9 @@ class TestEdgeCases:
         """A file with only frontmatter and no body produces no entries."""
         blocks, _ = parse_vault(vault_path)
         empty_entries = [
-            b for b in blocks
-            if b.kind == "entry"
-            and b.metadata.get("parent_note_title") == "empty-note"
+            b
+            for b in blocks
+            if b.kind == "entry" and b.metadata.get("parent_note_title") == "empty-note"
         ]
         assert len(empty_entries) == 0
 
