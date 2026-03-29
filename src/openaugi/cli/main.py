@@ -239,6 +239,43 @@ def serve(
 
 
 @app.command()
+def watch(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    debounce: float = typer.Option(
+        30.0, "--debounce", "-d", help="Seconds to wait after last change"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Watch vault for changes and run incremental ingest.
+
+    Runs as a long-lived process alongside 'openaugi serve'.
+    Debounces rapid saves before triggering Layer 0 + optional Layer 1 (embedding).
+    """
+    _setup_logging(verbose)
+
+    from openaugi.config import load_config
+    from openaugi.pipeline.watcher import watch_vault
+
+    config = load_config()
+
+    vault_path = path or config.get("vault", {}).get("default_path")
+    if not vault_path:
+        console.print("[red]No vault path specified.[/red]")
+        console.print("Use --path or run 'openaugi init' to set a default.")
+        raise typer.Exit(1)
+
+    db_path = db or str(_default_db())
+
+    console.print(f"[bold]Watching vault:[/bold] {vault_path}")
+    console.print(f"[bold]Database:[/bold] {db_path}")
+    console.print(f"[bold]Debounce:[/bold] {debounce}s")
+    console.print()
+
+    watch_vault(vault_path, db_path, config, debounce_seconds=debounce)
+
+
+@app.command()
 def search(
     query: str = typer.Argument(..., help="Search query"),
     k: int = typer.Option(10, "--k", "-k", help="Number of results"),
@@ -384,8 +421,19 @@ def _find_openaugi_bin() -> str:
     )
 
 
-def _generate_plist(bin_path: str, port: int = 8787) -> str:
+def _generate_plist(bin_path: str, port: int = 8787, allowed_hosts: str = "") -> str:
     """Generate a launchd plist for the OpenAugi HTTP server."""
+    env_block = """    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>"""
+    if allowed_hosts:
+        env_block += f"""
+        <key>OPENAUGI_ALLOWED_HOSTS</key>
+        <string>{allowed_hosts}</string>"""
+    env_block += """
+    </dict>"""
+
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -418,11 +466,7 @@ def _generate_plist(bin_path: str, port: int = 8787) -> str:
     <key>StandardErrorPath</key>
     <string>{_LOG_DIR / "server.err"}</string>
 
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin</string>
-    </dict>
+{env_block}
 </dict>
 </plist>
 """
@@ -431,6 +475,9 @@ def _generate_plist(bin_path: str, port: int = 8787) -> str:
 @service_app.command("install")
 def service_install(
     port: int = typer.Option(8787, "--port", "-p", help="HTTP port for the server"),
+    allowed_hosts: str = typer.Option(
+        "", "--allowed-hosts", help="Comma-separated tunnel hostnames (e.g. mcp.example.com)"
+    ),
 ):
     """Install OpenAugi as a launchd service (starts on boot, restarts on crash)."""
     import subprocess
@@ -449,7 +496,7 @@ def service_install(
         )
 
     _LOG_DIR.mkdir(parents=True, exist_ok=True)
-    plist_content = _generate_plist(bin_path, port=port)
+    plist_content = _generate_plist(bin_path, port=port, allowed_hosts=allowed_hosts)
     _PLIST_PATH.write_text(plist_content)
 
     result = subprocess.run(
@@ -486,31 +533,94 @@ def service_uninstall():
     console.print("[green]Service stopped and removed.[/green]")
 
 
-@service_app.command("status")
-def service_status():
-    """Check if the OpenAugi service is running."""
+@service_app.command("stop")
+def service_stop():
+    """Kill switch: stop MCP server AND any running cloudflared tunnels."""
     import subprocess
 
-    if not _PLIST_PATH.exists():
-        console.print("[yellow]Service not installed.[/yellow]")
-        console.print("Run: openaugi service install")
-        raise typer.Exit(0)
+    # Stop MCP service
+    if _PLIST_PATH.exists():
+        subprocess.run(["launchctl", "unload", str(_PLIST_PATH)], capture_output=True)
+        console.print("[green]MCP service stopped.[/green]")
+    else:
+        console.print("[dim]MCP service not installed.[/dim]")
 
+    # Kill any cloudflared tunnel processes
     result = subprocess.run(
-        ["launchctl", "list", _PLIST_NAME],
+        ["pkill", "-f", "cloudflared tunnel"],
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        console.print("[green]Cloudflared tunnel killed.[/green]")
+    else:
+        console.print("[dim]No cloudflared tunnel running.[/dim]")
+
+    # Verify nothing is listening
+    port_check = subprocess.run(
+        ["lsof", "-i", ":8787"],
         capture_output=True,
         text=True,
     )
-
-    if result.returncode == 0:
-        # Parse PID from output
-        lines = result.stdout.strip().split("\n")
-        console.print("[green]Service is running.[/green]")
-        for line in lines:
-            console.print(f"  {line}")
+    if port_check.stdout.strip():
+        console.print("[yellow]Warning: something still listening on :8787[/yellow]")
     else:
-        console.print("[yellow]Service is installed but not running.[/yellow]")
-        console.print("Check logs: ~/.openaugi/logs/server.err")
+        console.print("[green]Port 8787 is clear. Nothing is exposed.[/green]")
+
+
+@service_app.command("start")
+def service_start():
+    """Re-start the MCP service (if installed). Does NOT start the tunnel."""
+    import subprocess
+
+    if not _PLIST_PATH.exists():
+        console.print("[yellow]Service not installed. Run: openaugi service install[/yellow]")
+        raise typer.Exit(1)
+
+    subprocess.run(["launchctl", "load", str(_PLIST_PATH)], capture_output=True)
+    console.print("[green]MCP service started (localhost only).[/green]")
+    console.print("To expose via tunnel, run: cloudflared tunnel run openaugi")
+
+
+@service_app.command("status")
+def service_status():
+    """Check if the MCP service and tunnel are running."""
+    import subprocess
+
+    # MCP service
+    if not _PLIST_PATH.exists():
+        console.print("[yellow]MCP service: not installed[/yellow]")
+    else:
+        result = subprocess.run(
+            ["launchctl", "list", _PLIST_NAME],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            console.print("[green]MCP service: running[/green]")
+        else:
+            console.print("[yellow]MCP service: installed but not running[/yellow]")
+
+    # Port check
+    port_check = subprocess.run(
+        ["lsof", "-i", ":8787"],
+        capture_output=True,
+        text=True,
+    )
+    if port_check.stdout.strip():
+        console.print("[green]Port 8787: listening (localhost)[/green]")
+    else:
+        console.print("[dim]Port 8787: not listening[/dim]")
+
+    # Tunnel check
+    tunnel_check = subprocess.run(
+        ["pgrep", "-f", "cloudflared tunnel"],
+        capture_output=True,
+        text=True,
+    )
+    if tunnel_check.stdout.strip():
+        console.print("[yellow]Cloudflared tunnel: running (publicly reachable)[/yellow]")
+    else:
+        console.print("[dim]Cloudflared tunnel: not running[/dim]")
 
 
 def _print_block(block, score: float | None = None):
