@@ -351,7 +351,12 @@ class SQLiteStore:
     # ── FTS5 Search ────────────────────────────────────────────────
 
     def search_fts(self, query: str, limit: int = 20) -> list[Block]:
-        """Full-text search across blocks via FTS5."""
+        """Full-text search across blocks via FTS5.
+
+        User input is quoted to prevent FTS5 syntax errors (e.g., bare words
+        being interpreted as column names).
+        """
+        safe_query = _sanitize_fts_query(query)
         rows = self.conn.execute(
             """SELECT b.id, b.kind, b.content, b.summary, b.embedding, b.source,
                       b.title, b.tags, b.timestamp, b.occurred_at, b.metadata,
@@ -361,7 +366,7 @@ class SQLiteStore:
                WHERE blocks_fts MATCH ?
                ORDER BY rank
                LIMIT ?""",
-            (query, limit),
+            (safe_query, limit),
         ).fetchall()
         return [_row_to_block(r) for r in rows]
 
@@ -592,6 +597,32 @@ def _normalize_blob(blob: bytes) -> bytes:
 
 
 # ── Row conversion helpers ─────────────────────────────────────────
+
+
+def _sanitize_fts_query(query: str) -> str:
+    """Make a user query safe for FTS5 MATCH.
+
+    FTS5 has its own syntax: bare `-` means NOT, unquoted words matching column
+    names (title, content, tags) are treated as column prefixes, and special chars
+    like `*`, `"`, `(` have meaning.
+
+    Strategy: quote each word individually so FTS5 treats them as literal terms
+    joined by implicit AND (not as a phrase). Column-prefixed queries from our
+    own code (e.g., `title:foo`) get the value part quoted as a phrase.
+    """
+    # Column-prefixed query from our own code (e.g., "title:Some Title")
+    if ":" in query:
+        col, _, value = query.partition(":")
+        col = col.strip()
+        # Only allow known FTS5 columns
+        if col in ("title", "content", "tags"):
+            escaped = value.strip().replace('"', '""')
+            return f'{col}:"{escaped}"'
+
+    # Plain user query — quote each word individually (implicit AND, not phrase)
+    tokens = query.split()
+    quoted = [f'"{t.replace(chr(34), chr(34) + chr(34))}"' for t in tokens if t.strip("-")]
+    return " ".join(quoted) if quoted else f'"{query}"'
 
 
 def _row_to_block(row: tuple) -> Block:
