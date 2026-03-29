@@ -86,6 +86,7 @@ Both are optional if you've run `openaugi init` — the config file is the defau
 |------|---------|
 | `search` | Semantic (sqlite-vec KNN), keyword (FTS5), or browse with filters |
 | `get_block` | Full block content + metadata by ID |
+| `get_blocks` | Batch fetch up to 50 blocks by ID — prefer over calling `get_block` in a loop |
 | `get_related` | Follow links from/to a block (tags, wikilinks, derivations) |
 | `traverse` | Multi-hop graph walk from a starting block |
 | `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links |
