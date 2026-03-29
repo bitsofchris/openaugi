@@ -42,7 +42,8 @@ src/openaugi/
 ├── pipeline/
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
-│   └── rerank.py          # Dedup + MMR re-ranking for get_context
+│   ├── rerank.py          # Dedup + MMR re-ranking for get_context
+│   └── watcher.py         # File watcher — debounced incremental ingest on vault changes
 ├── store/
 │   └── sqlite.py          # SQLite backend (WAL, FTS5, sqlite-vec vec0, CASCADE)
 ├── models/
@@ -54,7 +55,7 @@ src/openaugi/
 │   ├── server.py          # MCP tools (read + write), stdio + streamable-http transport
 │   └── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
 ├── cli/
-│   └── main.py            # typer CLI (ingest, serve, search, hubs, status, service)
+│   └── main.py            # typer CLI (up, ingest, serve, watch, search, hubs, status, service)
 └── config.py              # TOML config loader + .env loader
 ```
 
@@ -110,19 +111,43 @@ See [docs/plans/m0.md](docs/plans/m0.md) § Key Design Decisions for full ration
 - **Default local embeddings**: sentence-transformers, no API key. Users upgrade via config.
 - **`get_context` dedup + MMR**: Over-fetches 3× candidates, collapses near-duplicates via cosine grouping, re-ranks for diversity before returning. See [docs/MCP_SERVER.md](docs/MCP_SERVER.md) for tuning.
 
-## Deployment
+## Running
+
+### Quick start (one command)
+
+```bash
+openaugi init          # one-time: configure embedding model, API key, vault path
+openaugi up            # daily: sync vault + file watcher + MCP server
+```
+
+`openaugi up` is the single command to run OpenAugi:
+
+1. **Incremental ingest** — syncs vault to SQLite (skips unchanged files via content hash)
+2. **File watcher** — daemon thread watches for `.md` changes, debounces (default 30s), re-ingests
+3. **MCP server** — foreground, stdio or HTTP transport
+
+Embedding is attempted with the user's configured model. If it fails, blocks are saved without embeddings and retried on the next watcher cycle. SQLite WAL mode handles concurrent reads (MCP) and writes (watcher) without locking.
+
+### Individual commands
+
+| Command | What |
+|---------|------|
+| `openaugi serve` | MCP server only (stdio or HTTP) |
+| `openaugi watch` | File watcher only (incremental ingest on vault changes) |
+| `openaugi up` | Both in one process |
+
+### Transports
 
 Two transport modes — see [docs/REMOTE_ACCESS.md](docs/REMOTE_ACCESS.md) for full setup.
 
 | Transport | Command | Use Case |
 |-----------|---------|----------|
-| stdio (default) | `openaugi serve` | Claude Desktop/Code on same machine |
-| streamable-http | `openaugi serve --transport http` | Remote clients, Claude mobile via Cloudflare Tunnel |
+| stdio (default) | `openaugi up` | Claude Desktop/Code on same machine |
+| streamable-http | `openaugi up --transport http` | Remote clients, Claude mobile via Cloudflare Tunnel |
 
 Service management (macOS): `openaugi service install/uninstall/status` — launchd plist, starts on boot.
 
 ## Plans
 
 - [docs/plans/overall-mvp.md](docs/plans/overall-mvp.md) — Milestones M0–M5
-- [docs/plans/m1.5-ship-and-run.md](docs/plans/m1.5-ship-and-run.md) — M1.5: Ship & Run (current)
 - [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features
