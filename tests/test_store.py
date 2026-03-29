@@ -48,6 +48,26 @@ class TestBlockCRUD:
     def test_delete_nonexistent_block(self, store: SQLiteStore):
         assert not store.delete_block("nonexistent")
 
+    def test_get_blocks_by_ids(self, store: SQLiteStore):
+        store.insert_blocks(
+            [
+                Block(id="b1", kind="entry", content="First"),
+                Block(id="b2", kind="entry", content="Second"),
+                Block(id="b3", kind="entry", content="Third"),
+            ]
+        )
+        result = store.get_blocks_by_ids(["b1", "b3", "nonexistent"])
+        assert len(result) == 2
+        assert "b1" in result
+        assert "b3" in result
+        assert "nonexistent" not in result
+        assert result["b1"].content == "First"
+        assert result["b3"].content == "Third"
+
+    def test_get_blocks_by_ids_empty(self, store: SQLiteStore):
+        result = store.get_blocks_by_ids([])
+        assert result == {}
+
     def test_get_blocks_by_kind(self, store: SQLiteStore):
         store.insert_blocks(
             [

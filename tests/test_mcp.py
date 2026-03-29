@@ -57,11 +57,22 @@ class TestMCPTools:
         result = json.loads(search(tags=["project"]))
         assert "results" in result
 
-    def test_search_no_args_returns_error(self):
+    def test_search_has_more_flag(self):
+        from openaugi.mcp.server import search
+
+        # Request k=1 — if there's more than 1 result, has_more should be True
+        result = json.loads(search(keyword="career", k=1))
+        assert "has_more" in result
+        if result["count"] == 1:
+            # We know fixture vault has multiple career entries
+            assert result["has_more"] is True
+
+    def test_search_no_args_returns_error_with_hint(self):
         from openaugi.mcp.server import search
 
         result = json.loads(search())
         assert "error" in result
+        assert "hint" in result
 
     def test_get_block(self):
         from openaugi.mcp.server import get_block, search
@@ -75,11 +86,45 @@ class TestMCPTools:
         assert "content" in result
         assert "metadata" in result
 
+    def test_get_blocks_batch(self):
+        from openaugi.mcp.server import get_blocks, search
+
+        # Find some block IDs via search
+        search_result = json.loads(search(keyword="career"))
+        ids = [r["id"] for r in search_result["results"][:3]]
+
+        result = json.loads(get_blocks(ids))
+        assert result["count"] == len(ids)
+        assert len(result["blocks"]) == len(ids)
+        assert result["missing"] == []
+        # Each block should have full content
+        for block in result["blocks"]:
+            assert "content" in block
+            assert "metadata" in block
+
+    def test_get_blocks_with_missing(self):
+        from openaugi.mcp.server import get_blocks, search
+
+        search_result = json.loads(search(keyword="career"))
+        valid_id = search_result["results"][0]["id"]
+
+        result = json.loads(get_blocks([valid_id, "nonexistent_id"]))
+        assert result["count"] == 1
+        assert len(result["blocks"]) == 1
+        assert result["missing"] == ["nonexistent_id"]
+
+    def test_get_blocks_too_many(self):
+        from openaugi.mcp.server import get_blocks
+
+        result = json.loads(get_blocks([f"id_{i}" for i in range(51)]))
+        assert "error" in result
+
     def test_get_block_not_found(self):
         from openaugi.mcp.server import get_block
 
         result = json.loads(get_block("nonexistent"))
         assert "error" in result
+        assert "hint" in result
 
     def test_get_related(self):
         from openaugi.mcp.server import get_related, search
