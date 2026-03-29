@@ -221,11 +221,15 @@ def serve(
     ),
     host: str = typer.Option("127.0.0.1", "--host", help="HTTP host (streamable-http only)"),
     port: int = typer.Option(8787, "--port", "-p", help="HTTP port (streamable-http only)"),
+    auth: str | None = typer.Option(
+        None, "--auth", help="Auth provider for remote access (e.g. cloudflare)"
+    ),
 ):
     """Start MCP server.
 
     Default: stdio transport for Claude Desktop/Code.
     Use --transport streamable-http for remote access (Claude mobile, Tailscale, etc.).
+    Use --auth cloudflare to enable OAuth via Cloudflare Access.
     """
     import os
 
@@ -235,7 +239,7 @@ def serve(
     from openaugi.mcp.server import run_server
 
     resolved = "streamable-http" if transport == "http" else transport
-    run_server(transport=resolved, host=host, port=port)  # type: ignore[arg-type]
+    run_server(transport=resolved, host=host, port=port, auth_provider=auth)  # type: ignore[arg-type]
 
 
 @app.command()
@@ -247,6 +251,9 @@ def up(
     ),
     host: str = typer.Option("127.0.0.1", "--host", help="HTTP host (streamable-http only)"),
     port: int = typer.Option(8787, "--port", help="HTTP port (streamable-http only)"),
+    auth: str | None = typer.Option(
+        None, "--auth", help="Auth provider for remote access (e.g. cloudflare)"
+    ),
     debounce: float = typer.Option(30.0, "--debounce", "-d", help="Watcher debounce seconds"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
@@ -322,7 +329,7 @@ def up(
     from openaugi.mcp.server import run_server
 
     resolved = "streamable-http" if transport == "http" else transport
-    run_server(transport=resolved, host=host, port=port)  # type: ignore[arg-type]
+    run_server(transport=resolved, host=host, port=port, auth_provider=auth)  # type: ignore[arg-type]
 
 
 @app.command()

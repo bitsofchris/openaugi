@@ -89,16 +89,9 @@ claude mcp add --transport stdio --scope user openaugi -- \
 }
 ```
 
-### Remote access (Claude mobile)
+### Remote access (advanced, optional)
 
-The MCP server is always local. For remote access (e.g., Claude mobile), run the HTTP transport and put a Cloudflare Tunnel in front of it:
-
-```bash
-openaugi up --transport http --port 8787
-# Then: cloudflared tunnel route to localhost:8787
-```
-
-See [docs/REMOTE_ACCESS.md](docs/REMOTE_ACCESS.md) for the full Cloudflare Tunnel + Access setup.
+The MCP server supports HTTP transport with OAuth authentication for remote access from Claude mobile. Requires a Cloudflare account, domain, and tunnel setup. This is not required for normal use.
 
 ## CLI Reference
 
