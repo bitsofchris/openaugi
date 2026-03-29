@@ -405,6 +405,22 @@ class SQLiteStore:
             )
         self.conn.commit()
 
+    def get_blocks_by_ids(self, block_ids: list[str]) -> dict[str, Block]:
+        """Fetch full blocks for a list of block IDs in a single query.
+
+        Returns a dict {block_id: Block} — missing IDs are omitted.
+        """
+        if not block_ids:
+            return {}
+        placeholders = ",".join("?" * len(block_ids))
+        rows = self.conn.execute(
+            f"""SELECT id, kind, content, summary, embedding, source, title,
+                       tags, timestamp, occurred_at, metadata, content_hash, created_at
+                FROM blocks WHERE id IN ({placeholders})""",
+            block_ids,
+        ).fetchall()
+        return {row[0]: _row_to_block(row) for row in rows}
+
     def get_embeddings_for_ids(self, block_ids: list[str]) -> dict[str, bytes | None]:
         """Fetch embedding blobs for a list of block IDs.
 

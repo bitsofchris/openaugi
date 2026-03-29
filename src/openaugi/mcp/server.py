@@ -3,6 +3,7 @@
 Read tools (readOnlyHint):
 - search: semantic (sqlite-vec KNN) + title (FTS5 title-only) + keyword (FTS5) + filters
 - get_block: full block content by ID
+- get_blocks: batch fetch multiple blocks by ID (up to 50)
 - get_related: follow links from a block
 - traverse: multi-hop graph walk
 - get_context: compound search → expand → structured result
@@ -109,36 +110,56 @@ def search(
     kind: str | None = None,
     source: str | None = None,
 ) -> str:
-    """Search knowledge base. Four modes:
-    - Title: provide 'title' to search note/document titles only — use this when
-      looking for a specific note by name (e.g. title="meeting notes", title="project plan")
-    - Semantic: provide 'query' for vector similarity search
-    - Keyword: provide 'keyword' for FTS5 full-text search (title + content + tags)
-    - Browse: provide filters (tags, after, before, kind, source)
+    """Search the knowledge base. Returns block summaries (not full content).
 
-    Prefer 'title' over 'keyword' when you know the note name or want to navigate by title.
-    Must provide at least one of: query, keyword, title, or a filter."""
+    Use this as your first step to find relevant blocks. Four modes:
+    - Title: provide 'title' to search note/document titles only (e.g. title="meeting notes")
+    - Semantic: provide 'query' for vector similarity search (best for concepts/questions)
+    - Keyword: provide 'keyword' for FTS5 full-text search (best for exact terms)
+    - Browse: provide only filters (tags, after, before, kind, source)
+
+    Do NOT use this to get full block content — use get_block or get_blocks for that.
+    For a complete research workflow (search + deduplicate + expand), use get_context instead.
+
+    Prefer 'title' over 'keyword' when you know the note name.
+    Must provide at least one of: query, keyword, title, or a filter.
+    Results are capped at k (default 20). If count == k, there may be more — increase k or
+    narrow your filters.
+    Dates use ISO format: after="2025-01-01", before="2025-06-01"."""
     if not query and not keyword and not title and not any([tags, after, before, kind, source]):
-        return _json({"error": "Provide query, keyword, title, or at least one filter"})
+        return _json(
+            {
+                "error": "No search parameters provided.",
+                "hint": "Provide at least one of: query (semantic), keyword (FTS), "
+                "title, or filters (tags, after, before, kind, source). "
+                "Example: search(keyword='project plan')",
+            }
+        )
 
     store = _get_store()
 
     if title:
-        results = store.search_fts(f"title:{title}", limit=k)
+        results = store.search_fts(f"title:{title}", limit=k + 1)
+        has_more = len(results) > k
+        results = results[:k]
         return _json(
             {
                 "results": [_block_summary(b) for b in results],
                 "count": len(results),
+                "has_more": has_more,
                 "mode": "title",
             }
         )
 
     if keyword:
-        results = store.search_fts(keyword, limit=k)
+        results = store.search_fts(keyword, limit=k + 1)
+        has_more = len(results) > k
+        results = results[:k]
         return _json(
             {
                 "results": [_block_summary(b) for b in results],
                 "count": len(results),
+                "has_more": has_more,
                 "mode": "keyword",
             }
         )
@@ -147,9 +168,13 @@ def search(
         query_vec = _get_embedding_model().embed_query(query)
         hits = store.semantic_search(query_vec, k=k * 3)
 
+        # Batch-fetch all hit blocks
+        hit_ids = [block_id for block_id, _ in hits]
+        blocks_map = store.get_blocks_by_ids(hit_ids)
+
         results = []
         for block_id, distance in hits:
-            block = store.get_block(block_id)
+            block = blocks_map.get(block_id)
             if block is None:
                 continue
             if kind and block.kind != kind:
@@ -165,10 +190,19 @@ def search(
             summary = _block_summary(block)
             summary["score"] = round(1.0 - distance, 4)
             results.append(summary)
-            if len(results) >= k:
+            if len(results) > k:
                 break
 
-        return _json({"results": results, "count": len(results), "mode": "semantic"})
+        has_more = len(results) > k
+        results = results[:k]
+        return _json(
+            {
+                "results": results,
+                "count": len(results),
+                "has_more": has_more,
+                "mode": "semantic",
+            }
+        )
 
     # Browse mode — filter blocks
     blocks = store.get_blocks_by_kind(kind or "entry", limit=k * 3)
@@ -183,21 +217,67 @@ def search(
         if before and (b.timestamp or "") > before:
             continue
         results.append(_block_summary(b))
-        if len(results) >= k:
+        if len(results) > k:
             break
 
-    return _json({"results": results, "count": len(results), "mode": "browse"})
+    has_more = len(results) > k
+    results = results[:k]
+    return _json(
+        {
+            "results": results,
+            "count": len(results),
+            "has_more": has_more,
+            "mode": "browse",
+        }
+    )
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 @_release_conn
 def get_block(block_id: str) -> str:
-    """Get full block content and metadata by ID."""
+    """Get full block content and metadata by ID.
+
+    Use after search/get_context to read the complete content of a specific block.
+    For multiple blocks, use get_blocks instead — one call vs. many.
+    Do NOT use this in a loop — use get_blocks with a list of IDs."""
     store = _get_store()
     block = store.get_block(block_id)
     if block is None:
-        return _json({"error": f"Block not found: {block_id}"})
+        return _json(
+            {
+                "error": f"Block not found: {block_id}",
+                "hint": "This ID may be stale or incorrect. Use search(keyword=...) or "
+                "search(title=...) to find valid block IDs.",
+            }
+        )
     return _json(_block_full(block))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@_release_conn
+def get_blocks(block_ids: list[str]) -> str:
+    """Get full content and metadata for multiple blocks in one call.
+
+    Use this instead of calling get_block in a loop — saves round trips.
+    Accepts up to 50 IDs. Missing IDs are listed in the 'missing' array (not errors).
+    Block order in the response matches the order of block_ids."""
+    if len(block_ids) > 50:
+        return _json(
+            {
+                "error": f"Too many IDs ({len(block_ids)}). Maximum is 50 per request.",
+                "hint": "Split into multiple get_blocks calls of 50 or fewer IDs each.",
+            }
+        )
+    store = _get_store()
+    found = store.get_blocks_by_ids(block_ids)
+    missing = [bid for bid in block_ids if bid not in found]
+    return _json(
+        {
+            "blocks": [_block_full(found[bid]) for bid in block_ids if bid in found],
+            "count": len(found),
+            "missing": missing,
+        }
+    )
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -208,37 +288,42 @@ def get_related(
     direction: str = "both",
     limit: int = 50,
 ) -> str:
-    """Follow links from/to a block. Returns connected blocks.
-    - direction: 'out' (from block), 'in' (to block), or 'both'
-    - kind: filter by link kind (split_from, tagged, links_to, etc.)"""
+    """Follow links from/to a block. Returns connected block summaries.
+
+    Use to explore the graph around a known block — find its tags, parent document,
+    wikilinked notes, or derived content.
+    Do NOT use this for broad discovery — use search or get_context instead.
+
+    - direction: 'out' (from block), 'in' (to block), or 'both' (default)
+    - kind: filter by link kind. Common kinds: 'split_from' (entry→document),
+      'tagged' (entry→tag), 'links_to' (wikilink between notes)
+    - limit: max results (default 50)"""
     store = _get_store()
 
-    results = []
-    if direction in ("out", "both"):
-        links = store.get_links_from(block_id, kind=kind)
-        for lnk in links[:limit]:
-            target = store.get_block(lnk.to_id)
-            if target:
-                results.append(
-                    {
-                        "block": _block_summary(target),
-                        "link_kind": lnk.kind,
-                        "direction": "out",
-                    }
-                )
+    out_links = (
+        store.get_links_from(block_id, kind=kind)[:limit] if direction in ("out", "both") else []
+    )
+    in_links = (
+        store.get_links_to(block_id, kind=kind)[:limit] if direction in ("in", "both") else []
+    )
 
-    if direction in ("in", "both"):
-        links = store.get_links_to(block_id, kind=kind)
-        for lnk in links[:limit]:
-            source_block = store.get_block(lnk.from_id)
-            if source_block:
-                results.append(
-                    {
-                        "block": _block_summary(source_block),
-                        "link_kind": lnk.kind,
-                        "direction": "in",
-                    }
-                )
+    # Batch-fetch all linked blocks in one query
+    needed_ids = [lnk.to_id for lnk in out_links] + [lnk.from_id for lnk in in_links]
+    blocks_map = store.get_blocks_by_ids(needed_ids) if needed_ids else {}
+
+    results = []
+    for lnk in out_links:
+        target = blocks_map.get(lnk.to_id)
+        if target:
+            results.append(
+                {"block": _block_summary(target), "link_kind": lnk.kind, "direction": "out"}
+            )
+    for lnk in in_links:
+        source_block = blocks_map.get(lnk.from_id)
+        if source_block:
+            results.append(
+                {"block": _block_summary(source_block), "link_kind": lnk.kind, "direction": "in"}
+            )
 
     return _json({"block_id": block_id, "related": results, "count": len(results)})
 
@@ -251,33 +336,52 @@ def traverse(
     link_kinds: list[str] | None = None,
     limit: int = 50,
 ) -> str:
-    """Multi-hop graph walk from a starting block.
-    Follows links up to max_hops deep. Returns all reachable blocks."""
+    """Multi-hop graph walk from a starting block. Returns block summaries with depth.
+
+    Use to map the neighborhood around a block — e.g. find everything connected to a
+    topic tag within 2 hops. Each result includes 'depth' (distance from start).
+    For single-hop exploration, prefer get_related (simpler, shows link kinds).
+    Do NOT use for broad search — use search or get_context instead.
+
+    - max_hops: how many link-steps to follow (default 2, max recommended 3)
+    - link_kinds: restrict to specific link types (e.g. ['links_to', 'tagged'])
+    - limit: max results (default 50)"""
     store = _get_store()
 
-    visited: set[str] = set()
+    visited: set[str] = {start_id}
     results: list[dict] = []
-    frontier = [(start_id, 0)]
+    current_level = [start_id]
 
-    while frontier and len(results) < limit:
-        current_id, depth = frontier.pop(0)
-        if current_id in visited:
-            continue
-        visited.add(current_id)
+    for depth in range(1, max_hops + 1):
+        if not current_level or len(results) >= limit:
+            break
 
-        block = store.get_block(current_id)
-        if block and current_id != start_id:
-            results.append({**_block_summary(block), "depth": depth})
-
-        if depth < max_hops:
-            links_out = store.get_links_from(current_id)
-            links_in = store.get_links_to(current_id)
+        # Gather all neighbor IDs for this frontier level
+        next_ids: list[str] = []
+        for cid in current_level:
+            links_out = store.get_links_from(cid)
+            links_in = store.get_links_to(cid)
             for lnk in links_out + links_in:
-                next_id = lnk.to_id if lnk.from_id == current_id else lnk.from_id
-                if next_id not in visited:
+                nid = lnk.to_id if lnk.from_id == cid else lnk.from_id
+                if nid not in visited:
                     if link_kinds and lnk.kind not in link_kinds:
                         continue
-                    frontier.append((next_id, depth + 1))
+                    next_ids.append(nid)
+                    visited.add(nid)
+
+        if not next_ids:
+            break
+
+        # Batch-fetch all blocks for this level
+        blocks_map = store.get_blocks_by_ids(next_ids)
+        for nid in next_ids:
+            block = blocks_map.get(nid)
+            if block:
+                results.append({**_block_summary(block), "depth": depth})
+                if len(results) >= limit:
+                    break
+
+        current_level = next_ids
 
     return _json(
         {
@@ -296,10 +400,17 @@ def get_context(
     k: int = 10,
     expand: bool = True,
 ) -> str:
-    """Power tool: multi-prong search → deduplicate → diversity re-rank → expand via links.
-    Combines semantic + keyword search, deduplicates redundant chunks via embedding
-    similarity grouping, re-ranks for diversity (MMR), then follows links from top
-    results to build a rich context package for Claude."""
+    """Primary research tool. Use this as the default for answering questions against the
+    knowledge base — it runs a full retrieval pipeline in one call:
+    semantic search + keyword search → deduplicate → diversity re-rank (MMR) → expand via links.
+
+    Returns 'direct_results' (top blocks) and 'expanded' (linked blocks for extra context).
+    Prefer this over manual search → get_block → get_related chains.
+    Use plain 'search' only when you need specific search modes (title-only, browse filters)
+    or fine-grained control over results.
+
+    - k: number of final results (default 10). Internally overfetches 3x for dedup.
+    - expand: follow links from top results for richer context (default true)"""
     store = _get_store()
     config = load_config()
     retrieval = config.get("retrieval", {})
@@ -354,31 +465,40 @@ def get_context(
     else:
         final_ids = sorted(all_ids, key=lambda bid: candidate_scores[bid], reverse=True)[:k]
 
-    # Fetch full blocks only for the final k IDs
+    # Batch-fetch full blocks for the final k IDs
+    final_blocks = store.get_blocks_by_ids(final_ids)
+    fts_ids = {b.id for b in fts_results}
     blocks_seen: dict[str, dict] = {}
     for block_id in final_ids:
-        block = store.get_block(block_id)
+        block = final_blocks.get(block_id)
         if block:
             entry = {**_block_summary(block), "score": candidate_scores.get(block_id, 0.0)}
-            entry["source"] = "fts" if block_id in {b.id for b in fts_results} else "semantic"
+            entry["source"] = "fts" if block_id in fts_ids else "semantic"
             blocks_seen[block_id] = entry
 
-    # Expand: follow links from top results
+    # Expand: follow links from top results, batch-fetch targets
     expanded: list[dict] = []
     if expand:
+        expand_targets: list[tuple[str, str, str]] = []  # (to_id, from_id, link_kind)
         for block_id in final_ids:
             links = store.get_links_from(block_id)
             for lnk in links[:5]:
                 if lnk.to_id not in blocks_seen:
-                    target = store.get_block(lnk.to_id)
-                    if target:
-                        entry = {
-                            **_block_summary(target),
-                            "expanded_from": block_id,
-                            "link_kind": lnk.kind,
-                        }
-                        expanded.append(entry)
-                        blocks_seen[lnk.to_id] = entry
+                    expand_targets.append((lnk.to_id, block_id, lnk.kind))
+
+        if expand_targets:
+            expand_ids = list({t[0] for t in expand_targets})
+            expand_blocks = store.get_blocks_by_ids(expand_ids)
+            for to_id, from_id, link_kind in expand_targets:
+                target = expand_blocks.get(to_id)
+                if target and to_id not in blocks_seen:
+                    entry = {
+                        **_block_summary(target),
+                        "expanded_from": from_id,
+                        "link_kind": link_kind,
+                    }
+                    expanded.append(entry)
+                    blocks_seen[to_id] = entry
 
     return _json(
         {
@@ -398,7 +518,15 @@ def recent(
     source: str | None = None,
     tags: list[str] | None = None,
 ) -> str:
-    """Recently created blocks, filtered by kind/source/tags."""
+    """Recently created blocks, ordered newest first. Returns block summaries.
+
+    Use to see what's new in the knowledge base or catch up on recent activity.
+    Do NOT use this for topic-based search — use search or get_context instead.
+
+    - k: max results (default 20)
+    - kind: block kind to filter by (default 'entry'). Common kinds: 'entry', 'document', 'tag'
+    - source: filter by source (e.g. 'vault')
+    - tags: filter to blocks matching any of these tags"""
     store = _get_store()
     target_kind = kind or "entry"
     blocks = store.get_blocks_by_kind(target_kind, limit=k * 3)
@@ -410,10 +538,12 @@ def recent(
         if tags and not set(tags).intersection(b.tags):
             continue
         results.append(_block_summary(b))
-        if len(results) >= k:
+        if len(results) > k:
             break
 
-    return _json({"results": results, "count": len(results)})
+    has_more = len(results) > k
+    results = results[:k]
+    return _json({"results": results, "count": len(results), "has_more": has_more})
 
 
 # ── Write Tools ────────────────────────────────────────────────────
@@ -524,7 +654,12 @@ def get_note_resource(title: str) -> str:
         fts = store.search_fts(title, limit=5)
         doc_blocks = [b for b in fts if b.kind == "document"]
         if not doc_blocks:
-            return _json({"error": f"Note not found: {title}"})
+            return _json(
+                {
+                    "error": f"Note not found: {title}",
+                    "hint": "Use search(title=...) to find notes by partial title match.",
+                }
+            )
         doc_id = doc_blocks[0].id
     else:
         doc_id = rows[0][0]
