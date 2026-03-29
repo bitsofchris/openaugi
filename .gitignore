@@ -1,4 +1,4 @@
-*.local.*
+*local*
 env
 .venv
 *.pyc
