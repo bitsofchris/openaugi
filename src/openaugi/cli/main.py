@@ -239,6 +239,93 @@ def serve(
 
 
 @app.command()
+def up(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    transport: str = typer.Option(
+        "stdio", "--transport", "-t", help="Transport: stdio or streamable-http"
+    ),
+    host: str = typer.Option("127.0.0.1", "--host", help="HTTP host (streamable-http only)"),
+    port: int = typer.Option(8787, "--port", help="HTTP port (streamable-http only)"),
+    debounce: float = typer.Option(30.0, "--debounce", "-d", help="Watcher debounce seconds"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Ingest, watch, and serve — the one command to run OpenAugi.
+
+    1. Runs incremental ingest (fast if already up-to-date)
+    2. Starts file watcher as a background thread
+    3. Starts MCP server in the foreground
+    """
+    import os
+
+    _setup_logging(verbose)
+
+    # Status output must go to stderr — stdout is the MCP stdio protocol channel.
+    err = Console(stderr=True)
+
+    from openaugi.config import load_config
+    from openaugi.pipeline.runner import run_layer0
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+
+    vault_path = path or config.get("vault", {}).get("default_path")
+    if not vault_path:
+        err.print("[red]No vault path specified.[/red]")
+        err.print("Use --path or run 'openaugi init' to set a default.")
+        raise typer.Exit(1)
+
+    db_path = db or str(_default_db())
+
+    err.print(f"[bold]Vault:[/bold] {vault_path}")
+    err.print(f"[bold]Database:[/bold] {db_path}")
+
+    # Step 1: Incremental ingest
+    err.print("\n[bold]Syncing vault...[/bold]")
+    store = SQLiteStore(db_path)
+    try:
+        exclude = config.get("vault", {}).get("exclude_patterns")
+        workers = config.get("vault", {}).get("max_workers", 4)
+        result = run_layer0(vault_path, store, exclude_patterns=exclude, max_workers=workers)
+        stats = result["stats"]
+        err.print(
+            f"  {stats['total_blocks']} blocks, {stats['total_links']} links "
+            f"({result['blocks_added']} new, {result['blocks_removed']} removed)"
+        )
+
+        # Embedding — graceful fallback
+        try:
+            from openaugi.models import get_embedding_model
+            from openaugi.pipeline.embed import run_embed
+
+            model = get_embedding_model(config.get("models", {}).get("embedding"))
+            count = run_embed(store, model)
+            if count:
+                err.print(f"  Embedded {count} blocks")
+        except Exception as e:
+            err.print(f"  [dim]Embeddings skipped: {e}[/dim]")
+    finally:
+        store.close()
+
+    # Step 2: File watcher
+    from openaugi.pipeline.watcher import start_watcher_thread
+
+    start_watcher_thread(vault_path, db_path, config, debounce_seconds=debounce)
+    err.print(f"\n[bold]Watcher:[/bold] debounce={debounce}s")
+    err.print(f"[bold]MCP:[/bold] {transport}")
+    err.print()
+
+    # Step 3: MCP server (blocks main thread)
+    if db:
+        os.environ["OPENAUGI_DB"] = db
+
+    from openaugi.mcp.server import run_server
+
+    resolved = "streamable-http" if transport == "http" else transport
+    run_server(transport=resolved, host=host, port=port)  # type: ignore[arg-type]
+
+
+@app.command()
 def watch(
     path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
     db: str | None = typer.Option(None, "--db", help="Database path"),

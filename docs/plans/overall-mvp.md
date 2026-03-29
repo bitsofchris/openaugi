@@ -39,7 +39,7 @@ See [ARCHITECTURE.md](../../ARCHITECTURE.md) for the canonical data model and sy
 |---|-----------|------|--------|
 | **M0** | **Port & Foundation** | Port v1 to blocks+links, SQLite+FAISS, vault adapter, Layer 0+1, model abstraction, 6 MCP read tools, CLI. | **✅ Done** |
 | **M1** | **MCP Write + Local Setup** | Write tools (`write_document`), `reload_index`, vault resource, Claude Desktop/Code registration docs. | **✅ Done** |
-| **M1.5** | **Ship & Run** | HTTP transport, launchd service, Cloudflare Tunnel for Claude mobile, PyPI release, README. | **Next** |
+| **M1.5** | **Ship & Run** | HTTP transport, launchd service, Cloudflare Tunnel for Claude mobile, file watcher, `openaugi up`. | **✅ Done** |
 | M2 | Enrichment | Layer 2: hub summaries (LLM → summary blocks), `get_summary` MCP tool, `openaugi enrich` CLI. Entity extraction as stretch. | |
 | M3 | Temporal Intelligence | Hub velocity, recurrence, dead streams. New MCP tools. Lens protocol. | |
 | M5 | Multi-Source | ChatGPT adapter, adapter base class, cross-source hubs. | Last |
@@ -78,6 +78,23 @@ See [ARCHITECTURE.md](../../ARCHITECTURE.md) for the canonical data model and sy
 - **Vault path config**: `OPENAUGI_VAULT_PATH` env var + `config.toml [vault] default_path`. Set via `openaugi init`.
 - **Setup docs**: [docs/MCP_SERVER.md](../MCP_SERVER.md) — Claude Desktop config, Claude Code `claude mcp add`, env vars reference.
 - **Refactor**: Extracted `_get_embedding_model()` helper, fixed silent exception swallowing in `get_context`.
+
+---
+
+## M1.5 — Ship & Run ✅
+
+*Detailed plan: [done/m1.5-ship-and-run.md](done/m1.5-ship-and-run.md)*
+
+**End state:** OpenAugi runs as a persistent local service with live vault watching. Accessible from Claude mobile via Cloudflare Tunnel.
+
+### What Shipped
+
+- **HTTP transport**: `openaugi serve --transport http` — Streamable HTTP MCP via FastMCP, alongside existing stdio.
+- **Service management**: `openaugi service install/uninstall/status` — launchd plist, starts on boot, restarts on crash.
+- **Remote access**: Cloudflare Tunnel + Access docs for Claude mobile connectivity.
+- **File watcher**: `openaugi watch` — watchdog-based `.md` file watcher with configurable debounce. Runs incremental Layer 0 + graceful Layer 1 (embedding skipped if no model configured, retried on next cycle).
+- **`openaugi up`**: Single command that runs MCP server + file watcher together. Watcher as daemon thread, MCP in foreground.
+- **`openaugi init`**: Interactive setup wizard (embedding model, API key, vault path).
 
 ---
 
