@@ -262,6 +262,23 @@ class TestFTSSearch:
         results = store.search_fts("React - pros")
         assert len(results) >= 0  # no crash is the test
 
+    def test_fts_commas_in_query(self, store: SQLiteStore):
+        """Commas in user queries should not cause FTS5 syntax errors."""
+        store.insert_blocks(
+            [
+                Block(
+                    id="e2",
+                    kind="entry",
+                    content="finding work that feels like play and niche evolution",
+                ),
+            ]
+        )
+        # Commas previously caused: fts5: syntax error near ","
+        results = store.search_fts(
+            "finding work that feels like play, niche evolution, specific knowledge"
+        )
+        assert len(results) >= 0  # no crash is the test
+
 
 class TestEmbeddingHelpers:
     def test_get_blocks_needing_embeddings(self, store: SQLiteStore):
