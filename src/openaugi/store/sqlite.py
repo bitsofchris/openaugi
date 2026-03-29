@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 from pathlib import Path
 
@@ -619,8 +620,10 @@ def _sanitize_fts_query(query: str) -> str:
             escaped = value.strip().replace('"', '""')
             return f'{col}:"{escaped}"'
 
+    # Strip FTS5 operators that cause syntax errors even when quoted
+    cleaned = re.sub(r"[,()\*\+\^~]", " ", query)
     # Plain user query — quote each word individually (implicit AND, not phrase)
-    tokens = query.split()
+    tokens = cleaned.split()
     quoted = [f'"{t.replace(chr(34), chr(34) + chr(34))}"' for t in tokens if t.strip("-")]
     return " ".join(quoted) if quoted else f'"{query}"'
 
