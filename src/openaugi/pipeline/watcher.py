@@ -121,6 +121,34 @@ def _run_ingest_cycle(
         store.close()
 
 
+def _watch_loop(
+    vault_path: Path,
+    db_path: str,
+    config: dict[str, Any],
+    handler: _DebouncedHandler,
+    debounce_seconds: float,
+) -> None:
+    """Internal watch loop — runs until handler.stop() is called."""
+    while not handler.stopped:
+        if not handler.wait_for_change(timeout=1.0):
+            continue
+
+        # Debounce: wait for quiet period after last change
+        while True:
+            handler._changed.clear()
+            if handler._changed.wait(timeout=debounce_seconds):
+                continue  # Another change during debounce — reset
+            else:
+                break  # Quiet period elapsed
+
+        if handler.stopped:
+            break
+
+        changed = handler.drain()
+        if changed:
+            _run_ingest_cycle(vault_path, db_path, config, changed)
+
+
 def watch_vault(
     vault_path: str | Path,
     db_path: str,
@@ -146,31 +174,40 @@ def watch_vault(
     logger.info("Press Ctrl+C to stop")
 
     try:
-        while not handler.stopped:
-            # Wait for any file change
-            if not handler.wait_for_change(timeout=1.0):
-                continue
-
-            # Debounce: wait for quiet period after last change
-            while True:
-                handler._changed.clear()
-                if handler._changed.wait(timeout=debounce_seconds):
-                    # Another change came in during debounce — reset timer
-                    continue
-                else:
-                    # Quiet period elapsed — time to ingest
-                    break
-
-            if handler.stopped:
-                break
-
-            changed = handler.drain()
-            if changed:
-                _run_ingest_cycle(vault_path, db_path, config, changed)
-
+        _watch_loop(vault_path, db_path, config, handler, debounce_seconds)
     except KeyboardInterrupt:
         logger.info("Stopping watcher")
     finally:
         handler.stop()
         observer.stop()
         observer.join()
+
+
+def start_watcher_thread(
+    vault_path: str | Path,
+    db_path: str,
+    config: dict[str, Any],
+    debounce_seconds: float = 30.0,
+) -> None:
+    """Start file watcher as a daemon thread (for embedding in other processes)."""
+    vault_path = Path(vault_path).resolve()
+    if not vault_path.is_dir():
+        raise FileNotFoundError(f"Vault path does not exist: {vault_path}")
+
+    exclude = config.get("vault", {}).get("exclude_patterns", [])
+    handler = _DebouncedHandler(debounce_seconds, exclude_patterns=exclude)
+
+    observer = Observer()
+    observer.schedule(handler, str(vault_path), recursive=True)
+    observer.daemon = True
+    observer.start()
+
+    thread = threading.Thread(
+        target=_watch_loop,
+        args=(vault_path, db_path, config, handler, debounce_seconds),
+        daemon=True,
+        name="openaugi-watcher",
+    )
+    thread.start()
+
+    logger.info(f"Watcher thread started for {vault_path} (debounce={debounce_seconds}s)")
