@@ -233,6 +233,35 @@ class TestFTSSearch:
         results = store.search_fts("nonexistent")
         assert len(results) == 0
 
+    def test_fts_special_chars_dont_crash(self, store: SQLiteStore):
+        """FTS5 operators in user input should not cause SQL errors."""
+        store.insert_blocks(
+            [
+                Block(
+                    id="d1",
+                    kind="document",
+                    title="MOC - Advice on Finding Your Niche",
+                    content="Overview of niche advice",
+                ),
+            ]
+        )
+        # Title search with dashes and spaces — previously crashed with
+        # "no such column: Advice" because FTS5 parsed `-` as NOT operator
+        results = store.search_fts("title:MOC - Advice on Finding Your Niche")
+        assert len(results) == 1
+        assert results[0].id == "d1"
+
+    def test_fts_keyword_with_special_chars(self, store: SQLiteStore):
+        """Plain keyword queries with FTS5 operators should be safe."""
+        store.insert_blocks(
+            [
+                Block(id="e1", kind="entry", content="pros and cons of React vs Vue"),
+            ]
+        )
+        # Bare `-` and other operators should not crash
+        results = store.search_fts("React - pros")
+        assert len(results) >= 0  # no crash is the test
+
 
 class TestEmbeddingHelpers:
     def test_get_blocks_needing_embeddings(self, store: SQLiteStore):
