@@ -28,6 +28,7 @@ dependencies = [
     "numpy>=1.26",
     "openai>=1.0",
     "sqlite-vec>=0.1.6",
+    "watchdog>=4.0",
 ]
 
 [project.optional-dependencies]
