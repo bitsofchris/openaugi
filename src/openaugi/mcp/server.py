@@ -27,6 +27,7 @@ from typing import Literal
 
 import numpy as np
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
 from openaugi.config import load_config
@@ -594,6 +595,17 @@ def run_server(
     if transport != "stdio":
         mcp.settings.host = host
         mcp.settings.port = port
+        # Allow tunnel hostnames through DNS rebinding protection.
+        # OPENAUGI_ALLOWED_HOSTS is a comma-separated list of hostnames
+        # that can reach this server (e.g. via Cloudflare Tunnel).
+        allowed = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+        extra_hosts = os.environ.get("OPENAUGI_ALLOWED_HOSTS", "")
+        if extra_hosts:
+            allowed.extend(h.strip() for h in extra_hosts.split(",") if h.strip())
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=allowed,
+        )
         logger.info("Starting MCP server on http://%s:%d/mcp", host, port)
     mcp.run(transport=transport)
 
