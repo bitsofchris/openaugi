@@ -180,6 +180,22 @@ plus inbound/outbound link counts. Shows up in Claude Code's `@` autocomplete:
 @openaugi:vault://note/My Note Title
 ```
 
+## Remote Access (Advanced)
+
+The MCP server supports HTTP transport with optional OAuth authentication for remote access (e.g. from Claude mobile). This is an advanced, optional feature — most users should use the default stdio transport with Claude Desktop/Code.
+
+```bash
+# HTTP transport (local network only, no auth)
+openaugi serve --transport http
+
+# HTTP transport with Cloudflare Access OAuth
+openaugi serve --transport http --auth cloudflare
+```
+
+Requires `pip install openaugi[remote]` for auth dependencies.
+
+Setup involves a Cloudflare account, domain, tunnel, and Access configuration. See the local docs for detailed instructions.
+
 ## Troubleshooting
 
 - **Server not showing in `/mcp`**: Run `claude mcp list` to check registration

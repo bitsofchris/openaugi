@@ -584,6 +584,7 @@ def run_server(
     transport: Literal["stdio", "sse", "streamable-http"] = "stdio",
     host: str = "127.0.0.1",
     port: int = 8787,
+    auth_provider: str | None = None,
 ):
     """Start the MCP server.
 
@@ -591,6 +592,7 @@ def run_server(
         transport: "stdio" for Claude Desktop/Code, "streamable-http" for remote access.
         host: HTTP host (only used with streamable-http transport).
         port: HTTP port (only used with streamable-http transport).
+        auth_provider: Optional auth provider (e.g. "cloudflare"). Only for HTTP transport.
     """
     if transport != "stdio":
         mcp.settings.host = host
@@ -607,6 +609,14 @@ def run_server(
             allowed_hosts=allowed,
         )
         logger.info("Starting MCP server on http://%s:%d/mcp", host, port)
+
+    if auth_provider:
+        from openaugi.auth import configure_auth
+
+        config = load_config()
+        configure_auth(mcp, auth_provider, config)
+        logger.info("Auth provider configured: %s", auth_provider)
+
     mcp.run(transport=transport)
 
 

@@ -35,6 +35,11 @@ dependencies = [
 local = ["sentence-transformers>=3.0"]
 openai = []  # kept for backwards compat, openai is now a core dependency
 ollama = ["httpx>=0.27"]
+remote = [
+    "PyJWT>=2.8",
+    "cryptography>=42",
+    "httpx>=0.27",
+]
 all = [
     "sentence-transformers>=3.0",
     "openai>=1.0",
