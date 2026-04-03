@@ -23,12 +23,37 @@ console = Console()
 
 
 def _setup_logging(verbose: bool):
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)-5s %(message)s",
-        datefmt="%H:%M:%S",
+    from logging.handlers import RotatingFileHandler
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    fmt = logging.Formatter(
+        "%(asctime)s %(levelname)-5s %(name)s  %(message)s", datefmt="%H:%M:%S"
     )
+
+    # Console: INFO (or DEBUG with --verbose), always to stderr
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
+    console_handler.setFormatter(fmt)
+    root.addHandler(console_handler)
+
+    # File: DEBUG for our code, WARNING for third-party noise.
+    # Rotated at 5 MB, keep 3 backups (~20 MB max).
+    log_dir = Path.home() / ".openaugi" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        log_dir / "openaugi.log", maxBytes=5 * 1024 * 1024, backupCount=3
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)-5s %(name)s  %(message)s")
+    )
+    root.addHandler(file_handler)
+
+    # Quiet down noisy third-party loggers
+    for name in ("httpcore", "httpx", "openai", "urllib3", "asyncio"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def _default_db() -> Path:
@@ -232,6 +257,8 @@ def serve(
     Use --auth cloudflare to enable OAuth via Cloudflare Access.
     """
     import os
+
+    _setup_logging(verbose=False)
 
     if db:
         os.environ["OPENAUGI_DB"] = db

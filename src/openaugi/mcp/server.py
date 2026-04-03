@@ -11,6 +11,7 @@ Read tools (readOnlyHint):
 
 Write tools:
 - write_document: create a markdown note in OpenAugi/{subfolder}/
+- write_snip: save a curated snippet to OpenAugi/Snips/
 
 Resources:
 - vault://note/{title}: all entries for a note + hub context
@@ -22,7 +23,6 @@ import functools
 import json
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import Literal
 
@@ -36,7 +36,6 @@ from openaugi.models import get_embedding_model
 from openaugi.pipeline.rerank import rerank as _rerank
 from openaugi.store.sqlite import SQLiteStore
 
-logging.basicConfig(level=logging.WARNING, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP("openaugi")
@@ -629,6 +628,46 @@ def write_thread(
 
     writer = VaultWriter(vault_path)
     return _json(writer.write_thread(topic, description, content))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+def write_snip(
+    title: str,
+    content: str,
+    description: str = "",
+    stream: str | None = None,
+    tags: list[str] | None = None,
+) -> str:
+    """Save a curated snippet to OpenAugi/Snips/.
+
+    Use when the user highlights text and says "save this", "snip this",
+    or when capturing a key insight from a conversation. Snips are atomic
+    captures — distilled ideas, not raw transcripts.
+
+    - title: Short descriptive title (becomes filename)
+    - content: The captured text, optionally refined/distilled
+    - description: One-line summary for scanning
+    - stream: Workstream this snip belongs to (optional)
+    - tags: Tags for categorization (optional)
+
+    Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""
+    from openaugi.mcp.doc_writer import VaultWriter
+
+    vault_path = _get_vault_path()
+    if not vault_path:
+        return _json(
+            {
+                "status": "error",
+                "reason": (
+                    "No vault path configured. "
+                    "Run 'openaugi init' to set a default vault, "
+                    "or set OPENAUGI_VAULT_PATH environment variable."
+                ),
+            }
+        )
+
+    writer = VaultWriter(vault_path)
+    return _json(writer.write_snip(title, content, description, stream=stream, tags=tags))
 
 
 # ── Resources ──────────────────────────────────────────────────────

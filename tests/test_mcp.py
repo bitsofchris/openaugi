@@ -265,3 +265,80 @@ class TestMCPTools:
         result = json.loads(write_thread("topic", "desc", "content"))
         assert result["status"] == "error"
         assert "vault path" in result["reason"].lower()
+
+    def test_write_snip_creates_file(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_snip
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(
+            write_snip(
+                "Key Insight",
+                "This is an important distilled idea.",
+                description="Insight from research session",
+                stream="product-management",
+                tags=["insight", "product"],
+            )
+        )
+        assert result["status"] == "created"
+        path = tmp_path / "OpenAugi" / "Snips" / "Key Insight.md"
+        assert path.exists()
+        text = path.read_text()
+        assert "type: snip" in text
+        assert "stream: product-management" in text
+        assert "tags: [insight, product]" in text
+        assert "description: Insight from research session" in text
+        assert "# Key Insight" in text
+
+    def test_write_snip_minimal(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_snip
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(write_snip("Bare Snip", "Just content."))
+        assert result["status"] == "created"
+        text = (tmp_path / "OpenAugi" / "Snips" / "Bare Snip.md").read_text()
+        assert "type: snip" in text
+        # Optional fields should not appear when empty
+        assert "stream:" not in text
+        assert "tags:" not in text
+        assert "source_session:" not in text
+        assert "description:" not in text
+
+    def test_write_snip_collision(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_snip
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        write_snip("Same Title", "first content")
+        result = json.loads(write_snip("Same Title", "second content"))
+        assert result["status"] == "created"
+        snips_dir = tmp_path / "OpenAugi" / "Snips"
+        files = list(snips_dir.glob("*.md"))
+        assert len(files) == 2
+        names = {f.name for f in files}
+        assert "Same Title.md" in names
+        assert "Same Title-2.md" in names
+
+    def test_write_snip_no_vault(self, monkeypatch):
+        import openaugi.mcp.server as srv
+        from openaugi.mcp.server import write_snip
+
+        monkeypatch.delenv("OPENAUGI_VAULT_PATH", raising=False)
+        monkeypatch.setattr(srv, "_get_vault_path", lambda: None)
+        result = json.loads(write_snip("title", "content"))
+        assert result["status"] == "error"
+        assert "vault path" in result["reason"].lower()
+
+    def test_write_snip_empty_title(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_snip
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(write_snip("", "content"))
+        assert result["status"] == "error"
+        assert "empty" in result["reason"].lower()
+
+    def test_write_snip_invalid_title(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_snip
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(write_snip("bad/title", "content"))
+        assert result["status"] == "error"
+        assert "invalid" in result["reason"].lower()
