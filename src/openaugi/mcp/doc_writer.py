@@ -138,6 +138,72 @@ class VaultWriter:
             "title": title,
         }
 
+    def write_snip(
+        self,
+        title: str,
+        content: str,
+        description: str = "",
+        stream: str | None = None,
+        tags: list[str] | None = None,
+        source_session: str | None = None,
+    ) -> dict:
+        """Save a curated snippet to OpenAugi/Snips/.
+
+        Args:
+            title: Snip title (becomes filename).
+            content: Markdown body — the captured/refined text.
+            description: One-line summary for scanning.
+            stream: Workstream slug this snip originated from (e.g. "product-management").
+            tags: Optional tags for categorization.
+            source_session: Claude session ID that produced this content.
+
+        Returns:
+            {"status": "created", "path": str, "vault_relative": str, "title": str}
+            {"status": "error", "reason": str}
+        """
+        title = title.strip()
+        if not title:
+            return {"status": "error", "reason": "Title cannot be empty"}
+        if _INVALID_TITLE_RE.search(title):
+            invalid = _INVALID_TITLE_RE.findall(title)
+            return {"status": "error", "reason": f"Title contains invalid characters: {invalid}"}
+
+        folder = self._resolve_folder("Snips")
+        if folder is None:
+            return {"status": "error", "reason": "Could not resolve Snips folder"}
+
+        folder.mkdir(parents=True, exist_ok=True)
+
+        filepath = self._unique_path(folder, title)
+
+        created = datetime.now().isoformat(timespec="seconds")
+
+        # Build frontmatter — only include non-empty optional fields
+        fm_lines = ["---", "type: snip"]
+        if description:
+            fm_lines.append(f"description: {description}")
+        if stream:
+            fm_lines.append(f"stream: {stream}")
+        if tags:
+            tag_str = ", ".join(tags)
+            fm_lines.append(f"tags: [{tag_str}]")
+        if source_session:
+            fm_lines.append(f"source_session: {source_session}")
+        fm_lines.append(f"created: {created}")
+        fm_lines.append("---")
+
+        note = "\n".join(fm_lines) + f"\n\n# {title}\n\n{content.strip()}\n"
+        filepath.write_text(note, encoding="utf-8")
+        logger.info("Wrote snip: %s", filepath)
+
+        final_title = filepath.stem
+        return {
+            "status": "created",
+            "path": str(filepath),
+            "vault_relative": str(filepath.relative_to(self.vault_path)),
+            "title": final_title,
+        }
+
     def _unique_path(self, folder: Path, base_title: str) -> Path:
         """Return a non-colliding path, appending -2, -3 as needed."""
         candidate = folder / f"{base_title}.md"
