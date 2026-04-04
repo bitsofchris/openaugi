@@ -342,3 +342,75 @@ class TestMCPTools:
         result = json.loads(write_snip("bad/title", "content"))
         assert result["status"] == "error"
         assert "invalid" in result["reason"].lower()
+
+    # ── Stream tools ──────────────────────────────────────────────
+
+    def test_make_stream(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import make_stream
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(make_stream("Product Management", context="Q2 roadmap"))
+        assert result["status"] == "created"
+        assert result["slug"] == "product-management"
+        assert (tmp_path / "OpenAugi" / "Streams" / "product-management.md").exists()
+
+    def test_make_stream_no_vault(self, monkeypatch):
+        import openaugi.mcp.server as srv
+        from openaugi.mcp.server import make_stream
+
+        monkeypatch.delenv("OPENAUGI_VAULT_PATH", raising=False)
+        monkeypatch.setattr(srv, "_get_vault_path", lambda: None)
+        result = json.loads(make_stream("Test"))
+        assert result["status"] == "error"
+
+    def test_list_streams(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import list_streams, make_stream
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        make_stream("Alpha")
+        make_stream("Beta")
+        result = json.loads(list_streams())
+        assert result["count"] == 2
+
+    def test_get_stream_context(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import get_stream_context, make_stream
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        make_stream("My Stream", context="Initial context")
+        result = json.loads(get_stream_context("my-stream"))
+        assert result["slug"] == "my-stream"
+        assert result["context"] == "Initial context"
+
+    def test_get_stream_context_not_found(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import get_stream_context
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(get_stream_context("nonexistent"))
+        assert result["status"] == "error"
+
+    def test_update_stream(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import get_stream_context, make_stream, update_stream
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        make_stream("Update Test")
+        result = json.loads(
+            update_stream(
+                "update-test",
+                left_off="At step 3",
+                log="Finished step 2",
+                session_id="sess-abc",
+            )
+        )
+        assert result["status"] == "updated"
+
+        ctx = json.loads(get_stream_context("update-test"))
+        assert ctx["left_off"] == "At step 3"
+        assert "Finished step 2" in ctx["log"]
+        assert "sess-abc" in ctx["linked_sessions"]
+
+    def test_update_stream_not_found(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import update_stream
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        result = json.loads(update_stream("nonexistent", left_off="x"))
+        assert result["status"] == "error"

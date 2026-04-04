@@ -197,6 +197,14 @@ class VaultWriter:
         logger.info("Wrote snip: %s", filepath)
 
         final_title = filepath.stem
+
+        # Backlink: append wikilink to the stream's Log section if stream exists
+        if stream:
+            from openaugi.mcp.stream_manager import StreamManager
+
+            manager = StreamManager(str(self.vault_path))
+            manager.append_to_log(stream, f"Saved snip [[{final_title}]]")
+
         return {
             "status": "created",
             "path": str(filepath),
