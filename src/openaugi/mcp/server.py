@@ -12,6 +12,12 @@ Read tools (readOnlyHint):
 Write tools:
 - write_document: create a markdown note in OpenAugi/{subfolder}/
 - write_snip: save a curated snippet to OpenAugi/Snips/
+- make_stream: create a new workstream in OpenAugi/Streams/
+- update_stream: update left_off, context, log, session, or status on a stream
+
+Stream tools (read):
+- list_streams: list workstreams with status and left-off preview
+- get_stream_context: load full stream state for resuming work
 
 Resources:
 - vault://note/{title}: all entries for a note + hub context
@@ -668,6 +674,141 @@ def write_snip(
 
     writer = VaultWriter(vault_path)
     return _json(writer.write_snip(title, content, description, stream=stream, tags=tags))
+
+
+# ── Stream Tools ──────────────────────────────────────────────────
+
+
+def _vault_path_or_error() -> str | None:
+    """Shared vault-path check for stream tools. Returns path or None."""
+    return _get_vault_path()
+
+
+def _no_vault_error() -> str:
+    return _json(
+        {
+            "status": "error",
+            "reason": (
+                "No vault path configured. "
+                "Run 'openaugi init' to set a default vault, "
+                "or set OPENAUGI_VAULT_PATH environment variable."
+            ),
+        }
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+def list_streams(
+    status: str | None = None,
+) -> str:
+    """List all workstreams with status and left-off preview.
+
+    Use to see what workstreams exist, which are active, and where the user
+    left off on each one. Good starting point when resuming work.
+
+    - status: filter by "active" or "done" (optional, default shows all)
+
+    Returns stream summaries sorted active-first, then by last_active date."""
+    from openaugi.mcp.stream_manager import StreamManager
+
+    vault_path = _vault_path_or_error()
+    if not vault_path:
+        return _no_vault_error()
+
+    manager = StreamManager(vault_path)
+    return _json(manager.list_streams(status=status))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+def get_stream_context(
+    stream: str,
+) -> str:
+    """Load full workstream state for resuming work.
+
+    Use when the user says "pick up where I left off", "what was I working on",
+    or starts a session on a known workstream. Returns the full context, current
+    LEFT OFF marker, and session log.
+
+    - stream: stream slug (e.g. "product-management") or display name
+      (e.g. "Product Management") — tries exact slug, then fuzzy name match"""
+    from openaugi.mcp.stream_manager import StreamManager
+
+    vault_path = _vault_path_or_error()
+    if not vault_path:
+        return _no_vault_error()
+
+    manager = StreamManager(vault_path)
+    return _json(manager.get_stream_context(stream))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+def make_stream(
+    name: str,
+    context: str = "",
+    status: str = "active",
+) -> str:
+    """Create a new workstream.
+
+    Use when the user wants to start tracking a new thread of work.
+    The name is slugified for the filename (e.g. "Product Management"
+    becomes "product-management.md").
+
+    - name: Display name for the stream
+    - context: Initial context description (what is this workstream about)
+    - status: "active" (default) or "done"
+
+    Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""
+    from openaugi.mcp.stream_manager import StreamManager
+
+    vault_path = _vault_path_or_error()
+    if not vault_path:
+        return _no_vault_error()
+
+    manager = StreamManager(vault_path)
+    return _json(manager.make_stream(name, context=context, status=status))
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+def update_stream(
+    stream: str,
+    left_off: str | None = None,
+    context: str | None = None,
+    log: str | None = None,
+    session_id: str | None = None,
+    status: str | None = None,
+) -> str:
+    """Update a workstream. All params are optional — does whatever you pass.
+
+    Use at end of session to save LEFT OFF state, link the current session,
+    or append to the log. Can combine multiple updates in one call.
+
+    - stream: slug or display name
+    - left_off: replace the LEFT OFF section (current state, not a log)
+    - context: replace the Context section (only when scope changes)
+    - log: append a timestamped entry to the Log section
+    - session_id: add a Claude session ID to linked_sessions (deduped)
+    - status: update status to "active" or "done"
+
+    Always updates last_active to today.
+
+    Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""
+    from openaugi.mcp.stream_manager import StreamManager
+
+    vault_path = _vault_path_or_error()
+    if not vault_path:
+        return _no_vault_error()
+
+    manager = StreamManager(vault_path)
+    return _json(
+        manager.update_stream(
+            stream,
+            left_off=left_off,
+            context=context,
+            log=log,
+            session_id=session_id,
+            status=status,
+        )
+    )
 
 
 # ── Resources ──────────────────────────────────────────────────────
