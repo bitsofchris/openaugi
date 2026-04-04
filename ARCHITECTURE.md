@@ -52,8 +52,9 @@ src/openaugi/
 │       ├── sentence_transformer.py  # Local default (free)
 │       └── openai.py               # OpenAI API adapter
 ├── mcp/
-│   ├── server.py          # MCP tools (read + write), stdio + streamable-http transport
-│   └── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
+│   ├── server.py          # MCP tools (read + write + streams), stdio + streamable-http transport
+│   ├── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
+│   └── stream_manager.py  # StreamManager — workstream CRUD (OpenAugi/Streams/)
 ├── cli/
 │   └── main.py            # typer CLI (up, ingest, serve, watch, search, hubs, status, service)
 └── config.py              # TOML config loader + .env loader
@@ -83,7 +84,7 @@ Vault .md files
 ```
 Claude → MCP tool call → server.py
   → search: sqlite-vec KNN (semantic) or FTS5 (keyword) + filters
-  → get_block: full content by ID
+  → get_block / get_blocks: full content by ID (single or batch)
   → get_related: follow links from/to a block
   → traverse: multi-hop graph walk
   → get_context: FTS + semantic (3× overfetch)
@@ -91,6 +92,8 @@ Claude → MCP tool call → server.py
                  → MMR re-rank
                  → expand via links
   → recent: recently created blocks
+  → write_document / write_thread / write_snip: save notes to vault
+  → list_streams / get_stream_context / make_stream / update_stream: workstream CRUD
 ```
 
 ### Hub Scoring
