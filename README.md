@@ -122,12 +122,18 @@ The MCP server supports HTTP transport with OAuth authentication for remote acce
 |------|------|
 | `search` | Semantic (sqlite-vec KNN) + keyword (FTS5) + tag/time filters |
 | `get_block` | Full block content by ID |
+| `get_blocks` | Batch fetch up to 50 blocks by ID |
 | `get_related` | Follow links from a block |
 | `traverse` | Multi-hop graph walk |
-| `get_context` | Compound search → expand → structured context |
+| `get_context` | Compound search → deduplicate → MMR re-rank → expand via links |
 | `recent` | Recently created blocks |
 | `write_document` | Create a markdown note in your vault |
 | `write_thread` | Save a conversation thread as a note |
+| `write_snip` | Save a curated snippet to `OpenAugi/Snips/` |
+| `list_streams` | List workstreams with status and left-off preview |
+| `get_stream_context` | Load full workstream state for resuming work |
+| `make_stream` | Create a new workstream |
+| `update_stream` | Update workstream left-off, context, log, or status |
 
 ## Architecture
 

@@ -19,6 +19,7 @@ class EmbeddingModel(Protocol):
 
     name: str
     dimensions: int
+    max_tokens: int
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts. Returns list of vectors."""
@@ -26,6 +27,10 @@ class EmbeddingModel(Protocol):
 
     def embed_query(self, query: str) -> list[float]:
         """Embed a single query. May use different instruction than batch."""
+        ...
+
+    def truncate(self, text: str) -> str:
+        """Truncate text to fit within the model's token limit."""
         ...
 
 
