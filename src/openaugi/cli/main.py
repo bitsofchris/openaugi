@@ -338,6 +338,15 @@ def up(
                 err.print(f"  Embedded {count} blocks")
         except Exception as e:
             err.print(f"  [dim]Embeddings skipped: {e}[/dim]")
+
+        # Compile Layer 0 context blocks (fast SQL, <1s)
+        try:
+            from openaugi.pipeline.compile import run_compile
+
+            compile_result = run_compile(store, vault_path=vault_path, layer=0)
+            err.print(f"  Compiled {compile_result['context_blocks']} context blocks")
+        except Exception as e:
+            err.print(f"  [dim]Compile skipped: {e}[/dim]")
     finally:
         store.close()
 
@@ -394,6 +403,68 @@ def watch(
     console.print()
 
     watch_vault(vault_path, db_path, config, debounce_seconds=debounce)
+
+
+@app.command()
+def compile(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    path: str | None = typer.Option(None, "--path", "-p", help="Vault path (for rendering)"),
+    layer: int = typer.Option(
+        1, "--layer", "-l", help="Max compile layer (0=SQL only, 1=SQL+templates)"
+    ),
+    top_n: int = typer.Option(50, "--top-n", "-n", help="Number of top hubs to compile"),
+    force: bool = typer.Option(False, "--force", "-f", help="Recompile even if fresh"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Compile context blocks — build the navigational metadata layer.
+
+    Materializes hub summaries, recent activity, concept pages, and graph health
+    as context blocks in SQLite. Renders to OpenAugi/Compiled/ in your vault.
+    """
+    _setup_logging(verbose)
+
+    from openaugi.config import load_config
+    from openaugi.pipeline.compile import run_compile
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+
+    db_path = db or str(_default_db())
+    vault_path = path or config.get("vault", {}).get("default_path")
+
+    if not Path(db_path).exists():
+        console.print(f"[red]Database not found:[/red] {db_path}")
+        console.print("Run 'openaugi ingest' first.")
+        raise typer.Exit(1)
+
+    store = SQLiteStore(db_path)
+    try:
+        console.print(f"[bold]Compiling...[/bold] (layer {layer}, top {top_n} hubs)")
+
+        result = run_compile(
+            store,
+            vault_path=vault_path,
+            layer=layer,
+            top_n=top_n,
+            force=force,
+        )
+
+        console.print(
+            f"[green]Done.[/green] {result['context_blocks']} context blocks, "
+            f"{result['context_links']} links"
+        )
+
+        by_type = result.get("by_type", {})
+        for ct, count in sorted(by_type.items()):
+            console.print(f"  {ct}: {count}")
+
+        if result.get("rendered_files", 0) > 0:
+            console.print(
+                f"\n[green]Rendered {result['rendered_files']} files[/green] "
+                f"to {vault_path}/OpenAugi/Compiled/"
+            )
+    finally:
+        store.close()
 
 
 @app.command()
