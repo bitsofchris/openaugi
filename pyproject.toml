@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.21"]
 build-backend = "hatchling.build"
 
 [project]
@@ -11,12 +11,6 @@ license = "MIT"
 requires-python = ">=3.12"
 authors = [{ name = "Chris", email = "chris@openaugi.com" }]
 keywords = ["knowledge-graph", "mcp", "obsidian", "personal-knowledge", "sqlite"]
-
-[project.urls]
-Homepage = "https://github.com/bitsofchris/openaugi"
-Repository = "https://github.com/bitsofchris/openaugi"
-Issues = "https://github.com/bitsofchris/openaugi/issues"
-
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -37,6 +31,11 @@ dependencies = [
     "sqlite-vec>=0.1.6",
     "watchdog>=4.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/bitsofchris/openaugi"
+Repository = "https://github.com/bitsofchris/openaugi"
+Issues = "https://github.com/bitsofchris/openaugi/issues"
 
 [project.optional-dependencies]
 local = ["sentence-transformers>=3.0"]
