@@ -1,158 +1,100 @@
 # OpenAugi
 
-This is an evolving personal project, submit issues with ideas or bugs, but expect nothing as I figure out what OpenAugi is :)
+Your augmented knowledge base for Agentic work.
 
-Today it's:
+## Human Context for Agents
 
-Self-hostable personal intelligence engine. One SQLite file. One MCP server. Works with Claude out of the box.
+You've become the bottleneck.
 
-> **Status:** M1.5 complete — local install from source. PyPI package coming in M4.
+Your notes are scattered. Your AI can't reach them. Every conversation starts from zero.
 
-## What It Does
+Claude and ChatGPT memory keep you stuck in a weird bubble.
 
-Point OpenAugi at your Obsidian vault. It builds a knowledge graph (blocks + links) in a single SQLite file, then exposes it to Claude via MCP. Claude can search, traverse, and understand your notes — semantically, by keyword, by tag, by time.
+You've built years of thinking in Obsidian, Google, ChatGPT — ideas, decisions, threads you've followed and dropped. But when you talk to your agent, none of that context exists. You repeat yourself. You lose threads. The AI that's supposed to help you think doesn't know what you've been thinking about.
 
-```
-Obsidian Vault → split → extract → embed → SQLite → MCP Server → Claude
-```
+**OpenAugi fixes this.** It turns your personal data vault turned into a knowledge graph that agents can search, traverse, and understand — semantically, by keyword, by tag, by time. One SQLite file. One MCP server. Everything stays on your machine.
 
-## Install
+> **Status:** Alpha. Evolving. This is a working tool, not a polished product. Expect rough edges. [MIT licensed.](LICENSE)
 
-Not on PyPI yet. Install from source:
-
-```bash
-git clone https://github.com/bitsofchris/openaugi.git
-cd openaugi
-python3 -m venv .venv
-
-# Core + OpenAI embeddings (recommended)
-.venv/bin/pip install -e ".[openai]"
-
-# Or core + local embeddings (free, no API key)
-.venv/bin/pip install -e ".[local]"
-
-# Or everything
-.venv/bin/pip install -e ".[all]"
-```
+---
 
 ## Quick Start
 
-### 1. Configure (one time)
-
 ```bash
-openaugi init
+# Install from source (PyPI coming soon)
+git clone https://github.com/bitsofchris/openaugi.git
+cd openaugi && python3 -m venv .venv
+
+# Pick your embedding model
+.venv/bin/pip install -e ".[local]"    # free, no API key
+# or: .venv/bin/pip install -e ".[openai]"  # better quality, needs API key
+
+# Configure and run
+.venv/bin/openaugi init    # one-time: vault path, embedding model, API key
+.venv/bin/openaugi up      # sync vault + start MCP server + watch for changes
 ```
 
-Interactive setup — choose embedding model (OpenAI, local, or none), set API key if needed, set your vault path.
+Then [register with Claude](docs/GETTING_STARTED.md#register-with-claude) and start asking questions about your notes.
 
-### 2. Run
+---
 
-```bash
-openaugi up
+## What It Actually Does
+
+```
+Obsidian Vault --> split --> extract --> embed --> SQLite --> MCP Server --> Claude
 ```
 
-That's it. `up` does everything:
+**Ingest:** Splits your vault by headings, extracts tags and links, builds a graph of blocks and links in SQLite. Embeds everything for semantic search. Watches for changes and re-ingests automatically.
 
-1. **Syncs your vault** — incremental ingest (skips unchanged files via content hash, fast if already up-to-date)
-2. **Starts file watcher** — watches for `.md` changes, debounces (30s default), re-ingests automatically
-3. **Starts MCP server** — stdio transport for Claude Desktop/Code
+**Query:** Claude gets MCP tools to search (semantic + keyword), traverse your knowledge graph, fetch full context, and understand how your ideas connect. It can also write notes back to your vault.
 
-Embedding is attempted with your configured model. If it fails (no API key, model unavailable), blocks are saved without embeddings and retried on the next watcher cycle.
+**Run:** One command (`openaugi up`) does everything — ingest, file watcher, MCP server. Runs as a background service if you want.
 
-You can also run the pieces separately if needed:
+---
 
-```bash
-openaugi ingest            # one-off ingest without serving
-openaugi serve             # MCP server only
-openaugi watch             # file watcher only
-```
+## Why This Exists
 
-### 3. Register with Claude
+Most "AI + notes" tools are cloud services that want your data. Or they're RAG demos that chunk your files and call it a day.
 
-**Claude Code:**
+OpenAugi is different:
 
-```bash
-claude mcp add --transport stdio --scope user openaugi -- \
-  /path/to/openaugi/.venv/bin/openaugi up
-```
+- **Your data stays yours.** One SQLite file on your machine. No cloud. No account.
+- **Graph, not chunks.** Tags, links, and documents are first-class nodes. Claude can follow connections, not just match keywords.
+- **Time-aware.** Your notes have history. OpenAugi preserves it — recently created, hub velocity, threads you dropped.
+- **Composable.** MCP tools that Claude calls directly. No middle layer, no wrapper app.
 
-**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+This started as a personal tool to make Claude useful with a large Obsidian vault. It works well enough that it might be useful to others.
 
-```json
-{
-  "mcpServers": {
-    "openaugi": {
-      "command": "/path/to/openaugi/.venv/bin/openaugi",
-      "args": ["up"]
-    }
-  }
-}
-```
+---
 
-### Remote access (advanced, optional)
+## Values
 
-The MCP server supports HTTP transport with OAuth authentication for remote access from Claude mobile. Requires a Cloudflare account, domain, and tunnel setup. This is not required for normal use.
+- **Privacy as foundation** — your data stays on your machine
+- **Open by default** — MIT licensed, all code public
+- **Augment, stay human** — amplify your thinking, don't replace it
+- **Composable ecosystem** — building blocks that work together
 
-## CLI Reference
+---
 
-| Command | What |
-|---------|------|
-| `openaugi init` | Configure embedding model, API key, vault path |
-| `openaugi ingest` | Run full Layer 0 + Layer 1 pipeline |
-| `openaugi up` | MCP server + file watcher (the daily driver) |
-| `openaugi serve` | MCP server only (stdio or HTTP) |
-| `openaugi watch` | File watcher only (incremental ingest on vault changes) |
-| `openaugi search "query"` | Search from terminal (semantic or `--keyword`) |
-| `openaugi hubs` | Top connected notes by link count |
-| `openaugi status` | Block/link/embedding counts |
-| `openaugi service install` | Run as macOS launchd service (starts on boot) |
+## Documentation
 
-## How It Works
+- **[Getting Started](docs/GETTING_STARTED.md)** — full install guide, CLI reference, MCP tools, Claude registration
+- **[Architecture](ARCHITECTURE.md)** — data model, processing layers, module map, design decisions
+- **[MCP Server](docs/MCP_SERVER.md)** — tool reference and tuning
+- **[Remote Access](docs/local.docs/REMOTE_ACCESS.md)** — Cloudflare Tunnel setup for Claude mobile
 
-**Data model:** Two tables — `blocks` and `links`. Everything is a block (documents, entries, tags). Structure lives in the links.
-
-**Processing layers:**
-- **Layer 0** (free) — split by headings, extract tags/links, FTS5 index, dedup hash
-- **Layer 1** (~$0) — embed with OpenAI or local sentence-transformers, hub scoring via link aggregation
-- **Layer 2** (coming) — entity extraction, summaries. LLM required.
-
-**MCP tools:**
-
-| Tool | What |
-|------|------|
-| `search` | Semantic (sqlite-vec KNN) + keyword (FTS5) + tag/time filters |
-| `get_block` | Full block content by ID |
-| `get_blocks` | Batch fetch up to 50 blocks by ID |
-| `get_related` | Follow links from a block |
-| `traverse` | Multi-hop graph walk |
-| `get_context` | Compound search → deduplicate → MMR re-rank → expand via links |
-| `recent` | Recently created blocks |
-| `write_document` | Create a markdown note in your vault |
-| `write_thread` | Save a conversation thread as a note |
-| `write_snip` | Save a curated snippet to `OpenAugi/Snips/` |
-| `list_streams` | List workstreams with status and left-off preview |
-| `get_stream_context` | Load full workstream state for resuming work |
-| `make_stream` | Create a new workstream |
-| `update_stream` | Update workstream left-off, context, log, or status |
-
-## Architecture
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design.
+---
 
 ## Development
 
 ```bash
-python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
-
-# Run full CI check (lint + types + tests)
-./scripts/check.sh
-
-# Or individually
-.venv/bin/python -m pytest tests/ -v
-.venv/bin/ruff check src tests
-.venv/bin/pyright src
+./scripts/check.sh          # lint + types + tests
 ```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system map.
+
+---
 
 ## License
 
