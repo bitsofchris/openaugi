@@ -14,24 +14,18 @@ You've built years of thinking in Obsidian, Google, ChatGPT — ideas, decisions
 
 **OpenAugi fixes this.** It turns your personal data vault turned into a knowledge graph that agents can search, traverse, and understand — semantically, by keyword, by tag, by time. One SQLite file. One MCP server. Everything stays on your machine.
 
-> **Status:** Alpha. Evolving. This is a working tool, not a polished product. Expect rough edges. [MIT licensed.](LICENSE)
+> **Status:** Alpha. `pip install openaugi` and go. Evolving — expect rough edges. [MIT licensed.](LICENSE)
 
 ---
 
 ## Quick Start
 
 ```bash
-# Install from source (PyPI coming soon)
-git clone https://github.com/bitsofchris/openaugi.git
-cd openaugi && python3 -m venv .venv
-
-# Pick your embedding model
-.venv/bin/pip install -e ".[local]"    # free, no API key
-# or: .venv/bin/pip install -e ".[openai]"  # better quality, needs API key
+pip install openaugi
 
 # Configure and run
-.venv/bin/openaugi init    # one-time: vault path, embedding model, API key
-.venv/bin/openaugi up      # sync vault + start MCP server + watch for changes
+openaugi init    # one-time: vault path, embedding model, API key
+openaugi up      # sync vault + start MCP server + watch for changes
 ```
 
 Then [register with Claude](docs/GETTING_STARTED.md#register-with-claude) and start asking questions about your notes.

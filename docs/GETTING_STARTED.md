@@ -9,21 +9,23 @@ Everything you need to install, configure, and run OpenAugi with Claude.
 
 ## Install
 
-Not on PyPI yet. Install from source:
+```bash
+pip install openaugi
+```
+
+For local embeddings (free, no API key needed):
+
+```bash
+pip install "openaugi[local]"
+```
+
+### Install from source (development)
 
 ```bash
 git clone https://github.com/bitsofchris/openaugi.git
 cd openaugi
 python3 -m venv .venv
-
-# Core + local embeddings (free, no API key)
-.venv/bin/pip install -e ".[local]"
-
-# Or core + OpenAI embeddings (better quality)
-.venv/bin/pip install -e ".[openai]"
-
-# Or everything
-.venv/bin/pip install -e ".[all]"
+.venv/bin/pip install -e ".[dev]"
 ```
 
 ## Configure
