@@ -178,6 +178,36 @@ class TestMCPTools:
         for r in result["results"]:
             assert r["kind"] == "document"
 
+    # ── get_index ─────────────────────────────────────────────────
+
+    def test_get_index_no_compile(self):
+        from openaugi.mcp.server import get_index
+
+        result = json.loads(get_index())
+        assert "error" in result
+        assert "compile" in result["error"].lower()
+
+    def test_get_index_after_compile(self, populated_db):
+        from openaugi.pipeline.compile import run_compile
+        from openaugi.store.sqlite import SQLiteStore as _Store
+
+        # Compile into the test DB
+        store = _Store(populated_db)
+        run_compile(store, layer=0)
+        store.close()
+
+        # Reset MCP state to pick up new blocks
+        import openaugi.mcp.server as srv
+
+        srv._store = None
+
+        from openaugi.mcp.server import get_index
+
+        result = json.loads(get_index())
+        assert "content" in result
+        assert "Top Hubs" in result["content"]
+        assert result["context_block_count"] > 0
+
     def test_write_document_no_vault(self, monkeypatch):
         import openaugi.mcp.server as srv
         from openaugi.mcp.server import write_document
