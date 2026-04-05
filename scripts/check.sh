@@ -4,6 +4,9 @@
 
 set -e
 
+echo "=== Build validation ==="
+.venv/bin/pip install -e ".[dev]" --quiet
+
 echo "=== Pre-commit hooks (lint, format, types) ==="
 .venv/bin/pre-commit run --all-files
 
