@@ -26,3 +26,5 @@ repos:
           - "rich>=13"
           - "mcp>=1.0"
           - "numpy>=1.26"
+          - "openai>=1.0"
+          - "tiktoken>=0.7"
