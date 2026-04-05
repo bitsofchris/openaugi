@@ -577,6 +577,163 @@ class SQLiteStore:
         results.sort(key=lambda x: x["hub_score"], reverse=True)
         return results[:limit]
 
+    # ── Compile helpers ────────────────────────────────────────────
+
+    def delete_blocks_by_source(self, source: str) -> int:
+        """Delete all blocks with the given source value. Returns count deleted.
+
+        Used by compile to clear old context blocks before regenerating.
+        CASCADE deletes associated links.
+        """
+        cursor = self.conn.execute("DELETE FROM blocks WHERE source = ?", (source,))
+        self.conn.commit()
+        return cursor.rowcount
+
+    def get_tag_details(self, limit: int = 50) -> list[dict]:
+        """Get detailed info for top tags: entry count, last active, co-occurring tags.
+
+        Returns tags ranked by entry count (inbound 'tagged' links).
+        """
+        import math
+
+        rows = self.conn.execute(
+            """
+            SELECT
+                b.id AS tag_id,
+                b.title AS tag_name,
+                (SELECT COUNT(*) FROM links l WHERE l.to_id = b.id AND l.kind = 'tagged') AS entry_count,
+                (SELECT COUNT(*) FROM links l WHERE l.to_id = b.id AND l.kind != 'tagged') AS in_links,
+                (SELECT COUNT(*) FROM links l WHERE l.from_id = b.id) AS out_links,
+                (SELECT MAX(e.timestamp)
+                 FROM blocks e
+                 JOIN links l ON l.from_id = e.id
+                 WHERE l.to_id = b.id AND l.kind = 'tagged' AND e.timestamp IS NOT NULL
+                ) AS last_active
+            FROM blocks b
+            WHERE b.kind = 'tag'
+            """
+        ).fetchall()
+
+        results = []
+        for tag_id, tag_name, entry_count, in_links, out_links, last_active in rows:
+            score = (
+                0.5 * math.log(1 + in_links + entry_count)
+                + 0.3 * math.log(1 + out_links)
+                + 0.2 * math.log(1 + entry_count)
+            )
+            results.append(
+                {
+                    "tag_id": tag_id,
+                    "tag_name": tag_name,
+                    "entry_count": entry_count,
+                    "in_links": in_links,
+                    "out_links": out_links,
+                    "last_active": last_active,
+                    "hub_score": score,
+                }
+            )
+
+        results.sort(key=lambda x: x["hub_score"], reverse=True)
+        return results[:limit]
+
+    def get_co_occurring_tags(self, tag_id: str, limit: int = 5) -> list[dict]:
+        """Get tags that co-occur with the given tag on the same entries."""
+        rows = self.conn.execute(
+            """
+            SELECT t.title AS co_tag, COUNT(*) AS shared_entries
+            FROM links l1
+            JOIN links l2 ON l1.from_id = l2.from_id AND l2.kind = 'tagged'
+            JOIN blocks t ON t.id = l2.to_id
+            WHERE l1.to_id = ? AND l1.kind = 'tagged'
+              AND l2.to_id != ?
+            GROUP BY t.title
+            ORDER BY shared_entries DESC
+            LIMIT ?
+            """,
+            (tag_id, tag_id, limit),
+        ).fetchall()
+        return [{"tag": r[0], "count": r[1]} for r in rows]
+
+    def get_entries_for_tag(self, tag_id: str, limit: int = 100) -> list[Block]:
+        """Get entry blocks tagged with the given tag, ordered by timestamp DESC."""
+        rows = self.conn.execute(
+            """SELECT b.id, b.kind, b.content, b.summary, b.embedding, b.source,
+                      b.title, b.tags, b.timestamp, b.occurred_at, b.metadata,
+                      b.content_hash, b.created_at
+               FROM blocks b
+               JOIN links l ON l.from_id = b.id
+               WHERE l.to_id = ? AND l.kind = 'tagged'
+               ORDER BY b.timestamp DESC NULLS LAST
+               LIMIT ?""",
+            (tag_id, limit),
+        ).fetchall()
+        return [_row_to_block(r) for r in rows]
+
+    def get_recent_blocks(
+        self, days: int = 30, kind: str | None = None, limit: int = 500
+    ) -> list[Block]:
+        """Get blocks created/modified within the last N days."""
+        query = """SELECT id, kind, content, summary, embedding, source, title,
+                          tags, timestamp, occurred_at, metadata, content_hash, created_at
+                   FROM blocks
+                   WHERE timestamp IS NOT NULL
+                     AND timestamp >= date('now', ?)"""
+        params: list = [f"-{days} days"]
+        if kind:
+            query += " AND kind = ?"
+            params.append(kind)
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+        rows = self.conn.execute(query, params).fetchall()
+        return [_row_to_block(r) for r in rows]
+
+    def get_orphan_block_ids(self, kind: str = "entry") -> list[str]:
+        """Get block IDs with zero inbound AND zero outbound links (excluding split_from)."""
+        rows = self.conn.execute(
+            """
+            SELECT b.id FROM blocks b
+            WHERE b.kind = ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM links l WHERE l.from_id = b.id AND l.kind != 'split_from'
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM links l WHERE l.to_id = b.id AND l.kind != 'split_from'
+              )
+            """,
+            (kind,),
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def get_stale_tags(self, weeks: int = 4) -> list[dict]:
+        """Get tags with no new entries in the last N weeks."""
+        rows = self.conn.execute(
+            """
+            SELECT tag_id, tag_name, entry_count, last_active
+            FROM (
+                SELECT
+                    b.id AS tag_id,
+                    b.title AS tag_name,
+                    (SELECT COUNT(*) FROM links l
+                     WHERE l.to_id = b.id AND l.kind = 'tagged') AS entry_count,
+                    (SELECT MAX(e.timestamp)
+                     FROM blocks e JOIN links l ON l.from_id = e.id
+                     WHERE l.to_id = b.id AND l.kind = 'tagged'
+                       AND e.timestamp IS NOT NULL
+                    ) AS last_active
+                FROM blocks b
+                WHERE b.kind = 'tag'
+            )
+            WHERE last_active IS NOT NULL
+              AND last_active < date('now', ?)
+            ORDER BY last_active ASC
+            """,
+            (f"-{weeks * 7} days",),
+        ).fetchall()
+        return [
+            {"tag_id": r[0], "tag_name": r[1], "entry_count": r[2], "last_active": r[3]}
+            for r in rows
+        ]
+
     # ── Stats ──────────────────────────────────────────────────────
 
     def get_stats(self) -> dict:

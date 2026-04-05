@@ -16,8 +16,8 @@ blocks (id, kind, content, summary, embedding, source, title, tags, timestamp, m
 links  (from_id, to_id, kind, weight, metadata)  — PK: (from_id, to_id, kind)
 ```
 
-**Block kinds:** document, entry, tag, cluster (M2), summary (M2)
-**Link kinds:** split_from, tagged, links_to, member_of (M2), summarizes (M2)
+**Block kinds:** document, entry, tag, context (Phase 2)
+**Link kinds:** split_from, tagged, links_to, summarizes (Phase 2)
 
 Everything is a block. Structure lives in the links, not in the schema.
 
@@ -152,5 +152,7 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 
 ## Plans
 
-- [docs/plans/overall-mvp.md](docs/plans/overall-mvp.md) — Milestones M0–M5
+- [docs/plans/overall-mvp.md](docs/plans/overall-mvp.md) — Milestones M0–M1.5 (shipped)
+- [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
+- [docs/plans/phase2-compile.md](docs/plans/phase2-compile.md) — Context block layer deep dive
 - [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features

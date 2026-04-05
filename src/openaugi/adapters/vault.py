@@ -44,6 +44,7 @@ DEFAULT_EXCLUDE_PATTERNS = [
     ".smart-env/**",
     ".trash/**",
     "templates/**",
+    "OpenAugi/Compiled/**",
 ]
 
 
