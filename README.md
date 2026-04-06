@@ -70,10 +70,27 @@ This started as a personal tool to make Claude useful with a large Obsidian vaul
 
 ---
 
+## Data Model: Give Agents a Map
+
+Most agent systems do brute-force retrieval — semantic search that stuffs the context window with raw documents. That's a magnifying glass in a warehouse. Agents need a map.
+
+OpenAugi implements a **navigational metadata layer** with three primitives:
+
+- **Data blocks** — raw content (documents, entries, tags) with deterministic identity
+- **Context blocks** — compiled summaries and indexes that answer "should the agent look here?" without touching raw content
+- **Links** — typed edges that let agents traverse connections they wouldn't find through search alone
+
+The agent reads the map first, assesses relevance, drills into promising areas, then retrieves only what it needs. Five retrieval modes — semantic, keyword, graph traversal, time-based, direct lookup — routed by context block signals.
+
+**[Read the full data model](docs/data-model.md)** | Based on [Context Engineering is Index Design](https://bitsofchris.com/p/context-engineering-is-index-design)
+
+---
+
 ## Documentation
 
 - **[Getting Started](docs/GETTING_STARTED.md)** — full install guide, CLI reference, MCP tools, Claude registration
 - **[Architecture](ARCHITECTURE.md)** — data model, processing layers, module map, design decisions
+- **[Data Model](docs/data-model.md)** — philosophy, block kinds, navigation pattern, four-layer architecture
 - **[MCP Server](docs/MCP_SERVER.md)** — tool reference and tuning
 - **[Remote Access](docs/local.docs/REMOTE_ACCESS.md)** — Cloudflare Tunnel setup for Claude mobile
 
