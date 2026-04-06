@@ -21,6 +21,8 @@ links  (from_id, to_id, kind, weight, metadata)  — PK: (from_id, to_id, kind)
 
 Everything is a block. Structure lives in the links, not in the schema.
 
+See [docs/data-model.md](docs/data-model.md) for the full data model philosophy — why agents need a map, not a magnifying glass, and how OpenAugi's blocks + links + context blocks implement navigational retrieval.
+
 ## Processing Layers
 
 | Layer | Cost | What | Requires |
