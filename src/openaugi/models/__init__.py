@@ -45,7 +45,8 @@ def get_embedding_model(config: dict[str, Any] | None = None) -> EmbeddingModel:
 def get_llm_model(config: dict[str, Any] | None = None) -> LLMModel | None:
     """Create an LLM model from config. Returns None if not configured.
 
-    LLM is not invoked in M0 — Layer 2 (M2) will use it.
+    Config shape:
+        {"provider": "openai", "model": "gpt-4o-mini"}
     """
     if not config:
         return None
@@ -54,5 +55,9 @@ def get_llm_model(config: dict[str, Any] | None = None) -> LLMModel | None:
     if not provider:
         return None
 
-    logger.info(f"LLM configured ({provider}) but not invoked in M0")
-    return None
+    if provider == "openai":
+        from openaugi.models.llms.openai import OpenAILLM
+
+        return OpenAILLM(model_name=config.get("model", "gpt-4o-mini"))
+
+    raise ValueError(f"Unknown LLM provider: {provider}")

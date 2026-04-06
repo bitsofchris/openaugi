@@ -187,7 +187,7 @@ def search(
                 continue
             if source and block.source != source:
                 continue
-            if tags and not set(tags).intersection(block.tags):
+            if tags and not set(tags).intersection(block.effective_tags):
                 continue
             if after and (block.timestamp or "") < after:
                 continue
@@ -216,7 +216,7 @@ def search(
     for b in blocks:
         if source and b.source != source:
             continue
-        if tags and not set(tags).intersection(b.tags):
+        if tags and not set(tags).intersection(b.effective_tags):
             continue
         if after and (b.timestamp or "") < after:
             continue
@@ -541,7 +541,7 @@ def recent(
     for b in blocks:
         if source and b.source != source:
             continue
-        if tags and not set(tags).intersection(b.tags):
+        if tags and not set(tags).intersection(b.effective_tags):
             continue
         results.append(_block_summary(b))
         if len(results) > k:
@@ -910,7 +910,7 @@ def _block_summary(block) -> dict:
         "kind": block.kind,
         "title": block.title,
         "content": (block.content or "")[:500],
-        "tags": block.tags,
+        "tags": block.effective_tags,
         "timestamp": block.timestamp,
         "source": block.source,
     }
@@ -923,7 +923,7 @@ def _block_full(block) -> dict:
         "title": block.title,
         "content": block.content,
         "summary": block.summary,
-        "tags": block.tags,
+        "tags": block.effective_tags,
         "timestamp": block.timestamp,
         "occurred_at": block.occurred_at,
         "source": block.source,

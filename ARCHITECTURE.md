@@ -27,7 +27,8 @@ Everything is a block. Structure lives in the links, not in the schema.
 |-------|------|------|----------|
 | **Layer 0** | FREE | Split, tag/link extract, FTS, dedup hash | Python + SQLite |
 | **Layer 1** | ~$0 | Embed (local default), hub scoring (SQL) | sentence-transformers (local) |
-| **Layer 2** | $$$ | Entity extraction, summaries, clustering | LLM (deferred to M2) |
+| **Compile** | FREE | Context blocks: hub summaries, concept pages, index, health | SQL + templates |
+| **Enrich** | FREE or $ | Tag taxonomy + document classification | Agent (free) or LLM API |
 
 ## Module Map
 
@@ -42,15 +43,21 @@ src/openaugi/
 ├── pipeline/
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
+│   ├── compile.py         # Context block materialization (hub summaries, concepts, index)
+│   ├── enrich.py          # Tag enrichment orchestrator (export, agent, apply)
+│   ├── taxonomy.py        # Tag rules engine (discover, normalize, apply)
+│   ├── tag_inference.py   # Batched document classification via LLM
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
 │   └── watcher.py         # File watcher — debounced incremental ingest on vault changes
 ├── store/
 │   └── sqlite.py          # SQLite backend (WAL, FTS5, sqlite-vec vec0, CASCADE)
 ├── models/
 │   ├── __init__.py        # Factory: get_embedding_model(), get_llm_model()
-│   └── embeddings/
-│       ├── sentence_transformer.py  # Local default (free)
-│       └── openai.py               # OpenAI API adapter
+│   ├── embeddings/
+│   │   ├── sentence_transformer.py  # Local default (free)
+│   │   └── openai.py               # OpenAI API adapter
+│   └── llms/
+│       └── openai.py               # OpenAI-compatible LLM (gpt-5.4-nano default)
 ├── mcp/
 │   ├── server.py          # MCP tools (read + write + streams), stdio + streamable-http transport
 │   ├── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
@@ -92,8 +99,34 @@ Claude → MCP tool call → server.py
                  → MMR re-rank
                  → expand via links
   → recent: recently created blocks
+  → get_index: compiled navigational map (context blocks)
   → write_document / write_thread / write_snip: save notes to vault
   → list_streams / get_stream_context / make_stream / update_stream: workstream CRUD
+```
+
+### Compile
+
+```
+openaugi compile → pipeline/compile.py
+  → Layer 0: hub summaries, recent activity, index (SQL aggregation)
+  → Layer 1: concept pages, graph health (SQL + templates)
+  → context blocks stored as Block(kind=context, source=compiled)
+  → rendered to OpenAugi/Compiled/ in vault (INDEX.md, concepts/, hubs/)
+  → auto-runs Layer 0 on `openaugi up`
+```
+
+### Enrich (tag taxonomy)
+
+See [docs/enrichment.md](docs/enrichment.md) for full details.
+
+```
+openaugi enrich --tags → pipeline/enrich.py
+  → export tag + doc inventory to ~/.openaugi/enrich/
+  → launch Claude agent (or use --model for API)
+  → agent writes tag_rules.json + doc_tags.json
+openaugi enrich --apply → pipeline/taxonomy.py
+  → apply rules: ignore garbage, merge synonyms → computed_tags in metadata
+  → block.effective_tags prefers computed_tags, falls back to source
 ```
 
 ### Hub Scoring
@@ -155,4 +188,5 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 - [docs/plans/overall-mvp.md](docs/plans/overall-mvp.md) — Milestones M0–M1.5 (shipped)
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
 - [docs/plans/phase2-compile.md](docs/plans/phase2-compile.md) — Context block layer deep dive
+- [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
 - [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features
