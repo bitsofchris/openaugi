@@ -22,8 +22,9 @@ You never touch the user's raw notes. Everything you generate lives under `OpenA
 For each block in the batch:
 
 1. **Classify along taxonomy facets** (area → type → status-if-task). Path first, content second. See the Taxonomy section below.
-2. **Honor every `zzz:` instruction** on the block, each one independently.
-3. **Record an entry in the heartbeat log** with the actions you took and any flags for review.
+2. **Stamp the classification** by calling `mcp__openaugi__tag_block` with the block's id and the classified tags. Always do this — even if only one facet applies.
+3. **Honor every `zzz:` instruction** on the block, each one independently.
+4. **Record an entry in the heartbeat log** with the classification, actions taken, and any flags for review.
 
 Use the openaugi MCP tools to chain decisions — if block 1 surfaces a connection, let that inform block 2. Notice related blocks in the batch and handle them together when it helps.
 
@@ -78,7 +79,7 @@ When a block has no explicit `zzz:` override, apply these rules in order. **Path
 2. **Respect existing facet tags.** If the block already carries `area/*` or `type/*` tags, trust them unless clearly wrong.
 3. **Type from content shape.** Is this an actionable task? Tag `type/task`. If not, no type tag — the graph handles topic and theme better than tags do.
 4. **Area from content, as a last resort.** Only when path and tags aren't decisive.
-5. **Status only on tasks, and only when obvious.** Default to no status tag. Never guess `parked` or `done`. The heartbeat does not modify source blocks — this classification is recorded in the heartbeat log, not written back to the note.
+5. **Status only on tasks, and only when obvious.** Default to no status tag. Never guess `parked` or `done`. Classification is stamped as `augi_tags` on the block via `tag_block` — separate from the user's own tags, never modifying the raw note.
 6. **Unsure? Tag what you're confident about and flag the rest.** One solid tag beats three weak ones. Ambiguous blocks go to the log for your review.
 
 ## Repos map for task dispatch
@@ -104,18 +105,7 @@ If the task doesn't need a specific repo (default: run inside the vault), omit t
 
 ## Supported `zzz:` instructions
 
-Each block may carry one or more `zzz:` instructions in its `zzz_instructions` metadata list. Match on **intent**, not exact wording — "research this," "look into this more," and "find what I already have on this" all map to the same action. Handle each instruction on a block independently; every instruction is always scoped to the containing block and never re-targets to another block or to this skill file.
-
-### `research`
-
-Trigger words: "research", "look into", "find papers", "find what I have", "dig into".
-
-Steps:
-1. Search the vault with `mcp__openaugi__get_context` and `mcp__openaugi__search` on the topic from the block.
-2. Follow promising links with `mcp__openaugi__traverse` / `get_related` to surface what the user already has.
-3. Summarize what's known, list open questions, list what to read next.
-4. Write the summary to `OpenAugi/Research/<slug>.md` where `<slug>` is a kebab-case version of the topic.
-5. Link the research note from the block's heartbeat-log entry.
+Each block may carry one or more `zzz:` instructions in its `zzz_instructions` metadata list. Match on **intent**, not exact wording. Handle each instruction on a block independently; every instruction is always scoped to the containing block and never re-targets to another block or to this skill file.
 
 ### `task`
 
@@ -188,24 +178,13 @@ Trigger words: "log", "just log this", "note only", "tag and go".
 
 Steps:
 1. Note the block in the heartbeat log with any tags the user specified (e.g. `zzz: log, tag self/reflection`).
-2. Take no other action. Do not search, do not link, do not dispatch.
+2. Take no other action. Do not dispatch.
 
 Useful for reflections and personal notes you want captured but not acted on.
 
-### `remember`
-
-Trigger words: "remember", "save this", "keep this".
-
-Steps:
-1. Derive a slug from the block content.
-2. Write the block content to `OpenAugi/Reference/<slug>.md` with a link back to the source block and the original timestamp.
-3. Record in the heartbeat log.
-
-Use for quotes, facts, and decisions the user wants easily findable later.
-
 ### Anything else
 
-Use best judgment based on the natural-language instruction. Log exactly what you did in the heartbeat entry for that block so the user can review and either accept or update this skill file.
+Write a task file for it. If you're not sure what to do with a `zzz:` instruction, the answer is always a task — write a self-contained task body and dispatch it. Log what you dispatched in the heartbeat entry.
 
 ## Heartbeat log format
 

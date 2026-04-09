@@ -21,7 +21,7 @@ links  (from_id, to_id, kind, weight, metadata)  — PK: (from_id, to_id, kind)
 
 Everything is a block. Structure lives in the links, not in the schema.
 
-See [docs/data-model.md](docs/data-model.md) for the full data model philosophy — why agents need a map, not a magnifying glass, and how OpenAugi's blocks + links + context blocks implement navigational retrieval.
+See [docs/data-model.md](docs/data-model.md) for the full data model philosophy.
 
 ## Processing Layers
 
@@ -29,7 +29,7 @@ See [docs/data-model.md](docs/data-model.md) for the full data model philosophy 
 |-------|------|------|----------|
 | **Layer 0** | FREE | Split, tag/link extract, FTS, dedup hash | Python + SQLite |
 | **Layer 1** | ~$0 | Embed (local default), hub scoring (SQL) | sentence-transformers (local) |
-| **Enrich** | FREE or $ | Tag taxonomy + document classification | Agent (free) or LLM API |
+| **Heartbeat** | FREE | Per-block classification → `augi_tags` on blocks, task dispatch | Claude Code agent |
 
 ## Module Map
 
@@ -44,10 +44,6 @@ src/openaugi/
 ├── pipeline/
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
-│   ├── compile.py         # Context block materialization (hub summaries, concepts, index)
-│   ├── enrich.py          # Tag enrichment orchestrator (export, agent, apply)
-│   ├── taxonomy.py        # Tag rules engine (discover, normalize, apply)
-│   ├── tag_inference.py   # Batched document classification via LLM
 │   ├── heartbeat.py       # Heartbeat orchestrator — new blocks → Claude Code agent session
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
@@ -118,7 +114,9 @@ openaugi heartbeat → pipeline/heartbeat.py
   → store.get_blocks_created_since(since) → entry blocks (capped at --max-blocks)
   → build prompt: skill file ref + per-block content + zzz_instructions metadata
   → spawn `claude -p <prompt>` with openaugi MCP tools allowed
-  → agent writes OpenAugi/Heartbeat/YYYY-MM-DD.md
+  → agent classifies each block → calls tag_block MCP tool → augi_tags on block
+  → agent dispatches tasks → writes OpenAugi/Tasks/<slug>.md
+  → agent writes heartbeat log → OpenAugi/Heartbeat/YYYY-MM-DD.md
   → on success: advance ~/.openaugi/last_heartbeat
 ```
 
@@ -160,20 +158,6 @@ defined in `src/openaugi/templates/task-template.md` and enforced by
 and `task_watcher.py` (reader) point at that template rather than
 redefine the format — see the contract diagram in [docs/task-dispatch.md](docs/task-dispatch.md).
 
-### Enrich (tag taxonomy)
-
-See [docs/enrichment.md](docs/enrichment.md) for full details.
-
-```
-openaugi enrich --tags → pipeline/enrich.py
-  → export tag + doc inventory to ~/.openaugi/enrich/
-  → launch Claude agent (or use --model for API)
-  → agent writes tag_rules.json + doc_tags.json
-openaugi enrich --apply → pipeline/taxonomy.py
-  → apply rules: ignore garbage, merge synonyms → computed_tags in metadata
-  → block.effective_tags prefers computed_tags, falls back to source
-```
-
 ### Hub Scoring
 
 Pure SQL aggregation at query time (no stored table):
@@ -209,15 +193,23 @@ openaugi up            # daily: sync vault + file watcher + MCP server
 
 Embedding is attempted with the user's configured model. If it fails, blocks are saved without embeddings and retried on the next watcher cycle. SQLite WAL mode handles concurrent reads (MCP) and writes (watcher) without locking.
 
-### Individual commands
+### Daily use — two entry points
+
+```
+openaugi up     ← Claude Desktop MCP config (vault sync + MCP server)
+openaugi agent  ← one terminal window (heartbeat every 5m + task dispatch)
+```
+
+### All commands
 
 | Command | What |
 |---------|------|
+| `openaugi up` | Ingest + watcher + MCP server in one process |
+| `openaugi agent` | Heartbeat loop (every `--interval` min) + task dispatch |
+| `openaugi heartbeat` | One-shot: find new blocks → spawn Claude Code agent |
+| `openaugi task-dispatch` | Watch `OpenAugi/Tasks/` and launch pending tasks in tmux |
 | `openaugi serve` | MCP server only (stdio or HTTP) |
 | `openaugi watch` | File watcher only (incremental ingest on vault changes) |
-| `openaugi up` | Ingest + watcher + MCP server in one process |
-| `openaugi heartbeat` | One-shot: ingest → find new blocks → spawn Claude Code agent to process them |
-| `openaugi task-dispatch` | Optional: watch `OpenAugi/Tasks/` for pending task files and launch them in named tmux sessions ([docs/task-dispatch.md](docs/task-dispatch.md)) |
 
 ### Transports
 
