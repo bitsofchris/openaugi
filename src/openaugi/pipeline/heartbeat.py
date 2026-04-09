@@ -58,16 +58,16 @@ def find_new_blocks(
     since: str | None,
     max_blocks: int = DEFAULT_MAX_BLOCKS,
     ignore_sources: list[str] | None = None,
+    ignore_headings: list[str] | None = None,
 ) -> list[Block]:
     """Fetch entry blocks created since the last heartbeat, oldest first.
 
     Capped at `max_blocks` to keep prompts bounded. If more exist, the
     caller should surface that so the user can rerun or raise the cap.
 
-    `ignore_sources` is a list of fnmatch glob patterns matched against each
-    block's `source_path` metadata field (relative vault path). Blocks whose
-    source matches any pattern are silently excluded.
-    Example: ["journals/HW/*", "private/*"]
+    `ignore_sources`: fnmatch glob patterns on `source_path` (file path).
+    `ignore_headings`: exact heading texts to exclude (case-insensitive),
+      matched against `section_heading` metadata — e.g. ["HW", "private"].
     """
     import fnmatch
 
@@ -79,6 +79,13 @@ def find_new_blocks(
             if not any(
                 fnmatch.fnmatch(b.metadata.get("source_path", ""), pat) for pat in ignore_sources
             )
+        ]
+    if ignore_headings:
+        ignore_lower = {h.lower() for h in ignore_headings}
+        blocks = [
+            b
+            for b in blocks
+            if (b.metadata.get("section_heading") or "").lower() not in ignore_lower
         ]
     return blocks
 
@@ -221,6 +228,7 @@ def run_heartbeat(
     max_blocks: int = DEFAULT_MAX_BLOCKS,
     dry_run: bool = False,
     ignore_sources: list[str] | None = None,
+    ignore_headings: list[str] | None = None,
 ) -> dict:
     """Run one heartbeat cycle.
 
@@ -246,7 +254,11 @@ def run_heartbeat(
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     since = get_last_heartbeat()
     blocks = find_new_blocks(
-        store, since=since, max_blocks=max_blocks, ignore_sources=ignore_sources
+        store,
+        since=since,
+        max_blocks=max_blocks,
+        ignore_sources=ignore_sources,
+        ignore_headings=ignore_headings,
     )
 
     today = datetime.now(UTC).strftime("%Y-%m-%d")

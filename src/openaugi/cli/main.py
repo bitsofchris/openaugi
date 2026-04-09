@@ -33,6 +33,17 @@ IgnoreSourceOption = Annotated[
     ),
 ]
 
+IgnoreHeadingOption = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--ignore-heading",
+        help=(
+            "Section heading text to exclude (case-insensitive, repeatable, "
+            "e.g. --ignore-heading HW --ignore-heading Private)"
+        ),
+    ),
+]
+
 
 def _setup_logging(verbose: bool):
     from logging.handlers import RotatingFileHandler
@@ -426,6 +437,7 @@ def heartbeat(
         help="Run incremental ingest before processing (use when `up` is not running)",
     ),
     ignore_source: IgnoreSourceOption = None,
+    ignore_heading: IgnoreHeadingOption = None,
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
     """Heartbeat — find new blocks and hand them to a Claude Code agent.
@@ -492,6 +504,9 @@ def heartbeat(
 
         # Step 2–4: find blocks, build prompt, spawn agent.
         ignore = list(ignore_source or []) or config.get("heartbeat", {}).get("ignore_sources", [])
+        ignore_h = list(ignore_heading or []) or config.get("heartbeat", {}).get(
+            "ignore_headings", []
+        )
         try:
             result = run_heartbeat(
                 store=store,
@@ -499,6 +514,7 @@ def heartbeat(
                 max_blocks=max_blocks,
                 dry_run=dry_run,
                 ignore_sources=ignore or None,
+                ignore_headings=ignore_h or None,
             )
         except FileNotFoundError as e:
             console.print(f"[red]{e}[/red]")
@@ -553,6 +569,7 @@ def agent_cmd(
         help="Run incremental ingest on each heartbeat cycle (use when `up` is not running)",
     ),
     ignore_source: IgnoreSourceOption = None,
+    ignore_heading: IgnoreHeadingOption = None,
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
     """Heartbeat loop + task dispatch — the agent processing companion to `up`.
@@ -588,11 +605,14 @@ def agent_cmd(
 
     db_path = db or str(_default_db())
     ignore = list(ignore_source or []) or config.get("heartbeat", {}).get("ignore_sources", [])
+    ignore_h = list(ignore_heading or []) or config.get("heartbeat", {}).get("ignore_headings", [])
 
     err.print(f"[bold]Vault:[/bold] {vault_path}")
     err.print(f"[bold]Heartbeat:[/bold] every {interval}m")
     if ignore:
         err.print(f"[bold]Ignoring sources:[/bold] {', '.join(ignore)}")
+    if ignore_h:
+        err.print(f"[bold]Ignoring headings:[/bold] {', '.join(ignore_h)}")
 
     # Start task-dispatch in a background daemon thread
     dispatch_thread = threading.Thread(
@@ -642,6 +662,7 @@ def agent_cmd(
                     vault_path=vault_path,
                     max_blocks=max_blocks,
                     ignore_sources=ignore or None,
+                    ignore_headings=ignore_h or None,
                 )
             except FileNotFoundError as e:
                 err.print(f"[red]{e}[/red]")
