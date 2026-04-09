@@ -187,8 +187,9 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 
 ## Plans
 
-- [docs/plans/overall-mvp.md](docs/plans/overall-mvp.md) — Milestones M0–M1.5 (shipped)
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
-- [docs/plans/phase2-compile.md](docs/plans/phase2-compile.md) — Context block layer deep dive
-- [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
+- [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
+- [docs/plans/capture-tag-stream-loop.md](docs/plans/capture-tag-stream-loop.md) — Phase 4: capture → tag → stream incremental pipeline
+- [docs/plans/from-capture-to-jarvis.md](docs/plans/from-capture-to-jarvis.md) — Longer-horizon vision (layers 1–4)
 - [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features
+- [docs/plans/done/](docs/plans/done/) — Shipped milestone plans (M0, M1)

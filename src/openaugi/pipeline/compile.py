@@ -6,8 +6,6 @@ of the knowledge graph without requiring them to read every raw block.
 Compile layers:
 - Layer 0 (FREE): hub_summary, recent_activity, index — pure SQL aggregation
 - Layer 1 (FREE): concept pages, graph_health — SQL + templates
-
-See docs/plans/phase2-compile.md for the full design.
 """
 
 from __future__ import annotations
