@@ -30,9 +30,10 @@ from openaugi.model.link import Link
 
 logger = logging.getLogger(__name__)
 
-# ── Regex patterns (same as v1) ───────────────────────────────────
+# ── Regex patterns ───────────────────────────────────────────────
 
-H3_DATE_PATTERN = re.compile(r"^###\s+(\d{4}-\d{2}-\d{2})", re.MULTILINE)
+ANY_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*?)$", re.MULTILINE)
+H3_DATE_PATTERN = re.compile(r"^###\s+(\d{4}-\d{2}-\d{2})", re.MULTILINE)  # kept for reference
 TAG_PATTERN = re.compile(r"(?<!\w)#([a-zA-Z0-9_/\-]+)")
 LINK_PATTERN = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
 FILENAME_DATE_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})")
@@ -248,15 +249,15 @@ def _parse_file(
     # Strip frontmatter, extract frontmatter tags
     content_body, fm_tags = _strip_frontmatter(content)
 
-    # Split by H3 date headers
-    sections = _split_by_h3_dates(content_body)
+    # Split by any heading; date flows down from nearest date-heading ancestor
+    sections = _split_by_headings(content_body)
 
     # Date from filename
     title_date = _extract_filename_date(file_path)
     file_created = _get_file_created_time(file_path)
 
-    for section_content, section_date_str in sections:
-        # Each H3 section is further split on `qqq` markers. When a section
+    for section_content, section_date_str, section_heading in sections:
+        # Each section is further split on `qqq` markers. When a section
         # has no qqq, _split_by_qqq returns [section_content] unchanged so
         # notes that don't use qqq behave exactly like before.
         sub_sections = _split_by_qqq(section_content)
@@ -281,8 +282,8 @@ def _parse_file(
             entry_hash = Block.hash_content(stripped)
             entry_id = Block.make_id(rel_path, entry_hash)
 
-            h3_date = _parse_date(section_date_str) if section_date_str else None
-            resolved_ts = _resolve_timestamp(h3_date, title_date, file_created)
+            section_date = _parse_date(section_date_str) if section_date_str else None
+            resolved_ts = _resolve_timestamp(section_date, title_date, file_created)
 
             # Extract tags (inline + frontmatter) from clean content
             inline_tags = _extract_tags(clean_content)
@@ -293,7 +294,8 @@ def _parse_file(
 
             entry_metadata: dict = {
                 "source_path": rel_path,
-                "h3_date": section_date_str,
+                "section_date": section_date_str,
+                "section_heading": section_heading,
                 "parent_note_title": parent_title,
                 "file_created_at": file_created,
             }
@@ -341,26 +343,46 @@ def _parse_file(
     return blocks, links, tag_blocks
 
 
-def _split_by_h3_dates(content: str) -> list[tuple[str, str | None]]:
-    """Split content by H3 date headers. Same logic as v1."""
-    matches = list(H3_DATE_PATTERN.finditer(content))
+def _split_by_headings(content: str) -> list[tuple[str, str | None, str | None]]:
+    """Split content by any markdown heading (# through ######).
+
+    Date context flows down: the nearest ancestor heading whose text begins
+    with YYYY-MM-DD establishes the date for all subsequent sections until
+    the next date heading appears.
+
+    Returns list of (section_content, date_str, heading_text):
+    - section_content: text after the heading line (heading line not included)
+    - date_str: inherited YYYY-MM-DD string, or None
+    - heading_text: heading text without # prefix, or None for preamble
+    """
+    matches = list(ANY_HEADING_PATTERN.finditer(content))
 
     if not matches:
-        return [(content, None)]
+        return [(content, None, None)]
 
-    sections: list[tuple[str, str | None]] = []
+    sections: list[tuple[str, str | None, str | None]] = []
+    current_date: str | None = None
 
-    # Preamble before first H3
+    # Preamble before the first heading
     if matches[0].start() > 0:
         preamble = content[: matches[0].start()]
         if preamble.strip():
-            sections.append((preamble, None))
+            sections.append((preamble, None, None))
 
     for i, match in enumerate(matches):
-        date_str = match.group(1)
-        start = match.start()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
-        sections.append((content[start:end], date_str))
+        heading_text = match.group(2).strip()
+
+        # Update date context if this heading begins with a date
+        date_match = re.match(r"(\d{4}-\d{2}-\d{2})", heading_text)
+        if date_match:
+            current_date = date_match.group(1)
+
+        # Content is everything after the heading line to the next heading
+        content_start = match.end()
+        content_end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
+        section_content = content[content_start:content_end]
+
+        sections.append((section_content, current_date, heading_text))
 
     return sections
 
