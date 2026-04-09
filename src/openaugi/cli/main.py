@@ -846,6 +846,71 @@ def status(
         store.close()
 
 
+# ── Task watcher ──────────────────────────────────────────────────
+
+tasks_app = typer.Typer(help="Manage OpenAugi task files and the tmux dispatcher.")
+app.add_typer(tasks_app, name="tasks")
+
+
+@tasks_app.command("watch")
+def tasks_watch(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    tasks_folder: str = typer.Option(
+        "OpenAugi/Tasks",
+        "--tasks-folder",
+        help="Relative folder in the vault where task files live",
+    ),
+    repos_note: str = typer.Option(
+        "OpenAugi/Repos.md",
+        "--repos-note",
+        help="Path (relative to vault) of the note mapping repo names → absolute paths",
+    ),
+    interval: float = typer.Option(5.0, "--interval", help="Poll interval in seconds"),
+    settle: float = typer.Option(
+        30.0,
+        "--settle",
+        help="Seconds a file must be unchanged before processing (debounces writes)",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Watch the vault's Tasks/ folder and dispatch pending tasks to tmux.
+
+    When a task file lands with `status: pending` in frontmatter, the
+    watcher hydrates it (assigns a task_id, timestamps, tmux session name),
+    resolves the working directory from `working_dir` / `repo` frontmatter
+    (via `OpenAugi/Repos.md` by default), builds a prompt, and launches
+    `claude` in a detached named tmux session. Attach any time with
+    `tmux attach -t <task_id>`.
+
+    Raw notes are never modified — the watcher only touches files in the
+    configured Tasks folder. See src/openaugi/templates/heartbeat-skill.md
+    for the task file format the heartbeat agent writes.
+    """
+    _setup_logging(verbose)
+
+    from openaugi.config import load_config
+    from openaugi.pipeline.task_watcher import watch_tasks
+
+    config = load_config()
+    vault_path = path or config.get("vault", {}).get("default_path")
+    if not vault_path:
+        console.print("[red]No vault path specified.[/red]")
+        console.print("Use --path or run 'openaugi init' to set a default.")
+        raise typer.Exit(1)
+
+    try:
+        watch_tasks(
+            vault_path=vault_path,
+            tasks_folder=tasks_folder,
+            repos_note=repos_note,
+            poll_interval=interval,
+            settle=settle,
+        )
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1) from None
+
+
 # ── Service management ─────────────────────────────────────────────
 
 service_app = typer.Typer(help="Manage OpenAugi as a launchd service (macOS).")
