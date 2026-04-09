@@ -2,26 +2,61 @@
 and launches Claude Code agents in named tmux sessions.
 
 Workflow:
-  1. The heartbeat agent (or the user, or a mobile capture) writes a task
+  1. The heartbeat agent (or a user, or a mobile capture) writes a task
      file to <vault>/OpenAugi/Tasks/ with frontmatter `status: pending`.
   2. This watcher scans that folder. Each .md file that has been stable
      for `settle` seconds is picked up.
-  3. The file is hydrated: `task_id`, `created`, `tmux_session`, defaults,
-     `## Session`, and `## Results` sections are added. `status` flips to
+  3. The file is hydrated: `task_id`, `created`, `tmux_session`, and
+     `## Session` / `## Results` sections are added. `status` flips to
      `active`. The file is renamed to match the task_id.
   4. The working directory is resolved from `working_dir` / `working-dir`
      / `repo` in frontmatter — either an absolute path, or a short name
      that maps to a path via `OpenAugi/Repos.md`'s `repos:` dict.
-  5. A prompt is built and written to a temp context file.
+  5. A small prompt (task_id + the task body + linked notes) is written
+     to a temp context file.
   6. A detached tmux session is created (with optional `-c <cwd>`), the
      shell is allowed to settle, and the claude CLI is launched via
      send-keys so the user's login-shell PATH and aliases apply.
 
 No LLM calls in this module. Dispatch only.
 
-See docs/plans/done/heartbeat.md for the overall design and
-src/openaugi/templates/heartbeat-skill.md for the task file format
-expected from the heartbeat agent.
+## Task file format — the contract
+
+The heartbeat agent (writer) and this watcher (reader) agree on one file
+format. The authoritative, annotated version lives in ONE place:
+
+    src/openaugi/templates/task-template.md
+
+Change that file and `test_task_template_hydrates_cleanly` breaks until
+the watcher keeps up. A minimal pending task looks like:
+
+    ---
+    status: pending
+    workstream: <workstream slug>
+    repo: <short repo name from OpenAugi/Repos.md, or omit for vault-local>
+    source_block_id: <block id>
+    source_note: "[[<source note title>]]"
+    ---
+
+    # <Human-readable task title>
+
+    ## Context
+    <source block content, verbatim>
+
+    ## Task
+    <self-contained description of what the remote agent should do>
+
+    ## Human Todo
+    <empty; remote agent appends items here if it needs you>
+
+    ## Results
+    <empty; remote agent fills this in when finished>
+
+Hydration adds `task_id`, `created`, `tmux_session`, and a `## Session`
+block with the `tmux attach` command. It does NOT add defaults for
+`workstream`, `priority`, etc. — those are the writer's responsibility.
+See src/openaugi/templates/heartbeat-skill.md for the writer side and
+docs/plans/done/heartbeat.md for the overall design.
 """
 
 from __future__ import annotations
@@ -134,9 +169,10 @@ def hydrate_note(filepath: Path) -> tuple[str, str, Path]:
     fm.setdefault("created", now)
     fm["tmux_session"] = session_name
 
-    # Sensible defaults so dashboards / listings behave
-    fm.setdefault("workstream", "openaugi")
-    fm.setdefault("priority", "now")
+    # No default workstream / priority. The writer (heartbeat agent or the
+    # user) owns those fields. If they're missing, they stay missing — the
+    # watcher logs the task as-is rather than labeling it under a surprise
+    # workstream the user didn't choose.
 
     # Inject Session section if not present
     if "## Session" not in body:
@@ -251,41 +287,25 @@ def detect_claude() -> str:
 
 
 def build_prompt(task_id: str, body: str, links: list[str]) -> str:
-    """Build the initial prompt the Claude agent receives in its tmux session.
+    """Build the initial prompt handed to the Claude agent in its tmux session.
 
-    The prompt is intentionally small — the task body itself carries the
-    real context. Links are surfaced so the agent pulls them via openaugi
-    MCP tools. The "how to finish" instructions tell the agent to edit
-    the task file's `## Results` section and flip frontmatter `status`
-    to `done` or `needs-input` — no custom MCP tool required.
+    The task body is the real prompt — the writer (heartbeat agent or
+    user) is responsible for making it self-contained. The watcher just
+    wraps it with the task_id, any linked notes to pull, and a one-line
+    finish instruction. No MCP tool lists, no `needs-input` protocol —
+    those are the writer's / the heartbeat-skill's concern.
     """
-    links_section = ""
+    links_line = ""
     if links:
-        link_list = ", ".join(f"[[{lnk}]]" for lnk in links)
-        links_section = (
-            f"\n## Linked Notes\n"
-            f"The task references these notes: {link_list}\n"
-            f"Use `mcp__openaugi__search` and `mcp__openaugi__get_context` "
-            f"to pull their content before acting.\n"
-        )
+        joined = ", ".join(f"[[{lnk}]]" for lnk in links)
+        links_line = f"\nLinked notes (pull via openaugi MCP): {joined}\n"
 
     return (
         f"You are working on task {task_id}.\n"
-        f"\n## Task\n{body.strip()}\n"
-        f"{links_section}"
-        f"\n## Instructions\n"
-        "- Use the openaugi MCP tools (`search`, `get_context`, `get_block`, "
-        "`traverse`, `get_related`) to gather context from the knowledge base.\n"
-        "- Work through the task thoroughly in the current working directory.\n"
-        "- If any steps require human action (manual testing, deployments, "
-        "approvals), capture them as a `## Human Todo` checklist inside the "
-        f"task file (OpenAugi/Tasks/{task_id}.md).\n"
-        f"- When done, edit OpenAugi/Tasks/{task_id}.md: fill in the "
-        "`## Results` section with your summary and change frontmatter "
-        "`status:` to `done`.\n"
-        f"- If you need human input, edit OpenAugi/Tasks/{task_id}.md: write "
-        "what you need in `## Results` and set `status:` to `needs-input`, "
-        "then stop and wait.\n"
+        f"{links_line}\n"
+        f"{body.strip()}\n\n"
+        f"When done, edit OpenAugi/Tasks/{task_id}.md: fill in `## Results` "
+        f"and set frontmatter `status: done`.\n"
     )
 
 
