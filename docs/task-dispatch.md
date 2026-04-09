@@ -7,7 +7,7 @@ description: Obsidian → tmux task dispatch. Optional watcher that picks up `st
 
 Write a task in Obsidian (on desktop or mobile). A watcher picks it up and launches a Claude Code agent in a named tmux session to do the work. Attach any time with `tmux attach -t <task_id>` to watch it happen.
 
-This is an **optional add-on**. If you don't run the watcher, `zzz: task` instructions from heartbeat simply land as files in `OpenAugi/Tasks/` and sit there. Nothing bad happens. You opt in by running `openaugi tasks watch`.
+This is an **optional add-on**. If you don't run the watcher, `zzz: task` instructions from heartbeat simply land as files in `OpenAugi/Tasks/` and sit there. Nothing bad happens. You opt in by running `openaugi task-dispatch`.
 
 ## When to use this
 
@@ -128,7 +128,7 @@ If the task doesn't need a specific repo (it's editing notes in the vault itself
 ## The full flow
 
 ```
-openaugi tasks watch → pipeline/task_watcher.py
+openaugi task-dispatch → pipeline/task_watcher.py
   poll loop (default every 5s):
   │
   ├── scan_pending(tasks_dir, settle=30s)
@@ -187,7 +187,7 @@ That's the whole protocol. No custom MCP tool, no callback, no "completion signa
 
 ```bash
 # in its own terminal (or a long-lived tmux window)
-openaugi tasks watch --path "/path/to/your/vault"
+openaugi task-dispatch --path "/path/to/your/vault"
 ```
 
 Options:

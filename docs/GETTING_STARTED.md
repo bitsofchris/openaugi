@@ -95,7 +95,8 @@ The MCP server supports HTTP transport with OAuth authentication for remote acce
 | `openaugi ingest` | Run full Layer 0 + Layer 1 pipeline |
 | `openaugi serve` | MCP server only (stdio or HTTP) |
 | `openaugi watch` | File watcher only (incremental ingest on vault changes) |
-| `openaugi heartbeat` | One-shot: ingest → hand new blocks to a Claude Code agent (see below) |
+| `openaugi heartbeat` | One-shot: find new blocks → hand to Claude Code agent (add `--ingest` if `up` not running) |
+| `openaugi task-dispatch` | Watch `OpenAugi/Tasks/` and launch pending tasks as Claude Code agents in tmux |
 | `openaugi search "query"` | Search from terminal (semantic or `--keyword`) |
 | `openaugi hubs` | Top connected notes by link count |
 | `openaugi status` | Block/link/embedding counts |
@@ -165,7 +166,7 @@ heartbeat run will pick it up.
 openaugi heartbeat                    # ingest + find new blocks + spawn agent
 openaugi heartbeat --dry-run          # build the prompt and print it (no agent)
 openaugi heartbeat --max-blocks 20    # cap the batch size (default 50)
-openaugi heartbeat --skip-ingest      # skip ingest (use when running alongside `up`)
+openaugi heartbeat --ingest           # run ingest first (use when `up` is not running)
 ```
 
 Output goes to `<vault>/OpenAugi/Heartbeat/YYYY-MM-DD.md`. The last-run
@@ -174,11 +175,11 @@ successful agent run — a failed run retries the same window next time.
 
 ### Running heartbeat alongside `openaugi up`
 
-`up` and `heartbeat` both call incremental ingest, but they're safe to run
-together: SQLite WAL mode serializes writes, block IDs are deterministic, and
-re-inserts are idempotent. The only cost of running both is duplicated file
-hashing. Pass `--skip-ingest` to `heartbeat` when `up` is already running and
-its watcher has the vault up to date.
+Heartbeat skips ingest by default — it assumes `up` is running and keeping
+the DB current. If `up` is not running, pass `--ingest` to do a one-off
+incremental ingest first. Both are safe to run together (SQLite WAL mode
+serializes writes, block IDs are deterministic, re-inserts are idempotent)
+but the default avoids redundant file hashing when `up` is already watching.
 
 ## MCP Tools
 
