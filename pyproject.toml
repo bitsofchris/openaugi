@@ -30,6 +30,7 @@ dependencies = [
     "tiktoken>=0.7",
     "sqlite-vec>=0.1.6",
     "watchdog>=4.0",
+    "pyyaml>=6.0",
 ]
 
 [project.urls]
