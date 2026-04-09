@@ -568,6 +568,11 @@ def agent_cmd(
         "--ingest",
         help="Run incremental ingest on each heartbeat cycle (use when `up` is not running)",
     ),
+    lookback: int = typer.Option(
+        24,
+        "--lookback",
+        help="Hours of history to process on first run (no prior state). 0 = all.",
+    ),
     ignore_source: IgnoreSourceOption = None,
     ignore_heading: IgnoreHeadingOption = None,
     verbose: bool = typer.Option(False, "--verbose", "-v"),
@@ -629,6 +634,18 @@ def agent_cmd(
     )
     dispatch_thread.start()
     err.print("[bold]Task dispatch:[/bold] watching OpenAugi/Tasks/\n")
+
+    # On first run (no prior state), apply lookback window to avoid processing full vault.
+    from openaugi.pipeline.heartbeat import get_last_heartbeat, set_last_heartbeat
+
+    if get_last_heartbeat() is None and lookback > 0:
+        from datetime import UTC, datetime, timedelta
+
+        default_since = (datetime.now(UTC) - timedelta(hours=lookback)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+        set_last_heartbeat(default_since)
+        err.print(f"[dim]First run — lookback {lookback}h, starting from {default_since}[/dim]")
 
     # Heartbeat loop — runs in the main thread
     while True:
