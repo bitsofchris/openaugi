@@ -37,6 +37,9 @@ TAG_PATTERN = re.compile(r"(?<!\w)#([a-zA-Z0-9_/\-]+)")
 LINK_PATTERN = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
 FILENAME_DATE_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
+# Per-block agent instruction: line starts with "zzz" (optional colon/whitespace)
+# Captured as metadata and stripped from clean content. See docs/plans/heartbeat.md.
+ZZZ_PATTERN = re.compile(r"^[ \t]*zzz\b[:\s]*(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
 
 DEFAULT_EXCLUDE_PATTERNS = [
     ".obsidian/**",
@@ -250,35 +253,49 @@ def _parse_file(
         if not stripped:
             continue
 
-        # Entry block
+        # Extract `zzz` agent instructions. The hash is computed on the
+        # *raw* section (including zzz) so that adding or editing a zzz
+        # instruction triggers a new block — the heartbeat agent then picks
+        # it up on the next run. The block's stored content is the clean
+        # version (zzz stripped) so downstream readers see only the note.
+        clean_content, zzz_instruction = _extract_zzz_instruction(stripped)
+        if not clean_content:
+            # Block contained only a zzz line — nothing meaningful to store
+            continue
+
+        # Entry block — identity keyed by raw content (zzz-sensitive)
         entry_hash = Block.hash_content(stripped)
         entry_id = Block.make_id(rel_path, entry_hash)
 
         h3_date = _parse_date(section_date_str) if section_date_str else None
         resolved_ts = _resolve_timestamp(h3_date, title_date, file_created)
 
-        # Extract tags (inline + frontmatter)
-        inline_tags = _extract_tags(stripped)
+        # Extract tags (inline + frontmatter) from clean content
+        inline_tags = _extract_tags(clean_content)
         all_tags = _unique_ordered(fm_tags + inline_tags)
 
-        # Extract wikilinks
-        entry_links = _extract_links(stripped)
+        # Extract wikilinks from clean content
+        entry_links = _extract_links(clean_content)
+
+        entry_metadata: dict = {
+            "source_path": rel_path,
+            "h3_date": section_date_str,
+            "parent_note_title": parent_title,
+            "file_created_at": file_created,
+        }
+        if zzz_instruction:
+            entry_metadata["zzz_instruction"] = zzz_instruction
 
         entry_block = Block(
             id=entry_id,
             kind="entry",
-            content=stripped,
+            content=clean_content,
             source="vault",
             title=parent_title,
             tags=all_tags,
             timestamp=resolved_ts,
             content_hash=entry_hash,
-            metadata={
-                "source_path": rel_path,
-                "h3_date": section_date_str,
-                "parent_note_title": parent_title,
-                "file_created_at": file_created,
-            },
+            metadata=entry_metadata,
         )
         blocks.append(entry_block)
 
@@ -375,6 +392,30 @@ def _extract_links(text: str) -> list[str]:
     """Extract [[wikilinks]], preserving order, deduped."""
     matches = LINK_PATTERN.findall(text)
     return _unique_ordered(matches)
+
+
+def _extract_zzz_instruction(text: str) -> tuple[str, str | None]:
+    """Extract `zzz` agent instruction lines from block content.
+
+    Lines starting with `zzz` (optionally `zzz: ...`) are per-block directives
+    for the heartbeat agent. They're stripped from the clean content and
+    returned as a single joined instruction string (None if absent).
+
+    Multiple zzz lines within a block are joined with newlines.
+    """
+    instructions: list[str] = []
+
+    def _capture(match: re.Match[str]) -> str:
+        body = match.group(1).strip()
+        if body:
+            instructions.append(body)
+        return ""  # strip the line entirely
+
+    stripped = ZZZ_PATTERN.sub(_capture, text)
+    # Collapse any blank lines left behind by the strip
+    stripped = re.sub(r"\n{3,}", "\n\n", stripped).strip("\n")
+    instruction = "\n".join(instructions) if instructions else None
+    return stripped, instruction
 
 
 def _extract_filename_date(file_path: Path) -> str | None:
