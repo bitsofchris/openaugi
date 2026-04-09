@@ -230,4 +230,5 @@ class TestBlockLevelIncremental:
 
         entries = store.get_entries_for_document(doc_id)
         assert len(entries) == 1
-        assert "Brand New" in (entries[0].content or "")
+        assert entries[0].metadata.get("section_heading") == "Brand New"
+        assert "new content" in (entries[0].content or "")

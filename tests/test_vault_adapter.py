@@ -20,7 +20,7 @@ from openaugi.adapters.vault import (
     _extract_tags,
     _extract_zzz_instructions,
     _matches_pattern,
-    _split_by_h3_dates,
+    _split_by_headings,
     _split_by_qqq,
     _strip_frontmatter,
     parse_vault,
@@ -203,24 +203,61 @@ class TestFrontmatter:
         assert "project" in tags
 
 
-class TestSplitByH3:
-    def test_split_with_h3_dates(self):
+class TestSplitByHeadings:
+    def test_split_with_date_h3s(self):
         content = "Preamble\n\n### 2024-03-15\nSection 1\n\n### 2024-03-14\nSection 2"
-        sections = _split_by_h3_dates(content)
-        assert len(sections) == 3  # preamble + 2 dated sections
-        assert sections[0][1] is None  # preamble has no date
+        sections = _split_by_headings(content)
+        # preamble + 2 date sections
+        assert len(sections) == 3
+        assert sections[0][1] is None  # preamble: no date
+        assert sections[0][2] is None  # preamble: no heading
         assert sections[1][1] == "2024-03-15"
+        assert sections[1][2] == "2024-03-15"
         assert sections[2][1] == "2024-03-14"
 
-    def test_split_no_h3(self):
-        content = "# Title\n\nJust a regular note."
-        sections = _split_by_h3_dates(content)
-        assert len(sections) == 1
-        assert sections[0][1] is None
+    def test_split_any_heading(self):
+        content = "## Overview\nsome text\n\n## Goals\nmore text"
+        sections = _split_by_headings(content)
+        assert len(sections) == 2
+        assert sections[0][2] == "Overview"
+        assert sections[1][2] == "Goals"
+        assert sections[0][1] is None  # no date
+        assert sections[1][1] is None  # no date
 
-    def test_split_empty_preamble_skipped(self):
+    def test_date_flows_down_to_subheadings(self):
+        content = "### 2024-03-15\ncontent\n#### HW\npersonal stuff"
+        sections = _split_by_headings(content)
+        assert len(sections) == 2
+        assert sections[0][1] == "2024-03-15"  # date heading
+        assert sections[1][1] == "2024-03-15"  # inherited
+        assert sections[1][2] == "HW"
+
+    def test_section_content_excludes_heading_line(self):
+        content = "### 2024-03-15\nhello world"
+        sections = _split_by_headings(content)
+        assert len(sections) == 1
+        assert "hello world" in sections[0][0]
+        assert "###" not in sections[0][0]
+
+    def test_heading_only_section_has_empty_content(self):
+        content = "# Title\n\n### 2024-03-15\nreal content"
+        sections = _split_by_headings(content)
+        # # Title section has only whitespace content
+        assert sections[0][0].strip() == ""
+        # Date section has real content
+        assert "real content" in sections[1][0]
+
+    def test_no_headings_returns_full_content(self):
+        content = "Just a plain note with no headings."
+        sections = _split_by_headings(content)
+        assert len(sections) == 1
+        assert sections[0][0] == content
+        assert sections[0][1] is None
+        assert sections[0][2] is None
+
+    def test_empty_preamble_before_first_heading_skipped(self):
         content = "### 2024-03-15\nFirst section"
-        sections = _split_by_h3_dates(content)
+        sections = _split_by_headings(content)
         assert len(sections) == 1
         assert sections[0][1] == "2024-03-15"
 
@@ -510,9 +547,9 @@ class TestEdgeCases:
             if b.kind == "entry" and b.metadata.get("parent_note_title") == "daily-2026-04-08"
         ]
         assert len(entries) == 2
-        # Both sub-blocks should inherit the H3 date
+        # Both sub-blocks should inherit the date from the heading
         for entry in entries:
-            assert entry.metadata.get("h3_date") == "2026-04-08"
+            assert entry.metadata.get("section_date") == "2026-04-08"
 
     def test_qqq_and_zzz_combined(self, tmp_path: Path):
         """A note mixing qqq splits and per-block zzz instructions."""
