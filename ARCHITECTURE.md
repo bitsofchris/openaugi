@@ -127,7 +127,7 @@ openaugi heartbeat → pipeline/heartbeat.py
   → run incremental ingest (unless --skip-ingest)
   → read ~/.openaugi/last_heartbeat timestamp
   → store.get_blocks_created_since(since) → entry blocks (capped at --max-blocks)
-  → build prompt: skill file ref + per-block content + zzz_instruction metadata
+  → build prompt: skill file ref + per-block content + zzz_instructions metadata
   → spawn `claude -p <prompt>` with openaugi MCP tools allowed
   → agent writes OpenAugi/Heartbeat/YYYY-MM-DD.md
   → on success: advance ~/.openaugi/last_heartbeat
@@ -135,9 +135,12 @@ openaugi heartbeat → pipeline/heartbeat.py
 
 The Python side is deliberately dumb: it does not classify. The reasoning
 lives in `<vault>/OpenAugi/heartbeat-skill.md`, a user-maintained markdown
-file. Per-block `zzz:` lines are extracted by the vault adapter into
-`metadata["zzz_instruction"]` (and stripped from the clean content) so the
-agent can honor them as per-block directives.
+file (template: `src/openaugi/templates/heartbeat-skill.md`). Per-block
+`zzz:` lines are extracted by the vault adapter into
+`metadata["zzz_instructions"]` (a list, one item per line; stripped from
+the clean content) so the agent can honor each as an independent per-block
+directive. Blocks are split on `###` headers and `qqq` markers
+(case-insensitive) — see [docs/plans/zzz-instructions.md](docs/plans/zzz-instructions.md).
 
 ### Enrich (tag taxonomy)
 

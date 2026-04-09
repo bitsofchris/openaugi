@@ -119,7 +119,7 @@ fall back to the defaults in the skill file.
     block_sections: list[str] = []
     for i, block in enumerate(blocks, start=1):
         source_path = block.metadata.get("source_path", "(unknown)")
-        zzz = block.metadata.get("zzz_instruction")
+        zzz_list = block.metadata.get("zzz_instructions") or []
         tags = ", ".join(block.tags) if block.tags else "(none)"
         content = (block.content or "").strip()
         preview = content if len(content) <= 800 else content[:800] + "…"
@@ -129,8 +129,10 @@ fall back to the defaults in the skill file.
             f"- **Tags:** {tags}\n"
             f"- **Timestamp:** {block.timestamp or '(none)'}\n"
         )
-        if zzz:
-            section += f"- **User instruction:** {zzz}\n"
+        if zzz_list:
+            section += "- **User instructions:**\n"
+            for instruction in zzz_list:
+                section += f"  - {instruction}\n"
         section += f"\n{preview}\n"
         block_sections.append(section)
 

@@ -42,11 +42,15 @@ def vault_with_skill(tmp_path: Path) -> Path:
 
 
 def _make_entry(
-    id_: str, content: str, source_path: str = "journal.md", zzz: str | None = None
+    id_: str,
+    content: str,
+    source_path: str = "journal.md",
+    zzz: list[str] | str | None = None,
 ) -> Block:
     metadata: dict = {"source_path": source_path}
     if zzz:
-        metadata["zzz_instruction"] = zzz
+        # Accept a single string for test ergonomics; normalize to list.
+        metadata["zzz_instructions"] = [zzz] if isinstance(zzz, str) else list(zzz)
     return Block(
         id=id_,
         kind="entry",
@@ -127,12 +131,12 @@ class TestBuildPrompt:
         assert str(skill) in prompt
         assert str(log) in prompt
 
-    def test_prompt_surfaces_zzz_instruction(self, tmp_path: Path):
+    def test_prompt_surfaces_zzz_instructions(self, tmp_path: Path):
         blocks = [
             _make_entry(
                 "a" * 16,
                 "Had a thought about embeddings",
-                zzz="research this more",
+                zzz=["research this more"],
             )
         ]
         prompt = hb.build_prompt(
@@ -142,9 +146,30 @@ class TestBuildPrompt:
             since=None,
             now="2026-04-08T06:14:00Z",
         )
-        assert "User instruction:" in prompt
+        assert "User instructions:" in prompt
         assert "research this more" in prompt
         assert "embeddings" in prompt
+
+    def test_prompt_surfaces_multiple_zzz_instructions(self, tmp_path: Path):
+        blocks = [
+            _make_entry(
+                "a" * 16,
+                "Thinking about workstreams",
+                zzz=["research this", "also tag openaugi/design"],
+            )
+        ]
+        prompt = hb.build_prompt(
+            blocks=blocks,
+            skill_file=tmp_path / "skill.md",
+            heartbeat_log=tmp_path / "log.md",
+            since=None,
+            now="2026-04-08T06:14:00Z",
+        )
+        # Both instructions should appear as separate bullet lines.
+        block_section = prompt.split("### Block 1")[1].split("##")[0]
+        assert "User instructions:" in block_section
+        assert "- research this" in block_section
+        assert "- also tag openaugi/design" in block_section
 
     def test_prompt_handles_no_zzz(self, tmp_path: Path):
         blocks = [_make_entry("a" * 16, "plain content")]
@@ -155,10 +180,9 @@ class TestBuildPrompt:
             since=None,
             now="2026-04-08T06:14:00Z",
         )
-        # The phrase "User instruction:" appears in the header as an explanation,
-        # but for the block itself there should be no bullet line that carries one.
+        # The block's metadata section should have no user-instruction bullet.
         block_section = prompt.split("### Block 1")[1].split("##")[0]
-        assert "User instruction:" not in block_section
+        assert "User instructions:" not in block_section
         assert "plain content" in block_section
 
     def test_prompt_truncates_long_content(self, tmp_path: Path):

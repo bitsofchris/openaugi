@@ -18,9 +18,10 @@ import pytest
 from openaugi.adapters.vault import (
     _extract_links,
     _extract_tags,
-    _extract_zzz_instruction,
+    _extract_zzz_instructions,
     _matches_pattern,
     _split_by_h3_dates,
+    _split_by_qqq,
     _strip_frontmatter,
     parse_vault,
     parse_vault_incremental,
@@ -52,60 +53,133 @@ class TestRegexExtraction:
         assert len(links) == 1
 
 
-class TestZzzInstruction:
+class TestZzzInstructions:
     def test_no_zzz_returns_content_unchanged(self):
         text = "Just a normal thought about something."
-        clean, instruction = _extract_zzz_instruction(text)
+        clean, instructions = _extract_zzz_instructions(text)
         assert clean == text
-        assert instruction is None
+        assert instructions == []
 
     def test_zzz_colon_form(self):
         text = "Had an idea\nzzz: research this more"
-        clean, instruction = _extract_zzz_instruction(text)
+        clean, instructions = _extract_zzz_instructions(text)
         assert clean == "Had an idea"
-        assert instruction == "research this more"
+        assert instructions == ["research this more"]
 
     def test_zzz_no_colon(self):
         text = "Need to fix onboarding\nzzz task - do this in openaugi repo"
-        clean, instruction = _extract_zzz_instruction(text)
+        clean, instructions = _extract_zzz_instructions(text)
         assert clean == "Need to fix onboarding"
-        assert instruction == "task - do this in openaugi repo"
+        assert instructions == ["task - do this in openaugi repo"]
 
-    def test_multiple_zzz_lines_joined(self):
+    def test_multiple_zzz_lines_as_separate_items(self):
         text = "A thought\nzzz research this\nmore content\nzzz also tag personal"
-        clean, instruction = _extract_zzz_instruction(text)
+        clean, instructions = _extract_zzz_instructions(text)
         assert "zzz" not in clean
         assert "A thought" in clean
         assert "more content" in clean
-        assert "research this" in instruction
-        assert "also tag personal" in instruction
+        # Each zzz line is its own list item, in document order
+        assert instructions == ["research this", "also tag personal"]
 
     def test_zzz_line_stripped_from_middle(self):
         text = "line one\nzzz just log this\nline three"
-        clean, instruction = _extract_zzz_instruction(text)
+        clean, instructions = _extract_zzz_instructions(text)
         assert "zzz" not in clean
         assert "line one" in clean
         assert "line three" in clean
-        assert instruction == "just log this"
+        assert instructions == ["just log this"]
 
-    def test_zzz_case_insensitive(self):
+    def test_zzz_case_insensitive_upper(self):
         text = "Thought\nZZZ: do research"
-        _, instruction = _extract_zzz_instruction(text)
-        assert instruction == "do research"
+        _, instructions = _extract_zzz_instructions(text)
+        assert instructions == ["do research"]
+
+    def test_zzz_case_insensitive_mixed(self):
+        """Any case combo on the zzz prefix should match: zZz, Zzz, zZZ, etc."""
+        text = "Thought\nzZz: mixed one\nZzZ: mixed two\nzZZ: mixed three"
+        _, instructions = _extract_zzz_instructions(text)
+        assert instructions == ["mixed one", "mixed two", "mixed three"]
 
     def test_bare_zzz_line_no_body(self):
-        """A line with just `zzz` and nothing after is treated as empty instruction."""
+        """A line with just `zzz` and nothing after produces no instruction."""
         text = "content\nzzz"
-        clean, instruction = _extract_zzz_instruction(text)
+        clean, instructions = _extract_zzz_instructions(text)
         assert clean == "content"
-        assert instruction is None
+        assert instructions == []
 
     def test_zzz_not_matched_inside_word(self):
         """Words containing 'zzz' like 'buzzzing' should not match."""
         text = "The buzzzing sound was loud"
-        clean, instruction = _extract_zzz_instruction(text)
+        clean, instructions = _extract_zzz_instructions(text)
         assert clean == text
-        assert instruction is None
+        assert instructions == []
+
+
+class TestSplitByQqq:
+    def test_no_qqq_returns_content_unchanged(self):
+        content = "Just a single block with no split markers."
+        assert _split_by_qqq(content) == [content]
+
+    def test_single_qqq_splits_into_two(self):
+        content = "First thought\nqqq\nSecond thought"
+        segments = _split_by_qqq(content)
+        assert len(segments) == 2
+        assert "First thought" in segments[0]
+        assert "Second thought" in segments[1]
+        # qqq marker itself is not in either segment
+        assert "qqq" not in segments[0]
+        assert "qqq" not in segments[1]
+
+    def test_multiple_qqq_splits(self):
+        content = "A\nqqq\nB\nqqq\nC"
+        segments = _split_by_qqq(content)
+        assert len(segments) == 3
+        assert "A" in segments[0]
+        assert "B" in segments[1]
+        assert "C" in segments[2]
+
+    def test_qqq_case_insensitive(self):
+        """qqq, QQQ, qQq should all act as splitters."""
+        content = "one\nqqq\ntwo\nQQQ\nthree\nqQq\nfour"
+        segments = _split_by_qqq(content)
+        assert len(segments) == 4
+        assert "one" in segments[0]
+        assert "two" in segments[1]
+        assert "three" in segments[2]
+        assert "four" in segments[3]
+
+    def test_qqq_with_surrounding_whitespace_still_matches(self):
+        content = "a\n  qqq  \nb"
+        segments = _split_by_qqq(content)
+        assert len(segments) == 2
+        assert "a" in segments[0]
+        assert "b" in segments[1]
+
+    def test_qqq_inside_word_not_matched(self):
+        """qqq inside a word (like 'qqq!') should not split."""
+        content = "Talking about qqq! in the middle of a sentence"
+        segments = _split_by_qqq(content)
+        assert len(segments) == 1
+        assert segments[0] == content
+
+    def test_consecutive_qqq_produces_empty_middle_segment(self):
+        """Two qqq lines in a row produce an empty segment between them."""
+        content = "one\nqqq\nqqq\ntwo"
+        segments = _split_by_qqq(content)
+        assert len(segments) == 3
+        # Middle segment is empty/whitespace; caller is responsible for dropping it
+        assert segments[1].strip() == ""
+        assert "one" in segments[0]
+        assert "two" in segments[2]
+
+    def test_leading_and_trailing_qqq(self):
+        """qqq at the very start or end produces empty edge segments."""
+        content = "qqq\nmiddle\nqqq"
+        segments = _split_by_qqq(content)
+        assert len(segments) == 3
+        assert segments[0].strip() == ""
+        assert "middle" in segments[1]
+        assert segments[2].strip() == ""
 
 
 class TestFrontmatter:
@@ -351,8 +425,8 @@ class TestEdgeCases:
         docs = [b for b in blocks if b.kind == "document"]
         assert any("Q&A (draft)" in (b.title or "") for b in docs)
 
-    def test_zzz_instruction_captured_in_metadata(self, tmp_path: Path):
-        """Full-parse flow: zzz line is stripped from content and stored in metadata."""
+    def test_zzz_instructions_captured_in_metadata(self, tmp_path: Path):
+        """Full-parse flow: zzz line is stripped from content and stored as a list in metadata."""
         note = tmp_path / "journal.md"
         note.write_text(
             "Had a thought about matryoshka embeddings\n"
@@ -365,7 +439,26 @@ class TestEdgeCases:
         entry = entries[0]
         assert "zzz" not in (entry.content or "")
         assert "matryoshka" in (entry.content or "")
-        assert entry.metadata.get("zzz_instruction") == "research this - find papers in my vault"
+        assert entry.metadata.get("zzz_instructions") == [
+            "research this - find papers in my vault"
+        ]
+
+    def test_multiple_zzz_instructions_in_one_block(self, tmp_path: Path):
+        """Each zzz line in a block becomes its own metadata entry."""
+        note = tmp_path / "journal.md"
+        note.write_text(
+            "Thinking about workstream routing\n"
+            "zzz: research this\n"
+            "zzz: also tag as openaugi/design\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "entry"]
+        assert len(entries) == 1
+        assert entries[0].metadata.get("zzz_instructions") == [
+            "research this",
+            "also tag as openaugi/design",
+        ]
 
     def test_zzz_only_block_skipped(self, tmp_path: Path):
         """A section containing only a zzz line produces no entry."""
@@ -387,8 +480,91 @@ class TestEdgeCases:
         entry_after = next(b for b in blocks_after if b.kind == "entry")
 
         assert entry_before.id != entry_after.id
-        assert entry_after.metadata.get("zzz_instruction") == "research this"
+        assert entry_after.metadata.get("zzz_instructions") == ["research this"]
         assert entry_after.content == "An idea about X"
+
+    def test_qqq_splits_a_note_without_h3(self, tmp_path: Path):
+        """A note with qqq markers and no H3 dates produces one block per qqq segment."""
+        note = tmp_path / "scratch.md"
+        note.write_text(
+            "First thought\nqqq\nSecond thought\nqqq\nThird thought\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "entry"]
+        assert len(entries) == 3
+        contents = sorted((e.content or "").strip() for e in entries)
+        assert contents == ["First thought", "Second thought", "Third thought"]
+
+    def test_qqq_subsplits_an_h3_section(self, tmp_path: Path):
+        """qqq markers inside an H3 date section split that section further."""
+        note = tmp_path / "daily-2026-04-08.md"
+        note.write_text(
+            "### 2026-04-08\nFirst thought of the day\nqqq\nSecond thought of the day\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [
+            b
+            for b in blocks
+            if b.kind == "entry" and b.metadata.get("parent_note_title") == "daily-2026-04-08"
+        ]
+        assert len(entries) == 2
+        # Both sub-blocks should inherit the H3 date
+        for entry in entries:
+            assert entry.metadata.get("h3_date") == "2026-04-08"
+
+    def test_qqq_and_zzz_combined(self, tmp_path: Path):
+        """A note mixing qqq splits and per-block zzz instructions."""
+        note = tmp_path / "journal.md"
+        note.write_text(
+            "First thought about X\n"
+            "zzz: research this\n"
+            "qqq\n"
+            "Second thought about Y\n"
+            "zzz: task — fix tomorrow\n"
+            "zzz: also log this\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = sorted(
+            (b for b in blocks if b.kind == "entry"),
+            key=lambda b: b.content or "",
+        )
+        assert len(entries) == 2
+        first, second = entries
+        assert (first.content or "").strip() == "First thought about X"
+        assert first.metadata.get("zzz_instructions") == ["research this"]
+        assert (second.content or "").strip() == "Second thought about Y"
+        assert second.metadata.get("zzz_instructions") == [
+            "task — fix tomorrow",
+            "also log this",
+        ]
+
+    def test_qqq_case_insensitive_in_parse_vault(self, tmp_path: Path):
+        """QQQ / qQq variants are all recognized as splitters."""
+        note = tmp_path / "mixed.md"
+        note.write_text("one\nQQQ\ntwo\nqQq\nthree\n", encoding="utf-8")
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "entry"]
+        assert len(entries) == 3
+
+    def test_note_with_no_delimiters_is_single_block(self, tmp_path: Path):
+        """A note with no H3 and no qqq produces one block for the whole content."""
+        note = tmp_path / "focused.md"
+        note.write_text(
+            "This is a focused note about one topic.\n"
+            "It has several lines.\n"
+            "But no headers and no qqq.\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "entry"]
+        assert len(entries) == 1
+        content = entries[0].content or ""
+        assert "focused note" in content
+        assert "several lines" in content
+        assert "no qqq" in content
 
     def test_non_utf8_file_skipped_gracefully(self, tmp_path: Path):
         """A Latin-1 file is skipped with a warning, not a crash."""
