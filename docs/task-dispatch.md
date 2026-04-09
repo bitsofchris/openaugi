@@ -90,8 +90,8 @@ clean clone.
 ```
 
 **Required frontmatter:**
-- `status: pending` — the watcher only picks up pending files
-- `workstream` — the writer owns this; the watcher does not default it
+- `status: pending` — the watcher only picks up pending files. Flows `pending → active → done` (or `needs-input`). **This is the dispatch lifecycle for the task file, not the same as `status/*` tag facet on blocks** — see [taxonomy.md § disambiguation](taxonomy.md#disambiguation--block-status-tag-vs-task-file-status-field).
+- `workstream` — the writer owns this; the watcher does not default it. Holds the **area slug without the `area/` prefix** (e.g., `openaugi`, not `area/openaugi`). See [taxonomy.md](taxonomy.md) for the full area list.
 
 **Optional frontmatter:**
 - `repo` — short name resolved via `OpenAugi/Repos.md` to a working directory
@@ -247,6 +247,7 @@ Save it, wait ~30s (the settle window), and it dispatches. Useful for mobile cap
 
 ## Related
 
+- [docs/taxonomy.md](taxonomy.md) — the taxonomy that defines `workstream` values and disambiguates the `status:` frontmatter field from the `status/*` tag facet on blocks
 - [src/openaugi/pipeline/task_watcher.py](../src/openaugi/pipeline/task_watcher.py) — the watcher implementation
 - [src/openaugi/templates/task-template.md](../src/openaugi/templates/task-template.md) — the authoritative task file format
 - [src/openaugi/templates/heartbeat-skill.md](../src/openaugi/templates/heartbeat-skill.md) — the writer side: how the heartbeat agent knows to emit task files
