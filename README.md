@@ -42,11 +42,16 @@ Obsidian Vault --> split --> extract --> embed --> SQLite --> MCP Server --> Cla
 
 **Query:** Claude gets MCP tools to search (semantic + keyword), traverse your knowledge graph, fetch full context, and understand how your ideas connect. It can also write notes back to your vault.
 
-**Run:** One command (`openaugi up`) does everything — ingest, file watcher, MCP server. Runs as a background service if you want.
+**Two entry points:**
 
-**Process:** `openaugi heartbeat` hands new blocks to a Claude Code agent that classifies them, chases connections, and honors inline `zzz:` instructions you write in your notes. Rules live in a markdown skill file you edit in Obsidian — no config system. See [Heartbeat](docs/GETTING_STARTED.md#heartbeat--process-new-blocks-with-a-claude-code-agent).
+```
+openaugi up     ← runs via Claude Desktop (ingest + file watcher + MCP server)
+openaugi agent  ← run in a terminal (heartbeat every 5m + task dispatch)
+```
 
-**Dispatch (optional):** `openaugi task-dispatch` picks up task files the heartbeat agent (or you) drop in `OpenAugi/Tasks/` and launches each one as a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>` to watch it work. See [Task Dispatch](docs/task-dispatch.md).
+**Process:** `openaugi agent` runs heartbeat on an interval — finds new blocks since the last run, hands them to a Claude Code agent that classifies them, dispatches tasks, and honors inline `zzz:` instructions you write in your notes. Rules live in a markdown skill file you edit in Obsidian. See [Getting Started](docs/GETTING_STARTED.md).
+
+**Dispatch:** The agent also watches `OpenAugi/Tasks/` — when heartbeat writes a task file, it launches a Claude Code agent in a named tmux session automatically. Attach any time with `tmux attach -t <task_id>`. See [Task Dispatch](docs/task-dispatch.md).
 
 ---
 
@@ -78,13 +83,12 @@ This started as a personal tool to make Claude useful with a large Obsidian vaul
 
 Most agent systems do brute-force retrieval — semantic search that stuffs the context window with raw documents. That's a magnifying glass in a warehouse. Agents need a map.
 
-OpenAugi implements a **navigational metadata layer** with three primitives:
+OpenAugi's data model is two tables — `blocks` and `links`:
 
-- **Data blocks** — raw content (documents, entries, tags) with deterministic identity
-- **Context blocks** — compiled summaries and indexes that answer "should the agent look here?" without touching raw content
-- **Links** — typed edges that let agents traverse connections they wouldn't find through search alone
+- **Blocks** — raw content (documents, entries, tags) with deterministic identity and `augi_tags` from heartbeat classification
+- **Links** — typed edges (split_from, tagged, links_to) that let agents traverse connections they wouldn't find through search alone
 
-The agent reads the map first, assesses relevance, drills into promising areas, then retrieves only what it needs. Five retrieval modes — semantic, keyword, graph traversal, time-based, direct lookup — routed by context block signals.
+Five retrieval modes — semantic, keyword, graph traversal, time-based, direct lookup — all operating on the same graph.
 
 **[Read the full data model](docs/data-model.md)** | Based on [Context Engineering is Index Design](https://bitsofchris.com/p/context-engineering-is-index-design)
 

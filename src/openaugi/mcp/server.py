@@ -2,6 +2,7 @@
 
 Read tools (readOnlyHint):
 - search: semantic (sqlite-vec KNN) + title (FTS5 title-only) + keyword (FTS5) + filters
+  (tag filter matches both user tags and augi_tags)
 - get_block: full block content by ID
 - get_blocks: batch fetch multiple blocks by ID (up to 50)
 - get_related: follow links from a block
@@ -186,7 +187,9 @@ def search(
                 continue
             if source and block.source != source:
                 continue
-            if tags and not set(tags).intersection(block.effective_tags):
+            if tags and not set(tags).intersection(
+                block.tags + block.metadata.get("augi_tags", [])
+            ):
                 continue
             if after and (block.timestamp or "") < after:
                 continue
@@ -215,7 +218,7 @@ def search(
     for b in blocks:
         if source and b.source != source:
             continue
-        if tags and not set(tags).intersection(b.effective_tags):
+        if tags and not set(tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
             continue
         if after and (b.timestamp or "") < after:
             continue
@@ -540,7 +543,7 @@ def recent(
     for b in blocks:
         if source and b.source != source:
             continue
-        if tags and not set(tags).intersection(b.effective_tags):
+        if tags and not set(tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
             continue
         results.append(_block_summary(b))
         if len(results) > k:
@@ -549,6 +552,27 @@ def recent(
     has_more = len(results) > k
     results = results[:k]
     return _json({"results": results, "count": len(results), "has_more": has_more})
+
+
+# ── Classification Tools ───────────────────────────────────────────
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@_release_conn
+def tag_block(block_id: str, augi_tags: list[str]) -> str:
+    """Stamp AI-classified tags onto a block.
+
+    Writes augi_tags to block.metadata["augi_tags"]. Overwrites any prior
+    classification — call once per block after classifying. Used by the
+    heartbeat agent to persist area/type/status classifications.
+
+    augi_tags: list of tag strings, e.g. ["area/work", "type/task", "status/active"]
+    """
+    store = _get_store()
+    found = store.update_block_metadata(block_id, {"augi_tags": augi_tags})
+    if not found:
+        return _json({"status": "error", "reason": f"Block {block_id} not found."})
+    return _json({"status": "ok", "block_id": block_id, "augi_tags": augi_tags})
 
 
 # ── Write Tools ────────────────────────────────────────────────────
@@ -869,7 +893,8 @@ def _block_summary(block) -> dict:
         "kind": block.kind,
         "title": block.title,
         "content": (block.content or "")[:500],
-        "tags": block.effective_tags,
+        "tags": block.tags,
+        "augi_tags": block.metadata.get("augi_tags", []),
         "timestamp": block.timestamp,
         "source": block.source,
     }
@@ -882,7 +907,8 @@ def _block_full(block) -> dict:
         "title": block.title,
         "content": block.content,
         "summary": block.summary,
-        "tags": block.effective_tags,
+        "tags": block.tags,
+        "augi_tags": block.metadata.get("augi_tags", []),
         "timestamp": block.timestamp,
         "occurred_at": block.occurred_at,
         "source": block.source,

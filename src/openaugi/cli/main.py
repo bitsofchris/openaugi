@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -20,6 +21,17 @@ app = typer.Typer(
     invoke_without_command=True,
 )
 console = Console()
+
+IgnoreSourceOption = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--ignore-source",
+        help=(
+            "fnmatch pattern on source_path to exclude "
+            "(repeatable, e.g. --ignore-source 'journals/HW/*')"
+        ),
+    ),
+]
 
 
 def _setup_logging(verbose: bool):
@@ -239,145 +251,6 @@ def ingest(
 
 
 @app.command()
-def enrich(
-    db: str | None = typer.Option(None, "--db", help="Database path"),
-    tags: bool = typer.Option(False, "--tags", help="Discover taxonomy and classify documents"),
-    apply: bool = typer.Option(
-        False, "--apply", help="Apply agent-generated rules from ~/.openaugi/enrich/"
-    ),
-    model: str | None = typer.Option(
-        None, "--model", "-m", help="Use API calls instead of agent (e.g. gpt-5.4-nano)"
-    ),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-):
-    """Enrich the knowledge base with tag taxonomy and classification.
-
-    Default: launches Claude agent to analyze your tags and classify documents.
-    The agent reads exported inventory files and writes rules + classifications.
-
-    --tags:   Export inventory → launch agent (or use --model for API calls)
-    --apply:  Apply agent-generated results from ~/.openaugi/enrich/
-
-    Workflow:
-      1. openaugi enrich --tags          # exports data, launches agent
-      2. (agent analyzes and writes results)
-      3. openaugi enrich --apply          # applies results to blocks
-    """
-    _setup_logging(verbose)
-
-    from openaugi.store.sqlite import SQLiteStore
-
-    if not tags and not apply:
-        console.print("[yellow]Specify a mode:[/yellow]")
-        console.print("  openaugi enrich --tags     # discover taxonomy + classify")
-        console.print("  openaugi enrich --apply    # apply agent results")
-        raise typer.Exit(1)
-
-    db_path = db or str(_default_db())
-    if not Path(db_path).exists():
-        console.print(f"[red]Database not found:[/red] {db_path}")
-        console.print("Run 'openaugi ingest' first.")
-        raise typer.Exit(1)
-
-    store = SQLiteStore(db_path)
-
-    try:
-        if apply:
-            _enrich_apply(store)
-        elif model:
-            _enrich_api(store, model)
-        else:
-            _enrich_agent(store)
-    finally:
-        store.close()
-
-
-def _enrich_agent(store):
-    """Default path: export inventory → launch claude agent."""
-    from openaugi.pipeline.enrich import export_inventory, launch_agent
-
-    console.print("\n[bold]Exporting inventory for agent...[/bold]")
-    paths = export_inventory(store)
-    enrich_dir = paths["enrich_dir"]
-
-    console.print(f"  Tags: {paths['tag_inventory']}")
-    console.print(f"  Docs: {paths['doc_inventory']}")
-
-    console.print("\n[bold]Launching Claude agent...[/bold]")
-    launched = launch_agent(enrich_dir)
-
-    if launched:
-        console.print("\n[bold green]Agent session complete.[/bold green]")
-        console.print("Run 'openaugi enrich --apply' to apply the results.")
-    else:
-        console.print("\n[yellow]Claude CLI not found.[/yellow]")
-        console.print("Option 1: Run the agent manually:")
-        console.print(f'  claude -p "$(cat {enrich_dir}/README.md)"')
-        console.print("\nOption 2: Use API calls instead:")
-        console.print("  openaugi enrich --tags --model gpt-5.4-nano")
-
-
-def _enrich_apply(store):
-    """Apply agent-generated results."""
-    from openaugi.pipeline.enrich import apply_results
-
-    console.print("\n[bold]Applying enrichment results...[/bold]")
-    stats = apply_results(store)
-
-    if stats["rules_applied"]:
-        console.print(f"  Tag rules applied: {stats['entries_updated']} entries updated")
-    else:
-        console.print("  [yellow]No tag_rules.json found[/yellow]")
-
-    if stats["docs_classified"] > 0:
-        console.print(f"  Documents classified: {stats['docs_classified']}")
-    else:
-        console.print("  [yellow]No doc_tags.json found[/yellow]")
-
-    console.print("\n[bold green]Done.[/bold green]")
-
-
-def _enrich_api(store, model: str):
-    """Fallback: use API calls directly."""
-    from openaugi.models.llms.openai import OpenAILLM
-    from openaugi.pipeline.tag_inference import infer_document_tags
-    from openaugi.pipeline.taxonomy import apply_tag_rules, discover_taxonomy
-
-    llm = OpenAILLM(model_name=model)
-
-    console.print(f"\n[bold]Discovering taxonomy...[/bold] (model: {model})")
-    rules = discover_taxonomy(store, llm)
-
-    # Show proposal
-    console.print("\n[bold]Proposed Taxonomy[/bold]\n")
-    for facet, values in rules.taxonomy.items():
-        if values:
-            console.print(f"  [cyan]{facet}/[/cyan]: {', '.join(values)}")
-
-    if rules.discovered_topics:
-        console.print(f"\n  Topics: {', '.join(rules.discovered_topics)}")
-
-    console.print(
-        f"\n  {len(rules.merge)} merge rules, {len(rules.ignore_patterns)} ignore patterns"
-    )
-
-    # Save and apply rules
-    rules_path = Path.home() / ".openaugi" / "tag_rules.json"
-    rules.save(rules_path)
-
-    console.print("\n[bold]Applying tag rules...[/bold]")
-    result = apply_tag_rules(store, rules)
-    console.print(f"  {result['blocks_updated']} entries updated")
-
-    # Classify documents
-    console.print(f"\n[bold]Classifying documents...[/bold] (model: {model})")
-    classify = infer_document_tags(store, llm, rules)
-    console.print(f"  {classify['classified']} docs classified")
-    console.print(f"  {classify['entries_updated']} entries updated (trickle-down)")
-
-    console.print("\n[bold green]Enrichment complete.[/bold green]")
-
-
 @app.command()
 def serve(
     db: str | None = typer.Option(None, "--db", help="Database path"),
@@ -552,6 +425,7 @@ def heartbeat(
         "--ingest",
         help="Run incremental ingest before processing (use when `up` is not running)",
     ),
+    ignore_source: IgnoreSourceOption = None,
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
     """Heartbeat — find new blocks and hand them to a Claude Code agent.
@@ -617,12 +491,14 @@ def heartbeat(
                 console.print(f"  [dim]Embeddings skipped: {e}[/dim]")
 
         # Step 2–4: find blocks, build prompt, spawn agent.
+        ignore = list(ignore_source or []) or config.get("heartbeat", {}).get("ignore_sources", [])
         try:
             result = run_heartbeat(
                 store=store,
                 vault_path=vault_path,
                 max_blocks=max_blocks,
                 dry_run=dry_run,
+                ignore_sources=ignore or None,
             )
         except FileNotFoundError as e:
             console.print(f"[red]{e}[/red]")
@@ -661,6 +537,132 @@ def heartbeat(
             raise typer.Exit(result["return_code"] or 1)
     finally:
         store.close()
+
+
+@app.command("agent")
+def agent_cmd(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    interval: int = typer.Option(5, "--interval", "-i", help="Heartbeat interval in minutes"),
+    max_blocks: int = typer.Option(
+        50, "--max-blocks", "-n", help="Max blocks per heartbeat batch"
+    ),
+    ingest: bool = typer.Option(
+        False,
+        "--ingest",
+        help="Run incremental ingest on each heartbeat cycle (use when `up` is not running)",
+    ),
+    ignore_source: IgnoreSourceOption = None,
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Heartbeat loop + task dispatch — the agent processing companion to `up`.
+
+    While `up` handles vault sync and the MCP server, `agent` handles processing:
+
+      1. Runs heartbeat every --interval minutes (default 5)
+      2. Watches OpenAugi/Tasks/ and dispatches pending tasks as Claude Code
+         agents in named tmux sessions
+
+    Assumes `openaugi up` is running and keeping the DB current.
+    Pass --ingest if `up` is not running.
+    """
+    import threading
+    import time
+
+    _setup_logging(verbose)
+
+    err = Console(stderr=True)
+
+    from openaugi.config import load_config
+    from openaugi.pipeline.heartbeat import run_heartbeat
+    from openaugi.pipeline.task_watcher import watch_tasks
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+
+    vault_path = path or config.get("vault", {}).get("default_path")
+    if not vault_path:
+        err.print("[red]No vault path specified.[/red]")
+        err.print("Use --path or run 'openaugi init' to set a default.")
+        raise typer.Exit(1)
+
+    db_path = db or str(_default_db())
+    ignore = list(ignore_source or []) or config.get("heartbeat", {}).get("ignore_sources", [])
+
+    err.print(f"[bold]Vault:[/bold] {vault_path}")
+    err.print(f"[bold]Heartbeat:[/bold] every {interval}m")
+    if ignore:
+        err.print(f"[bold]Ignoring sources:[/bold] {', '.join(ignore)}")
+
+    # Start task-dispatch in a background daemon thread
+    dispatch_thread = threading.Thread(
+        target=watch_tasks,
+        kwargs=dict(
+            vault_path=vault_path,
+            tasks_folder="OpenAugi/Tasks",
+            repos_note="OpenAugi/Repos.md",
+            poll_interval=5.0,
+            settle=30.0,
+        ),
+        daemon=True,
+        name="task-dispatch",
+    )
+    dispatch_thread.start()
+    err.print("[bold]Task dispatch:[/bold] watching OpenAugi/Tasks/\n")
+
+    # Heartbeat loop — runs in the main thread
+    while True:
+        store = SQLiteStore(db_path)
+        try:
+            if ingest:
+                from openaugi.pipeline.runner import run_layer0
+
+                exclude = config.get("vault", {}).get("exclude_patterns")
+                workers = config.get("vault", {}).get("max_workers", 4)
+                res = run_layer0(vault_path, store, exclude_patterns=exclude, max_workers=workers)
+                stats = res["stats"]
+                err.print(
+                    f"  Synced: {stats['total_blocks']} blocks "
+                    f"({res['blocks_added']} new, {res['blocks_removed']} removed)"
+                )
+                try:
+                    from openaugi.models import get_embedding_model
+                    from openaugi.pipeline.embed import run_embed
+
+                    model = get_embedding_model(config.get("models", {}).get("embedding"))
+                    count = run_embed(store, model)
+                    if count:
+                        err.print(f"  Embedded {count} blocks")
+                except Exception as e:
+                    err.print(f"  [dim]Embeddings skipped: {e}[/dim]")
+
+            try:
+                result = run_heartbeat(
+                    store=store,
+                    vault_path=vault_path,
+                    max_blocks=max_blocks,
+                    ignore_sources=ignore or None,
+                )
+            except FileNotFoundError as e:
+                err.print(f"[red]{e}[/red]")
+                raise typer.Exit(1) from None
+
+            if result["block_count"] == 0:
+                err.print(f"[dim]Heartbeat: nothing new. Next run in {interval}m.[/dim]")
+            elif result["return_code"] == 0:
+                err.print(
+                    f"[green]Heartbeat complete[/green] ({result['block_count']} blocks). "
+                    f"Next run in {interval}m."
+                )
+            else:
+                err.print(
+                    f"[yellow]Heartbeat agent exited {result['return_code']}.[/yellow] "
+                    f"Retrying same window next run in {interval}m."
+                )
+        finally:
+            store.close()
+
+        time.sleep(interval * 60)
 
 
 @app.command()

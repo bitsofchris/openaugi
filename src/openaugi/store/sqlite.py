@@ -276,6 +276,22 @@ class SQLiteStore:
         )
         self.conn.commit()
 
+    def update_block_metadata(self, block_id: str, updates: dict) -> bool:
+        """Merge `updates` into a block's metadata JSON. Returns True if block was found."""
+        row = self.conn.execute("SELECT metadata FROM blocks WHERE id = ?", (block_id,)).fetchone()
+        if row is None:
+            return False
+        import json
+
+        current = json.loads(row[0] or "{}")
+        current.update(updates)
+        self.conn.execute(
+            "UPDATE blocks SET metadata = ? WHERE id = ?",
+            (json.dumps(current), block_id),
+        )
+        self.conn.commit()
+        return True
+
     # ── Link CRUD ──────────────────────────────────────────────────
 
     def insert_link(self, link: Link) -> None:

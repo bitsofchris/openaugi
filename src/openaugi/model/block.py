@@ -77,14 +77,6 @@ class Block(BaseModel):
             self.content_hash = self.hash_content(self.content)
         return self
 
-    @property
-    def effective_tags(self) -> list[str]:
-        """Return computed_tags if available, otherwise source tags."""
-        computed = self.metadata.get("computed_tags")
-        if computed and isinstance(computed, list):
-            return computed
-        return self.tags
-
     def metadata_json(self) -> str:
         """Serialize metadata to JSON string for storage."""
         return json.dumps(self.metadata) if self.metadata else "{}"
