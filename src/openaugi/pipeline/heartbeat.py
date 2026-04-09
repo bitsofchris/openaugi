@@ -57,13 +57,30 @@ def find_new_blocks(
     store: SQLiteStore,
     since: str | None,
     max_blocks: int = DEFAULT_MAX_BLOCKS,
+    ignore_sources: list[str] | None = None,
 ) -> list[Block]:
     """Fetch entry blocks created since the last heartbeat, oldest first.
 
     Capped at `max_blocks` to keep prompts bounded. If more exist, the
     caller should surface that so the user can rerun or raise the cap.
+
+    `ignore_sources` is a list of fnmatch glob patterns matched against each
+    block's `source_path` metadata field (relative vault path). Blocks whose
+    source matches any pattern are silently excluded.
+    Example: ["journals/HW/*", "private/*"]
     """
-    return store.get_blocks_created_since(since=since, kind="entry", limit=max_blocks)
+    import fnmatch
+
+    blocks = store.get_blocks_created_since(since=since, kind="entry", limit=max_blocks)
+    if ignore_sources:
+        blocks = [
+            b
+            for b in blocks
+            if not any(
+                fnmatch.fnmatch(b.metadata.get("source_path", ""), pat) for pat in ignore_sources
+            )
+        ]
+    return blocks
 
 
 def build_prompt(
@@ -101,6 +118,7 @@ Follow it.
     - mcp__openaugi__get_related       — follow links from/to a block
     - mcp__openaugi__traverse          — multi-hop graph walk
     - mcp__openaugi__recent            — recent blocks
+    - mcp__openaugi__tag_block         — stamp area/type/status classification onto a block
     - mcp__openaugi__list_streams / get_stream_context — workstream CRUD
 
 Use them to chain decisions: if block 1 surfaces a connection, let that
@@ -183,6 +201,7 @@ def launch_agent(prompt: str) -> int:
             "mcp__openaugi__get_related",
             "mcp__openaugi__traverse",
             "mcp__openaugi__recent",
+            "mcp__openaugi__tag_block",
             "mcp__openaugi__list_streams",
             "mcp__openaugi__get_stream_context",
         ]
@@ -201,6 +220,7 @@ def run_heartbeat(
     vault_path: str | Path,
     max_blocks: int = DEFAULT_MAX_BLOCKS,
     dry_run: bool = False,
+    ignore_sources: list[str] | None = None,
 ) -> dict:
     """Run one heartbeat cycle.
 
@@ -225,7 +245,9 @@ def run_heartbeat(
 
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     since = get_last_heartbeat()
-    blocks = find_new_blocks(store, since=since, max_blocks=max_blocks)
+    blocks = find_new_blocks(
+        store, since=since, max_blocks=max_blocks, ignore_sources=ignore_sources
+    )
 
     today = datetime.now(UTC).strftime("%Y-%m-%d")
     heartbeat_log = vault / HEARTBEAT_LOG_RELATIVE / f"{today}.md"

@@ -38,15 +38,32 @@ Interactive setup — choose embedding model (local or OpenAI), set API key if n
 
 ## Run
 
-```bash
-openaugi up
-```
+OpenAugi has two entry points that run alongside each other:
 
-That's it. `up` does everything:
+**1. `openaugi up` — data + MCP (run via Claude Desktop)**
+
+Add to your Claude Desktop MCP config (see [Register with Claude](#register-with-claude)) and it starts automatically. Does three things:
 
 1. **Syncs your vault** — incremental ingest (skips unchanged files via content hash)
 2. **Starts file watcher** — watches for `.md` changes, debounces (30s default), re-ingests automatically
-3. **Starts MCP server** — stdio transport for Claude Desktop/Code
+3. **Starts MCP server** — stdio transport so Claude can query your vault
+
+**2. `openaugi agent` — heartbeat + task dispatch (run in a terminal)**
+
+```bash
+openaugi agent
+```
+
+Runs alongside `up` in a terminal window. Does two things:
+
+1. **Heartbeat every 5 minutes** — finds new blocks, hands them to a Claude Code agent that classifies, chases connections, and honors `zzz:` instructions
+2. **Task dispatch** — watches `OpenAugi/Tasks/` and launches pending task files as Claude Code agents in named tmux sessions
+
+```bash
+openaugi agent --interval 10              # run heartbeat every 10 minutes
+openaugi agent --ignore-source 'HW/*'    # skip blocks from this source path pattern
+openaugi agent --ingest                  # run ingest too (if `up` is not running)
+```
 
 Embedding is attempted with your configured model. If it fails (no API key, model unavailable), blocks are saved without embeddings and retried on the next watcher cycle.
 
@@ -56,6 +73,8 @@ You can also run the pieces separately:
 openaugi ingest            # one-off ingest without serving
 openaugi serve             # MCP server only
 openaugi watch             # file watcher only
+openaugi heartbeat         # one-shot heartbeat (useful for testing)
+openaugi task-dispatch     # task dispatch only
 ```
 
 ## Register with Claude
@@ -88,15 +107,25 @@ The MCP server supports HTTP transport with OAuth authentication for remote acce
 
 ## CLI Reference
 
+### Daily use (two entry points)
+
+| Entry point | How it runs | What it does |
+|-------------|-------------|--------------|
+| `openaugi up` | Claude Desktop MCP config | Vault sync + file watcher + MCP server |
+| `openaugi agent` | One terminal window | Heartbeat every 5m + task dispatch |
+
+### All commands
+
 | Command | What |
 |---------|------|
 | `openaugi init` | Configure embedding model, API key, vault path |
-| `openaugi up` | MCP server + file watcher (the daily driver) |
-| `openaugi ingest` | Run full Layer 0 + Layer 1 pipeline |
+| `openaugi up` | Ingest + file watcher + MCP server (run via Claude Desktop) |
+| `openaugi agent` | Heartbeat loop + task dispatch (run in terminal alongside `up`) |
+| `openaugi heartbeat` | One-shot heartbeat (useful for testing/debugging) |
+| `openaugi task-dispatch` | Task dispatch only (standalone, no heartbeat loop) |
+| `openaugi ingest` | One-off ingest without serving |
 | `openaugi serve` | MCP server only (stdio or HTTP) |
-| `openaugi watch` | File watcher only (incremental ingest on vault changes) |
-| `openaugi heartbeat` | One-shot: find new blocks → hand to Claude Code agent (add `--ingest` if `up` not running) |
-| `openaugi task-dispatch` | Watch `OpenAugi/Tasks/` and launch pending tasks as Claude Code agents in tmux |
+| `openaugi watch` | File watcher only |
 | `openaugi search "query"` | Search from terminal (semantic or `--keyword`) |
 | `openaugi hubs` | Top connected notes by link count |
 | `openaugi status` | Block/link/embedding counts |
@@ -107,9 +136,10 @@ The MCP server supports HTTP transport with OAuth authentication for remote acce
 `openaugi heartbeat` is a "dumb script, smart agent" loop for reviewing what
 you've captured since the last run. The Python side finds entry blocks added
 since the last heartbeat and spawns a Claude Code session with your OpenAugi
-MCP tools. The agent classifies, looks up connections, follows any inline
-`zzz:` instructions you wrote, and writes a log. One command, no config
-system — the rules live in a markdown file you edit by hand.
+MCP tools. The agent classifies each block (`area/`, `type/`, `status/` tags
+written back to the block via `tag_block`), dispatches actionable items as
+task files, and writes an audit log. One command, no config system — the
+rules live in a markdown file you edit by hand.
 
 ### One-time setup: write the skill file
 
@@ -120,19 +150,20 @@ command fails loudly if it's missing. A minimal example:
 ```markdown
 # Heartbeat Skill
 
-## Workstreams
-- openaugi — the tool, the project, the code
-- work — day job
-- self — journal, reflection, life
+## Areas (customize for your vault)
+- area/openaugi — the tool, the project, the code
+- area/work — day job
+- area/self — journal, reflection, life
 
 ## Defaults (when no zzz: instruction)
-- Classify by folder if the signal is clear
-- Tag with facets: type/idea, type/task, type/insight
-- Unsure? Tag and move on. Don't block.
+- Classify by folder if the signal is clear (path beats content)
+- type/task for actionable items only — everything else just gets an area
+- Unsure? Tag what you're confident about and flag the rest.
 
 ## What to write back
-- Heartbeat log at OpenAugi/Heartbeat/YYYY-MM-DD.md summarizing
-  blocks processed, classifications, connections, actions taken.
+- Always call tag_block to stamp the classification onto the block.
+- Write task files to OpenAugi/Tasks/ for anything actionable.
+- Heartbeat log at OpenAugi/Heartbeat/YYYY-MM-DD.md.
 - Never modify raw source notes.
 ```
 
@@ -147,14 +178,14 @@ content and attaches them to the block as metadata — the heartbeat prompt then
 surfaces them per-block so the agent honors each one.
 
 ```markdown
-Had a thought about matryoshka embeddings for multi-res matching
-zzz research this more - find papers in my vault
-
 Need to fix the README onboarding flow before Thursday
 zzz task - do this in the openaugi repo
 
 Feeling stuck on the direction of openaugi today
-zzz just log this, tag personal/reflection
+zzz just log this, tag area/self
+
+Had a thought about matryoshka embeddings for multi-res matching
+zzz task - research this, find papers, write a summary note
 ```
 
 Adding or editing a `zzz` line changes the block's content hash, so the next
@@ -196,6 +227,7 @@ These are the tools Claude gets when connected to OpenAugi:
 | `traverse` | Multi-hop graph walk |
 | `get_context` | Compound search -> deduplicate -> MMR re-rank -> expand via links |
 | `recent` | Recently created blocks |
+| `tag_block` | Stamp AI-classified `augi_tags` onto a block (used by heartbeat agent) |
 
 ### Write Tools
 
