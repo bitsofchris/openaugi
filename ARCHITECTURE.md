@@ -49,6 +49,7 @@ src/openaugi/
 │   ├── enrich.py          # Tag enrichment orchestrator (export, agent, apply)
 │   ├── taxonomy.py        # Tag rules engine (discover, normalize, apply)
 │   ├── tag_inference.py   # Batched document classification via LLM
+│   ├── heartbeat.py       # Heartbeat orchestrator — new blocks → Claude Code agent session
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
 │   └── watcher.py         # File watcher — debounced incremental ingest on vault changes
 ├── store/
@@ -65,7 +66,7 @@ src/openaugi/
 │   ├── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
 │   └── stream_manager.py  # StreamManager — workstream CRUD (OpenAugi/Streams/)
 ├── cli/
-│   └── main.py            # typer CLI (up, ingest, serve, watch, search, hubs, status, service)
+│   └── main.py            # typer CLI (up, ingest, serve, watch, heartbeat, search, hubs, status, service)
 └── config.py              # TOML config loader + .env loader
 ```
 
@@ -116,6 +117,27 @@ openaugi compile → pipeline/compile.py
   → rendered to OpenAugi/Compiled/ in vault (INDEX.md, concepts/, hubs/)
   → auto-runs Layer 0 on `openaugi up`
 ```
+
+### Heartbeat (dumb script, smart agent)
+
+See [docs/plans/heartbeat.md](docs/plans/heartbeat.md) for the full design.
+
+```
+openaugi heartbeat → pipeline/heartbeat.py
+  → run incremental ingest (unless --skip-ingest)
+  → read ~/.openaugi/last_heartbeat timestamp
+  → store.get_blocks_created_since(since) → entry blocks (capped at --max-blocks)
+  → build prompt: skill file ref + per-block content + zzz_instruction metadata
+  → spawn `claude -p <prompt>` with openaugi MCP tools allowed
+  → agent writes OpenAugi/Heartbeat/YYYY-MM-DD.md
+  → on success: advance ~/.openaugi/last_heartbeat
+```
+
+The Python side is deliberately dumb: it does not classify. The reasoning
+lives in `<vault>/OpenAugi/heartbeat-skill.md`, a user-maintained markdown
+file. Per-block `zzz:` lines are extracted by the vault adapter into
+`metadata["zzz_instruction"]` (and stripped from the clean content) so the
+agent can honor them as per-block directives.
 
 ### Enrich (tag taxonomy)
 
@@ -173,6 +195,7 @@ Embedding is attempted with the user's configured model. If it fails, blocks are
 | `openaugi serve` | MCP server only (stdio or HTTP) |
 | `openaugi watch` | File watcher only (incremental ingest on vault changes) |
 | `openaugi up` | Both in one process |
+| `openaugi heartbeat` | One-shot: ingest → find new blocks → spawn Claude Code agent to process them |
 
 ### Transports
 
@@ -189,6 +212,7 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
 - [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
+- [docs/plans/heartbeat.md](docs/plans/heartbeat.md) — Heartbeat: dumb script spawns a Claude Code agent session to process new blocks
 - [docs/plans/capture-tag-stream-loop.md](docs/plans/capture-tag-stream-loop.md) — Phase 4: capture → tag → stream incremental pipeline
 - [docs/plans/from-capture-to-jarvis.md](docs/plans/from-capture-to-jarvis.md) — Longer-horizon vision (layers 1–4)
 - [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features

@@ -687,6 +687,31 @@ class SQLiteStore:
         rows = self.conn.execute(query, params).fetchall()
         return [_row_to_block(r) for r in rows]
 
+    def get_blocks_created_since(
+        self,
+        since: str | None,
+        kind: str = "entry",
+        limit: int = 500,
+    ) -> list[Block]:
+        """Get blocks of a given kind created since an ISO timestamp.
+
+        Used by the heartbeat pipeline to find entries added since the
+        previous run. Pass `since=None` to get all blocks of the kind
+        (first run).
+        """
+        query = """SELECT id, kind, content, summary, embedding, source, title,
+                          tags, timestamp, occurred_at, metadata, content_hash, created_at
+                   FROM blocks
+                   WHERE kind = ?"""
+        params: list = [kind]
+        if since:
+            query += " AND created_at > ?"
+            params.append(since)
+        query += " ORDER BY created_at ASC LIMIT ?"
+        params.append(limit)
+        rows = self.conn.execute(query, params).fetchall()
+        return [_row_to_block(r) for r in rows]
+
     def get_orphan_block_ids(self, kind: str = "entry") -> list[str]:
         """Get block IDs with zero inbound AND zero outbound links (excluding split_from)."""
         rows = self.conn.execute(
