@@ -5,9 +5,9 @@ description: Features deferred from M0 — task system, additional MCP tools, le
 
 # Future Work — Deferred from M0
 
-*Updated: 2026-03-24*
+*Updated: 2026-04-08*
 
-Features and systems that exist in augi-engine-v1 or were designed in earlier plans but are not part of the M0 port. Tracked here so nothing is lost.
+Features and systems that exist in augi-engine-v1 or were designed in earlier plans but are not part of the M0 port. Tracked here so nothing is lost. For the active roadmap (Phases 2–7), see [m2-feature-roadmap.md](m2-feature-roadmap.md).
 
 ---
 
@@ -36,7 +36,7 @@ v1 has a full task scanning and thread management system. This is a personal wor
 | v1 Tool | Why Deferred | When |
 |---|---|---|
 | `search_hubs` | Folded into `search` + `traverse` in v5 tool design | M0 (covered by new tools) |
-| `get_summary` | Hub summaries deferred to M2 | M2 |
+| `get_summary` | Free-SQL hub summaries shipped in Phase 2 via `get_index` + context blocks. LLM hub narratives pending Phase 4. | Phase 4 |
 | `reload_index` | Automatic in v5 (detect DB changes) | M0 (implicit) |
 
 ---
@@ -60,30 +60,32 @@ Scheduled enrichment passes that read the store, apply reasoning through a frame
 
 ---
 
-## Layer 2 Processing (M2)
+## Layer 2 Processing (Phase 4)
+
+Free-SQL hub summaries shipped as Phase 2 context blocks. LLM-powered pieces remain:
 
 | Feature | What It Does |
 |---|---|
 | Entity extraction | LLM extracts entities from entries → extraction blocks + links |
-| Hub summaries | LLM summarizes top-N hubs → summary blocks |
+| Hub narratives | LLM summarizes top-N hubs → `context_type=hub_narrative` blocks (themes, tensions, decisions) |
 | Clustering | HDBSCAN on embeddings → cluster blocks + member_of links |
 | Block summaries | 16-word self-description per entry block |
 | Ontology | YAML config constraining entity types for extraction |
 
 ---
 
-## Sync Engine (M3)
+## Sync Engine
+
+File watcher + daemon mode shipped in M1.5 (`openaugi watch`, `openaugi up`, launchd service). Remaining:
 
 | Feature | What It Does |
 |---|---|
-| File watcher | Watch vault for changes, auto-ingest |
-| Daemon mode | `openaugi daemon` runs pipeline on schedule |
-| API source scheduling | Periodic sync from Readwise, etc. |
-| Config YAML | Source definitions, schedules, credentials |
+| API source scheduling | Periodic sync from Readwise, etc. (Phase 3 adapters) |
+| Config YAML | Per-source schedules and credentials beyond the current `config.toml` (Phase 3) |
 
 ---
 
-## Temporal Intelligence (M3)
+## Temporal Intelligence (Phase 5)
 
 | Feature | What It Does |
 |---|---|
@@ -95,14 +97,14 @@ Scheduled enrichment passes that read the store, apply reasoning through a frame
 
 ---
 
-## Additional Adapters (M1+)
+## Additional Adapters
+
+ChatGPT, Readwise, Research output, and a LlamaIndex bridge are planned for Phase 3 — see [phase3-adapters.md](phase3-adapters.md). Beyond that:
 
 | Adapter | Source | Priority |
 |---|---|---|
-| ChatGPT | JSON export → document blocks → turn-level entries | M1 |
-| Claude | JSON export → same pattern | M1 |
-| Readwise | API → highlight-level entries | M1-M2 |
-| Google Drive | Download → markdown conversion | M2+ |
+| Claude export | JSON export → same pattern as ChatGPT | Post-Phase 3 |
+| Google Drive | Download → markdown conversion | Post-Phase 3 |
 | Notion | Export → markdown | Community |
 | Pocket/Instapaper | API → article entries | Community |
 
@@ -110,10 +112,9 @@ Scheduled enrichment passes that read the store, apply reasoning through a frame
 
 ## Other Deferred Items
 
-- **Adapter protocol / registry / entry points** — extract from concrete implementations when second source arrives (M1)
-- **Config wizard / onboarding CLI** — interactive first-time setup
+- **Adapter protocol / registry / entry points** — to be defined in Phase 3 alongside the first non-vault adapters
+- **Config wizard / onboarding CLI** — `openaugi init` shipped in M1.5; full multi-source wizard is Phase 7
 - **Observation lifecycle** — living blocks that track recurring patterns, supersede older versions
-- **Context blocks** — curated collections assembled for a purpose
 - **Deployment modes** — Docker, hosted/managed, REST API
 - **Obsidian plugin** — direct integration instead of MCP
 - **Mobile capture** — quick-capture via CLI or API
