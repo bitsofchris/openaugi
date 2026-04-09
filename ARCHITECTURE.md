@@ -16,8 +16,8 @@ blocks (id, kind, content, summary, embedding, source, title, tags, timestamp, m
 links  (from_id, to_id, kind, weight, metadata)  — PK: (from_id, to_id, kind)
 ```
 
-**Block kinds:** document, entry, tag, context (Phase 2)
-**Link kinds:** split_from, tagged, links_to, summarizes (Phase 2)
+**Block kinds:** document, entry, tag
+**Link kinds:** split_from, tagged, links_to
 
 Everything is a block. Structure lives in the links, not in the schema.
 
@@ -29,7 +29,6 @@ See [docs/data-model.md](docs/data-model.md) for the full data model philosophy 
 |-------|------|------|----------|
 | **Layer 0** | FREE | Split, tag/link extract, FTS, dedup hash | Python + SQLite |
 | **Layer 1** | ~$0 | Embed (local default), hub scoring (SQL) | sentence-transformers (local) |
-| **Compile** | FREE | Context blocks: hub summaries, concept pages, index, health | SQL + templates |
 | **Enrich** | FREE or $ | Tag taxonomy + document classification | Agent (free) or LLM API |
 
 ## Module Map
@@ -51,6 +50,7 @@ src/openaugi/
 │   ├── tag_inference.py   # Batched document classification via LLM
 │   ├── heartbeat.py       # Heartbeat orchestrator — new blocks → Claude Code agent session
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
+│   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
 │   ├── watcher.py         # File watcher — debounced incremental ingest on vault changes
 │   └── task_watcher.py    # Task dispatch — OpenAugi/Tasks/ → tmux-hosted Claude sessions (optional)
 ├── store/
@@ -103,20 +103,8 @@ Claude → MCP tool call → server.py
                  → MMR re-rank
                  → expand via links
   → recent: recently created blocks
-  → get_index: compiled navigational map (context blocks)
   → write_document / write_thread / write_snip: save notes to vault
   → list_streams / get_stream_context / make_stream / update_stream: workstream CRUD
-```
-
-### Compile
-
-```
-openaugi compile → pipeline/compile.py
-  → Layer 0: hub summaries, recent activity, index (SQL aggregation)
-  → Layer 1: concept pages, graph health (SQL + templates)
-  → context blocks stored as Block(kind=context, source=compiled)
-  → rendered to OpenAugi/Compiled/ in vault (INDEX.md, concepts/, hubs/)
-  → auto-runs Layer 0 on `openaugi up`
 ```
 
 ### Heartbeat (dumb script, smart agent)
@@ -142,6 +130,13 @@ file (template: `src/openaugi/templates/heartbeat-skill.md`). Per-block
 the clean content) so the agent can honor each as an independent per-block
 directive. Blocks are split on `###` headers and `qqq` markers
 (case-insensitive) — see [docs/plans/zzz-instructions.md](docs/plans/zzz-instructions.md).
+
+The tag taxonomy the skill applies — `area/*` evolution streams, `type/task`
+for actionable items, and `status/*` task states — is documented in
+[docs/taxonomy.md](docs/taxonomy.md). That doc is the single source of truth
+for what `workstream:` means in task-dispatch frontmatter and for the
+disambiguation between the block-level `status/*` tag facet and the
+task-file `status:` frontmatter lifecycle.
 
 ### Task Dispatch (optional add-on)
 
@@ -220,7 +215,7 @@ Embedding is attempted with the user's configured model. If it fails, blocks are
 |---------|------|
 | `openaugi serve` | MCP server only (stdio or HTTP) |
 | `openaugi watch` | File watcher only (incremental ingest on vault changes) |
-| `openaugi up` | Both in one process |
+| `openaugi up` | Ingest + watcher + MCP server in one process |
 | `openaugi heartbeat` | One-shot: ingest → find new blocks → spawn Claude Code agent to process them |
 | `openaugi tasks watch` | Optional: watch `OpenAugi/Tasks/` for pending task files and launch them in named tmux sessions ([docs/task-dispatch.md](docs/task-dispatch.md)) |
 

@@ -1,7 +1,6 @@
 """OpenAugi MCP Server — query + write tools for Claude.
 
 Read tools (readOnlyHint):
-- get_index: START HERE — compiled navigational map of the knowledge graph
 - search: semantic (sqlite-vec KNN) + title (FTS5 title-only) + keyword (FTS5) + filters
 - get_block: full block content by ID
 - get_blocks: batch fetch multiple blocks by ID (up to 50)
@@ -550,46 +549,6 @@ def recent(
     has_more = len(results) > k
     results = results[:k]
     return _json({"results": results, "count": len(results), "has_more": has_more})
-
-
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
-@_release_conn
-def get_index() -> str:
-    """Get the navigational index of the knowledge graph.
-
-    START HERE. This returns the compiled map of the user's knowledge base:
-    top hubs (most connected topics), recent activity, and graph health.
-    Read this first, then use search/get_block/get_related to drill into
-    specific topics.
-
-    Returns the index context block. If no compiled index exists, returns
-    a message suggesting the user run 'openaugi compile'.
-    """
-    store = _get_store()
-    blocks = store.get_blocks_by_kind("context", limit=200)
-
-    index_block = None
-    for b in blocks:
-        if b.metadata.get("context_type") == "index":
-            index_block = b
-            break
-
-    if not index_block:
-        return _json(
-            {
-                "error": "No compiled index found. "
-                "Run 'openaugi compile' to build the navigational layer.",
-                "hint": "The index provides a map of hubs, recent activity, and graph health.",
-            }
-        )
-
-    return _json(
-        {
-            "content": index_block.content,
-            "context_block_count": index_block.metadata.get("context_block_count", 0),
-            "compiled_at": index_block.metadata.get("compiled_at"),
-        }
-    )
 
 
 # ── Write Tools ────────────────────────────────────────────────────

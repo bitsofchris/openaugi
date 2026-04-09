@@ -86,8 +86,9 @@ def build_prompt(
 Read your skill file first:
   {skill_file}
 
-It contains the workstream list, default classification rules, task/research
-handling, and what to write back. Follow it.
+It contains the area taxonomy (area/type/status facets), default
+classification rules, task/research handling, and what to write back.
+Follow it.
 
 ## Context
 
@@ -100,7 +101,6 @@ handling, and what to write back. Follow it.
     - mcp__openaugi__get_related       — follow links from/to a block
     - mcp__openaugi__traverse          — multi-hop graph walk
     - mcp__openaugi__recent            — recent blocks
-    - mcp__openaugi__get_index         — navigational map
     - mcp__openaugi__list_streams / get_stream_context — workstream CRUD
 
 Use them to chain decisions: if block 1 surfaces a connection, let that
@@ -183,7 +183,6 @@ def launch_agent(prompt: str) -> int:
             "mcp__openaugi__get_related",
             "mcp__openaugi__traverse",
             "mcp__openaugi__recent",
-            "mcp__openaugi__get_index",
             "mcp__openaugi__list_streams",
             "mcp__openaugi__get_stream_context",
         ]

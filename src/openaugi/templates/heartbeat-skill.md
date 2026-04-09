@@ -1,6 +1,6 @@
 ---
 name: heartbeat
-description: Rules for the OpenAugi heartbeat agent. Classifies new blocks against your workstreams, honors per-block `zzz:` instructions, writes task files for the task watcher to launch in tmux, and records a heartbeat log. Copy this file to `<vault>/OpenAugi/heartbeat-skill.md` and customize the Workstreams section for your own vault.
+description: Rules for the OpenAugi heartbeat agent. Classifies new blocks along the three-facet taxonomy (area/type/status — see docs/taxonomy.md), honors per-block `zzz:` instructions, writes task files for the task watcher to launch in tmux, and records a heartbeat log. Copy this file to `<vault>/OpenAugi/heartbeat-skill.md` and customize the `area/*` list for your own vault.
 ---
 
 # Heartbeat
@@ -21,32 +21,65 @@ You never touch the user's raw notes. Everything you generate lives under `OpenA
 
 For each block in the batch:
 
-1. **Classify the workstream** (deterministic-first, then content-based).
+1. **Classify along taxonomy facets** (area → type → status-if-task). Path first, content second. See the Taxonomy section below.
 2. **Honor every `zzz:` instruction** on the block, each one independently.
 3. **Record an entry in the heartbeat log** with the actions you took and any flags for review.
 
 Use the openaugi MCP tools to chain decisions — if block 1 surfaces a connection, let that inform block 2. Notice related blocks in the batch and handle them together when it helps.
 
-## Workstreams
+## Taxonomy
 
-**Customize this list for your own vault.** Five to ten top-level workstreams works well — these are the coarsest "where does this live" partitions. Examples to get you started:
+Every classified block gets tagged along up to three facets. The point is retrieval: enabling queries the graph can't answer on its own — "show me the evolution of X over time" (`area/*`) and "show me all active tasks" (`type/task` + `status/active`).
 
-- **self** — journal, reflection, personal life
-- **reference** — memories, quotes, facts, things to keep findable
-- *(add your own — projects, jobs, hobbies, recurring themes)*
+See `docs/taxonomy.md` in the openaugi repo for the full rationale and — critically — the disambiguation between the block-level `status/*` tag facet and the task-file `status:` frontmatter field. **They are not the same thing.**
 
-Edit this section as your workstreams evolve. The agent reads this file every run, so changes take effect immediately.
+**Rule: one area, one type (if applicable), one status (tasks only).** Don't stack.
+
+### `area/*` — evolution streams
+
+**Customize this list for your own vault.** The stories you're actively following over time. Five or fewer. Add one when you catch yourself wanting its timeline; delete one when you stop caring.
+
+Examples to get you started (replace with your own):
+
+- `area/self` — reflections, journal
+- `area/work` — your day job or primary professional stream
+- *(add your own — your active projects, a learning stream, a content stream)*
+
+Areas can overlap when two stories genuinely want the same block. Prefer one; allow two when obvious.
+
+Edit this section as your areas evolve. The agent reads this file every run, so changes take effect immediately.
+
+### `type/*` — only for things with a lifecycle
+
+One value in the default:
+
+- `type/task` — an actionable item
+
+Everything else is "a captured thought." The graph handles what it is (idea, insight, quote, reflection) better than a tag could. Don't invent `type/idea` or `type/insight` unless you actually filter on them and find the graph insufficient.
+
+### `status/*` — only on `type/task` blocks
+
+- `status/active` — working on it now
+- `status/parked` — looked at, not doing yet
+- `status/done` — completed
+
+Absence = queued, not yet triaged. That's a fine default.
+
+**Note:** this is the block-level tag facet, not the `status:` frontmatter field in task files. Task-file `status:` (`pending/active/done/needs-input`) is the watcher's dispatch lifecycle for files under `OpenAugi/Tasks/`. Different object, different lifecycle. See `docs/taxonomy.md` for the full disambiguation.
 
 ## Classification defaults
 
-When a block has no explicit `zzz:` workstream instruction, classify it:
+When a block has no explicit `zzz:` override, apply these rules in order. **Path beats tags beats content beats guess** — cheapest, most reliable signals first.
 
-1. **By source path.** If the block comes from a folder that clearly maps to a workstream, use that. For example, a block from `journals/work/` → workstream = `work`. Edit the rules below to match your folder layout.
-   - `OpenAugi/` → the workstream that owns this tool/setup
-   - Daily note / catch-all journal → classify by content
-2. **By tags.** If the block has facet tags like `type/idea`, `type/task`, `type/insight`, use them as signals.
-3. **By content.** If neither path nor tags are decisive, read the content and pick the best-fit workstream.
-4. **Unsure?** Tag it and move on. Don't block on ambiguity — flag it in the log for review.
+1. **Area from source path.** If the block comes from a folder that clearly maps to an area, use it and stop. Customize the mapping for your folder layout:
+   - `journals/work/` → `area/work`
+   - `OpenAugi/` → the area that owns this tool/setup
+   - Daily notes and catch-all journals → fall through to content
+2. **Respect existing facet tags.** If the block already carries `area/*` or `type/*` tags, trust them unless clearly wrong.
+3. **Type from content shape.** Is this an actionable task? Tag `type/task`. If not, no type tag — the graph handles topic and theme better than tags do.
+4. **Area from content, as a last resort.** Only when path and tags aren't decisive.
+5. **Status only on tasks, and only when obvious.** Default to no status tag. Never guess `parked` or `done`. The heartbeat does not modify source blocks — this classification is recorded in the heartbeat log, not written back to the note.
+6. **Unsure? Tag what you're confident about and flag the rest.** One solid tag beats three weak ones. Ambiguous blocks go to the log for your review.
 
 ## Repos map for task dispatch
 
@@ -141,8 +174,8 @@ something manually (testing, approvals, deploys). -->
 ```
 
 **Notes on the frontmatter:**
-- `status: pending` is required — the watcher only picks up pending files.
-- `workstream` is required — the watcher does not default this anymore; if you leave it off the task is logged un-scoped.
+- `status: pending` is required — the watcher only picks up pending files. This is the **task-file dispatch lifecycle** (`pending → active → done` or `needs-input`), not the block-level `status/*` tag facet. See `docs/taxonomy.md`.
+- `workstream` is required — this is the **area slug without the `area/` prefix** (e.g., `openaugi`, not `area/openaugi`). Fill it from the block's classified area. The watcher does not default it; if you leave it off the task is logged un-scoped.
 - `repo` is optional. Omit it for tasks that run in the vault (no code repo).
 - The watcher adds `task_id`, `created`, and `tmux_session` during hydration. You do not set them.
 - Use `working_dir: /absolute/path` instead of `repo` only if you need an absolute path the user hasn't added to `OpenAugi/Repos.md`.
@@ -192,8 +225,8 @@ Write the log to the path the Python side told you (typically `OpenAugi/Heartbea
 
 ### Block 1 — "<first ~60 chars of content>"
 - **Source:** <source path>
-- **Workstream:** <slug>
-- **Tags:** <tag list or "(none)">
+- **Classification:** `area/<x>`[, `type/task`[, `status/<y>`]] or "(unclassified — flagged)"
+- **Other tags:** <any non-facet tags on the block, or "(none)">
 - **User instructions:** <list each `zzz:` instruction, or "(none)">
 - **Connections found:** <wiki links to related blocks from `openaugi:search` / `get_context`, or "(none)">
 - **Actions:**
@@ -211,5 +244,5 @@ Include a "Connections found" bullet even when empty so the user can see you loo
 - **Never launch subprocesses.** You have no `Bash` tool. Tasks are dispatched by writing task files to `OpenAugi/Tasks/` — the `openaugi tasks watch` process handles the actual launch.
 - **Always use the openaugi MCP tools for vault lookups.** Don't grep the filesystem when `openaugi:search` / `get_context` are available — they use the indexed graph and embeddings.
 - **If uncertain, log and move on.** Don't block the whole heartbeat run on a single ambiguous block. Flag it in the log and keep going.
-- **The heartbeat log is the audit trail.** The user reads it to see what you did and to decide whether to update this skill file, the workstream list, or `OpenAugi/Repos.md`.
+- **The heartbeat log is the audit trail.** The user reads it to see what you did and to decide whether to update this skill file, the `area/*` list, or `OpenAugi/Repos.md`.
 - **Every `zzz:` instruction gets honored or explicitly flagged.** If you can't interpret one, log that fact — don't silently drop it.
