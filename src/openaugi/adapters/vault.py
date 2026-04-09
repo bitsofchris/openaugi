@@ -37,9 +37,16 @@ TAG_PATTERN = re.compile(r"(?<!\w)#([a-zA-Z0-9_/\-]+)")
 LINK_PATTERN = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
 FILENAME_DATE_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
-# Per-block agent instruction: line starts with "zzz" (optional colon/whitespace)
-# Captured as metadata and stripped from clean content. See docs/plans/heartbeat.md.
-ZZZ_PATTERN = re.compile(r"^[ \t]*zzz\b[:\s]*(.*?)\s*$", re.MULTILINE | re.IGNORECASE)
+# Atomic thought delimiter: a line containing only `qqq` (case-insensitive).
+# Used to split sections into sub-blocks finer than H3 headers.
+# See docs/plans/zzz-instructions.md.
+QQQ_PATTERN = re.compile(r"^[ \t]*[qQ]{3}[ \t]*$", re.MULTILINE)
+# Per-block agent instructions: lines starting with `zzz` (case-insensitive),
+# optionally followed by a colon. Each match becomes one item in the
+# block's `zzz_instructions` metadata list. The prefix is stripped from
+# clean content before hashing. Multiple zzz lines in one block are kept
+# as separate instructions. See docs/plans/zzz-instructions.md.
+ZZZ_PATTERN = re.compile(r"^[ \t]*[zZ]{3}\b[:\s]*(.*?)\s*$", re.MULTILINE)
 
 DEFAULT_EXCLUDE_PATTERNS = [
     ".obsidian/**",
@@ -249,78 +256,87 @@ def _parse_file(
     file_created = _get_file_created_time(file_path)
 
     for section_content, section_date_str in sections:
-        stripped = section_content.strip()
-        if not stripped:
-            continue
+        # Each H3 section is further split on `qqq` markers. When a section
+        # has no qqq, _split_by_qqq returns [section_content] unchanged so
+        # notes that don't use qqq behave exactly like before.
+        sub_sections = _split_by_qqq(section_content)
 
-        # Extract `zzz` agent instructions. The hash is computed on the
-        # *raw* section (including zzz) so that adding or editing a zzz
-        # instruction triggers a new block — the heartbeat agent then picks
-        # it up on the next run. The block's stored content is the clean
-        # version (zzz stripped) so downstream readers see only the note.
-        clean_content, zzz_instruction = _extract_zzz_instruction(stripped)
-        if not clean_content:
-            # Block contained only a zzz line — nothing meaningful to store
-            continue
+        for sub_content in sub_sections:
+            stripped = sub_content.strip()
+            if not stripped:
+                continue
 
-        # Entry block — identity keyed by raw content (zzz-sensitive)
-        entry_hash = Block.hash_content(stripped)
-        entry_id = Block.make_id(rel_path, entry_hash)
+            # Extract `zzz` agent instructions. The hash is computed on the
+            # *raw* sub-section (including zzz) so that adding or editing a
+            # zzz instruction triggers a new block — the heartbeat agent
+            # then picks it up on the next run. The block's stored content
+            # is the clean version (zzz stripped) so downstream readers see
+            # only the note.
+            clean_content, zzz_instructions = _extract_zzz_instructions(stripped)
+            if not clean_content:
+                # Sub-block contained only zzz lines — nothing meaningful to store
+                continue
 
-        h3_date = _parse_date(section_date_str) if section_date_str else None
-        resolved_ts = _resolve_timestamp(h3_date, title_date, file_created)
+            # Entry block — identity keyed by raw sub-content (zzz-sensitive)
+            entry_hash = Block.hash_content(stripped)
+            entry_id = Block.make_id(rel_path, entry_hash)
 
-        # Extract tags (inline + frontmatter) from clean content
-        inline_tags = _extract_tags(clean_content)
-        all_tags = _unique_ordered(fm_tags + inline_tags)
+            h3_date = _parse_date(section_date_str) if section_date_str else None
+            resolved_ts = _resolve_timestamp(h3_date, title_date, file_created)
 
-        # Extract wikilinks from clean content
-        entry_links = _extract_links(clean_content)
+            # Extract tags (inline + frontmatter) from clean content
+            inline_tags = _extract_tags(clean_content)
+            all_tags = _unique_ordered(fm_tags + inline_tags)
 
-        entry_metadata: dict = {
-            "source_path": rel_path,
-            "h3_date": section_date_str,
-            "parent_note_title": parent_title,
-            "file_created_at": file_created,
-        }
-        if zzz_instruction:
-            entry_metadata["zzz_instruction"] = zzz_instruction
+            # Extract wikilinks from clean content
+            entry_links = _extract_links(clean_content)
 
-        entry_block = Block(
-            id=entry_id,
-            kind="entry",
-            content=clean_content,
-            source="vault",
-            title=parent_title,
-            tags=all_tags,
-            timestamp=resolved_ts,
-            content_hash=entry_hash,
-            metadata=entry_metadata,
-        )
-        blocks.append(entry_block)
+            entry_metadata: dict = {
+                "source_path": rel_path,
+                "h3_date": section_date_str,
+                "parent_note_title": parent_title,
+                "file_created_at": file_created,
+            }
+            if zzz_instructions:
+                entry_metadata["zzz_instructions"] = zzz_instructions
 
-        # Link: entry -> document (split_from)
-        links.append(Link(from_id=entry_id, to_id=doc_id, kind="split_from"))
-
-        # Tag blocks + tagged links
-        for tag_name in all_tags:
-            tag_id = Block.make_tag_id(tag_name)
-            if tag_name not in tag_blocks:
-                tag_blocks[tag_name] = Block(id=tag_id, kind="tag", title=tag_name, source="vault")
-            links.append(Link(from_id=entry_id, to_id=tag_id, kind="tagged"))
-
-        # Wikilink links
-        for link_target in entry_links:
-            # Resolve to document block if it exists in this vault
-            target_doc_id = Block.make_document_id(_resolve_wikilink(link_target, file_index))
-            links.append(
-                Link(
-                    from_id=entry_id,
-                    to_id=target_doc_id,
-                    kind="links_to",
-                    metadata={"target_title": link_target},
-                )
+            entry_block = Block(
+                id=entry_id,
+                kind="entry",
+                content=clean_content,
+                source="vault",
+                title=parent_title,
+                tags=all_tags,
+                timestamp=resolved_ts,
+                content_hash=entry_hash,
+                metadata=entry_metadata,
             )
+            blocks.append(entry_block)
+
+            # Link: entry -> document (split_from)
+            links.append(Link(from_id=entry_id, to_id=doc_id, kind="split_from"))
+
+            # Tag blocks + tagged links
+            for tag_name in all_tags:
+                tag_id = Block.make_tag_id(tag_name)
+                if tag_name not in tag_blocks:
+                    tag_blocks[tag_name] = Block(
+                        id=tag_id, kind="tag", title=tag_name, source="vault"
+                    )
+                links.append(Link(from_id=entry_id, to_id=tag_id, kind="tagged"))
+
+            # Wikilink links
+            for link_target in entry_links:
+                # Resolve to document block if it exists in this vault
+                target_doc_id = Block.make_document_id(_resolve_wikilink(link_target, file_index))
+                links.append(
+                    Link(
+                        from_id=entry_id,
+                        to_id=target_doc_id,
+                        kind="links_to",
+                        metadata={"target_title": link_target},
+                    )
+                )
 
     return blocks, links, tag_blocks
 
@@ -347,6 +363,30 @@ def _split_by_h3_dates(content: str) -> list[tuple[str, str | None]]:
         sections.append((content[start:end], date_str))
 
     return sections
+
+
+def _split_by_qqq(content: str) -> list[str]:
+    """Split a section on standalone `qqq` lines (case-insensitive).
+
+    Each segment is the text between two qqq markers (or between start/end
+    and a qqq marker). Empty / whitespace-only segments are NOT dropped
+    here — the caller decides, since it also needs to reject zzz-only
+    segments after zzz extraction.
+
+    If there are no qqq markers, returns [content] unchanged, so callers
+    that don't use qqq markers see the same behavior as before.
+    """
+    matches = list(QQQ_PATTERN.finditer(content))
+    if not matches:
+        return [content]
+
+    segments: list[str] = []
+    cursor = 0
+    for match in matches:
+        segments.append(content[cursor : match.start()])
+        cursor = match.end()
+    segments.append(content[cursor:])
+    return segments
 
 
 def _strip_frontmatter(content: str) -> tuple[str, list[str]]:
@@ -394,14 +434,19 @@ def _extract_links(text: str) -> list[str]:
     return _unique_ordered(matches)
 
 
-def _extract_zzz_instruction(text: str) -> tuple[str, str | None]:
+def _extract_zzz_instructions(text: str) -> tuple[str, list[str]]:
     """Extract `zzz` agent instruction lines from block content.
 
-    Lines starting with `zzz` (optionally `zzz: ...`) are per-block directives
-    for the heartbeat agent. They're stripped from the clean content and
-    returned as a single joined instruction string (None if absent).
+    Lines starting with `zzz` (case-insensitive, optionally `zzz: ...`) are
+    per-block directives for the heartbeat agent. They're stripped from the
+    clean content and returned as a list of instruction strings — one per
+    `zzz` line, in document order.
 
-    Multiple zzz lines within a block are joined with newlines.
+    Multiple zzz lines in the same block are kept as separate instructions
+    so the agent can honor each independently. Bare `zzz` lines with no body
+    are dropped (nothing to act on).
+
+    Returns (clean_content, instructions) where instructions is `[]` if none.
     """
     instructions: list[str] = []
 
@@ -414,8 +459,7 @@ def _extract_zzz_instruction(text: str) -> tuple[str, str | None]:
     stripped = ZZZ_PATTERN.sub(_capture, text)
     # Collapse any blank lines left behind by the strip
     stripped = re.sub(r"\n{3,}", "\n\n", stripped).strip("\n")
-    instruction = "\n".join(instructions) if instructions else None
-    return stripped, instruction
+    return stripped, instructions
 
 
 def _extract_filename_date(file_path: Path) -> str | None:
