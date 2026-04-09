@@ -356,7 +356,7 @@ openaugi init                       # interactive: add/configure sources
 ### Step 7: Integration + docs
 - [ ] End-to-end test: multiple sources → single store → verify blocks from all sources coexist
 - [ ] Update ARCHITECTURE.md with adapter protocol and new module map
-- [ ] Update phase2-compile.md if compile needs awareness of new source types
+- [ ] Update compile pipeline if it needs awareness of new source types (context block inputs currently source-agnostic by design)
 - [ ] Verify `openaugi up` works with multi-source config
 
 ---

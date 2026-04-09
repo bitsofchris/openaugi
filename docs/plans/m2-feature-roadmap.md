@@ -5,7 +5,7 @@ description: Post-launch feature roadmap — phased plan from public launch thro
 
 # Feature Roadmap — Post-Launch
 
-*Created: 2026-04-05 | Updated: 2026-04-05*
+*Created: 2026-04-05 | Updated: 2026-04-08*
 
 ---
 
@@ -34,6 +34,7 @@ This architecture aligns with the [context engineering as index design](https://
 | M1 — MCP Write + Local Setup (write_document, vault resource, Claude registration) | Done |
 | M1.5 — Ship & Run (HTTP transport, file watcher, launchd service, `openaugi up`) | Done |
 | v0.1.0 — Public Launch (README, GETTING_STARTED.md, PyPI) | Done |
+| Phase 2 — Context Block Layer (compile, context blocks, vault rendering, `get_index` MCP tool) | Done |
 
 ---
 
@@ -45,19 +46,15 @@ v0.1.0 live on PyPI. `pip install openaugi && openaugi init && openaugi up` work
 
 ---
 
-### Phase 2: Show — Context Block Layer
+### Phase 2: Show — Context Block Layer ✓
 
-**Goal:** Build the navigational metadata layer. Materialize context blocks from raw data so agents have a map, not just a magnifying glass. Render them to the vault so humans can browse too.
+**Status:** Shipped. [src/openaugi/pipeline/compile.py](../../src/openaugi/pipeline/compile.py) implements all Layer 0 + Layer 1 context block types (`hub_summary`, `recent_activity`, `index`, `concept`, `graph_health`). Vault rendering writes to `OpenAugi/Compiled/`. The `get_index` MCP tool is live at [src/openaugi/mcp/server.py:557](../../src/openaugi/mcp/server.py#L557). Layer 0 compile runs automatically after ingest in `openaugi up`.
 
-**Why now:** This is the most visible, demo-able improvement. People can see and share what OpenAugi produces. It also makes the vault navigable by ANY LLM (Claude Desktop folder mode, ChatGPT, Cursor) without MCP.
-
-**Plan:** [docs/plans/phase2-compile.md](phase2-compile.md)
-
-Key decisions:
-- Context blocks live in SQLite as `Block(kind=context)` with metadata typing (hub_summary, concept, stream_status, etc.)
-- `openaugi compile` materializes context blocks from data blocks at progressive cost layers (free SQL → embeddings → LLM)
-- `openaugi compile --render` writes context blocks as `.md` to `OpenAugi/Compiled/` in the vault
-- Compiled vault output excluded from re-ingest (or ingested with `source=compiled` and filtered from compile inputs)
+Key decisions (as shipped):
+- Context blocks live in SQLite as `Block(kind=context)` with `metadata["context_type"]` differentiating subtypes
+- `openaugi compile` materializes context blocks from data blocks at progressive cost layers (free SQL → templates)
+- Compile always renders to vault — `OpenAugi/Compiled/` is excluded from ingest via path filter
+- LLM-powered context block types (`hub_narrative`, `connection_map`) deferred to Phase 4
 
 ---
 
@@ -92,15 +89,17 @@ Architecture direction:
 
 **Why:** Free SQL context blocks give structure. LLM context blocks give meaning. "What have I been thinking about?" deserves a genuinely good answer.
 
-**Plan:** [docs/plans/phase4-enrichment.md](phase4-enrichment.md) (to be created)
+**Plan:** [docs/plans/capture-tag-stream-loop.md](capture-tag-stream-loop.md) — the capture → tag → stream loop is the concrete Phase 4 plan.
+
+Partially landed: [src/openaugi/pipeline/enrich.py](../../src/openaugi/pipeline/enrich.py), [tag_inference.py](../../src/openaugi/pipeline/tag_inference.py), [taxonomy.py](../../src/openaugi/pipeline/taxonomy.py) exist; `openaugi enrich` CLI runs batch taxonomy discovery + tag inference via the agent or API flow. The missing piece is wiring tag inference incrementally into the ingest pipeline.
 
 Key pieces:
-- `openaugi enrich` CLI — run Layer 2 on demand, `--top-n`, `--model` override
-- Hub summaries: LLM reads entries under a hub → themes, tensions, decisions, open questions → `Block(kind=context, context_type=hub_summary)`
-- Extraction, not summarization — atomic ideas, not TLDRs (lesson from v1)
-- Incremental — skip hubs with fresh context blocks unless `--force`
-- `get_summary` MCP tool queries context blocks
-- LLM config in `openaugi init` (OpenAI default, Ollama option)
+- Incremental tag inference in `runner.py` after Layer 0 ingest — new blocks get `computed_tags` automatically
+- `openaugi enrich --incremental` flag for re-tag passes on existing data
+- `openaugi stream <tag>` CLI to prove the "tag = stream" claim at the CLI level
+- Compile reads `computed_tags` in addition to source tags for hub scoring and concept pages
+- LLM hub narratives — `Block(kind=context, context_type=hub_narrative)` — extraction not summarization, atomic ideas not TLDRs (lesson from v1)
+- Entity extraction as stretch
 - Agent-generated content always marked `source=agent` to prevent echo-chamber retrieval
 
 ---
@@ -193,11 +192,11 @@ This is mostly prompt engineering and MCP tool defaults, shipped incrementally a
 
 ```
 Done       → Phase 1: Ship v0.1.0
-Week 1-3   → Phase 2: Context block layer + compile + vault rendering
-Month 2    → Phase 3: New ingest adapters (research, AI chats, PDFs)
-Month 2-3  → Phase 4: LLM enrichment (summaries, entity extraction)
-Month 3-4  → Phase 5: Workstreams + temporal intelligence
-Month 4+   → Phase 6: Proactive lenses
+Done       → Phase 2: Context block layer + compile + vault rendering
+Next       → Phase 3: New ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
+Next       → Phase 4: Capture → tag → stream loop + LLM enrichment
+Later      → Phase 5: Workstreams + temporal intelligence
+Later      → Phase 6: Proactive lenses
 Ongoing    → Phase 7: Extensibility emerges from concrete implementations
 Throughout → Write-back flywheel, incremental
 ```
