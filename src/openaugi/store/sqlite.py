@@ -577,12 +577,9 @@ class SQLiteStore:
         results.sort(key=lambda x: x["hub_score"], reverse=True)
         return results[:limit]
 
-    # ── Compile helpers ────────────────────────────────────────────
-
     def delete_blocks_by_source(self, source: str) -> int:
         """Delete all blocks with the given source value. Returns count deleted.
 
-        Used by compile to clear old context blocks before regenerating.
         CASCADE deletes associated links.
         """
         cursor = self.conn.execute("DELETE FROM blocks WHERE source = ?", (source,))
