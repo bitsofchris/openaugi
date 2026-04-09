@@ -44,6 +44,8 @@ Obsidian Vault --> split --> extract --> embed --> SQLite --> MCP Server --> Cla
 
 **Run:** One command (`openaugi up`) does everything — ingest, file watcher, MCP server. Runs as a background service if you want.
 
+**Process:** `openaugi heartbeat` hands new blocks to a Claude Code agent that classifies them, chases connections, and honors inline `zzz:` instructions you write in your notes. Rules live in a markdown skill file you edit in Obsidian — no config system. See [Heartbeat](docs/GETTING_STARTED.md#heartbeat--process-new-blocks-with-a-claude-code-agent).
+
 ---
 
 ## Why This Exists

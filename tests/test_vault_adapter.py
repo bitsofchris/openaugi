@@ -18,6 +18,7 @@ import pytest
 from openaugi.adapters.vault import (
     _extract_links,
     _extract_tags,
+    _extract_zzz_instruction,
     _matches_pattern,
     _split_by_h3_dates,
     _strip_frontmatter,
@@ -49,6 +50,62 @@ class TestRegexExtraction:
         text = "[[Alpha]] and [[Alpha]] again"
         links = _extract_links(text)
         assert len(links) == 1
+
+
+class TestZzzInstruction:
+    def test_no_zzz_returns_content_unchanged(self):
+        text = "Just a normal thought about something."
+        clean, instruction = _extract_zzz_instruction(text)
+        assert clean == text
+        assert instruction is None
+
+    def test_zzz_colon_form(self):
+        text = "Had an idea\nzzz: research this more"
+        clean, instruction = _extract_zzz_instruction(text)
+        assert clean == "Had an idea"
+        assert instruction == "research this more"
+
+    def test_zzz_no_colon(self):
+        text = "Need to fix onboarding\nzzz task - do this in openaugi repo"
+        clean, instruction = _extract_zzz_instruction(text)
+        assert clean == "Need to fix onboarding"
+        assert instruction == "task - do this in openaugi repo"
+
+    def test_multiple_zzz_lines_joined(self):
+        text = "A thought\nzzz research this\nmore content\nzzz also tag personal"
+        clean, instruction = _extract_zzz_instruction(text)
+        assert "zzz" not in clean
+        assert "A thought" in clean
+        assert "more content" in clean
+        assert "research this" in instruction
+        assert "also tag personal" in instruction
+
+    def test_zzz_line_stripped_from_middle(self):
+        text = "line one\nzzz just log this\nline three"
+        clean, instruction = _extract_zzz_instruction(text)
+        assert "zzz" not in clean
+        assert "line one" in clean
+        assert "line three" in clean
+        assert instruction == "just log this"
+
+    def test_zzz_case_insensitive(self):
+        text = "Thought\nZZZ: do research"
+        _, instruction = _extract_zzz_instruction(text)
+        assert instruction == "do research"
+
+    def test_bare_zzz_line_no_body(self):
+        """A line with just `zzz` and nothing after is treated as empty instruction."""
+        text = "content\nzzz"
+        clean, instruction = _extract_zzz_instruction(text)
+        assert clean == "content"
+        assert instruction is None
+
+    def test_zzz_not_matched_inside_word(self):
+        """Words containing 'zzz' like 'buzzzing' should not match."""
+        text = "The buzzzing sound was loud"
+        clean, instruction = _extract_zzz_instruction(text)
+        assert clean == text
+        assert instruction is None
 
 
 class TestFrontmatter:
@@ -293,6 +350,45 @@ class TestEdgeCases:
         blocks, _ = parse_vault(tmp_path)
         docs = [b for b in blocks if b.kind == "document"]
         assert any("Q&A (draft)" in (b.title or "") for b in docs)
+
+    def test_zzz_instruction_captured_in_metadata(self, tmp_path: Path):
+        """Full-parse flow: zzz line is stripped from content and stored in metadata."""
+        note = tmp_path / "journal.md"
+        note.write_text(
+            "Had a thought about matryoshka embeddings\n"
+            "zzz research this - find papers in my vault\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "entry"]
+        assert len(entries) == 1
+        entry = entries[0]
+        assert "zzz" not in (entry.content or "")
+        assert "matryoshka" in (entry.content or "")
+        assert entry.metadata.get("zzz_instruction") == "research this - find papers in my vault"
+
+    def test_zzz_only_block_skipped(self, tmp_path: Path):
+        """A section containing only a zzz line produces no entry."""
+        note = tmp_path / "scratch.md"
+        note.write_text("zzz just a note to self\n", encoding="utf-8")
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "entry"]
+        assert len(entries) == 0
+
+    def test_zzz_changes_block_identity(self, tmp_path: Path):
+        """Adding a zzz to a block changes its content_hash so it shows up as new."""
+        note = tmp_path / "note.md"
+        note.write_text("An idea about X\n", encoding="utf-8")
+        blocks_before, _ = parse_vault(tmp_path)
+        entry_before = next(b for b in blocks_before if b.kind == "entry")
+
+        note.write_text("An idea about X\nzzz research this\n", encoding="utf-8")
+        blocks_after, _ = parse_vault(tmp_path)
+        entry_after = next(b for b in blocks_after if b.kind == "entry")
+
+        assert entry_before.id != entry_after.id
+        assert entry_after.metadata.get("zzz_instruction") == "research this"
+        assert entry_after.content == "An idea about X"
 
     def test_non_utf8_file_skipped_gracefully(self, tmp_path: Path):
         """A Latin-1 file is skipped with a warning, not a crash."""

@@ -610,6 +610,127 @@ def compile(
 
 
 @app.command()
+def heartbeat(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    max_blocks: int = typer.Option(
+        50, "--max-blocks", "-n", help="Max new blocks to process in one run"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Build the prompt but do not launch the agent"
+    ),
+    skip_ingest: bool = typer.Option(
+        False, "--skip-ingest", help="Skip the incremental ingest step"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Heartbeat — ingest new blocks and hand them to a Claude Code agent.
+
+    The Python side is a dumb script:
+      1. Runs incremental ingest (unless --skip-ingest)
+      2. Finds entry blocks added since ~/.openaugi/last_heartbeat
+      3. Builds a prompt listing the blocks + any `zzz:` instructions
+      4. Spawns `claude -p <prompt>` with openaugi MCP tools allowed
+      5. Updates the timestamp on success
+
+    The reasoning lives in the skill file at
+    <vault>/OpenAugi/heartbeat-skill.md. Edit the skill file, not the code,
+    when the agent does the wrong thing.
+
+    See docs/plans/heartbeat.md for the full design.
+    """
+    _setup_logging(verbose)
+
+    from openaugi.config import load_config
+    from openaugi.pipeline.heartbeat import run_heartbeat
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+
+    vault_path = path or config.get("vault", {}).get("default_path")
+    if not vault_path:
+        console.print("[red]No vault path specified.[/red]")
+        console.print("Use --path or run 'openaugi init' to set a default.")
+        raise typer.Exit(1)
+
+    db_path = db or str(_default_db())
+    store = SQLiteStore(db_path)
+
+    try:
+        # Step 1: incremental ingest so the agent sees the latest state.
+        if not skip_ingest:
+            from openaugi.pipeline.runner import run_layer0
+
+            console.print(f"[bold]Syncing vault:[/bold] {vault_path}")
+            exclude = config.get("vault", {}).get("exclude_patterns")
+            workers = config.get("vault", {}).get("max_workers", 4)
+            result = run_layer0(vault_path, store, exclude_patterns=exclude, max_workers=workers)
+            stats = result["stats"]
+            console.print(
+                f"  {stats['total_blocks']} blocks, {stats['total_links']} links "
+                f"({result['blocks_added']} new, {result['blocks_removed']} removed)"
+            )
+
+            # Embedding — graceful fallback (agent search still works via FTS without it).
+            try:
+                from openaugi.models import get_embedding_model
+                from openaugi.pipeline.embed import run_embed
+
+                model = get_embedding_model(config.get("models", {}).get("embedding"))
+                count = run_embed(store, model)
+                if count:
+                    console.print(f"  Embedded {count} blocks")
+            except Exception as e:
+                console.print(f"  [dim]Embeddings skipped: {e}[/dim]")
+
+        # Step 2–4: find blocks, build prompt, spawn agent.
+        try:
+            result = run_heartbeat(
+                store=store,
+                vault_path=vault_path,
+                max_blocks=max_blocks,
+                dry_run=dry_run,
+            )
+        except FileNotFoundError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+
+        since = result["since"] or "(first run)"
+        console.print(f"\n[bold]Heartbeat window:[/bold] {since} → {result['now']}")
+        console.print(f"[bold]Skill file:[/bold] {result['skill_file']}")
+        console.print(f"[bold]Heartbeat log:[/bold] {result['heartbeat_log']}")
+        console.print(f"[bold]New blocks:[/bold] {result['block_count']}")
+
+        if result["batch_capped"]:
+            console.print(
+                f"[yellow]Batch capped at {max_blocks}.[/yellow] "
+                "Run again to process the next batch, or raise --max-blocks."
+            )
+
+        if result["block_count"] == 0:
+            console.print("[dim]Nothing to process. Timestamp advanced.[/dim]")
+            return
+
+        if dry_run:
+            console.print("\n[bold]--- Prompt (dry run) ---[/bold]")
+            console.print(result["prompt"])
+            return
+
+        if result["return_code"] == 0:
+            console.print(
+                f"\n[green]Heartbeat complete.[/green] Review the log at {result['heartbeat_log']}"
+            )
+        else:
+            console.print(
+                f"\n[yellow]Agent exited with {result['return_code']}.[/yellow] "
+                "Timestamp was NOT advanced — the next run will retry these blocks."
+            )
+            raise typer.Exit(result["return_code"] or 1)
+    finally:
+        store.close()
+
+
+@app.command()
 def search(
     query: str = typer.Argument(..., help="Search query"),
     k: int = typer.Option(10, "--k", "-k", help="Number of results"),
