@@ -90,6 +90,8 @@ Trigger words: "task", "make this a task", "go do this", "agent task", "dispatch
 
 **You do not execute the task.** You write a structured task file that the task watcher (`openaugi tasks watch`) picks up and launches as a Claude Code agent in a detached tmux session. The user attaches with `tmux attach -t <task_id>` to watch it work.
 
+**The task file format is a single contract** between you and the watcher. The authoritative, annotated version lives at `src/openaugi/templates/task-template.md` in the openaugi repo — follow it exactly. A compact version is inlined below for quick reference.
+
 Steps:
 
 1. **Derive a slug** from the task content: kebab-case, 3–6 words, e.g. `readme-onboarding-fix`.
@@ -109,7 +111,6 @@ Steps:
 status: pending
 workstream: <workstream slug>
 repo: <short repo name, or omit for vault-local tasks>
-priority: now
 source_block_id: <block id from the batch>
 source_note: "[[<source note title>]]"
 ---
@@ -141,6 +142,7 @@ something manually (testing, approvals, deploys). -->
 
 **Notes on the frontmatter:**
 - `status: pending` is required — the watcher only picks up pending files.
+- `workstream` is required — the watcher does not default this anymore; if you leave it off the task is logged un-scoped.
 - `repo` is optional. Omit it for tasks that run in the vault (no code repo).
 - The watcher adds `task_id`, `created`, and `tmux_session` during hydration. You do not set them.
 - Use `working_dir: /absolute/path` instead of `repo` only if you need an absolute path the user hasn't added to `OpenAugi/Repos.md`.

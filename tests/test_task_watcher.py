@@ -229,13 +229,22 @@ class TestHydrateNote:
         assert body.count("## Session") == 1
         assert body.count("## Results") == 1
 
-    def test_default_workstream_and_priority(self, tmp_path: Path):
+    def test_no_default_workstream_or_priority(self, tmp_path: Path):
+        """Hydration does not invent workstream/priority — the writer owns those."""
         f = tmp_path / "task.md"
         f.write_text("---\nstatus: pending\n---\nbody\n", encoding="utf-8")
         _, _, new_path = tw.hydrate_note(f)
         fm, _ = tw.parse_note(new_path.read_text())
-        assert fm["workstream"] == "openaugi"
-        assert fm["priority"] == "now"
+        assert "workstream" not in fm
+        assert "priority" not in fm
+
+    def test_preserves_writer_supplied_workstream(self, tmp_path: Path):
+        """If the writer sets workstream, hydration leaves it alone."""
+        f = tmp_path / "task.md"
+        f.write_text("---\nstatus: pending\nworkstream: content\n---\nbody\n", encoding="utf-8")
+        _, _, new_path = tw.hydrate_note(f)
+        fm, _ = tw.parse_note(new_path.read_text())
+        assert fm["workstream"] == "content"
 
 
 # ── Scanning ───────────────────────────────────────────────────────────────
@@ -286,25 +295,27 @@ class TestBuildPrompt:
 
     def test_surfaces_linked_notes(self):
         p = tw.build_prompt("TASK-x", "body", ["Alpha", "Beta"])
-        assert "## Linked Notes" in p
         assert "[[Alpha]]" in p
         assert "[[Beta]]" in p
+        assert "openaugi MCP" in p
 
-    def test_no_links_section_when_empty(self):
+    def test_no_links_line_when_empty(self):
         p = tw.build_prompt("TASK-x", "body", [])
-        assert "## Linked Notes" not in p
-
-    def test_instructions_reference_openaugi_mcp_tools(self):
-        p = tw.build_prompt("TASK-x", "body", [])
-        assert "mcp__openaugi__search" in p or "openaugi MCP" in p
+        assert "[[" not in p
+        assert "openaugi MCP" not in p
 
     def test_instructs_agent_to_edit_task_file(self):
+        """The finish instruction points at the task file directly."""
         p = tw.build_prompt("TASK-x", "body", [])
-        # The finishing instructions tell the agent to edit the task file
-        # directly rather than call a custom MCP tool.
         assert "OpenAugi/Tasks/TASK-x.md" in p
-        assert "status" in p
+        assert "status: done" in p
         assert "Results" in p
+
+    def test_is_concise(self):
+        """Sanity check: trimmed prompt should stay under ~400 chars
+        for a plain no-links task so the real task body isn't drowned out."""
+        p = tw.build_prompt("TASK-x", "Do a small thing", [])
+        assert len(p) < 400
 
 
 class TestWriteContextFile:
@@ -370,3 +381,88 @@ class TestDispatchTask:
 
         result = tw.dispatch_task(task, tmux="/fake/tmux", claude="/fake/claude", repo_paths={})
         assert result is None
+
+
+# ── The task format contract ──────────────────────────────────────────────
+
+# The authoritative task file format lives at
+# src/openaugi/templates/task-template.md. This test reads that file and
+# runs it through the full dispatch pipeline. Any change to the template
+# that the watcher can't hydrate + launch cleanly fails here. The intent
+# is to keep a single source of truth for the heartbeat agent (writer) and
+# the watcher (reader) so the contract can't silently drift.
+
+TASK_TEMPLATE_PATH = (
+    Path(__file__).parent.parent / "src" / "openaugi" / "templates" / "task-template.md"
+)
+
+
+class TestTaskTemplateContract:
+    def test_template_file_exists(self):
+        assert TASK_TEMPLATE_PATH.exists(), (
+            "Authoritative task template is missing. See "
+            "src/openaugi/templates/task-template.md and the task_watcher "
+            "docstring for why this file must exist."
+        )
+
+    def test_template_has_required_frontmatter(self):
+        text = TASK_TEMPLATE_PATH.read_text(encoding="utf-8")
+        fm, body = tw.parse_note(text)
+        # The contract: every pending task must carry at least status.
+        # `workstream` should be present in the example so the heartbeat
+        # agent sees it modeled.
+        assert fm.get("status") == "pending"
+        assert "workstream" in fm, "template should model a workstream field"
+        # Sections the remote agent depends on
+        assert "## Context" in body
+        assert "## Task" in body
+        assert "## Results" in body
+
+    def test_template_hydrates_cleanly(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """The template, as shipped, should survive the full hydrate → dispatch
+        pipeline with a mocked tmux launch."""
+        monkeypatch.setattr(tw, "CONTEXT_DIR", tmp_path / "ctx")
+
+        calls: dict = {}
+
+        def fake_launch(tmux, claude, session_name, context_file, working_dir=None):
+            calls["session"] = session_name
+            calls["working_dir"] = working_dir
+            calls["prompt"] = Path(context_file).read_text()
+            return True
+
+        monkeypatch.setattr(tw, "launch_tmux", fake_launch)
+
+        # Copy the template to a tmp vault location so hydrate can rename it
+        # without touching the repo file.
+        task_file = tmp_path / "template-instance.md"
+        task_file.write_text(TASK_TEMPLATE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+
+        task_id = tw.dispatch_task(
+            task_file,
+            tmux="/fake/tmux",
+            claude="/fake/claude",
+            # The template uses `repo: openaugi`; resolve it to a real tmp dir
+            # so launch_tmux sees a valid cwd.
+            repo_paths={"openaugi": str(tmp_path)},
+        )
+
+        assert task_id is not None
+        assert task_id.startswith("TASK-")
+
+        # After hydration the file should be renamed and flipped to active.
+        new_file = tmp_path / f"{task_id}.md"
+        assert new_file.exists()
+        fm, body = tw.parse_note(new_file.read_text())
+        assert fm["status"] == "active"
+        assert fm["task_id"] == task_id
+        assert fm["tmux_session"] == task_id
+        assert "## Session" in body
+        assert "## Results" in body
+
+        # The prompt handed to claude should contain the task body, not
+        # the placeholder comments — i.e. strip_out the HTML comments
+        # shouldn't erase the real task description.
+        assert "README" in calls["prompt"] or "Task" in calls["prompt"]
+        assert task_id in calls["prompt"]
+        assert calls["working_dir"] == str(tmp_path)

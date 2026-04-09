@@ -51,7 +51,8 @@ src/openaugi/
 │   ├── tag_inference.py   # Batched document classification via LLM
 │   ├── heartbeat.py       # Heartbeat orchestrator — new blocks → Claude Code agent session
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
-│   └── watcher.py         # File watcher — debounced incremental ingest on vault changes
+│   ├── watcher.py         # File watcher — debounced incremental ingest on vault changes
+│   └── task_watcher.py    # Task dispatch — OpenAugi/Tasks/ → tmux-hosted Claude sessions (optional)
 ├── store/
 │   └── sqlite.py          # SQLite backend (WAL, FTS5, sqlite-vec vec0, CASCADE)
 ├── models/
@@ -142,6 +143,28 @@ the clean content) so the agent can honor each as an independent per-block
 directive. Blocks are split on `###` headers and `qqq` markers
 (case-insensitive) — see [docs/plans/zzz-instructions.md](docs/plans/zzz-instructions.md).
 
+### Task Dispatch (optional add-on)
+
+See [docs/task-dispatch.md](docs/task-dispatch.md) for the full feature doc.
+
+```
+openaugi tasks watch → pipeline/task_watcher.py
+  poll loop (default every 5s):
+  ├── scan_pending(OpenAugi/Tasks/, settle=30s)
+  ├── hydrate_note(file) — assign task_id, flip status→active, inject ## Session
+  ├── resolve_working_dir — OpenAugi/Repos.md short-name → absolute path
+  ├── build_prompt — small wrapper around the task body
+  └── launch_tmux — detached `tmux new-session` + send-keys `claude "$(cat ctx)"`
+```
+
+Optional add-on: if you don't run `openaugi tasks watch`, task files from
+heartbeat (or hand-written) just sit in `OpenAugi/Tasks/`. Opt in by
+running the watcher. The **task file format is a single contract**
+defined in `src/openaugi/templates/task-template.md` and enforced by
+`test_task_template_hydrates_cleanly`. Both the heartbeat skill (writer)
+and `task_watcher.py` (reader) point at that template rather than
+redefine the format — see the contract diagram in [docs/task-dispatch.md](docs/task-dispatch.md).
+
 ### Enrich (tag taxonomy)
 
 See [docs/enrichment.md](docs/enrichment.md) for full details.
@@ -199,6 +222,7 @@ Embedding is attempted with the user's configured model. If it fails, blocks are
 | `openaugi watch` | File watcher only (incremental ingest on vault changes) |
 | `openaugi up` | Both in one process |
 | `openaugi heartbeat` | One-shot: ingest → find new blocks → spawn Claude Code agent to process them |
+| `openaugi tasks watch` | Optional: watch `OpenAugi/Tasks/` for pending task files and launch them in named tmux sessions ([docs/task-dispatch.md](docs/task-dispatch.md)) |
 
 ### Transports
 
