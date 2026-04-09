@@ -46,7 +46,7 @@ Obsidian Vault --> split --> extract --> embed --> SQLite --> MCP Server --> Cla
 
 **Process:** `openaugi heartbeat` hands new blocks to a Claude Code agent that classifies them, chases connections, and honors inline `zzz:` instructions you write in your notes. Rules live in a markdown skill file you edit in Obsidian — no config system. See [Heartbeat](docs/GETTING_STARTED.md#heartbeat--process-new-blocks-with-a-claude-code-agent).
 
-**Dispatch (optional):** `openaugi tasks watch` picks up task files the heartbeat agent (or you) drop in `OpenAugi/Tasks/` and launches each one as a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>` to watch it work. See [Task Dispatch](docs/task-dispatch.md).
+**Dispatch (optional):** `openaugi task-dispatch` picks up task files the heartbeat agent (or you) drop in `OpenAugi/Tasks/` and launches each one as a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>` to watch it work. See [Task Dispatch](docs/task-dispatch.md).
 
 ---
 
