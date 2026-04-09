@@ -113,7 +113,7 @@ See [docs/plans/heartbeat.md](docs/plans/heartbeat.md) for the full design.
 
 ```
 openaugi heartbeat → pipeline/heartbeat.py
-  → run incremental ingest (unless --skip-ingest)
+  → run incremental ingest (only if --ingest; default assumes `up` is running)
   → read ~/.openaugi/last_heartbeat timestamp
   → store.get_blocks_created_since(since) → entry blocks (capped at --max-blocks)
   → build prompt: skill file ref + per-block content + zzz_instructions metadata
@@ -143,7 +143,7 @@ task-file `status:` frontmatter lifecycle.
 See [docs/task-dispatch.md](docs/task-dispatch.md) for the full feature doc.
 
 ```
-openaugi tasks watch → pipeline/task_watcher.py
+openaugi task-dispatch → pipeline/task_watcher.py
   poll loop (default every 5s):
   ├── scan_pending(OpenAugi/Tasks/, settle=30s)
   ├── hydrate_note(file) — assign task_id, flip status→active, inject ## Session
@@ -152,7 +152,7 @@ openaugi tasks watch → pipeline/task_watcher.py
   └── launch_tmux — detached `tmux new-session` + send-keys `claude "$(cat ctx)"`
 ```
 
-Optional add-on: if you don't run `openaugi tasks watch`, task files from
+Optional add-on: if you don't run `openaugi task-dispatch`, task files from
 heartbeat (or hand-written) just sit in `OpenAugi/Tasks/`. Opt in by
 running the watcher. The **task file format is a single contract**
 defined in `src/openaugi/templates/task-template.md` and enforced by
@@ -217,7 +217,7 @@ Embedding is attempted with the user's configured model. If it fails, blocks are
 | `openaugi watch` | File watcher only (incremental ingest on vault changes) |
 | `openaugi up` | Ingest + watcher + MCP server in one process |
 | `openaugi heartbeat` | One-shot: ingest → find new blocks → spawn Claude Code agent to process them |
-| `openaugi tasks watch` | Optional: watch `OpenAugi/Tasks/` for pending task files and launch them in named tmux sessions ([docs/task-dispatch.md](docs/task-dispatch.md)) |
+| `openaugi task-dispatch` | Optional: watch `OpenAugi/Tasks/` for pending task files and launch them in named tmux sessions ([docs/task-dispatch.md](docs/task-dispatch.md)) |
 
 ### Transports
 

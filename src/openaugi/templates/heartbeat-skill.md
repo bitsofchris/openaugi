@@ -121,7 +121,7 @@ Steps:
 
 Trigger words: "task", "make this a task", "go do this", "agent task", "dispatch this".
 
-**You do not execute the task.** You write a structured task file that the task watcher (`openaugi tasks watch`) picks up and launches as a Claude Code agent in a detached tmux session. The user attaches with `tmux attach -t <task_id>` to watch it work.
+**You do not execute the task.** You write a structured task file that the task dispatcher (`openaugi task-dispatch`) picks up and launches as a Claude Code agent in a detached tmux session. The user attaches with `tmux attach -t <task_id>` to watch it work.
 
 **The task file format is a single contract** between you and the watcher. The authoritative, annotated version lives at `src/openaugi/templates/task-template.md` in the openaugi repo — follow it exactly. A compact version is inlined below for quick reference.
 
@@ -241,7 +241,7 @@ Include a "Connections found" bullet even when empty so the user can see you loo
 ## Hard rules
 
 - **Never modify the user's raw notes.** Everything system-generated lives under `OpenAugi/` in the vault.
-- **Never launch subprocesses.** You have no `Bash` tool. Tasks are dispatched by writing task files to `OpenAugi/Tasks/` — the `openaugi tasks watch` process handles the actual launch.
+- **Never launch subprocesses.** You have no `Bash` tool. Tasks are dispatched by writing task files to `OpenAugi/Tasks/` — the `openaugi task-dispatch` process handles the actual launch.
 - **Always use the openaugi MCP tools for vault lookups.** Don't grep the filesystem when `openaugi:search` / `get_context` are available — they use the indexed graph and embeddings.
 - **If uncertain, log and move on.** Don't block the whole heartbeat run on a single ambiguous block. Flag it in the log and keep going.
 - **The heartbeat log is the audit trail.** The user reads it to see what you did and to decide whether to update this skill file, the `area/*` list, or `OpenAugi/Repos.md`.

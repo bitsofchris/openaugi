@@ -547,19 +547,24 @@ def heartbeat(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Build the prompt but do not launch the agent"
     ),
-    skip_ingest: bool = typer.Option(
-        False, "--skip-ingest", help="Skip the incremental ingest step"
+    ingest: bool = typer.Option(
+        False,
+        "--ingest",
+        help="Run incremental ingest before processing (use when `up` is not running)",
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
-    """Heartbeat — ingest new blocks and hand them to a Claude Code agent.
+    """Heartbeat — find new blocks and hand them to a Claude Code agent.
 
     The Python side is a dumb script:
-      1. Runs incremental ingest (unless --skip-ingest)
-      2. Finds entry blocks added since ~/.openaugi/last_heartbeat
-      3. Builds a prompt listing the blocks + any `zzz:` instructions
-      4. Spawns `claude -p <prompt>` with openaugi MCP tools allowed
-      5. Updates the timestamp on success
+      1. Finds entry blocks added since ~/.openaugi/last_heartbeat
+      2. Builds a prompt listing the blocks + any `zzz:` instructions
+      3. Spawns `claude -p <prompt>` with openaugi MCP tools allowed
+      4. Updates the timestamp on success
+
+    Assumes `openaugi up` is already running and keeping the DB current.
+    Pass --ingest to run a one-off incremental ingest first if `up` is not
+    running.
 
     The reasoning lives in the skill file at
     <vault>/OpenAugi/heartbeat-skill.md. Edit the skill file, not the code,
@@ -585,8 +590,8 @@ def heartbeat(
     store = SQLiteStore(db_path)
 
     try:
-        # Step 1: incremental ingest so the agent sees the latest state.
-        if not skip_ingest:
+        # Step 1: incremental ingest — opt-in when `up` is not running.
+        if ingest:
             from openaugi.pipeline.runner import run_layer0
 
             console.print(f"[bold]Syncing vault:[/bold] {vault_path}")
@@ -774,14 +779,11 @@ def status(
         store.close()
 
 
-# ── Task watcher ──────────────────────────────────────────────────
-
-tasks_app = typer.Typer(help="Manage OpenAugi task files and the tmux dispatcher.")
-app.add_typer(tasks_app, name="tasks")
+# ── Task dispatch ──────────────────────────────────────────────────
 
 
-@tasks_app.command("watch")
-def tasks_watch(
+@app.command("task-dispatch")
+def task_dispatch(
     path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
     tasks_folder: str = typer.Option(
         "OpenAugi/Tasks",
@@ -801,7 +803,7 @@ def tasks_watch(
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
-    """Watch the vault's Tasks/ folder and dispatch pending tasks to tmux.
+    """Watch OpenAugi/Tasks/ and dispatch pending task files to tmux.
 
     When a task file lands with `status: pending` in frontmatter, the
     watcher hydrates it (assigns a task_id, timestamps, tmux session name),
