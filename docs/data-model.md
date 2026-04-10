@@ -46,10 +46,10 @@ A data block is the raw thing — a document, a journal entry, a tag. It has con
 
 | Kind | What it holds | Example |
 |------|--------------|---------|
-| `document` | A full source file | An Obsidian note |
-| `entry` | A section split from a document | An H3-dated journal entry |
-| `tag` | A first-class tag node | `#project/openaugi` |
-| `context` | Generated navigational metadata | Hub summary, concept page, index |
+| `context_block:document` | A full source file | An Obsidian note |
+| `data_block` | A section split from a document | An H3-dated journal entry |
+| `context_block:tag` | A first-class tag node | `#project/openaugi` |
+| `context_block:cluster` | Generated navigational metadata | Hub summary, concept page, index |
 
 Data blocks are like parquet files — raw data with a footer full of statistics. The agent should rarely read these directly as a first step. It should read the map first.
 
@@ -69,8 +69,8 @@ Links are typed, weighted edges between blocks. The composite primary key `(from
 
 | Kind | Meaning | Example |
 |------|---------|---------|
-| `split_from` | Entry was extracted from document | Journal entry -> parent note |
-| `tagged` | Block has this tag | Entry -> tag block |
+| `contains` | data_block was extracted from context_block:document | Journal entry -> parent note |
+| `groups` | data_block has this tag | Entry -> context_block:tag |
 | `links_to` | Explicit reference (wikilink) | Note A -> Note B |
 | `summarizes` | Context block summarizes source | Hub summary -> tag block |
 
@@ -90,7 +90,7 @@ OpenAugi generates context blocks through the [compile step](../ARCHITECTURE.md#
 | **Concept pages** | Topic clusters with key entries | Semantic grouping |
 | **Index** | Navigational map of the entire graph | Aggregation of all context blocks |
 
-Context blocks are stored as `Block(kind="context", source="compiled")` — same table, same query interface, but serving a fundamentally different purpose. They're the table of contents, not the chapters.
+Context blocks are stored as `Block(kind="context_block:*", source="compiled")` — same table, same query interface, but serving a fundamentally different purpose. They're the table of contents, not the chapters.
 
 ### Scope is flexible
 
@@ -118,8 +118,8 @@ OpenAugi's implementation maps to a [general architecture for context engineerin
 
 | Concept | OpenAugi implementation |
 |---------|------------------------|
-| **Data blocks** | `Block(kind=document\|entry\|tag)` — raw content with metadata |
-| **Context blocks** | `Block(kind=context)` — compiled hub summaries, concepts, index |
+| **Data blocks** | `Block(kind=data_block)` — raw content with metadata |
+| **Context blocks** | `Block(kind=context_block:*)` — compiled hub summaries, concepts, index |
 | **Context graph** | `links` table — typed edges the agent traverses |
 | **Context snapshots** | Incremental compile — content-hash based change detection |
 

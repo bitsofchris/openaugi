@@ -23,12 +23,12 @@ def _utcnow() -> str:
 class Block(BaseModel):
     """A node in the knowledge graph.
 
-    Kinds: document, entry, tag, cluster, summary, extraction.
+    Kinds: data_block, context_block:document, context_block:tag, cluster, summary, extraction.
     Kind-specific data goes in metadata (JSON).
     """
 
     id: str
-    kind: str  # document, entry, tag, cluster, summary, ...
+    kind: str  # data_block, context_block:document, context_block:tag, cluster, summary, ...
     content: str | None = None
     summary: str | None = None
     embedding: bytes | None = Field(default=None, exclude=True, repr=False)
@@ -36,12 +36,12 @@ class Block(BaseModel):
     source: str | None = None  # adapter name: "vault", "chatgpt", "pipeline"
     title: str | None = None
     tags: list[str] = Field(default_factory=list)
-    timestamp: str | None = None  # ISO-8601
+    block_time: str | None = None  # ISO-8601 — content/note date (heading, filename, file created)
     occurred_at: str | None = None
 
     metadata: dict[str, Any] = Field(default_factory=dict)
     content_hash: str | None = None
-    created_at: str = Field(default_factory=_utcnow)
+    ingested_at: str = Field(default_factory=_utcnow)  # when the block was inserted into the DB
 
     model_config = {"frozen": False}
 
