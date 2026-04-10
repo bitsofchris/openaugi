@@ -16,8 +16,8 @@ blocks (id, kind, content, summary, embedding, source, title, tags, timestamp, m
 links  (from_id, to_id, kind, weight, metadata)  — PK: (from_id, to_id, kind)
 ```
 
-**Block kinds:** document, entry, tag
-**Link kinds:** split_from, tagged, links_to
+**Block kinds:** data_block, context_block:document, context_block:tag
+**Link kinds:** contains, groups, links_to
 
 Everything is a block. Structure lives in the links, not in the schema.
 
@@ -75,10 +75,10 @@ src/openaugi/
 Vault .md files
   → parse_vault_incremental()  [adapters/vault.py]
     → file hash check (skip unchanged)
-    → split by H3 dates → entry blocks
-    → extract tags → tag blocks + tagged links
+    → split by H3 dates → data_block blocks
+    → extract tags → context_block:tag blocks + groups links
     → extract [[wikilinks]] → links_to links
-    → document block + split_from links
+    → context_block:document block + contains links
   → insert blocks + links  [store/sqlite.py]
   → FTS5 auto-indexed via triggers
   → run_embed()  [pipeline/embed.py]
@@ -111,7 +111,7 @@ See [docs/plans/heartbeat.md](docs/plans/heartbeat.md) for the full design.
 openaugi heartbeat → pipeline/heartbeat.py
   → run incremental ingest (only if --ingest; default assumes `up` is running)
   → read ~/.openaugi/last_heartbeat timestamp
-  → store.get_blocks_created_since(since) → entry blocks (capped at --max-blocks)
+  → store.get_blocks_created_since(since) → data_block blocks (capped at --max-blocks)
   → build prompt: skill file ref + per-block content + zzz_instructions metadata
   → spawn `claude -p <prompt>` with openaugi MCP tools allowed
   → agent classifies each block → calls tag_block MCP tool → augi_tags on block
@@ -210,6 +210,7 @@ openaugi agent  ← one terminal window (heartbeat every 5m + task dispatch)
 | `openaugi task-dispatch` | Watch `OpenAugi/Tasks/` and launch pending tasks in tmux |
 | `openaugi serve` | MCP server only (stdio or HTTP) |
 | `openaugi watch` | File watcher only (incremental ingest on vault changes) |
+| `openaugi re-embed` | Reset + re-embed all data blocks with current model (use after model switch) |
 
 ### Transports
 
@@ -230,4 +231,5 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 - [docs/plans/capture-tag-stream-loop.md](docs/plans/capture-tag-stream-loop.md) — Phase 4: capture → tag → stream incremental pipeline
 - [docs/plans/from-capture-to-jarvis.md](docs/plans/from-capture-to-jarvis.md) — Longer-horizon vision (layers 1–4)
 - [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features
+- [docs/plans/hierarchical-embeddings.md](docs/plans/hierarchical-embeddings.md) — Hierarchical cluster context blocks (title-prepend re-embed → agglomerative clustering → cluster context blocks)
 - [docs/plans/done/](docs/plans/done/) — Shipped milestone plans (M0, M1)

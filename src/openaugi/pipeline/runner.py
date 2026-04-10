@@ -63,13 +63,13 @@ def run_layer0(
     other_blocks: list[Block] = []
 
     for b in blocks:
-        if b.kind == "document":
+        if b.kind == "context_block:document":
             source_path = b.metadata.get("source_path", "")
             doc_blocks[source_path] = b
-        elif b.kind == "entry":
+        elif b.kind == "data_block":
             source_path = b.metadata.get("source_path", "")
             entry_blocks_by_doc.setdefault(source_path, []).append(b)
-        elif b.kind == "tag":
+        elif b.kind == "context_block:tag":
             tag_blocks.append(b)
         else:
             other_blocks.append(b)
@@ -168,7 +168,7 @@ def run_layer0(
 
 def _get_known_doc_hashes(store: SQLiteStore) -> dict[str, str]:
     """Get {relative_path: content_hash} for all document blocks."""
-    docs = store.get_blocks_by_kind("document", limit=100_000)
+    docs = store.get_blocks_by_kind("context_block:document", limit=100_000)
     return {
         b.metadata.get("source_path", ""): b.content_hash
         for b in docs

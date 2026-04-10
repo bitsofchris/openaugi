@@ -2,6 +2,11 @@
 
 Processes blocks where embedding IS NULL. Stores embeddings as BLOBs
 in the blocks table and in the sqlite-vec vec_blocks virtual table.
+
+Text construction: prepend the block's parent note title to the content
+before embedding. This gives short/ambiguous chunks their context so the
+embedding reflects where the thought lives, not just what it says.
+Format: "{title}\n\n{content}" per OpenAI embedding best practices.
 """
 
 from __future__ import annotations
@@ -11,12 +16,27 @@ import time
 
 import numpy as np
 
+from openaugi.model.block import Block
 from openaugi.model.protocols import EmbeddingModel
 from openaugi.store.sqlite import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 32
+
+
+def _build_embed_text(block: Block) -> str:
+    """Build the text to embed for a block.
+
+    Prepends the note title so short/ambiguous chunks carry their context.
+    A block from "2024-03-15" titled "Trading Journal" embeds as:
+        "Trading Journal\n\ngot stopped out on NVDA, rethinking position sizing"
+    rather than the decontextualized chunk alone.
+    """
+    content = block.content or ""
+    if block.title:
+        return f"{block.title}\n\n{content}"
+    return content
 
 
 def _is_bad_request(exc: Exception) -> bool:
@@ -37,9 +57,9 @@ def run_embed(
     batch_size: int = BATCH_SIZE,
 ) -> int:
     """Embed all blocks that need embeddings. Returns count embedded."""
-    blocks = store.get_blocks_needing_embeddings(kind="entry")
+    blocks = store.get_blocks_needing_embeddings(kind="data_block")
     if not blocks:
-        logger.info("All entry blocks already have embeddings")
+        logger.info("All data_block blocks already have embeddings")
         return 0
 
     # Ensure vec_blocks table exists with the correct dimension before writing
@@ -52,7 +72,7 @@ def run_embed(
 
     for i in range(0, len(blocks), batch_size):
         batch = blocks[i : i + batch_size]
-        texts = [model.truncate(b.content or "") for b in batch]
+        texts = [model.truncate(_build_embed_text(b)) for b in batch]
         block_ids = [b.id for b in batch]
 
         try:

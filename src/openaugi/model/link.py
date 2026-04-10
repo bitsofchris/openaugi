@@ -1,7 +1,7 @@
 """Link — edges between blocks in the knowledge graph.
 
 Structure lives in the links, not in the schema.
-Link kinds: split_from, tagged, links_to, member_of, ...
+Link kinds: contains, groups, links_to, member_of, ...
 
 See docs/plans/m0.md for the canonical schema.
 """
@@ -27,10 +27,10 @@ class Link(BaseModel):
 
     from_id: str
     to_id: str
-    kind: str  # split_from, tagged, links_to, member_of, ...
+    kind: str  # contains, groups, links_to, member_of, ...
     weight: float | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(default_factory=_utcnow)
+    ingested_at: str = Field(default_factory=_utcnow)
 
     model_config = {"frozen": False}
 

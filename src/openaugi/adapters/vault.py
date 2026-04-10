@@ -10,7 +10,7 @@ What stays from v1:
 
 What changes:
 - Output: Block + Link instead of Entry dataclass
-- Tags become Block(kind="tag") + Link(kind="tagged")
+- Tags become Block(kind="context_block:tag") + Link(kind="groups")
 - File hashes tracked via document block content_hash
 - Block ID = hash(source_path + content_hash) — stable across reordering
 """
@@ -238,7 +238,7 @@ def _parse_file(
     doc_id = Block.make_document_id(rel_path)
     doc_block = Block(
         id=doc_id,
-        kind="document",
+        kind="context_block:document",
         title=parent_title,
         source="vault",
         content_hash=file_hash,
@@ -278,7 +278,7 @@ def _parse_file(
                 # Sub-block contained only zzz lines — nothing meaningful to store
                 continue
 
-            # Entry block — identity keyed by raw sub-content (zzz-sensitive)
+            # Data block — identity keyed by raw sub-content (zzz-sensitive)
             entry_hash = Block.hash_content(stripped)
             entry_id = Block.make_id(rel_path, entry_hash)
 
@@ -304,28 +304,28 @@ def _parse_file(
 
             entry_block = Block(
                 id=entry_id,
-                kind="entry",
+                kind="data_block",
                 content=clean_content,
                 source="vault",
                 title=parent_title,
                 tags=all_tags,
-                timestamp=resolved_ts,
+                block_time=resolved_ts,
                 content_hash=entry_hash,
                 metadata=entry_metadata,
             )
             blocks.append(entry_block)
 
-            # Link: entry -> document (split_from)
-            links.append(Link(from_id=entry_id, to_id=doc_id, kind="split_from"))
+            # Link: data_block -> context_block:document (contains)
+            links.append(Link(from_id=entry_id, to_id=doc_id, kind="contains"))
 
-            # Tag blocks + tagged links
+            # context_block:tag blocks + groups links
             for tag_name in all_tags:
                 tag_id = Block.make_tag_id(tag_name)
                 if tag_name not in tag_blocks:
                     tag_blocks[tag_name] = Block(
-                        id=tag_id, kind="tag", title=tag_name, source="vault"
+                        id=tag_id, kind="context_block:tag", title=tag_name, source="vault"
                     )
-                links.append(Link(from_id=entry_id, to_id=tag_id, kind="tagged"))
+                links.append(Link(from_id=entry_id, to_id=tag_id, kind="groups"))
 
             # Wikilink links
             for link_target in entry_links:

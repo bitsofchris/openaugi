@@ -17,16 +17,16 @@ class TestPipelineIntegration:
         assert result["blocks_inserted"] > 0
         assert result["stats"]["total_blocks"] > 0
 
-        # Should have documents, entries, and tags
+        # Should have documents, data blocks, and tags
         stats = result["stats"]
-        assert stats["blocks_by_kind"].get("document", 0) >= 5
-        assert stats["blocks_by_kind"].get("entry", 0) >= 5
-        assert stats["blocks_by_kind"].get("tag", 0) >= 3
+        assert stats["blocks_by_kind"].get("context_block:document", 0) >= 5
+        assert stats["blocks_by_kind"].get("data_block", 0) >= 5
+        assert stats["blocks_by_kind"].get("context_block:tag", 0) >= 3
 
         # Should have links
         assert stats["total_links"] > 0
-        assert stats["links_by_kind"].get("split_from", 0) > 0
-        assert stats["links_by_kind"].get("tagged", 0) > 0
+        assert stats["links_by_kind"].get("contains", 0) > 0
+        assert stats["links_by_kind"].get("groups", 0) > 0
 
     def test_incremental_second_run_is_noop(self, vault_path: Path, store: SQLiteStore):
         """Second ingest with no changes should not insert new blocks."""
@@ -63,17 +63,17 @@ class TestPipelineIntegration:
         """Should be able to traverse links after ingestion."""
         run_layer0(vault_path, store)
 
-        # Get an entry block
-        entries = store.get_blocks_by_kind("entry", limit=1)
+        # Get a data_block
+        entries = store.get_blocks_by_kind("data_block", limit=1)
         assert len(entries) > 0
 
         entry = entries[0]
 
-        # Should have a split_from link to its document
-        links = store.get_links_from(entry.id, kind="split_from")
+        # Should have a contains link to its document
+        links = store.get_links_from(entry.id, kind="contains")
         assert len(links) == 1
 
-        # The target should be a document block
+        # The target should be a context_block:document block
         doc = store.get_block(links[0].to_id)
         assert doc is not None
-        assert doc.kind == "document"
+        assert doc.kind == "context_block:document"
