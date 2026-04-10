@@ -136,7 +136,7 @@ class TestMCPTools:
         result = json.loads(get_related(block_id))
         assert "related" in result
         assert result["count"] >= 0
-        # Entry should have at least a split_from link
+        # data_block should have at least a contains link
         if result["count"] > 0:
             assert "link_kind" in result["related"][0]
             assert "block" in result["related"][0]
@@ -173,10 +173,10 @@ class TestMCPTools:
     def test_recent_filtered_by_kind(self):
         from openaugi.mcp.server import recent
 
-        result = json.loads(recent(kind="document"))
+        result = json.loads(recent(kind="context_block:document"))
         assert "results" in result
         for r in result["results"]:
-            assert r["kind"] == "document"
+            assert r["kind"] == "context_block:document"
 
     def test_write_document_no_vault(self, monkeypatch):
         import openaugi.mcp.server as srv

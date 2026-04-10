@@ -2,7 +2,7 @@
 
 Covers:
 - Timestamp persistence (get/set last heartbeat)
-- find_new_blocks filtering by created_at
+- find_new_blocks filtering by block_time
 - build_prompt formatting (skill file ref, zzz instructions, log path)
 - run_heartbeat orchestration with a mocked agent launch
 - Skill file missing → loud failure
@@ -11,7 +11,6 @@ Covers:
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import pytest
@@ -53,7 +52,7 @@ def _make_entry(
         metadata["zzz_instructions"] = [zzz] if isinstance(zzz, str) else list(zzz)
     return Block(
         id=id_,
-        kind="entry",
+        kind="data_block",
         content=content,
         source="vault",
         title="journal",
@@ -84,17 +83,32 @@ class TestFindNewBlocks:
         blocks = hb.find_new_blocks(store, since=None)
         assert len(blocks) == 2
 
-    def test_filters_by_created_at(self, store: SQLiteStore):
-        store.insert_blocks([_make_entry("a" * 16, "first")])
-        # Capture a timestamp after the first insert
-        time.sleep(0.01)
-        cutoff = store.conn.execute(
-            "SELECT created_at FROM blocks WHERE id = ?", ("a" * 16,)
-        ).fetchone()[0]
-        time.sleep(0.01)
-        store.insert_blocks([_make_entry("b" * 16, "second")])
+    def test_filters_by_block_time(self, store: SQLiteStore):
+        # Insert two entries with distinct block_time values
+        older = Block(
+            id="a" * 16,
+            kind="data_block",
+            content="first",
+            source="vault",
+            title="journal",
+            content_hash="a" * 16,
+            metadata={"source_path": "journal.md"},
+            block_time="2024-01-01",
+        )
+        newer = Block(
+            id="b" * 16,
+            kind="data_block",
+            content="second",
+            source="vault",
+            title="journal",
+            content_hash="b" * 16,
+            metadata={"source_path": "journal.md"},
+            block_time="2024-06-01",
+        )
+        store.insert_blocks([older, newer])
 
-        blocks = hb.find_new_blocks(store, since=cutoff)
+        # Filter: only entries with block_time > "2024-01-01"
+        blocks = hb.find_new_blocks(store, since="2024-01-01")
         ids = [b.id for b in blocks]
         assert "b" * 16 in ids
         assert "a" * 16 not in ids
@@ -104,15 +118,15 @@ class TestFindNewBlocks:
         blocks = hb.find_new_blocks(store, since=None, max_blocks=3)
         assert len(blocks) == 3
 
-    def test_only_returns_entry_kind(self, store: SQLiteStore):
+    def test_only_returns_data_block_kind(self, store: SQLiteStore):
         store.insert_blocks(
             [
                 _make_entry("a" * 16, "entry content"),
-                Block(id="t" * 16, kind="tag", title="research", source="vault"),
+                Block(id="t" * 16, kind="context_block:tag", title="research", source="vault"),
             ]
         )
         blocks = hb.find_new_blocks(store, since=None)
-        assert all(b.kind == "entry" for b in blocks)
+        assert all(b.kind == "data_block" for b in blocks)
         assert len(blocks) == 1
 
 

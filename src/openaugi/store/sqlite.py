@@ -34,11 +34,11 @@ CREATE TABLE IF NOT EXISTS blocks (
     source TEXT,
     title TEXT,
     tags TEXT,                  -- JSON array
-    timestamp TEXT,             -- ISO-8601
+    block_time TEXT,             -- ISO-8601 — content/note date
     occurred_at TEXT,
     metadata TEXT,              -- JSON object
     content_hash TEXT,
-    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    ingested_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 """
 
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS links (
     kind TEXT NOT NULL,
     weight REAL,
     metadata TEXT,
-    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ingested_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     PRIMARY KEY (from_id, to_id, kind)
 );
 """
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS meta (
 _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_blocks_kind ON blocks(kind);",
     "CREATE INDEX IF NOT EXISTS idx_blocks_source ON blocks(source);",
-    "CREATE INDEX IF NOT EXISTS idx_blocks_timestamp ON blocks(timestamp);",
+    "CREATE INDEX IF NOT EXISTS idx_blocks_block_time ON blocks(block_time);",
     "CREATE INDEX IF NOT EXISTS idx_blocks_content_hash ON blocks(content_hash);",
     "CREATE INDEX IF NOT EXISTS idx_links_from ON links(from_id);",
     "CREATE INDEX IF NOT EXISTS idx_links_to ON links(to_id);",
@@ -163,7 +163,7 @@ class SQLiteStore:
         self.conn.execute(
             """INSERT OR IGNORE INTO blocks
                (id, kind, content, summary, embedding, source, title,
-                tags, timestamp, occurred_at, metadata, content_hash, created_at)
+                tags, block_time, occurred_at, metadata, content_hash, ingested_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 block.id,
@@ -174,11 +174,11 @@ class SQLiteStore:
                 block.source,
                 block.title,
                 block.tags_json(),
-                block.timestamp,
+                block.block_time,
                 block.occurred_at,
                 block.metadata_json(),
                 block.content_hash,
-                block.created_at,
+                block.ingested_at,
             ),
         )
 
@@ -189,7 +189,7 @@ class SQLiteStore:
         self.conn.executemany(
             """INSERT OR IGNORE INTO blocks
                (id, kind, content, summary, embedding, source, title,
-                tags, timestamp, occurred_at, metadata, content_hash, created_at)
+                tags, block_time, occurred_at, metadata, content_hash, ingested_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
@@ -201,11 +201,11 @@ class SQLiteStore:
                     b.source,
                     b.title,
                     b.tags_json(),
-                    b.timestamp,
+                    b.block_time,
                     b.occurred_at,
                     b.metadata_json(),
                     b.content_hash,
-                    b.created_at,
+                    b.ingested_at,
                 )
                 for b in blocks
             ],
@@ -217,7 +217,7 @@ class SQLiteStore:
         """Fetch a block by ID."""
         row = self.conn.execute(
             """SELECT id, kind, content, summary, embedding, source, title,
-                      tags, timestamp, occurred_at, metadata, content_hash, created_at
+                      tags, block_time, occurred_at, metadata, content_hash, ingested_at
                FROM blocks WHERE id = ?""",
             (block_id,),
         ).fetchone()
@@ -229,8 +229,8 @@ class SQLiteStore:
         """Fetch blocks by kind."""
         rows = self.conn.execute(
             """SELECT id, kind, content, summary, embedding, source, title,
-                      tags, timestamp, occurred_at, metadata, content_hash, created_at
-               FROM blocks WHERE kind = ? ORDER BY created_at DESC LIMIT ?""",
+                      tags, block_time, occurred_at, metadata, content_hash, ingested_at
+               FROM blocks WHERE kind = ? ORDER BY ingested_at DESC LIMIT ?""",
             (kind, limit),
         ).fetchall()
         return [_row_to_block(r) for r in rows]
@@ -243,11 +243,11 @@ class SQLiteStore:
 
     def delete_blocks_by_source_path(self, source_path: str) -> int:
         """Delete all blocks from a source path (via metadata). Returns count."""
-        # Document blocks have source_path in metadata
-        # Entry blocks link to doc via split_from — CASCADE handles them
+        # context_block:document blocks have source_path in metadata
+        # data_block blocks link to doc via contains — CASCADE handles them
         cursor = self.conn.execute(
             "DELETE FROM blocks WHERE id IN ("
-            "  SELECT id FROM blocks WHERE kind = 'document' "
+            "  SELECT id FROM blocks WHERE kind = 'context_block:document' "
             "  AND json_extract(metadata, '$.source_path') = ?"
             ")",
             (source_path,),
@@ -256,14 +256,14 @@ class SQLiteStore:
         return cursor.rowcount
 
     def get_entries_for_document(self, doc_id: str) -> list[Block]:
-        """Get entry blocks linked to a document via split_from."""
+        """Get data_block blocks linked to a context_block:document via contains."""
         rows = self.conn.execute(
             """SELECT b.id, b.kind, b.content, b.summary, b.embedding, b.source,
-                      b.title, b.tags, b.timestamp, b.occurred_at, b.metadata,
-                      b.content_hash, b.created_at
+                      b.title, b.tags, b.block_time, b.occurred_at, b.metadata,
+                      b.content_hash, b.ingested_at
                FROM blocks b
                JOIN links l ON l.from_id = b.id
-               WHERE l.to_id = ? AND l.kind = 'split_from'""",
+               WHERE l.to_id = ? AND l.kind = 'contains'""",
             (doc_id,),
         ).fetchall()
         return [_row_to_block(r) for r in rows]
@@ -298,7 +298,7 @@ class SQLiteStore:
         """Insert a single link. Ignores if already exists."""
         self.conn.execute(
             """INSERT OR IGNORE INTO links
-               (from_id, to_id, kind, weight, metadata, created_at)
+               (from_id, to_id, kind, weight, metadata, ingested_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (
                 link.from_id,
@@ -306,7 +306,7 @@ class SQLiteStore:
                 link.kind,
                 link.weight,
                 link.metadata_json(),
-                link.created_at,
+                link.ingested_at,
             ),
         )
 
@@ -316,7 +316,7 @@ class SQLiteStore:
             return 0
         self.conn.executemany(
             """INSERT OR IGNORE INTO links
-               (from_id, to_id, kind, weight, metadata, created_at)
+               (from_id, to_id, kind, weight, metadata, ingested_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
             [
                 (
@@ -325,7 +325,7 @@ class SQLiteStore:
                     lnk.kind,
                     lnk.weight,
                     lnk.metadata_json(),
-                    lnk.created_at,
+                    lnk.ingested_at,
                 )
                 for lnk in links
             ],
@@ -337,13 +337,13 @@ class SQLiteStore:
         """Get outgoing links from a block, optionally filtered by kind."""
         if kind:
             rows = self.conn.execute(
-                "SELECT from_id, to_id, kind, weight, metadata, created_at "
+                "SELECT from_id, to_id, kind, weight, metadata, ingested_at "
                 "FROM links WHERE from_id = ? AND kind = ?",
                 (block_id, kind),
             ).fetchall()
         else:
             rows = self.conn.execute(
-                "SELECT from_id, to_id, kind, weight, metadata, created_at "
+                "SELECT from_id, to_id, kind, weight, metadata, ingested_at "
                 "FROM links WHERE from_id = ?",
                 (block_id,),
             ).fetchall()
@@ -353,13 +353,13 @@ class SQLiteStore:
         """Get incoming links to a block, optionally filtered by kind."""
         if kind:
             rows = self.conn.execute(
-                "SELECT from_id, to_id, kind, weight, metadata, created_at "
+                "SELECT from_id, to_id, kind, weight, metadata, ingested_at "
                 "FROM links WHERE to_id = ? AND kind = ?",
                 (block_id, kind),
             ).fetchall()
         else:
             rows = self.conn.execute(
-                "SELECT from_id, to_id, kind, weight, metadata, created_at "
+                "SELECT from_id, to_id, kind, weight, metadata, ingested_at "
                 "FROM links WHERE to_id = ?",
                 (block_id,),
             ).fetchall()
@@ -376,8 +376,8 @@ class SQLiteStore:
         safe_query = _sanitize_fts_query(query)
         rows = self.conn.execute(
             """SELECT b.id, b.kind, b.content, b.summary, b.embedding, b.source,
-                      b.title, b.tags, b.timestamp, b.occurred_at, b.metadata,
-                      b.content_hash, b.created_at
+                      b.title, b.tags, b.block_time, b.occurred_at, b.metadata,
+                      b.content_hash, b.ingested_at
                FROM blocks_fts f
                JOIN blocks b ON f.id = b.id
                WHERE blocks_fts MATCH ?
@@ -389,11 +389,11 @@ class SQLiteStore:
 
     # ── Embedding helpers ──────────────────────────────────────────
 
-    def get_blocks_needing_embeddings(self, kind: str = "entry") -> list[Block]:
+    def get_blocks_needing_embeddings(self, kind: str = "data_block") -> list[Block]:
         """Get blocks that need embeddings (embedding IS NULL)."""
         rows = self.conn.execute(
             """SELECT id, kind, content, summary, embedding, source, title,
-                      tags, timestamp, occurred_at, metadata, content_hash, created_at
+                      tags, block_time, occurred_at, metadata, content_hash, ingested_at
                FROM blocks WHERE kind = ? AND embedding IS NULL AND content IS NOT NULL""",
             (kind,),
         ).fetchall()
@@ -431,7 +431,7 @@ class SQLiteStore:
         placeholders = ",".join("?" * len(block_ids))
         rows = self.conn.execute(
             f"""SELECT id, kind, content, summary, embedding, source, title,
-                       tags, timestamp, occurred_at, metadata, content_hash, created_at
+                       tags, block_time, occurred_at, metadata, content_hash, ingested_at
                 FROM blocks WHERE id IN ({placeholders})""",
             block_ids,
         ).fetchall()
@@ -452,11 +452,25 @@ class SQLiteStore:
         ).fetchall()
         return {row[0]: row[1] for row in rows}
 
-    def get_blocks_with_embeddings(self, kind: str = "entry") -> list[Block]:
+    def reset_embeddings(self, kind: str = "data_block") -> int:
+        """NULL out embeddings for all blocks of the given kind.
+
+        Forces a full re-embed on next run_embed() call. Use before switching
+        embedding models or adding title-prepend to get clean, consistent vectors.
+        Returns count of blocks reset.
+        """
+        cursor = self.conn.execute(
+            "UPDATE blocks SET embedding = NULL WHERE kind = ? AND embedding IS NOT NULL",
+            (kind,),
+        )
+        self.conn.commit()
+        return cursor.rowcount
+
+    def get_blocks_with_embeddings(self, kind: str = "data_block") -> list[Block]:
         """Get all blocks with embeddings (raw blobs for migration purposes)."""
         rows = self.conn.execute(
             """SELECT id, kind, content, summary, embedding, source, title,
-                      tags, timestamp, occurred_at, metadata, content_hash, created_at
+                      tags, block_time, occurred_at, metadata, content_hash, ingested_at
                FROM blocks WHERE kind = ? AND embedding IS NOT NULL""",
             (kind,),
         ).fetchall()
@@ -562,11 +576,11 @@ class SQLiteStore:
                 b.title,
                 b.source,
                 COALESCE(json_extract(b.metadata, '$.source_path'), '') AS source_path,
-                (SELECT COUNT(*) FROM links l WHERE l.to_id = b.id AND l.kind != 'split_from') AS in_links,
+                (SELECT COUNT(*) FROM links l WHERE l.to_id = b.id AND l.kind != 'contains') AS in_links,
                 (SELECT COUNT(*) FROM links l WHERE l.from_id = b.id) AS out_links,
-                (SELECT COUNT(*) FROM links l WHERE l.to_id = b.id AND l.kind = 'split_from') AS entry_count
+                (SELECT COUNT(*) FROM links l WHERE l.to_id = b.id AND l.kind = 'contains') AS entry_count
             FROM blocks b
-            WHERE b.kind = 'document'
+            WHERE b.kind = 'context_block:document'
             """
         ).fetchall()
 
@@ -605,7 +619,7 @@ class SQLiteStore:
     def get_tag_details(self, limit: int = 50) -> list[dict]:
         """Get detailed info for top tags: entry count, last active, co-occurring tags.
 
-        Returns tags ranked by entry count (inbound 'tagged' links).
+        Returns tags ranked by entry count (inbound 'groups' links).
         """
         import math
 
@@ -614,16 +628,16 @@ class SQLiteStore:
             SELECT
                 b.id AS tag_id,
                 b.title AS tag_name,
-                (SELECT COUNT(*) FROM links l WHERE l.to_id = b.id AND l.kind = 'tagged') AS entry_count,
-                (SELECT COUNT(*) FROM links l WHERE l.to_id = b.id AND l.kind != 'tagged') AS in_links,
+                (SELECT COUNT(*) FROM links l WHERE l.to_id = b.id AND l.kind = 'groups') AS entry_count,
+                (SELECT COUNT(*) FROM links l WHERE l.to_id = b.id AND l.kind != 'groups') AS in_links,
                 (SELECT COUNT(*) FROM links l WHERE l.from_id = b.id) AS out_links,
-                (SELECT MAX(e.timestamp)
+                (SELECT MAX(e.block_time)
                  FROM blocks e
                  JOIN links l ON l.from_id = e.id
-                 WHERE l.to_id = b.id AND l.kind = 'tagged' AND e.timestamp IS NOT NULL
+                 WHERE l.to_id = b.id AND l.kind = 'groups' AND e.block_time IS NOT NULL
                 ) AS last_active
             FROM blocks b
-            WHERE b.kind = 'tag'
+            WHERE b.kind = 'context_block:tag'
             """
         ).fetchall()
 
@@ -655,9 +669,9 @@ class SQLiteStore:
             """
             SELECT t.title AS co_tag, COUNT(*) AS shared_entries
             FROM links l1
-            JOIN links l2 ON l1.from_id = l2.from_id AND l2.kind = 'tagged'
+            JOIN links l2 ON l1.from_id = l2.from_id AND l2.kind = 'groups'
             JOIN blocks t ON t.id = l2.to_id
-            WHERE l1.to_id = ? AND l1.kind = 'tagged'
+            WHERE l1.to_id = ? AND l1.kind = 'groups'
               AND l2.to_id != ?
             GROUP BY t.title
             ORDER BY shared_entries DESC
@@ -668,15 +682,15 @@ class SQLiteStore:
         return [{"tag": r[0], "count": r[1]} for r in rows]
 
     def get_entries_for_tag(self, tag_id: str, limit: int = 100) -> list[Block]:
-        """Get entry blocks tagged with the given tag, ordered by timestamp DESC."""
+        """Get data_block blocks grouped with the given tag, ordered by block_time DESC."""
         rows = self.conn.execute(
             """SELECT b.id, b.kind, b.content, b.summary, b.embedding, b.source,
-                      b.title, b.tags, b.timestamp, b.occurred_at, b.metadata,
-                      b.content_hash, b.created_at
+                      b.title, b.tags, b.block_time, b.occurred_at, b.metadata,
+                      b.content_hash, b.ingested_at
                FROM blocks b
                JOIN links l ON l.from_id = b.id
-               WHERE l.to_id = ? AND l.kind = 'tagged'
-               ORDER BY b.timestamp DESC NULLS LAST
+               WHERE l.to_id = ? AND l.kind = 'groups'
+               ORDER BY b.block_time DESC NULLS LAST
                LIMIT ?""",
             (tag_id, limit),
         ).fetchall()
@@ -685,57 +699,56 @@ class SQLiteStore:
     def get_recent_blocks(
         self, days: int = 30, kind: str | None = None, limit: int = 500
     ) -> list[Block]:
-        """Get blocks created/modified within the last N days."""
+        """Get blocks with a note date within the last N days."""
         query = """SELECT id, kind, content, summary, embedding, source, title,
-                          tags, timestamp, occurred_at, metadata, content_hash, created_at
+                          tags, block_time, occurred_at, metadata, content_hash, ingested_at
                    FROM blocks
-                   WHERE timestamp IS NOT NULL
-                     AND timestamp >= date('now', ?)"""
+                   WHERE block_time IS NOT NULL
+                     AND block_time >= date('now', ?)"""
         params: list = [f"-{days} days"]
         if kind:
             query += " AND kind = ?"
             params.append(kind)
-        query += " ORDER BY timestamp DESC LIMIT ?"
+        query += " ORDER BY block_time DESC LIMIT ?"
         params.append(limit)
         rows = self.conn.execute(query, params).fetchall()
         return [_row_to_block(r) for r in rows]
 
-    def get_blocks_created_since(
+    def get_blocks_since(
         self,
         since: str | None,
-        kind: str = "entry",
+        kind: str = "data_block",
         limit: int = 500,
     ) -> list[Block]:
-        """Get blocks of a given kind created since an ISO timestamp.
+        """Get blocks of a given kind with a note date (block_time) since an ISO timestamp.
 
-        Used by the heartbeat pipeline to find entries added since the
-        previous run. Pass `since=None` to get all blocks of the kind
-        (first run).
+        Used by the heartbeat pipeline to find data_block blocks from notes dated since the
+        previous run. Pass `since=None` to get all blocks of the kind (first run).
         """
         query = """SELECT id, kind, content, summary, embedding, source, title,
-                          tags, timestamp, occurred_at, metadata, content_hash, created_at
+                          tags, block_time, occurred_at, metadata, content_hash, ingested_at
                    FROM blocks
                    WHERE kind = ?"""
         params: list = [kind]
         if since:
-            query += " AND created_at > ?"
+            query += " AND block_time > ?"
             params.append(since)
-        query += " ORDER BY created_at ASC LIMIT ?"
+        query += " ORDER BY block_time ASC LIMIT ?"
         params.append(limit)
         rows = self.conn.execute(query, params).fetchall()
         return [_row_to_block(r) for r in rows]
 
-    def get_orphan_block_ids(self, kind: str = "entry") -> list[str]:
-        """Get block IDs with zero inbound AND zero outbound links (excluding split_from)."""
+    def get_orphan_block_ids(self, kind: str = "data_block") -> list[str]:
+        """Get block IDs with zero inbound AND zero outbound links (excluding contains)."""
         rows = self.conn.execute(
             """
             SELECT b.id FROM blocks b
             WHERE b.kind = ?
               AND NOT EXISTS (
-                  SELECT 1 FROM links l WHERE l.from_id = b.id AND l.kind != 'split_from'
+                  SELECT 1 FROM links l WHERE l.from_id = b.id AND l.kind != 'contains'
               )
               AND NOT EXISTS (
-                  SELECT 1 FROM links l WHERE l.to_id = b.id AND l.kind != 'split_from'
+                  SELECT 1 FROM links l WHERE l.to_id = b.id AND l.kind != 'contains'
               )
             """,
             (kind,),
@@ -752,14 +765,14 @@ class SQLiteStore:
                     b.id AS tag_id,
                     b.title AS tag_name,
                     (SELECT COUNT(*) FROM links l
-                     WHERE l.to_id = b.id AND l.kind = 'tagged') AS entry_count,
-                    (SELECT MAX(e.timestamp)
+                     WHERE l.to_id = b.id AND l.kind = 'groups') AS entry_count,
+                    (SELECT MAX(e.block_time)
                      FROM blocks e JOIN links l ON l.from_id = e.id
-                     WHERE l.to_id = b.id AND l.kind = 'tagged'
-                       AND e.timestamp IS NOT NULL
+                     WHERE l.to_id = b.id AND l.kind = 'groups'
+                       AND e.block_time IS NOT NULL
                     ) AS last_active
                 FROM blocks b
-                WHERE b.kind = 'tag'
+                WHERE b.kind = 'context_block:tag'
             )
             WHERE last_active IS NOT NULL
               AND last_active < date('now', ?)
@@ -850,11 +863,11 @@ def _row_to_block(row: tuple) -> Block:
         source,
         title,
         tags_json_str,
-        timestamp,
+        block_time,
         occurred_at,
         metadata_json_str,
         content_hash,
-        created_at,
+        ingested_at,
     ) = row
 
     tags = json.loads(tags_json_str) if tags_json_str else []
@@ -869,17 +882,17 @@ def _row_to_block(row: tuple) -> Block:
         source=source,
         title=title,
         tags=tags,
-        timestamp=timestamp,
+        block_time=block_time,
         occurred_at=occurred_at,
         metadata=metadata,
         content_hash=content_hash,
-        created_at=created_at or "",
+        ingested_at=ingested_at or "",
     )
 
 
 def _row_to_link(row: tuple) -> Link:
     """Convert a SQLite row tuple to a Link."""
-    from_id, to_id, kind, weight, metadata_json_str, created_at = row
+    from_id, to_id, kind, weight, metadata_json_str, ingested_at = row
     metadata = json.loads(metadata_json_str) if metadata_json_str else {}
     return Link(
         from_id=from_id,
@@ -887,5 +900,5 @@ def _row_to_link(row: tuple) -> Link:
         kind=kind,
         weight=weight,
         metadata=metadata,
-        created_at=created_at or "",
+        ingested_at=ingested_at or "",
     )

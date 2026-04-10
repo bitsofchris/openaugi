@@ -5,18 +5,18 @@ from openaugi.model.block import Block
 
 class TestBlockModel:
     def test_create_entry_block(self):
-        b = Block(id="abc123", kind="entry", content="Hello world", source="vault")
+        b = Block(id="abc123", kind="data_block", content="Hello world", source="vault")
         assert b.id == "abc123"
-        assert b.kind == "entry"
+        assert b.kind == "data_block"
         assert b.content == "Hello world"
         assert b.content_hash is not None  # auto-computed
 
     def test_content_hash_auto_computed(self):
-        b = Block(id="a", kind="entry", content="test content")
+        b = Block(id="a", kind="data_block", content="test content")
         assert b.content_hash == Block.hash_content("test content")
 
     def test_content_hash_not_overwritten(self):
-        b = Block(id="a", kind="entry", content="test", content_hash="explicit")
+        b = Block(id="a", kind="data_block", content="test", content_hash="explicit")
         assert b.content_hash == "explicit"
 
     def test_make_id_deterministic(self):
@@ -40,16 +40,16 @@ class TestBlockModel:
         assert id1 == id2
 
     def test_tags_json(self):
-        b = Block(id="a", kind="entry", tags=["career", "project"])
+        b = Block(id="a", kind="data_block", tags=["career", "project"])
         assert '"career"' in b.tags_json()
         assert '"project"' in b.tags_json()
 
     def test_metadata_json(self):
-        b = Block(id="a", kind="entry", metadata={"h3_date": "2024-03-15"})
+        b = Block(id="a", kind="data_block", metadata={"h3_date": "2024-03-15"})
         assert '"h3_date"' in b.metadata_json()
 
     def test_block_no_content_no_hash(self):
-        b = Block(id="a", kind="tag", title="career")
+        b = Block(id="a", kind="context_block:tag", title="career")
         assert b.content is None
         assert b.content_hash is None
 

@@ -226,7 +226,7 @@ class TestBlockLevelIncremental:
         doc_id = Block.make_document_id("brand-new-note.md")
         doc = store.get_block(doc_id)
         assert doc is not None
-        assert doc.kind == "document"
+        assert doc.kind == "context_block:document"
 
         entries = store.get_entries_for_document(doc_id)
         assert len(entries) == 1

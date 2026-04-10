@@ -7,7 +7,7 @@ session with openaugi MCP tools to process them.
 The Python side is deliberately dumb: it does not classify, it does not
 decide what goes where. It only:
   1. Reads the last heartbeat timestamp from ~/.openaugi/last_heartbeat
-  2. Queries entry blocks created since that timestamp
+  2. Queries data_block blocks created since that timestamp
   3. Builds a prompt listing blocks + zzz instructions + skill file ref
   4. Shells out to `claude -p <prompt> --allowedTools ...`
   5. Updates the timestamp on success
@@ -20,7 +20,6 @@ the skill file, not the Python. See docs/plans/heartbeat.md.
 from __future__ import annotations
 
 import logging
-import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -60,7 +59,7 @@ def find_new_blocks(
     ignore_sources: list[str] | None = None,
     ignore_headings: list[str] | None = None,
 ) -> list[Block]:
-    """Fetch entry blocks created since the last heartbeat, oldest first.
+    """Fetch data_block blocks created since the last heartbeat, oldest first.
 
     Capped at `max_blocks` to keep prompts bounded. If more exist, the
     caller should surface that so the user can rerun or raise the cap.
@@ -71,7 +70,7 @@ def find_new_blocks(
     """
     import fnmatch
 
-    blocks = store.get_blocks_created_since(since=since, kind="entry", limit=max_blocks)
+    blocks = store.get_blocks_since(since=since, kind="data_block", limit=max_blocks)
     if ignore_sources:
         blocks = [
             b
@@ -152,7 +151,7 @@ fall back to the defaults in the skill file.
             f"\n### Block {i} — id {block.id}\n"
             f"- **Source:** {source_path}\n"
             f"- **Tags:** {tags}\n"
-            f"- **Timestamp:** {block.timestamp or '(none)'}\n"
+            f"- **Timestamp:** {block.block_time or '(none)'}\n"
         )
         if zzz_list:
             section += "- **User instructions:**\n"
@@ -187,12 +186,15 @@ def launch_agent(prompt: str) -> int:
     `claude` binary is not on PATH — the CLI caller turns that into a
     helpful error for the user.
     """
-    claude_bin = shutil.which("claude")
-    if not claude_bin:
+    from openaugi.pipeline.task_watcher import detect_claude
+
+    try:
+        claude_bin = detect_claude()
+    except FileNotFoundError as err:
         raise FileNotFoundError(
-            "The `claude` CLI was not found on PATH. Install Claude Code "
+            "The `claude` CLI was not found. Install Claude Code "
             "(https://claude.com/claude-code) or run the prompt manually."
-        )
+        ) from err
 
     allowed_tools = ",".join(
         [
@@ -235,7 +237,7 @@ def run_heartbeat(
     Steps:
       1. Resolve the skill file path and fail loudly if missing.
       2. Read last heartbeat timestamp.
-      3. Query entry blocks created since that timestamp.
+      3. Query data_block blocks created since that timestamp.
       4. Build a prompt and (unless dry_run) spawn the claude agent.
       5. On success, update the timestamp.
 

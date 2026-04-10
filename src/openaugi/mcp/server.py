@@ -70,7 +70,7 @@ def _get_vault_path() -> str | None:
 def _get_store() -> SQLiteStore:
     global _store
     if _store is None:
-        _store = SQLiteStore(_get_db_path(), read_only=True)
+        _store = SQLiteStore(_get_db_path())
     return _store
 
 
@@ -191,9 +191,9 @@ def search(
                 block.tags + block.metadata.get("augi_tags", [])
             ):
                 continue
-            if after and (block.timestamp or "") < after:
+            if after and (block.block_time or "") < after:
                 continue
-            if before and (block.timestamp or "") > before:
+            if before and (block.block_time or "") > before:
                 continue
             summary = _block_summary(block)
             summary["score"] = round(1.0 - distance, 4)
@@ -213,16 +213,16 @@ def search(
         )
 
     # Browse mode — filter blocks
-    blocks = store.get_blocks_by_kind(kind or "entry", limit=k * 3)
+    blocks = store.get_blocks_by_kind(kind or "data_block", limit=k * 3)
     results = []
     for b in blocks:
         if source and b.source != source:
             continue
         if tags and not set(tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
             continue
-        if after and (b.timestamp or "") < after:
+        if after and (b.block_time or "") < after:
             continue
-        if before and (b.timestamp or "") > before:
+        if before and (b.block_time or "") > before:
             continue
         results.append(_block_summary(b))
         if len(results) > k:
@@ -303,8 +303,8 @@ def get_related(
     Do NOT use this for broad discovery — use search or get_context instead.
 
     - direction: 'out' (from block), 'in' (to block), or 'both' (default)
-    - kind: filter by link kind. Common kinds: 'split_from' (entry→document),
-      'tagged' (entry→tag), 'links_to' (wikilink between notes)
+    - kind: filter by link kind. Common kinds: 'contains' (data_block→context_block:document),
+      'groups' (data_block→context_block:tag), 'links_to' (wikilink between notes)
     - limit: max results (default 50)"""
     store = _get_store()
 
@@ -352,7 +352,7 @@ def traverse(
     Do NOT use for broad search — use search or get_context instead.
 
     - max_hops: how many link-steps to follow (default 2, max recommended 3)
-    - link_kinds: restrict to specific link types (e.g. ['links_to', 'tagged'])
+    - link_kinds: restrict to specific link types (e.g. ['links_to', 'groups'])
     - limit: max results (default 50)"""
     store = _get_store()
 
@@ -532,11 +532,12 @@ def recent(
     Do NOT use this for topic-based search — use search or get_context instead.
 
     - k: max results (default 20)
-    - kind: block kind to filter by (default 'entry'). Common kinds: 'entry', 'document', 'tag'
+    - kind: block kind to filter by (default 'data_block'). Common kinds:
+      'data_block', 'context_block:document', 'context_block:tag'
     - source: filter by source (e.g. 'vault')
     - tags: filter to blocks matching any of these tags"""
     store = _get_store()
-    target_kind = kind or "entry"
+    target_kind = kind or "data_block"
     blocks = store.get_blocks_by_kind(target_kind, limit=k * 3)
 
     results = []
@@ -849,14 +850,14 @@ def get_note_resource(title: str) -> str:
 
     # Find document block by title
     rows = store.conn.execute(
-        "SELECT id FROM blocks WHERE kind = 'document' AND title = ? LIMIT 1",
+        "SELECT id FROM blocks WHERE kind = 'context_block:document' AND title = ? LIMIT 1",
         (title,),
     ).fetchall()
 
     if not rows:
         # Fall back to FTS search on title
         fts = store.search_fts(title, limit=5)
-        doc_blocks = [b for b in fts if b.kind == "document"]
+        doc_blocks = [b for b in fts if b.kind == "context_block:document"]
         if not doc_blocks:
             return _json(
                 {
@@ -895,7 +896,7 @@ def _block_summary(block) -> dict:
         "content": (block.content or "")[:500],
         "tags": block.tags,
         "augi_tags": block.metadata.get("augi_tags", []),
-        "timestamp": block.timestamp,
+        "block_time": block.block_time,
         "source": block.source,
     }
 
@@ -909,12 +910,12 @@ def _block_full(block) -> dict:
         "summary": block.summary,
         "tags": block.tags,
         "augi_tags": block.metadata.get("augi_tags", []),
-        "timestamp": block.timestamp,
+        "block_time": block.block_time,
         "occurred_at": block.occurred_at,
         "source": block.source,
         "metadata": block.metadata,
         "content_hash": block.content_hash,
-        "created_at": block.created_at,
+        "ingested_at": block.ingested_at,
     }
 
 

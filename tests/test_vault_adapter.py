@@ -283,33 +283,33 @@ class TestParseVault:
         assert len(blocks) > 0
         assert len(links) > 0
 
-        # Should have document blocks
-        doc_blocks = [b for b in blocks if b.kind == "document"]
+        # Should have context_block:document blocks
+        doc_blocks = [b for b in blocks if b.kind == "context_block:document"]
         assert len(doc_blocks) >= 5  # at least our 6 .md files minus empty
 
-        # Should have entry blocks
-        entry_blocks = [b for b in blocks if b.kind == "entry"]
-        assert len(entry_blocks) >= 5
+        # Should have data_block blocks
+        data_blocks = [b for b in blocks if b.kind == "data_block"]
+        assert len(data_blocks) >= 5
 
-        # Should have tag blocks
-        tag_blocks = [b for b in blocks if b.kind == "tag"]
+        # Should have context_block:tag blocks
+        tag_blocks = [b for b in blocks if b.kind == "context_block:tag"]
         assert len(tag_blocks) >= 3
 
     def test_obsidian_dir_excluded(self, vault_path: Path):
         blocks, _ = parse_vault(vault_path)
         # .obsidian/ files should not produce any blocks
         for b in blocks:
-            if b.kind == "document":
+            if b.kind == "context_block:document":
                 assert ".obsidian" not in b.metadata.get("source_path", "")
 
     def test_h3_splitting(self, vault_path: Path):
         blocks, _ = parse_vault(vault_path)
 
-        # daily-2024-03-15.md has 2 H3 dates → should produce 2+ entries
+        # daily-2024-03-15.md has 2 H3 dates → should produce 2+ data_blocks
         daily_entries = [
             b
             for b in blocks
-            if b.kind == "entry" and b.metadata.get("parent_note_title") == "daily-2024-03-15"
+            if b.kind == "data_block" and b.metadata.get("parent_note_title") == "daily-2024-03-15"
         ]
         assert len(daily_entries) >= 2
 
@@ -320,7 +320,7 @@ class TestParseVault:
         daily_entries = [
             b
             for b in blocks
-            if b.kind == "entry" and b.metadata.get("parent_note_title") == "daily-2024-03-15"
+            if b.kind == "data_block" and b.metadata.get("parent_note_title") == "daily-2024-03-15"
         ]
         # At least one entry should have the frontmatter tag
         all_tags = set()
@@ -338,17 +338,17 @@ class TestParseVault:
         targets = [lnk.metadata.get("target_title") for lnk in links_to]
         assert "Project Alpha" in targets
 
-    def test_split_from_links(self, vault_path: Path):
+    def test_contains_links(self, vault_path: Path):
         _, links = parse_vault(vault_path)
 
-        split_links = [lnk for lnk in links if lnk.kind == "split_from"]
-        assert len(split_links) > 0
+        contains_links = [lnk for lnk in links if lnk.kind == "contains"]
+        assert len(contains_links) > 0
 
-    def test_tagged_links(self, vault_path: Path):
+    def test_groups_links(self, vault_path: Path):
         _, links = parse_vault(vault_path)
 
-        tagged_links = [lnk for lnk in links if lnk.kind == "tagged"]
-        assert len(tagged_links) > 0
+        groups_links = [lnk for lnk in links if lnk.kind == "groups"]
+        assert len(groups_links) > 0
 
     def test_nested_directory(self, vault_path: Path):
         blocks, _ = parse_vault(vault_path)
@@ -356,7 +356,8 @@ class TestParseVault:
         nested = [
             b
             for b in blocks
-            if b.kind == "document" and "subdir/" in b.metadata.get("source_path", "")
+            if b.kind == "context_block:document"
+            and "subdir/" in b.metadata.get("source_path", "")
         ]
         assert len(nested) == 1
 
@@ -367,11 +368,11 @@ class TestParseVault:
         book_entries = [
             b
             for b in blocks
-            if b.kind == "entry"
+            if b.kind == "data_block"
             and b.metadata.get("parent_note_title", "").startswith("2024-01-15")
         ]
         assert len(book_entries) >= 1
-        assert book_entries[0].timestamp == "2024-01-15"
+        assert book_entries[0].block_time == "2024-01-15"
 
     def test_single_entry_for_no_h3(self, vault_path: Path):
         blocks, _ = parse_vault(vault_path)
@@ -379,7 +380,7 @@ class TestParseVault:
         simple_entries = [
             b
             for b in blocks
-            if b.kind == "entry" and b.metadata.get("parent_note_title") == "no-dates-no-h3"
+            if b.kind == "data_block" and b.metadata.get("parent_note_title") == "no-dates-no-h3"
         ]
         assert len(simple_entries) == 1
 
@@ -387,8 +388,8 @@ class TestParseVault:
         blocks1, _ = parse_vault(vault_path)
         blocks2, _ = parse_vault(vault_path)
 
-        ids1 = sorted(b.id for b in blocks1 if b.kind == "entry")
-        ids2 = sorted(b.id for b in blocks2 if b.kind == "entry")
+        ids1 = sorted(b.id for b in blocks1 if b.kind == "data_block")
+        ids2 = sorted(b.id for b in blocks2 if b.kind == "data_block")
         assert ids1 == ids2
 
 
@@ -440,7 +441,7 @@ class TestEdgeCases:
             encoding="utf-8",
         )
         blocks, links = parse_vault(tmp_path)
-        entries = [b for b in blocks if b.kind == "entry"]
+        entries = [b for b in blocks if b.kind == "data_block"]
         assert len(entries) == 1
         assert "🚀" in entries[0].content
 
@@ -450,7 +451,7 @@ class TestEdgeCases:
         empty_entries = [
             b
             for b in blocks
-            if b.kind == "entry" and b.metadata.get("parent_note_title") == "empty-note"
+            if b.kind == "data_block" and b.metadata.get("parent_note_title") == "empty-note"
         ]
         assert len(empty_entries) == 0
 
@@ -459,7 +460,7 @@ class TestEdgeCases:
         note = tmp_path / "Q&A (draft).md"
         note.write_text("Some content here\n")
         blocks, _ = parse_vault(tmp_path)
-        docs = [b for b in blocks if b.kind == "document"]
+        docs = [b for b in blocks if b.kind == "context_block:document"]
         assert any("Q&A (draft)" in (b.title or "") for b in docs)
 
     def test_zzz_instructions_captured_in_metadata(self, tmp_path: Path):
@@ -471,7 +472,7 @@ class TestEdgeCases:
             encoding="utf-8",
         )
         blocks, _ = parse_vault(tmp_path)
-        entries = [b for b in blocks if b.kind == "entry"]
+        entries = [b for b in blocks if b.kind == "data_block"]
         assert len(entries) == 1
         entry = entries[0]
         assert "zzz" not in (entry.content or "")
@@ -490,7 +491,7 @@ class TestEdgeCases:
             encoding="utf-8",
         )
         blocks, _ = parse_vault(tmp_path)
-        entries = [b for b in blocks if b.kind == "entry"]
+        entries = [b for b in blocks if b.kind == "data_block"]
         assert len(entries) == 1
         assert entries[0].metadata.get("zzz_instructions") == [
             "research this",
@@ -502,7 +503,7 @@ class TestEdgeCases:
         note = tmp_path / "scratch.md"
         note.write_text("zzz just a note to self\n", encoding="utf-8")
         blocks, _ = parse_vault(tmp_path)
-        entries = [b for b in blocks if b.kind == "entry"]
+        entries = [b for b in blocks if b.kind == "data_block"]
         assert len(entries) == 0
 
     def test_zzz_changes_block_identity(self, tmp_path: Path):
@@ -510,11 +511,11 @@ class TestEdgeCases:
         note = tmp_path / "note.md"
         note.write_text("An idea about X\n", encoding="utf-8")
         blocks_before, _ = parse_vault(tmp_path)
-        entry_before = next(b for b in blocks_before if b.kind == "entry")
+        entry_before = next(b for b in blocks_before if b.kind == "data_block")
 
         note.write_text("An idea about X\nzzz research this\n", encoding="utf-8")
         blocks_after, _ = parse_vault(tmp_path)
-        entry_after = next(b for b in blocks_after if b.kind == "entry")
+        entry_after = next(b for b in blocks_after if b.kind == "data_block")
 
         assert entry_before.id != entry_after.id
         assert entry_after.metadata.get("zzz_instructions") == ["research this"]
@@ -528,7 +529,7 @@ class TestEdgeCases:
             encoding="utf-8",
         )
         blocks, _ = parse_vault(tmp_path)
-        entries = [b for b in blocks if b.kind == "entry"]
+        entries = [b for b in blocks if b.kind == "data_block"]
         assert len(entries) == 3
         contents = sorted((e.content or "").strip() for e in entries)
         assert contents == ["First thought", "Second thought", "Third thought"]
@@ -544,7 +545,7 @@ class TestEdgeCases:
         entries = [
             b
             for b in blocks
-            if b.kind == "entry" and b.metadata.get("parent_note_title") == "daily-2026-04-08"
+            if b.kind == "data_block" and b.metadata.get("parent_note_title") == "daily-2026-04-08"
         ]
         assert len(entries) == 2
         # Both sub-blocks should inherit the date from the heading
@@ -565,7 +566,7 @@ class TestEdgeCases:
         )
         blocks, _ = parse_vault(tmp_path)
         entries = sorted(
-            (b for b in blocks if b.kind == "entry"),
+            (b for b in blocks if b.kind == "data_block"),
             key=lambda b: b.content or "",
         )
         assert len(entries) == 2
@@ -583,7 +584,7 @@ class TestEdgeCases:
         note = tmp_path / "mixed.md"
         note.write_text("one\nQQQ\ntwo\nqQq\nthree\n", encoding="utf-8")
         blocks, _ = parse_vault(tmp_path)
-        entries = [b for b in blocks if b.kind == "entry"]
+        entries = [b for b in blocks if b.kind == "data_block"]
         assert len(entries) == 3
 
     def test_note_with_no_delimiters_is_single_block(self, tmp_path: Path):
@@ -596,7 +597,7 @@ class TestEdgeCases:
             encoding="utf-8",
         )
         blocks, _ = parse_vault(tmp_path)
-        entries = [b for b in blocks if b.kind == "entry"]
+        entries = [b for b in blocks if b.kind == "data_block"]
         assert len(entries) == 1
         content = entries[0].content or ""
         assert "focused note" in content
@@ -612,5 +613,5 @@ class TestEdgeCases:
         blocks, _ = parse_vault(tmp_path)
         # good.md produces a doc + entry; bad.md produces a doc but entry may fail
         # The key assertion: no crash, and good.md content is present
-        entries = [b for b in blocks if b.kind == "entry"]
+        entries = [b for b in blocks if b.kind == "data_block"]
         assert any("Normal content" in (b.content or "") for b in entries)

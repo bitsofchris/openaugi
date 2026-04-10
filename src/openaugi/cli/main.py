@@ -261,6 +261,55 @@ def ingest(
         store.close()
 
 
+@app.command(name="re-embed")
+def re_embed(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    kind: str = typer.Option(
+        "data_block", "--kind", help="Block kind to re-embed (default: data_block)"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Reset embeddings and re-embed from scratch with the current model config.
+
+    Use after switching embedding models or enabling title-prepend.
+    Nulls out all embeddings for the given block kind, then re-embeds
+    using the model in your config (~/.openaugi/config.toml).
+
+    Example — switch to text-embedding-3-large:
+        # In ~/.openaugi/config.toml:
+        # [models.embedding]
+        # provider = "openai"
+        # model = "text-embedding-3-large"
+
+        openaugi re-embed
+    """
+    _setup_logging(verbose)
+
+    from openaugi.config import load_config
+    from openaugi.models import get_embedding_model
+    from openaugi.pipeline.embed import run_embed
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    db_path = db or str(_default_db())
+    store = SQLiteStore(db_path)
+
+    try:
+        console.print(f"[bold]Database:[/bold] {db_path}")
+        console.print(f"[bold]Kind:[/bold] {kind}")
+
+        count = store.reset_embeddings(kind=kind)
+        console.print(f"[yellow]Reset {count} embeddings → will re-embed[/yellow]")
+
+        model = get_embedding_model(config.get("models", {}).get("embedding"))
+        console.print(f"[bold]Model:[/bold] {model.name} ({model.dimensions} dims)")
+
+        embedded = run_embed(store, model)
+        console.print(f"[green]Done. Embedded {embedded} blocks.[/green]")
+    finally:
+        store.close()
+
+
 @app.command()
 @app.command()
 def serve(
