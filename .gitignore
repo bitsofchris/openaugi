@@ -11,12 +11,19 @@ storage/
 *.log
 *lib/
 *.json
+!experiments/**/fixture.json
+!experiments/**/package.json
+!experiments/**/tsconfig*.json
 notes_network.html
 *.duckdb*
 *.duckdb
 *.db
 *.db-wal
 *.db-shm
+
+# Frontend
+node_modules/
+dist/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

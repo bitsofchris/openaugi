@@ -1,0 +1,4332 @@
+{
+  "generated_at": "2026-04-10",
+  "block_count": 300,
+  "passes": [
+    {
+      "id": "life_areas",
+      "description": "Coarse life area clusters",
+      "dims": 64,
+      "scope": "all",
+      "parent_pass": null
+    },
+    {
+      "id": "life_areas_fine",
+      "description": "Fine topic clusters within each life area",
+      "dims": 512,
+      "scope": "within",
+      "parent_pass": "life_areas"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "block_0000",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.506,
+      "y": 0.3877,
+      "date": "2023-12",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0001",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.6924,
+      "y": 0.4436,
+      "date": "2022-01",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0002",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.3457,
+      "y": 0.3849,
+      "date": "2025-04",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0003",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.3276,
+      "y": -0.6852,
+      "date": "2023-12",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0004",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.5551,
+      "y": 0.7487,
+      "date": "2022-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0005",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.5655,
+      "y": 0.5977,
+      "date": "2022-12",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0006",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.4463,
+      "y": -0.5285,
+      "date": "2024-11",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0007",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.2929,
+      "y": -0.6094,
+      "date": "2022-11",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0008",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.4042,
+      "y": 0.5525,
+      "date": "2022-07",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0009",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.4047,
+      "y": 0.6083,
+      "date": "2023-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0010",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.6229,
+      "y": 0.3352,
+      "date": "2023-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0011",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.5427,
+      "y": 0.8391,
+      "date": "2023-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0012",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.7616,
+      "y": -0.4041,
+      "date": "2024-07",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0013",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.2128,
+      "y": 0.3923,
+      "date": "2024-04",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0014",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.4481,
+      "y": 0.4349,
+      "date": "2023-04",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0015",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.7762,
+      "y": -0.6624,
+      "date": "2025-06",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0016",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.4608,
+      "y": 0.5252,
+      "date": "2022-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0017",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.6215,
+      "y": 0.4158,
+      "date": "2025-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0018",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.261,
+      "y": -0.4827,
+      "date": "2024-11",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0019",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.4934,
+      "y": 0.5101,
+      "date": "2024-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0020",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.4132,
+      "y": -0.5918,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0021",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.1752,
+      "y": 0.4023,
+      "date": "2022-10",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0022",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 1.0298,
+      "y": 0.9089,
+      "date": "2024-04",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0023",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.56,
+      "y": 0.4792,
+      "date": "2025-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0024",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.6952,
+      "y": 0.1935,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0025",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.8363,
+      "y": -0.5766,
+      "date": "2023-12",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0026",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.4052,
+      "y": 0.3698,
+      "date": "2025-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0027",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": -1.1495,
+      "y": 0.1294,
+      "date": "2023-01",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0028",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.457,
+      "y": 0.8229,
+      "date": "2024-02",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0029",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.3141,
+      "y": 0.5171,
+      "date": "2025-04",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0030",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.3175,
+      "y": 0.6229,
+      "date": "2024-07",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0031",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.7058,
+      "y": 0.5729,
+      "date": "2022-01",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0032",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.4268,
+      "y": 0.4134,
+      "date": "2023-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0033",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.5203,
+      "y": 0.6119,
+      "date": "2022-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0034",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": 1.1983,
+      "y": 0.8065,
+      "date": "2022-04",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0035",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.5343,
+      "y": 0.6479,
+      "date": "2022-03",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0036",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.525,
+      "y": 0.7614,
+      "date": "2025-05",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0037",
+      "content": "HDBSCAN handles noise gracefully, treating outliers as unclustered rather than forcing assignment.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.309,
+      "y": 0.4945,
+      "date": "2025-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0038",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.7284,
+      "y": 0.5879,
+      "date": "2022-12",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0039",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.0557,
+      "y": 1.0065,
+      "date": "2023-01",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0040",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.4489,
+      "y": 0.5235,
+      "date": "2023-07",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0041",
+      "content": "Ward linkage produces more balanced cluster sizes than average linkage for text.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.4624,
+      "y": -0.5203,
+      "date": "2022-07",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0042",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.407,
+      "y": -0.5404,
+      "date": "2024-04",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0043",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.3988,
+      "y": 0.3687,
+      "date": "2022-01",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0044",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.4415,
+      "y": -0.5014,
+      "date": "2023-09",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0045",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.274,
+      "y": 0.2901,
+      "date": "2024-05",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0046",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.4406,
+      "y": 0.3024,
+      "date": "2022-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0047",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.7448,
+      "y": 0.6865,
+      "date": "2024-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0048",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.5286,
+      "y": 0.7024,
+      "date": "2024-04",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0049",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.2596,
+      "y": -0.6626,
+      "date": "2022-11",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0050",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.7575,
+      "y": -0.4943,
+      "date": "2024-03",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0051",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.5678,
+      "y": -0.5273,
+      "date": "2023-09",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0052",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.3496,
+      "y": -0.5515,
+      "date": "2022-05",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0053",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.5422,
+      "y": -0.5074,
+      "date": "2024-04",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0054",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.4414,
+      "y": 0.1941,
+      "date": "2025-10",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0055",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.7705,
+      "y": -0.8083,
+      "date": "2023-07",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0056",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.6712,
+      "y": 0.8015,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0057",
+      "content": "HDBSCAN handles noise gracefully, treating outliers as unclustered rather than forcing assignment.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.5312,
+      "y": 0.5284,
+      "date": "2025-04",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0058",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.3371,
+      "y": -0.2747,
+      "date": "2023-04",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0059",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.6416,
+      "y": 0.7643,
+      "date": "2024-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0060",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.5747,
+      "y": 0.3881,
+      "date": "2022-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0061",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.4583,
+      "y": 0.4957,
+      "date": "2025-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0062",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.3524,
+      "y": 0.4894,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0063",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.7697,
+      "y": 0.4661,
+      "date": "2023-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0064",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.3159,
+      "y": 0.3999,
+      "date": "2022-12",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0065",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.6277,
+      "y": -0.4171,
+      "date": "2024-09",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0066",
+      "content": "Ward linkage produces more balanced cluster sizes than average linkage for text.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.71,
+      "y": 0.4174,
+      "date": "2023-10",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0067",
+      "content": "Ward linkage produces more balanced cluster sizes than average linkage for text.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.5641,
+      "y": 0.3896,
+      "date": "2023-07",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0068",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.6582,
+      "y": -0.4646,
+      "date": "2023-09",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0069",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.4739,
+      "y": 0.4123,
+      "date": "2022-05",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0070",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.6413,
+      "y": 0.7383,
+      "date": "2023-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0071",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.5277,
+      "y": 0.5369,
+      "date": "2025-10",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0072",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.4324,
+      "y": 0.4282,
+      "date": "2025-08",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0073",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.379,
+      "y": 0.2071,
+      "date": "2022-07",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0074",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.5559,
+      "y": 0.3419,
+      "date": "2023-02",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0075",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.7206,
+      "y": 0.1128,
+      "date": "2024-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0076",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.2175,
+      "y": -0.5085,
+      "date": "2025-03",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0077",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.5037,
+      "y": 0.7137,
+      "date": "2025-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0078",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.4751,
+      "y": 0.3932,
+      "date": "2024-06",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0079",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.4729,
+      "y": 0.7292,
+      "date": "2023-02",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0080",
+      "content": "Ward linkage produces more balanced cluster sizes than average linkage for text.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.4474,
+      "y": 0.5114,
+      "date": "2025-07",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0081",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": 0.9136,
+      "y": 0.1817,
+      "date": "2025-01",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0082",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.7248,
+      "y": 0.2043,
+      "date": "2025-09",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0083",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.4806,
+      "y": 0.6038,
+      "date": "2025-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0084",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.4342,
+      "y": 0.3622,
+      "date": "2023-08",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0085",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.3325,
+      "y": -0.6109,
+      "date": "2022-02",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0086",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.4516,
+      "y": 0.6059,
+      "date": "2024-04",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0087",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.5881,
+      "y": 0.4169,
+      "date": "2025-05",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0088",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.0946,
+      "y": 1.1998,
+      "date": "2024-04",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0089",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.4635,
+      "y": 0.5094,
+      "date": "2023-04",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0090",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.3434,
+      "y": -0.341,
+      "date": "2023-08",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0091",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.8039,
+      "y": 0.2615,
+      "date": "2022-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0092",
+      "content": "HDBSCAN handles noise gracefully, treating outliers as unclustered rather than forcing assignment.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.3228,
+      "y": 0.4151,
+      "date": "2025-07",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0093",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.4457,
+      "y": 0.4021,
+      "date": "2024-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0094",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.2393,
+      "y": 0.4734,
+      "date": "2024-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0095",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.637,
+      "y": 0.4949,
+      "date": "2025-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0096",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.3144,
+      "y": 0.288,
+      "date": "2023-07",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0097",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.6215,
+      "y": 0.3318,
+      "date": "2025-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0098",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.4662,
+      "y": -0.2089,
+      "date": "2022-05",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0099",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.2983,
+      "y": 0.4053,
+      "date": "2024-01",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0100",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.36,
+      "y": -0.489,
+      "date": "2024-06",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0101",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.6394,
+      "y": -0.6307,
+      "date": "2023-02",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0102",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.6046,
+      "y": 0.4622,
+      "date": "2025-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0103",
+      "content": "Ward linkage produces more balanced cluster sizes than average linkage for text.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.5885,
+      "y": 0.5586,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0104",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.345,
+      "y": 0.4695,
+      "date": "2024-06",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0105",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.5292,
+      "y": 0.738,
+      "date": "2024-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0106",
+      "content": "Ward linkage produces more balanced cluster sizes than average linkage for text.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.4118,
+      "y": 0.7293,
+      "date": "2024-12",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0107",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.5142,
+      "y": 0.5676,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0108",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.6847,
+      "y": 0.5165,
+      "date": "2024-01",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0109",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.2993,
+      "y": -0.5736,
+      "date": "2025-02",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0110",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.6357,
+      "y": -0.4817,
+      "date": "2022-05",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0111",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.5478,
+      "y": 0.5344,
+      "date": "2022-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0112",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.659,
+      "y": 0.952,
+      "date": "2022-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0113",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.6908,
+      "y": -0.6757,
+      "date": "2025-08",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0114",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.6278,
+      "y": 0.492,
+      "date": "2022-10",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0115",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.4466,
+      "y": 0.7139,
+      "date": "2023-04",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0116",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -1.1936,
+      "y": -0.1188,
+      "date": "2025-05",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0117",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.4393,
+      "y": 0.791,
+      "date": "2022-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0118",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.5513,
+      "y": -0.6936,
+      "date": "2023-07",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0119",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.4301,
+      "y": -0.4051,
+      "date": "2023-02",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0120",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.7313,
+      "y": 0.3427,
+      "date": "2024-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0121",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.3886,
+      "y": 0.1591,
+      "date": "2025-08",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0122",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.1631,
+      "y": -0.4264,
+      "date": "2024-01",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0123",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.6009,
+      "y": 0.3317,
+      "date": "2022-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0124",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": 0.615,
+      "y": -0.0708,
+      "date": "2025-05",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0125",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.3447,
+      "y": -0.8637,
+      "date": "2025-06",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0126",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.5703,
+      "y": 0.5543,
+      "date": "2025-12",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0127",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.2944,
+      "y": 0.6485,
+      "date": "2022-08",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0128",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.6926,
+      "y": 0.6718,
+      "date": "2022-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0129",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.5543,
+      "y": 0.6314,
+      "date": "2025-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0130",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.5591,
+      "y": -0.8856,
+      "date": "2024-08",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0131",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": 0.3121,
+      "y": 0.7184,
+      "date": "2023-05",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0132",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.1102,
+      "y": 0.7585,
+      "date": "2022-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0133",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.7382,
+      "y": 0.5024,
+      "date": "2024-07",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0134",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.36,
+      "y": 0.4533,
+      "date": "2023-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0135",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.8012,
+      "y": 0.6783,
+      "date": "2024-01",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0136",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.9732,
+      "y": 0.2123,
+      "date": "2025-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0137",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.626,
+      "y": -0.2789,
+      "date": "2025-08",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0138",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.4367,
+      "y": -0.6848,
+      "date": "2023-07",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0139",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.4239,
+      "y": 0.2368,
+      "date": "2025-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0140",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.7729,
+      "y": 0.7772,
+      "date": "2024-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0141",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.7314,
+      "y": 0.5642,
+      "date": "2025-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0142",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.3662,
+      "y": 0.4738,
+      "date": "2025-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0143",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.4152,
+      "y": -0.6647,
+      "date": "2024-11",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0144",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.4188,
+      "y": -0.5738,
+      "date": "2024-04",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0145",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.5152,
+      "y": 0.2665,
+      "date": "2022-08",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0146",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.3694,
+      "y": 0.524,
+      "date": "2022-05",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0147",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.5056,
+      "y": 0.6545,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0148",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.6682,
+      "y": 0.653,
+      "date": "2025-10",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0149",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.4971,
+      "y": 0.6151,
+      "date": "2022-08",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0150",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.1767,
+      "y": 0.6618,
+      "date": "2024-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0151",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.4436,
+      "y": 0.4174,
+      "date": "2025-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0152",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.4205,
+      "y": 0.5973,
+      "date": "2024-01",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0153",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.8762,
+      "y": 0.6679,
+      "date": "2022-10",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0154",
+      "content": "HDBSCAN handles noise gracefully, treating outliers as unclustered rather than forcing assignment.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.4394,
+      "y": -0.2383,
+      "date": "2024-04",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0155",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.491,
+      "y": -0.7561,
+      "date": "2023-11",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0156",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.7564,
+      "y": -0.4352,
+      "date": "2022-10",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0157",
+      "content": "HDBSCAN handles noise gracefully, treating outliers as unclustered rather than forcing assignment.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.3875,
+      "y": 0.4282,
+      "date": "2025-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0158",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.3978,
+      "y": 0.3997,
+      "date": "2024-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0159",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.2299,
+      "y": -0.4691,
+      "date": "2024-02",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0160",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.209,
+      "y": 0.4378,
+      "date": "2025-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0161",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.3147,
+      "y": 0.5162,
+      "date": "2025-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0162",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.5932,
+      "y": -0.6105,
+      "date": "2023-08",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0163",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.8088,
+      "y": -0.6254,
+      "date": "2023-11",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0164",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.3928,
+      "y": 0.4314,
+      "date": "2025-02",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0165",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.5585,
+      "y": 0.6646,
+      "date": "2022-04",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0166",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.7525,
+      "y": 0.7655,
+      "date": "2025-10",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0167",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.6413,
+      "y": -0.3986,
+      "date": "2025-05",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0168",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.8448,
+      "y": 0.6281,
+      "date": "2024-02",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0169",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.5325,
+      "y": -0.5419,
+      "date": "2024-04",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0170",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.5869,
+      "y": -0.4436,
+      "date": "2022-01",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0171",
+      "content": "HDBSCAN handles noise gracefully, treating outliers as unclustered rather than forcing assignment.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.5234,
+      "y": 0.4011,
+      "date": "2023-10",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0172",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.4598,
+      "y": -0.4254,
+      "date": "2022-05",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0173",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.4783,
+      "y": 0.4309,
+      "date": "2022-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0174",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.5101,
+      "y": 0.6323,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0175",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.7449,
+      "y": 0.4595,
+      "date": "2025-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0176",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.6014,
+      "y": -0.4685,
+      "date": "2022-12",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0177",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.5518,
+      "y": 0.4881,
+      "date": "2025-07",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0178",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.538,
+      "y": 0.3421,
+      "date": "2022-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0179",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.54,
+      "y": 0.3194,
+      "date": "2024-07",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0180",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.659,
+      "y": -0.5055,
+      "date": "2022-11",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0181",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.7841,
+      "y": 0.6335,
+      "date": "2025-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0182",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.6308,
+      "y": 0.589,
+      "date": "2024-06",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0183",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.2416,
+      "y": 0.616,
+      "date": "2022-07",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0184",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.4276,
+      "y": 0.323,
+      "date": "2024-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0185",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.3733,
+      "y": 0.2847,
+      "date": "2022-05",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0186",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.4084,
+      "y": 0.4512,
+      "date": "2025-04",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0187",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.3287,
+      "y": 0.6881,
+      "date": "2023-07",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0188",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.6627,
+      "y": 0.3591,
+      "date": "2022-10",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0189",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.5378,
+      "y": 0.3767,
+      "date": "2024-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0190",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.6388,
+      "y": 0.4386,
+      "date": "2023-12",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0191",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.466,
+      "y": 0.6528,
+      "date": "2024-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0192",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.5326,
+      "y": 0.3085,
+      "date": "2022-01",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0193",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.4411,
+      "y": 0.519,
+      "date": "2025-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0194",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.4103,
+      "y": 0.5537,
+      "date": "2022-06",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0195",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.5752,
+      "y": 0.344,
+      "date": "2024-01",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0196",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.5955,
+      "y": 0.5342,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0197",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.7484,
+      "y": 0.5121,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0198",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.784,
+      "y": -0.5005,
+      "date": "2024-02",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0199",
+      "content": "Ward linkage produces more balanced cluster sizes than average linkage for text.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.3467,
+      "y": -0.4351,
+      "date": "2022-06",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0200",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.4607,
+      "y": 0.349,
+      "date": "2022-07",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0201",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.6576,
+      "y": 0.4462,
+      "date": "2024-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0202",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.3605,
+      "y": -0.4403,
+      "date": "2022-07",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0203",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.5454,
+      "y": 0.5789,
+      "date": "2022-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0204",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.3586,
+      "y": 0.6962,
+      "date": "2023-04",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0205",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.46,
+      "y": 0.5766,
+      "date": "2022-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0206",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.5102,
+      "y": 0.3366,
+      "date": "2024-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0207",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.7079,
+      "y": 0.5411,
+      "date": "2024-10",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0208",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.4391,
+      "y": 0.6528,
+      "date": "2022-06",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0209",
+      "content": "Ward linkage produces more balanced cluster sizes than average linkage for text.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.4354,
+      "y": 0.4908,
+      "date": "2025-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0210",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.503,
+      "y": -0.5433,
+      "date": "2023-06",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0211",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.6584,
+      "y": 0.4569,
+      "date": "2024-12",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0212",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.2718,
+      "y": -0.4427,
+      "date": "2025-09",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0213",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.5853,
+      "y": -0.4123,
+      "date": "2025-06",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0214",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.5333,
+      "y": 0.4557,
+      "date": "2022-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0215",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.7308,
+      "y": 0.1888,
+      "date": "2023-06",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0216",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.388,
+      "y": -0.5646,
+      "date": "2025-03",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0217",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.5533,
+      "y": 0.6357,
+      "date": "2024-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0218",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.626,
+      "y": 0.5658,
+      "date": "2024-05",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0219",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.5099,
+      "y": 0.4026,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0220",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.7072,
+      "y": 0.6528,
+      "date": "2022-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0221",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.5991,
+      "y": -0.393,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0222",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.5081,
+      "y": 0.4559,
+      "date": "2024-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0223",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.5039,
+      "y": 0.2375,
+      "date": "2023-09",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0224",
+      "content": "Ward linkage produces more balanced cluster sizes than average linkage for text.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.5696,
+      "y": 0.1828,
+      "date": "2023-06",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0225",
+      "content": "HDBSCAN handles noise gracefully, treating outliers as unclustered rather than forcing assignment.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.4708,
+      "y": 0.6442,
+      "date": "2025-03",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0226",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.4657,
+      "y": 0.4648,
+      "date": "2025-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0227",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.6659,
+      "y": -0.7412,
+      "date": "2024-02",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0228",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.2181,
+      "y": 0.4763,
+      "date": "2022-04",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0229",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.5489,
+      "y": -0.4917,
+      "date": "2024-04",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0230",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.1587,
+      "y": 0.5611,
+      "date": "2024-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0231",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.3888,
+      "y": 0.297,
+      "date": "2023-12",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0232",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.5244,
+      "y": 0.4836,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0233",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.7299,
+      "y": 0.6204,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0234",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.6346,
+      "y": 0.3395,
+      "date": "2022-02",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0235",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.6326,
+      "y": -0.6447,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0236",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.4908,
+      "y": 0.6554,
+      "date": "2022-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0237",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.7535,
+      "y": 0.4279,
+      "date": "2022-07",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0238",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.3861,
+      "y": 0.4864,
+      "date": "2022-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0239",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.4613,
+      "y": 0.4414,
+      "date": "2024-03",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0240",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.5362,
+      "y": 0.4142,
+      "date": "2025-12",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0241",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.3424,
+      "y": 0.6784,
+      "date": "2025-01",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0242",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": -0.7213,
+      "y": -1.0994,
+      "date": "2024-09",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0243",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.4948,
+      "y": -0.2491,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0244",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.5896,
+      "y": -0.6006,
+      "date": "2022-06",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0245",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.151,
+      "y": -0.3612,
+      "date": "2024-03",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0246",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.3386,
+      "y": 0.4169,
+      "date": "2022-12",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0247",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.4054,
+      "y": 0.4971,
+      "date": "2024-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0248",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.5461,
+      "y": 0.6563,
+      "date": "2025-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0249",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.452,
+      "y": 0.1731,
+      "date": "2025-05",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0250",
+      "content": "Return events indicate ideas that resurface after dormancy \u2014 worth paying attention to.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.6496,
+      "y": 0.6,
+      "date": "2023-01",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0251",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "areas/trading/strategy.md",
+      "source_content": "Mean reversion strategy working well on crypto. Need to back-test on longer window.",
+      "x": 0.5078,
+      "y": -0.5392,
+      "date": "2022-04",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_0"
+      }
+    },
+    {
+      "id": "block_0252",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.3135,
+      "y": 0.4162,
+      "date": "2025-06",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0253",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.3353,
+      "y": 0.4175,
+      "date": "2025-06",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0254",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.595,
+      "y": 0.5156,
+      "date": "2025-09",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0255",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.4703,
+      "y": 0.4001,
+      "date": "2024-12",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0256",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.5991,
+      "y": 0.3686,
+      "date": "2025-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0257",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "journal/2024-01-20.md",
+      "source_content": "Revisiting the question of how to surface what I knew two years ago.",
+      "x": -0.3279,
+      "y": 0.5744,
+      "date": "2024-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0258",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.4299,
+      "y": 0.9295,
+      "date": "2023-04",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0259",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.6513,
+      "y": 0.4261,
+      "date": "2023-10",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0260",
+      "content": "Ward linkage produces more balanced cluster sizes than average linkage for text.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.261,
+      "y": 0.4994,
+      "date": "2025-07",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0261",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.5241,
+      "y": 0.5537,
+      "date": "2025-11",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0262",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.5905,
+      "y": 0.333,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0263",
+      "content": "The two-table schema elegantly handles documents, tags, and relationships.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.4274,
+      "y": -0.4736,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0264",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.5349,
+      "y": 0.3662,
+      "date": "2024-02",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0265",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.4264,
+      "y": 0.4756,
+      "date": "2024-10",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0266",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.3251,
+      "y": 0.8118,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0267",
+      "content": "Embedding space naturally organizes ideas the same way intuition does.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.6781,
+      "y": 0.7902,
+      "date": "2022-01",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0268",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.4845,
+      "y": 0.3834,
+      "date": "2023-10",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0269",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.7107,
+      "y": -0.4974,
+      "date": "2024-11",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0270",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.554,
+      "y": 0.3567,
+      "date": "2025-02",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0271",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.6008,
+      "y": 0.51,
+      "date": "2023-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0272",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.5853,
+      "y": 0.6249,
+      "date": "2024-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0273",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.6157,
+      "y": 0.5247,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0274",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.6548,
+      "y": 0.638,
+      "date": "2023-03",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0275",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "areas/life/health.md",
+      "source_content": "Consistent sleep schedule making a big difference in focus and energy.",
+      "x": 0.4023,
+      "y": -0.2649,
+      "date": "2025-09",
+      "cluster_assignments": {
+        "life_areas": "3",
+        "life_areas_fine": "3_1"
+      }
+    },
+    {
+      "id": "block_0276",
+      "content": "Mean reversion strategy requires careful position sizing to manage drawdown.",
+      "source_path": "areas/openaugi/embedding.md",
+      "source_content": "Title-prepended embeddings improve semantic clustering significantly.",
+      "x": 0.4348,
+      "y": 0.5011,
+      "date": "2025-09",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0277",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.4709,
+      "y": 0.5386,
+      "date": "2025-10",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0278",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.5913,
+      "y": 0.3695,
+      "date": "2024-12",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0279",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.4533,
+      "y": 0.5136,
+      "date": "2023-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0280",
+      "content": "Personal knowledge graphs differ from corporate ones in their emphasis on evolution over time.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.0102,
+      "y": 0.6346,
+      "date": "2024-10",
+      "cluster_assignments": {}
+    },
+    {
+      "id": "block_0281",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "journal/2022-06-15.md",
+      "source_content": "Reflection on how information flows through daily work and what gets lost.",
+      "x": -0.381,
+      "y": 0.5828,
+      "date": "2024-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0282",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.6215,
+      "y": 0.4088,
+      "date": "2022-01",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0283",
+      "content": "The gap between capture and retrieval is where ideas get lost.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.4396,
+      "y": 0.3288,
+      "date": "2023-10",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0284",
+      "content": "Title-prepended embeddings give semantic context to chunks that would otherwise be ambiguous.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.5677,
+      "y": 0.4417,
+      "date": "2024-10",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0285",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.7308,
+      "y": -0.5475,
+      "date": "2024-08",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0286",
+      "content": "Agents should maintain a working memory that persists across conversations.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.6202,
+      "y": 0.599,
+      "date": "2024-12",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0287",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.2434,
+      "y": -0.5539,
+      "date": "2023-12",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0288",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.737,
+      "y": -0.5364,
+      "date": "2025-03",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0289",
+      "content": "Context engineering is about shaping the information environment for the model.",
+      "source_path": "journal/2022-01-10.md",
+      "source_content": "Started thinking about personal knowledge management and how to organize ideas better.",
+      "x": -0.5299,
+      "y": 0.4071,
+      "date": "2025-06",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0290",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "journal/2023-02-20.md",
+      "source_content": "Been reading about embedding models and semantic search. Seems promising for vault retrieval.",
+      "x": -0.4494,
+      "y": 0.6697,
+      "date": "2025-12",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0291",
+      "content": "Temporal patterns: some ideas recur every 6 months, others appear once and vanish.",
+      "source_path": "journal/2024-06-01.md",
+      "source_content": "The vault is growing but navigation is getting harder. Need better structure.",
+      "x": -0.4648,
+      "y": 0.6283,
+      "date": "2025-09",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_0"
+      }
+    },
+    {
+      "id": "block_0292",
+      "content": "Agent routing benefits from coarse cluster navigation before fine-grained search.",
+      "source_path": "notes/mcp-tools.md",
+      "source_content": "MCP tools give agents grounded access to data without hallucination.",
+      "x": 0.3208,
+      "y": 0.5464,
+      "date": "2024-11",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0293",
+      "content": "LLM summaries of clusters provide orientation without reading every block.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.383,
+      "y": -0.5321,
+      "date": "2024-04",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    },
+    {
+      "id": "block_0294",
+      "content": "The vault as a landscape \u2014 clusters are territories, blocks are landmarks.",
+      "source_path": "notes/temporal-analysis.md",
+      "source_content": "Return events signal recurring interest. Monthly histograms show activity bursts.",
+      "x": -0.4378,
+      "y": 0.726,
+      "date": "2024-08",
+      "cluster_assignments": {
+        "life_areas": "0",
+        "life_areas_fine": "0_1"
+      }
+    },
+    {
+      "id": "block_0295",
+      "content": "Semantic search alone is not enough \u2014 you need structure to navigate the unknown unknowns.",
+      "source_path": "areas/research/llm-memory.md",
+      "source_content": "Long-term memory in LLMs is an open problem. Current approaches: RAG, fine-tuning, tool use.",
+      "x": -0.4663,
+      "y": -0.6151,
+      "date": "2022-10",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_0"
+      }
+    },
+    {
+      "id": "block_0296",
+      "content": "The key insight is that context blocks act as compressed representations of knowledge.",
+      "source_path": "areas/openaugi/architecture.md",
+      "source_content": "Two-table schema: blocks and links. Everything is a block.",
+      "x": 0.3912,
+      "y": 0.5849,
+      "date": "2023-05",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0297",
+      "content": "Sleep and exercise are the highest-leverage health interventions available.",
+      "source_path": "notes/context-engineering.md",
+      "source_content": "Context is the new prompt. How you frame the context window determines quality.",
+      "x": 0.7994,
+      "y": 0.6622,
+      "date": "2024-12",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_1"
+      }
+    },
+    {
+      "id": "block_0298",
+      "content": "Hierarchical clustering reveals the topology of your thinking.",
+      "source_path": "notes/agent-design.md",
+      "source_content": "Agents need memory, context, and the ability to retrieve past decisions.",
+      "x": 0.1614,
+      "y": 0.4163,
+      "date": "2024-03",
+      "cluster_assignments": {
+        "life_areas": "1",
+        "life_areas_fine": "1_0"
+      }
+    },
+    {
+      "id": "block_0299",
+      "content": "Monthly activity histograms show when topics were most actively developed.",
+      "source_path": "areas/research/clustering.md",
+      "source_content": "HDBSCAN outperforms k-means for semantic text clustering due to noise handling.",
+      "x": -0.4967,
+      "y": -0.4517,
+      "date": "2023-11",
+      "cluster_assignments": {
+        "life_areas": "2",
+        "life_areas_fine": "2_1"
+      }
+    }
+  ],
+  "clusters": {
+    "cluster_la_0": {
+      "id": "cluster_la_0",
+      "pass_id": "life_areas",
+      "label": "0",
+      "dims": 64,
+      "summary": "Reflective journal writing \u2014 capturing daily observations, tracking what ideas return over time, and noting gaps between capture and retrieval.",
+      "member_count": 122,
+      "temporal": {
+        "first_block": "2022-01-10",
+        "last_block": "2025-12-01",
+        "monthly_counts": {
+          "2023-12": 3,
+          "2022-01": 3,
+          "2022-12": 3,
+          "2022-07": 3,
+          "2023-09": 2,
+          "2023-11": 2,
+          "2024-04": 3,
+          "2022-03": 5,
+          "2025-09": 3,
+          "2024-09": 4,
+          "2022-10": 2,
+          "2023-05": 4,
+          "2024-02": 3,
+          "2024-07": 2,
+          "2022-08": 2,
+          "2025-05": 1,
+          "2025-03": 4,
+          "2023-07": 1,
+          "2024-05": 2,
+          "2025-10": 3,
+          "2025-04": 1,
+          "2024-06": 3,
+          "2025-06": 5,
+          "2023-06": 3,
+          "2022-05": 2,
+          "2023-02": 2,
+          "2024-08": 3,
+          "2025-08": 6,
+          "2023-04": 3,
+          "2025-07": 2,
+          "2024-11": 4,
+          "2025-11": 5,
+          "2024-12": 1,
+          "2022-09": 4,
+          "2024-01": 2,
+          "2024-03": 5,
+          "2025-02": 1,
+          "2022-04": 1,
+          "2022-06": 2,
+          "2024-10": 2,
+          "2022-02": 1,
+          "2025-01": 1,
+          "2023-01": 1,
+          "2023-10": 3,
+          "2023-03": 3,
+          "2025-12": 1
+        },
+        "return_events": 2
+      }
+    },
+    "cluster_la_1": {
+      "id": "cluster_la_1",
+      "pass_id": "life_areas",
+      "label": "1",
+      "dims": 64,
+      "summary": "OpenAugi and agent system design \u2014 architecture decisions, context engineering, MCP tool design, and embedding strategies.",
+      "member_count": 91,
+      "temporal": {
+        "first_block": "2022-01-10",
+        "last_block": "2025-12-01",
+        "monthly_counts": {
+          "2025-04": 3,
+          "2022-02": 2,
+          "2023-11": 1,
+          "2023-04": 2,
+          "2025-02": 4,
+          "2022-01": 3,
+          "2022-03": 1,
+          "2022-12": 1,
+          "2022-11": 5,
+          "2024-02": 4,
+          "2023-05": 4,
+          "2023-10": 2,
+          "2023-07": 3,
+          "2025-10": 2,
+          "2025-08": 2,
+          "2022-07": 2,
+          "2025-11": 3,
+          "2024-06": 3,
+          "2025-07": 2,
+          "2025-09": 3,
+          "2023-08": 1,
+          "2025-05": 2,
+          "2024-01": 3,
+          "2022-10": 1,
+          "2025-12": 2,
+          "2022-08": 3,
+          "2023-02": 1,
+          "2023-03": 6,
+          "2022-05": 1,
+          "2022-06": 2,
+          "2024-11": 2,
+          "2024-12": 5,
+          "2023-06": 2,
+          "2023-09": 1,
+          "2025-03": 1,
+          "2022-04": 1,
+          "2024-03": 2,
+          "2025-06": 2,
+          "2024-10": 1
+        },
+        "return_events": 3
+      }
+    },
+    "cluster_la_2": {
+      "id": "cluster_la_2",
+      "pass_id": "life_areas",
+      "label": "2",
+      "dims": 64,
+      "summary": null,
+      "member_count": 39,
+      "temporal": {
+        "first_block": "2022-01-10",
+        "last_block": "2025-12-01",
+        "monthly_counts": {
+          "2023-12": 2,
+          "2024-11": 3,
+          "2025-06": 3,
+          "2023-03": 1,
+          "2024-04": 3,
+          "2023-09": 3,
+          "2022-11": 2,
+          "2024-09": 1,
+          "2022-02": 1,
+          "2023-08": 2,
+          "2025-02": 1,
+          "2022-05": 1,
+          "2025-08": 2,
+          "2023-02": 1,
+          "2023-11": 3,
+          "2022-12": 1,
+          "2024-02": 1,
+          "2023-06": 1,
+          "2025-09": 1,
+          "2025-03": 2,
+          "2023-05": 2,
+          "2024-08": 1,
+          "2022-10": 1
+        },
+        "return_events": 8
+      }
+    },
+    "cluster_la_3": {
+      "id": "cluster_la_3",
+      "pass_id": "life_areas",
+      "label": "3",
+      "dims": 64,
+      "summary": null,
+      "member_count": 33,
+      "temporal": {
+        "first_block": "2022-01-10",
+        "last_block": "2025-12-01",
+        "monthly_counts": {
+          "2022-11": 1,
+          "2024-07": 1,
+          "2023-12": 1,
+          "2022-07": 2,
+          "2024-03": 2,
+          "2022-05": 3,
+          "2024-04": 4,
+          "2023-07": 3,
+          "2023-04": 1,
+          "2025-03": 1,
+          "2024-06": 1,
+          "2023-02": 1,
+          "2024-11": 1,
+          "2022-10": 1,
+          "2024-02": 2,
+          "2025-05": 1,
+          "2022-01": 1,
+          "2022-06": 2,
+          "2023-03": 1,
+          "2023-05": 1,
+          "2022-04": 1,
+          "2025-09": 1
+        },
+        "return_events": 7
+      }
+    },
+    "cluster_laf_00": {
+      "id": "cluster_laf_00",
+      "pass_id": "life_areas_fine",
+      "label": "0_0",
+      "dims": 512,
+      "summary": null,
+      "member_count": 58,
+      "temporal": {
+        "first_block": "2022-03-01",
+        "last_block": "2025-11-01",
+        "monthly_counts": {
+          "2023-09": 2,
+          "2023-11": 1,
+          "2022-03": 3,
+          "2024-02": 3,
+          "2022-08": 2,
+          "2025-05": 1,
+          "2025-03": 3,
+          "2024-05": 1,
+          "2024-04": 2,
+          "2023-05": 2,
+          "2025-06": 3,
+          "2023-06": 2,
+          "2023-02": 1,
+          "2024-08": 2,
+          "2025-08": 3,
+          "2025-11": 2,
+          "2022-05": 1,
+          "2024-03": 2,
+          "2022-04": 1,
+          "2025-10": 1,
+          "2024-11": 1,
+          "2024-06": 1,
+          "2023-12": 2,
+          "2022-09": 3,
+          "2024-10": 2,
+          "2022-02": 1,
+          "2022-06": 1,
+          "2022-12": 1,
+          "2023-10": 3,
+          "2022-01": 1,
+          "2024-09": 1,
+          "2023-03": 1,
+          "2025-12": 1,
+          "2025-09": 1
+        },
+        "return_events": 8
+      }
+    },
+    "cluster_laf_01": {
+      "id": "cluster_laf_01",
+      "pass_id": "life_areas_fine",
+      "label": "0_1",
+      "dims": 512,
+      "summary": null,
+      "member_count": 64,
+      "temporal": {
+        "first_block": "2022-03-01",
+        "last_block": "2025-11-01",
+        "monthly_counts": {
+          "2023-12": 1,
+          "2022-01": 2,
+          "2022-12": 2,
+          "2022-07": 3,
+          "2024-04": 1,
+          "2025-09": 2,
+          "2024-09": 3,
+          "2022-10": 2,
+          "2023-05": 2,
+          "2024-07": 2,
+          "2023-07": 1,
+          "2025-10": 2,
+          "2025-04": 1,
+          "2024-06": 2,
+          "2022-05": 1,
+          "2023-11": 1,
+          "2023-02": 1,
+          "2025-08": 3,
+          "2023-04": 3,
+          "2022-03": 2,
+          "2025-07": 2,
+          "2024-11": 3,
+          "2024-12": 1,
+          "2022-09": 1,
+          "2024-01": 2,
+          "2025-11": 3,
+          "2025-06": 2,
+          "2025-02": 1,
+          "2022-06": 1,
+          "2024-03": 3,
+          "2024-05": 1,
+          "2025-01": 1,
+          "2025-03": 1,
+          "2023-01": 1,
+          "2023-03": 2,
+          "2023-06": 1,
+          "2024-08": 1
+        },
+        "return_events": 2
+      }
+    },
+    "cluster_laf_10": {
+      "id": "cluster_laf_10",
+      "pass_id": "life_areas_fine",
+      "label": "1_0",
+      "dims": 512,
+      "summary": null,
+      "member_count": 57,
+      "temporal": {
+        "first_block": "2022-03-01",
+        "last_block": "2025-11-01",
+        "monthly_counts": {
+          "2025-04": 2,
+          "2022-02": 1,
+          "2023-11": 1,
+          "2025-02": 3,
+          "2022-01": 1,
+          "2022-11": 4,
+          "2023-10": 2,
+          "2025-10": 2,
+          "2025-08": 2,
+          "2022-07": 1,
+          "2025-11": 3,
+          "2025-05": 2,
+          "2024-01": 3,
+          "2023-05": 2,
+          "2024-06": 1,
+          "2025-12": 2,
+          "2023-02": 1,
+          "2024-02": 2,
+          "2023-03": 4,
+          "2022-08": 1,
+          "2023-07": 1,
+          "2022-06": 2,
+          "2023-04": 1,
+          "2024-11": 2,
+          "2024-12": 2,
+          "2023-09": 1,
+          "2025-03": 1,
+          "2024-03": 2,
+          "2025-06": 2,
+          "2025-09": 2,
+          "2024-10": 1
+        },
+        "return_events": 3
+      }
+    },
+    "cluster_laf_11": {
+      "id": "cluster_laf_11",
+      "pass_id": "life_areas_fine",
+      "label": "1_1",
+      "dims": 512,
+      "summary": null,
+      "member_count": 34,
+      "temporal": {
+        "first_block": "2022-03-01",
+        "last_block": "2025-11-01",
+        "monthly_counts": {
+          "2023-04": 1,
+          "2025-02": 1,
+          "2022-03": 1,
+          "2022-12": 1,
+          "2022-01": 2,
+          "2024-02": 2,
+          "2022-02": 1,
+          "2023-05": 2,
+          "2023-07": 2,
+          "2024-06": 2,
+          "2025-07": 2,
+          "2025-09": 1,
+          "2023-08": 1,
+          "2022-10": 1,
+          "2022-08": 2,
+          "2022-05": 1,
+          "2025-04": 1,
+          "2023-03": 2,
+          "2022-07": 1,
+          "2023-06": 2,
+          "2022-11": 1,
+          "2022-04": 1,
+          "2024-12": 3
+        },
+        "return_events": 1
+      }
+    },
+    "cluster_laf_20": {
+      "id": "cluster_laf_20",
+      "pass_id": "life_areas_fine",
+      "label": "2_0",
+      "dims": 512,
+      "summary": null,
+      "member_count": 19,
+      "temporal": {
+        "first_block": "2022-03-01",
+        "last_block": "2025-11-01",
+        "monthly_counts": {
+          "2024-11": 2,
+          "2025-06": 1,
+          "2023-03": 1,
+          "2022-11": 2,
+          "2023-09": 1,
+          "2024-09": 1,
+          "2025-02": 1,
+          "2023-02": 1,
+          "2025-08": 1,
+          "2024-04": 1,
+          "2022-12": 1,
+          "2024-02": 1,
+          "2023-06": 1,
+          "2025-09": 1,
+          "2023-05": 1,
+          "2024-08": 1,
+          "2022-10": 1
+        },
+        "return_events": 3
+      }
+    },
+    "cluster_laf_30": {
+      "id": "cluster_laf_30",
+      "pass_id": "life_areas_fine",
+      "label": "3_0",
+      "dims": 512,
+      "summary": null,
+      "member_count": 19,
+      "temporal": {
+        "first_block": "2022-03-01",
+        "last_block": "2025-11-01",
+        "monthly_counts": {
+          "2024-07": 1,
+          "2023-12": 1,
+          "2024-03": 1,
+          "2022-05": 3,
+          "2023-04": 1,
+          "2025-03": 1,
+          "2024-06": 1,
+          "2023-07": 1,
+          "2024-11": 1,
+          "2024-04": 2,
+          "2022-01": 1,
+          "2022-06": 2,
+          "2022-07": 1,
+          "2023-05": 1,
+          "2022-04": 1
+        },
+        "return_events": 7
+      }
+    }
+  },
+  "clusters_by_pass": {
+    "life_areas": [
+      "cluster_la_0",
+      "cluster_la_1",
+      "cluster_la_2",
+      "cluster_la_3"
+    ],
+    "life_areas_fine": [
+      "cluster_laf_00",
+      "cluster_laf_01",
+      "cluster_laf_10",
+      "cluster_laf_11",
+      "cluster_laf_20",
+      "cluster_laf_30"
+    ]
+  }
+}
