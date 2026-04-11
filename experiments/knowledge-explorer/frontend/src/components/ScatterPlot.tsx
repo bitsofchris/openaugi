@@ -51,6 +51,21 @@ function hashToRgb(str: string): [number, number, number] {
   ];
 }
 
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  s /= 100; l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60)       { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else              { r = c; b = x; }
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+
 // Blue (old) → amber (recent) over 2-year window
 function getDateColor(date: string | null): [number, number, number] {
   if (!date) return [100, 100, 120];
@@ -121,9 +136,18 @@ export const ScatterPlot = forwardRef<ScatterPlotRef, Props>(function ScatterPlo
     let rgb: [number, number, number];
 
     if (colorMode === 'cluster') {
-      // Color by "{pass_id}:{label}" for stable, unique colors across passes
       const label = block.cluster_assignments[level] ?? '';
-      rgb = hashToRgb(`${level}:${label}`);
+      if (level === '_explore') {
+        // Golden-ratio hue spacing for numbered k-means/HDBSCAN labels.
+        // Consecutive integers like 0,1,2... get maximally perceptually distinct hues.
+        const labelNum = parseInt(label, 10);
+        const phi = 0.618033988749895;
+        const h = ((Math.max(0, labelNum) * phi) % 1) * 360;
+        rgb = hslToRgb(h, 65, 55);
+      } else {
+        // Color by "{pass_id}:{label}" for stable, unique colors across passes
+        rgb = hashToRgb(`${level}:${label}`);
+      }
     } else if (colorMode === 'date') {
       if (timelineActive && timelineDate) {
         rgb = getTimelineAgeColor(block.date, timelineDate);
@@ -224,9 +248,9 @@ export const ScatterPlot = forwardRef<ScatterPlotRef, Props>(function ScatterPlo
       style={{ background: colors.bg }}
     >
       <div style={{
-        position: 'absolute', bottom: 20, left: 20,
-        padding: '10px 14px',
-        background: 'rgba(13,13,20,0.9)',
+        position: 'absolute', top: 16, left: 16,
+        padding: '8px 12px',
+        background: 'rgba(13,13,20,0.85)',
         borderRadius: 8,
         border: `1px solid ${colors.border}`,
         fontFamily: "'JetBrains Mono', monospace",
