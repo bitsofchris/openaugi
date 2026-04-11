@@ -20,7 +20,7 @@ const MS_PER_DAY = 1000 * 60 * 60 * 24;
 export function TimelinePlayer({ items, onDateChange, isActive, onToggle, colors }: Props) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(DEFAULT_SPEED);
-  const [progress, setProgress] = useState(0); // 0-1
+  const [progress, setProgress] = useState(1); // 0-1, starts at 1 (rightmost = all visible)
   const animationRef = useRef<number>();
   const lastTimeRef = useRef<number>(0);
 

@@ -1,4 +1,4 @@
-import type { ExplorerData } from './types';
+import type { ExplorerData, ExploreParams, ExploreResult } from './types';
 
 const API_BASE = '/api';
 
@@ -26,4 +26,26 @@ export async function isBackendAvailable(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Run ad-hoc clustering + UMAP on a subset of blocks.
+ * Pass block_ids=null to run on all blocks.
+ */
+export async function postExplore(
+  params: ExploreParams,
+  block_ids: string[] | null = null,
+  db?: string,
+): Promise<ExploreResult> {
+  const url = db ? `${API_BASE}/explore?db=${encodeURIComponent(db)}` : `${API_BASE}/explore`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...params, block_ids }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Explore failed (${res.status}): ${text}`);
+  }
+  return res.json();
 }
