@@ -538,12 +538,15 @@ class SQLiteStore:
     def reset_embeddings(self, kind: str = "data_block") -> int:
         """NULL out embeddings for all blocks of the given kind.
 
-        Forces a full re-embed on next run_embed() call. Use before switching
-        embedding models or adding title-prepend to get clean, consistent vectors.
+        Forces a full re-embed on next run_embed() call. Use after switching
+        embedding models or changing embedding strategy. Clears both the main
+        embedding column and the legacy content_only_embedding column.
         Returns count of blocks reset.
         """
         cursor = self.conn.execute(
-            "UPDATE blocks SET embedding = NULL WHERE kind = ? AND embedding IS NOT NULL",
+            """UPDATE blocks
+               SET embedding = NULL, content_only_embedding = NULL
+               WHERE kind = ? AND (embedding IS NOT NULL OR content_only_embedding IS NOT NULL)""",
             (kind,),
         )
         self.conn.commit()
