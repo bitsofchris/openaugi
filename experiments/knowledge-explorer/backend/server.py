@@ -30,6 +30,24 @@ log = logging.getLogger(__name__)
 
 DEFAULT_DB = Path.home() / ".openaugi" / "openaugi.db"
 UMAP_CACHE_DIR = Path.home() / ".openaugi" / "umap_cache"
+EXPLORER_CONFIG = Path.home() / ".openaugi" / "explorer_config.json"
+
+
+def load_explorer_config() -> dict:
+    """Load explorer_config.json from ~/.openaugi/. Returns {} if missing."""
+    if EXPLORER_CONFIG.exists():
+        try:
+            with EXPLORER_CONFIG.open() as f:
+                cfg = json.load(f)
+            log.info("Explorer config: %s", EXPLORER_CONFIG)
+            return cfg
+        except (json.JSONDecodeError, OSError) as e:
+            log.warning("Could not read explorer config: %s", e)
+    return {}
+
+
+_EXPLORER_CONFIG = load_explorer_config()
+_INCLUDE_FOLDERS: list[str] = _EXPLORER_CONFIG.get("include_folders", [])
 
 # One UMAP runs at a time — Numba's workqueue is not re-entrant.
 # A second request hitting the same cache key will wait, then get a cache hit.
@@ -52,8 +70,21 @@ def open_db(db_path: str) -> sqlite3.Connection:
     return conn
 
 
+def _in_include_folders(source_path: str | None) -> bool:
+    """Return True if source_path starts with one of the configured include folders.
+
+    If _INCLUDE_FOLDERS is empty, all blocks pass (no filter).
+    source_path is vault-relative, e.g. "1-notes/MyNote.md".
+    """
+    if not _INCLUDE_FOLDERS or not source_path:
+        return True
+    # Normalise: strip leading slash, compare first path component
+    sp = source_path.lstrip("/")
+    return any(sp == folder or sp.startswith(folder + "/") for folder in _INCLUDE_FOLDERS)
+
+
 def load_data_blocks(conn: sqlite3.Connection) -> list[dict]:
-    """Load data_blocks that have embeddings."""
+    """Load data_blocks that have embeddings, filtered by include_folders config."""
     rows = conn.execute("""
         SELECT id,
                content,
@@ -68,21 +99,34 @@ def load_data_blocks(conn: sqlite3.Connection) -> list[dict]:
         ORDER BY id
     """).fetchall()
     result = []
+    skipped = 0
     for r in rows:
+        sp = r["source_path"] or r["title"] or r["id"]
+        if not _in_include_folders(r["source_path"]):
+            skipped += 1
+            continue
         ca_raw = r["cluster_assignments_json"]
         try:
             ca = json.loads(ca_raw) if ca_raw else {}
         except (json.JSONDecodeError, TypeError):
             ca = {}
-        result.append({
-            "id": r["id"],
-            "content": r["content"] or "",
-            "title": r["title"] or "",
-            "block_time": r["block_time"],
-            "embedding": r["embedding"],
-            "source_path": r["source_path"] or r["title"] or r["id"],
-            "cluster_assignments": ca,
-        })
+        result.append(
+            {
+                "id": r["id"],
+                "content": r["content"] or "",
+                "title": r["title"] or "",
+                "block_time": r["block_time"],
+                "embedding": r["embedding"],
+                "source_path": sp,
+                "cluster_assignments": ca,
+            }
+        )
+    if skipped:
+        log.info(
+            "Folder filter: kept %d blocks, skipped %d (not in include_folders)",
+            len(result),
+            skipped,
+        )
     return result
 
 
@@ -111,19 +155,21 @@ def load_cluster_blocks(conn: sqlite3.Connection) -> list[dict]:
             meta = json.loads(r["metadata"]) if r["metadata"] else {}
         except (json.JSONDecodeError, TypeError):
             meta = {}
-        result.append({
-            "id": r["id"],
-            "content": r["content"],
-            "title": r["title"] or "",
-            "pass_id": meta.get("pass_id", ""),
-            "parent_pass_id": meta.get("parent_pass_id"),
-            "cluster_label": meta.get("cluster_label"),
-            "dims": meta.get("dims", 0),
-            "min_cluster_size": meta.get("min_cluster_size"),
-            "member_count": meta.get("member_count", 0),
-            "noise_count": meta.get("noise_count", 0),
-            "temporal": meta.get("temporal"),
-        })
+        result.append(
+            {
+                "id": r["id"],
+                "content": r["content"],
+                "title": r["title"] or "",
+                "pass_id": meta.get("pass_id", ""),
+                "parent_pass_id": meta.get("parent_pass_id"),
+                "cluster_label": meta.get("cluster_label"),
+                "dims": meta.get("dims", 0),
+                "min_cluster_size": meta.get("min_cluster_size"),
+                "member_count": meta.get("member_count", 0),
+                "noise_count": meta.get("noise_count", 0),
+                "temporal": meta.get("temporal"),
+            }
+        )
     return result
 
 
@@ -252,7 +298,7 @@ def _cluster_stats(blocks: list[dict], labels: np.ndarray) -> dict[str, dict]:
     for lbl in set(labels):
         if lbl == -1:
             continue
-        members = [blocks[i] for i, l in enumerate(labels) if l == lbl]
+        members = [blocks[i] for i, lab in enumerate(labels) if lab == lbl]
         stats[str(lbl)] = {
             "count": len(members),
             "sample_titles": [b["source_path"].split("/")[-1] for b in members[:6]],
@@ -277,9 +323,7 @@ class ClusterRequest(BaseModel):
     block_ids: list[str] | None = None
 
 
-def _load_blocks_for_request(
-    block_ids: list[str] | None, db_path: Path
-) -> list[dict]:
+def _load_blocks_for_request(block_ids: list[str] | None, db_path: Path) -> list[dict]:
     conn = open_db(str(db_path))
     try:
         all_blocks = load_data_blocks(conn)
@@ -323,12 +367,14 @@ def post_explore_umap(req: UmapRequest, db: str = str(DEFAULT_DB)):
         if b["block_time"]:
             with contextlib.suppress(ValueError):
                 date = datetime.fromisoformat(b["block_time"][:19]).strftime("%Y-%m")
-        points.append({
-            "id": b["id"],
-            "x": round(float(coords[i, 0]), 4),
-            "y": round(float(coords[i, 1]), 4),
-            "date": date,
-        })
+        points.append(
+            {
+                "id": b["id"],
+                "x": round(float(coords[i, 0]), 4),
+                "y": round(float(coords[i, 1]), 4),
+                "date": date,
+            }
+        )
 
     return {"points": points, "block_count": len(points), "dims": req.dims}
 
@@ -376,7 +422,7 @@ def post_explore_cluster(req: ClusterRequest, db: str = str(DEFAULT_DB)):
         labels = _run_kmeans(matrix, req.k)
 
     stats = _cluster_stats(blocks, labels)
-    noise_count = int(sum(1 for l in labels if l == -1))
+    noise_count = int(sum(1 for lab in labels if lab == -1))
 
     result = {
         "labels": {blocks[i]["id"]: str(int(labels[i])) for i in range(len(blocks))},
@@ -398,6 +444,15 @@ def post_explore_cluster(req: ClusterRequest, db: str = str(DEFAULT_DB)):
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/config")
+def get_config():
+    """Return active explorer configuration (include_folders filter, etc.)."""
+    return {
+        "include_folders": _INCLUDE_FOLDERS,
+        "config_path": str(EXPLORER_CONFIG),
+    }
 
 
 @app.get("/api/data")
@@ -452,16 +507,18 @@ def get_data(db: str = str(DEFAULT_DB)):
             if b["block_time"]:
                 with contextlib.suppress(ValueError):
                     block_date = datetime.fromisoformat(b["block_time"][:19]).strftime("%Y-%m")
-            output_blocks.append({
-                "id": b["id"],
-                "content": b["content"],
-                "source_path": b["source_path"],
-                "source_content": source_content_map.get(b["source_path"], ""),
-                "x": round(float(coords[i, 0]), 4),
-                "y": round(float(coords[i, 1]), 4),
-                "date": block_date,
-                "cluster_assignments": b["cluster_assignments"],
-            })
+            output_blocks.append(
+                {
+                    "id": b["id"],
+                    "content": b["content"],
+                    "source_path": b["source_path"],
+                    "source_content": source_content_map.get(b["source_path"], ""),
+                    "x": round(float(coords[i, 0]), 4),
+                    "y": round(float(coords[i, 1]), 4),
+                    "date": block_date,
+                    "cluster_assignments": b["cluster_assignments"],
+                }
+            )
 
         return {
             "generated_at": datetime.now().isoformat(timespec="seconds"),

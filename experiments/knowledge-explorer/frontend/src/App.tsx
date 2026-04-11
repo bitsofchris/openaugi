@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { fetchData, postExploreUmap, postExploreCluster } from './api';
+import { fetchData, fetchConfig, postExploreUmap, postExploreCluster } from './api';
 import type {
   Block, ColorMode, ExplorerData, PassInfo,
   ExplorePoint, ExploreClusterResult, ExploreCrumb, ExploreParams,
@@ -54,6 +54,8 @@ export default function App() {
   const [exploreBreadcrumb, setExploreBreadcrumb] = useState<ExploreCrumb[]>([]);
   const [exploreSelectedLabel, setExploreSelectedLabel] = useState<string | null>(null);
 
+  const [includeFolders, setIncludeFolders] = useState<string[]>([]);
+
   const scatterRef = useRef<ScatterPlotRef>(null);
 
   const productionBlockById = useMemo(() => {
@@ -69,6 +71,7 @@ export default function App() {
       })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false));
+    fetchConfig().then(cfg => setIncludeFolders(cfg.include_folders));
   }, []);
 
   // ── Explore: merge UMAP coords + cluster labels → Block[] for scatter ────────
@@ -365,6 +368,7 @@ export default function App() {
             onDrillInto={handleDrillInto}
             selectedLabel={exploreSelectedLabel}
             colors={COLORS}
+            includeFolders={includeFolders}
           />
         )}
 

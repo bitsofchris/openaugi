@@ -14,6 +14,12 @@ export async function fetchData(): Promise<ExplorerData> {
   }
 }
 
+export async function fetchConfig(): Promise<{ include_folders: string[]; config_path: string }> {
+  const res = await fetch(`${API_BASE}/config`);
+  if (!res.ok) return { include_folders: [], config_path: '' };
+  return res.json();
+}
+
 export async function isBackendAvailable(): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(1000) });
