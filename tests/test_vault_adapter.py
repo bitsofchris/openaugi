@@ -16,9 +16,12 @@ from pathlib import Path
 import pytest
 
 from openaugi.adapters.vault import (
+    _code_fence_ranges,
     _extract_links,
     _extract_tags,
+    _extract_wk_date,
     _extract_zzz_instructions,
+    _has_meaningful_content,
     _matches_pattern,
     _split_by_headings,
     _split_by_qqq,
@@ -255,11 +258,132 @@ class TestSplitByHeadings:
         assert sections[0][1] is None
         assert sections[0][2] is None
 
+    def test_hash_inside_code_fence_not_treated_as_heading(self):
+        """# comments inside ``` fences must not split the block."""
+        content = (
+            "Typical:\n```\n# Start services\ndocker-compose up -d\n\n"
+            "# Stop services\ndocker-compose down\n```"
+        )
+        sections = _split_by_headings(content)
+        # The whole content is one section (no real headings)
+        assert len(sections) == 1
+        assert "docker-compose up" in sections[0][0]
+        assert "docker-compose down" in sections[0][0]
+
+    def test_hash_in_fence_and_real_heading_split_correctly(self):
+        """Real headings split normally; # inside fences are ignored."""
+        content = (
+            "```\n# comment\n```\n\n"
+            "### 2024-03-15\n"
+            "real content\n"
+            "```\n# another comment\ndocker run\n```"
+        )
+        sections = _split_by_headings(content)
+        # Preamble (the code block) + one real heading section
+        assert len(sections) == 2
+        assert sections[1][1] == "2024-03-15"
+        assert "real content" in sections[1][0]
+        assert "# another comment" in sections[1][0]
+
+    def test_tilde_fence_hash_ignored(self):
+        """~~~ fences are also respected."""
+        content = "~~~\n# not a heading\n~~~\n# real heading\nsome text"
+        sections = _split_by_headings(content)
+        # preamble + one heading section
+        assert len(sections) == 2
+        assert sections[1][2] == "real heading"
+
     def test_empty_preamble_before_first_heading_skipped(self):
         content = "### 2024-03-15\nFirst section"
         sections = _split_by_headings(content)
         assert len(sections) == 1
         assert sections[0][1] == "2024-03-15"
+
+
+class TestCodeFenceRanges:
+    def test_no_fences_returns_empty(self):
+        assert _code_fence_ranges("just plain text") == []
+
+    def test_single_backtick_fence(self):
+        content = "before\n```\ncode\n```\nafter"
+        ranges = _code_fence_ranges(content)
+        assert len(ranges) == 1
+        start, end = ranges[0]
+        # The fenced region covers the opening ``` through the closing ```
+        assert content[start:end].startswith("```")
+        assert content[start:end].endswith("```")
+        assert "code" in content[start:end]
+
+    def test_hash_inside_fence_is_within_range(self):
+        content = "```\n# comment\n```"
+        ranges = _code_fence_ranges(content)
+        assert len(ranges) == 1
+        start, end = ranges[0]
+        # The # comment falls inside the range
+        hash_pos = content.index("# comment")
+        assert start <= hash_pos < end
+
+    def test_tilde_fence(self):
+        content = "~~~\ncode here\n~~~"
+        ranges = _code_fence_ranges(content)
+        assert len(ranges) == 1
+
+    def test_fence_with_language_specifier(self):
+        content = "```bash\n# a comment\n```"
+        ranges = _code_fence_ranges(content)
+        assert len(ranges) == 1
+
+    def test_multiple_fences(self):
+        content = "```\nblock1\n```\nmiddle\n```\nblock2\n```"
+        ranges = _code_fence_ranges(content)
+        assert len(ranges) == 2
+
+    def test_unclosed_fence_extends_to_eof(self):
+        content = "```\nunclosed code"
+        ranges = _code_fence_ranges(content)
+        assert len(ranges) == 1
+        assert ranges[0][1] == len(content)
+
+    def test_heading_outside_fence_not_in_range(self):
+        content = "```\n# inside\n```\n# outside"
+        ranges = _code_fence_ranges(content)
+        outside_pos = content.rindex("# outside")
+        assert not any(start <= outside_pos < end for start, end in ranges)
+
+
+class TestMeaningfulContent:
+    def test_real_text_is_meaningful(self):
+        assert _has_meaningful_content("Some actual content here")
+
+    def test_empty_string_is_not_meaningful(self):
+        assert not _has_meaningful_content("")
+
+    def test_only_horizontal_rule_not_meaningful(self):
+        assert not _has_meaningful_content("---")
+
+    def test_multiple_horizontal_rules_not_meaningful(self):
+        assert not _has_meaningful_content("---\n---\n---")
+
+    def test_empty_checkbox_not_meaningful(self):
+        assert not _has_meaningful_content("- [ ]")
+
+    def test_empty_checkbox_with_trailing_space_not_meaningful(self):
+        assert not _has_meaningful_content("- [ ]   ")
+
+    def test_mix_of_rule_and_empty_checkboxes_not_meaningful(self):
+        assert not _has_meaningful_content("---\n- [ ]\n---")
+
+    def test_checkbox_with_text_is_meaningful(self):
+        assert _has_meaningful_content("- [ ] Buy groceries")
+
+    def test_completed_checkbox_is_meaningful(self):
+        assert _has_meaningful_content("- [x] Done task")
+
+    def test_only_blank_lines_not_meaningful(self):
+        assert not _has_meaningful_content("   \n\n  \n")
+
+    def test_rule_plus_real_text_is_meaningful(self):
+        assert _has_meaningful_content("---\nSome notes below the divider")
 
 
 class TestExcludePatterns:
@@ -274,6 +398,15 @@ class TestExcludePatterns:
 
     def test_nested_path_excluded(self):
         assert _matches_pattern(".obsidian/plugins/something.json", ".obsidian/**")
+
+    def test_double_glob_matches_dir_anywhere_in_path(self):
+        assert _matches_pattern("_private/4-Tech Notes/Docker.md", "**/4-Tech Notes/**")
+
+    def test_double_glob_matches_dir_at_root(self):
+        assert _matches_pattern("4-Tech Notes/Docker.md", "**/4-Tech Notes/**")
+
+    def test_double_glob_does_not_match_unrelated_path(self):
+        assert not _matches_pattern("notes/daily.md", "**/4-Tech Notes/**")
 
 
 class TestParseVault:
@@ -430,6 +563,61 @@ class TestVaultValidation:
                 parse_vault(blocked)
         finally:
             blocked.chmod(0o755)
+
+
+class TestWeeklyNotes:
+    def test_extract_wk_date_standard(self, tmp_path: Path):
+        f = tmp_path / "WK - 25-11-09.md"
+        assert _extract_wk_date(f) == "2025-11-09"
+
+    def test_extract_wk_date_different_format(self, tmp_path: Path):
+        f = tmp_path / "WK - 24-03-01.md"
+        assert _extract_wk_date(f) == "2024-03-01"
+
+    def test_extract_wk_date_no_match(self, tmp_path: Path):
+        f = tmp_path / "regular-note.md"
+        assert _extract_wk_date(f) is None
+
+    def test_extract_wk_date_ignores_four_digit_year(self, tmp_path: Path):
+        """Files already matched by FILENAME_DATE_PATTERN are not re-matched."""
+        f = tmp_path / "2024-03-15 daily.md"
+        assert _extract_wk_date(f) is None
+
+    def test_wk_note_produces_single_block(self, tmp_path: Path):
+        """WK notes are not split by headings — the whole body is one block."""
+        note = tmp_path / "WK - 25-11-09.md"
+        note.write_text(
+            "## How did this week go?\nIt was productive.\n\n"
+            "## What would I do differently?\nStart earlier.\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        assert len(entries) == 1
+        content = entries[0].content or ""
+        assert "productive" in content
+        assert "Start earlier" in content
+
+    def test_wk_note_block_time_from_filename(self, tmp_path: Path):
+        """The block timestamp comes from the WK date in the filename."""
+        note = tmp_path / "WK - 25-11-09.md"
+        note.write_text("Weekly reflection content.\n", encoding="utf-8")
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        assert len(entries) == 1
+        assert entries[0].block_time == "2025-11-09"
+
+    def test_wk_note_gets_document_granularity(self, tmp_path: Path):
+        """Single-block WK notes are tagged granularity=document."""
+        note = tmp_path / "WK - 25-11-09.md"
+        note.write_text(
+            "## Reflection\nGood week.\n\n## Goals\nKeep going.\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        assert len(entries) == 1
+        assert entries[0].metadata.get("granularity") == "document"
 
 
 class TestEdgeCases:
@@ -603,6 +791,71 @@ class TestEdgeCases:
         assert "focused note" in content
         assert "several lines" in content
         assert "no qqq" in content
+
+    def test_single_block_note_gets_document_granularity(self, tmp_path: Path):
+        """A note with no headings and no qqq produces one block tagged granularity=document."""
+        note = tmp_path / "atomic.md"
+        note.write_text("A focused thought with no structure.\n", encoding="utf-8")
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        assert len(entries) == 1
+        assert entries[0].metadata.get("granularity") == "document"
+
+    def test_h3_split_note_gets_section_granularity(self, tmp_path: Path):
+        """A note split by H3 date headers produces blocks tagged granularity=section."""
+        note = tmp_path / "journal.md"
+        note.write_text(
+            "### 2024-01-01\nFirst entry.\n\n### 2024-01-02\nSecond entry.\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        assert len(entries) == 2
+        for entry in entries:
+            assert entry.metadata.get("granularity") == "section"
+
+    def test_qqq_split_note_gets_section_granularity(self, tmp_path: Path):
+        """A note split by qqq markers produces blocks tagged granularity=section."""
+        note = tmp_path / "ideas.md"
+        note.write_text("First idea.\nqqq\nSecond idea.\nqqq\nThird idea.\n", encoding="utf-8")
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        assert len(entries) == 3
+        for entry in entries:
+            assert entry.metadata.get("granularity") == "section"
+
+    def test_excalidraw_files_excluded(self, tmp_path: Path):
+        """Files ending in .excalidraw.md are skipped entirely."""
+        drawing = tmp_path / "diagram.excalidraw.md"
+        drawing.write_text('{"type":"excalidraw","version":2}\n', encoding="utf-8")
+        real = tmp_path / "real-note.md"
+        real.write_text("Actual content\n", encoding="utf-8")
+        blocks, _ = parse_vault(tmp_path)
+        source_paths = [b.metadata.get("source_path", "") for b in blocks]
+        assert not any("excalidraw" in p for p in source_paths)
+        assert any("real-note" in p for p in source_paths)
+
+    def test_empty_checkbox_section_produces_no_block(self, tmp_path: Path):
+        """A heading section whose only content is an empty checkbox is skipped."""
+        note = tmp_path / "template.md"
+        note.write_text("### Next\n- [ ]\n\n### Notes\nActual content here\n", encoding="utf-8")
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        assert len(entries) == 1
+        assert "Actual content" in (entries[0].content or "")
+
+    def test_horizontal_rule_only_section_produces_no_block(self, tmp_path: Path):
+        """A heading section whose only content is a horizontal rule is skipped."""
+        note = tmp_path / "project.md"
+        note.write_text(
+            "Scope: build the thing\n\n# Resources\n---\n\n# Notes\nReal notes here\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        contents = [e.content or "" for e in entries]
+        assert any("Real notes" in c for c in contents)
+        assert not any(c.strip() == "---" for c in contents)
 
     def test_non_utf8_file_skipped_gracefully(self, tmp_path: Path):
         """A Latin-1 file is skipped with a warning, not a crash."""

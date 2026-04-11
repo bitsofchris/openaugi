@@ -37,6 +37,10 @@ H3_DATE_PATTERN = re.compile(r"^###\s+(\d{4}-\d{2}-\d{2})", re.MULTILINE)  # kep
 TAG_PATTERN = re.compile(r"(?<!\w)#([a-zA-Z0-9_/\-]+)")
 LINK_PATTERN = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
 FILENAME_DATE_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})")
+# Two-digit year date found anywhere in the stem, e.g. "WK - 25-11-09".
+# Negative lookbehind prevents matching the last two digits of a 4-digit year
+# (e.g. "2024-03-15" should not match as "24-03-15").
+WK_DATE_PATTERN = re.compile(r"(?<!\d)(\d{2})-(\d{2})-(\d{2})(?!\d)")
 FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 # Atomic thought delimiter: a line containing only `qqq` (case-insensitive).
 # Used to split sections into sub-blocks finer than H3 headers.
@@ -56,6 +60,12 @@ DEFAULT_EXCLUDE_PATTERNS = [
     ".trash/**",
     "templates/**",
     "OpenAugi/Compiled/**",
+    "*.excalidraw.md",
+    "**/4-Tech Notes/**",
+    # High-volume reference import folders — clippings, not original thought
+    "**/Instapaper/**",
+    "**/Readwise/**",
+    "**/Snipd/**",
 ]
 
 
@@ -249,12 +259,15 @@ def _parse_file(
     # Strip frontmatter, extract frontmatter tags
     content_body, fm_tags = _strip_frontmatter(content)
 
-    # Split by any heading; date flows down from nearest date-heading ancestor
-    sections = _split_by_headings(content_body)
-
-    # Date from filename
+    # Date from filename — 4-digit year takes priority; fall back to WK 2-digit year
     title_date = _extract_filename_date(file_path)
+    wk_date = _extract_wk_date(file_path)
+    effective_title_date = title_date or wk_date
     file_created = _get_file_created_time(file_path)
+
+    # Weekly reflection notes: embed as one block — heading-splitting would
+    # fragment question/answer pairs into disconnected pieces.
+    sections = [(content_body, wk_date, None)] if wk_date else _split_by_headings(content_body)
 
     for section_content, section_date_str, section_heading in sections:
         # Each section is further split on `qqq` markers. When a section
@@ -264,7 +277,7 @@ def _parse_file(
 
         for sub_content in sub_sections:
             stripped = sub_content.strip()
-            if not stripped:
+            if not stripped or not _has_meaningful_content(stripped):
                 continue
 
             # Extract `zzz` agent instructions. The hash is computed on the
@@ -283,7 +296,7 @@ def _parse_file(
             entry_id = Block.make_id(rel_path, entry_hash)
 
             section_date = _parse_date(section_date_str) if section_date_str else None
-            resolved_ts = _resolve_timestamp(section_date, title_date, file_created)
+            resolved_ts = _resolve_timestamp(section_date, effective_title_date, file_created)
 
             # Extract tags (inline + frontmatter) from clean content
             inline_tags = _extract_tags(clean_content)
@@ -340,7 +353,54 @@ def _parse_file(
                     )
                 )
 
+    # Tag every data_block with its granularity — recorded once at ingest time so
+    # downstream consumers (clustering, retrieval) don't have to re-derive it.
+    #
+    # "document"       — the block IS the whole file (no heading or qqq split occurred).
+    #                    Safe to treat as a document-level semantic unit.
+    # "section"        — the file was split by a heading or qqq marker; this block is
+    #                    one intentional structural unit the author created.
+    #                    Each section is a real idea and should cluster individually.
+    # "document_chunk" — reserved for length/sentence-based chunking (future adapters,
+    #                    e.g. PDF or web importers). Not produced by the vault adapter.
+    #                    For clustering: aggregate to document level before use.
+    entry_blocks = [b for b in blocks if b.kind == "data_block"]
+    granularity = "document" if len(entry_blocks) == 1 else "section"
+    for b in entry_blocks:
+        b.metadata["granularity"] = granularity
+
     return blocks, links, tag_blocks
+
+
+def _code_fence_ranges(content: str) -> list[tuple[int, int]]:
+    """Return (start, end) character ranges for all fenced code blocks.
+
+    Handles ``` and ~~~ fences (3+ chars). Pairs greedily: the first fence
+    opens, the next matching fence closes. An unclosed fence extends to EOF.
+    Used to exclude # comments inside code blocks from heading detection.
+    """
+    ranges: list[tuple[int, int]] = []
+    fence_re = re.compile(r"^(`{3,}|~{3,})", re.MULTILINE)
+    fence_matches = list(fence_re.finditer(content))
+    i = 0
+    while i < len(fence_matches):
+        opener = fence_matches[i]
+        fence_char = opener.group(1)[0]
+        fence_len = len(opener.group(1))
+        # Find the next closing fence: same character, same or more length
+        j = i + 1
+        while j < len(fence_matches):
+            closer = fence_matches[j]
+            if closer.group(1)[0] == fence_char and len(closer.group(1)) >= fence_len:
+                ranges.append((opener.start(), closer.end()))
+                i = j + 1
+                break
+            j += 1
+        else:
+            # Unclosed fence — treat rest of content as fenced
+            ranges.append((opener.start(), len(content)))
+            break
+    return ranges
 
 
 def _split_by_headings(content: str) -> list[tuple[str, str | None, str | None]]:
@@ -350,12 +410,21 @@ def _split_by_headings(content: str) -> list[tuple[str, str | None, str | None]]
     with YYYY-MM-DD establishes the date for all subsequent sections until
     the next date heading appears.
 
+    Heading matches inside fenced code blocks (``` or ~~~) are ignored so that
+    shell/Python # comments don't get treated as headings.
+
     Returns list of (section_content, date_str, heading_text):
     - section_content: text after the heading line (heading line not included)
     - date_str: inherited YYYY-MM-DD string, or None
     - heading_text: heading text without # prefix, or None for preamble
     """
-    matches = list(ANY_HEADING_PATTERN.finditer(content))
+    all_matches = list(ANY_HEADING_PATTERN.finditer(content))
+
+    # Filter out # lines that are inside fenced code blocks
+    fence_ranges = _code_fence_ranges(content)
+    matches = [
+        m for m in all_matches if not any(start <= m.start() < end for start, end in fence_ranges)
+    ]
 
     if not matches:
         return [(content, None, None)]
@@ -409,6 +478,25 @@ def _split_by_qqq(content: str) -> list[str]:
         cursor = match.end()
     segments.append(content[cursor:])
     return segments
+
+
+def _has_meaningful_content(text: str) -> bool:
+    """Return False if text contains only structural markdown with no real content.
+
+    Filters out template sections that are purely:
+    - Horizontal rules (---)
+    - Empty checkbox items (- [ ] with no following text)
+    """
+    for line in text.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if s == "---":
+            continue
+        if re.match(r"^-\s+\[\s*\]\s*$", s):  # empty checkbox
+            continue
+        return True
+    return False
 
 
 def _strip_frontmatter(content: str) -> tuple[str, list[str]]:
@@ -492,6 +580,21 @@ def _extract_filename_date(file_path: Path) -> str | None:
     return None
 
 
+def _extract_wk_date(file_path: Path) -> str | None:
+    """Extract YYYY-MM-DD from filenames with a 2-digit year (e.g. 'WK - 25-11-09').
+
+    Only applies when the standard 4-digit pattern doesn't match. Assumes 2000s
+    for all 2-digit years (YY → 20YY). Returns None for non-WK filenames.
+    """
+    if FILENAME_DATE_PATTERN.match(file_path.stem):
+        return None  # already handled by _extract_filename_date
+    match = WK_DATE_PATTERN.search(file_path.stem)
+    if match:
+        yy, mm, dd = match.group(1), match.group(2), match.group(3)
+        return f"20{yy}-{mm}-{dd}"
+    return None
+
+
 def _get_file_created_time(file_path: Path) -> str | None:
     """Get file creation time as ISO string."""
     try:
@@ -570,6 +673,10 @@ def _should_include(file_path: Path, vault_root: Path, patterns: list[str]) -> b
 
 def _matches_pattern(path: str, pattern: str) -> bool:
     """Check if path matches a glob-like exclude pattern. Same logic as v1."""
+    # **/dir/** — matches a directory name anywhere in the path
+    if pattern.startswith("**/") and pattern.endswith("/**"):
+        middle = pattern[3:-3]
+        return ("/" + middle + "/") in ("/" + path)
     if pattern.endswith("/**"):
         prefix = pattern[:-3]
         return path.startswith(prefix) or path.startswith(prefix + "/")
