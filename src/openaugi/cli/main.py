@@ -1447,10 +1447,13 @@ def explore(
     if not backend_ready.wait(timeout=10):
         rc = backend_proc.poll()
         if rc is not None:
-            console.print(f"[red]Backend exited immediately (code {rc}). Is port {backend_port} already in use?[/red]")
+            console.print(
+                f"[red]Backend exited immediately (code {rc}). "
+                f"Is port {backend_port} already in use?[/red]"
+            )
             raise typer.Exit(1)
         # Still starting — continue anyway
-    console.print(f"  [green]Backend ready[/green]")
+    console.print("  [green]Backend ready[/green]")
 
     # ── Launch frontend ─────────────────────────────────────────────────────────
     env = os.environ.copy()
