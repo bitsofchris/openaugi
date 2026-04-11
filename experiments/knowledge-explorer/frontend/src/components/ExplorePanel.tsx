@@ -168,7 +168,7 @@ export function ExplorePanel({
             </>
           ) : (
             <Slider label="k (clusters)" value={params.k}
-              min={2} max={50} onChange={v => set('k', v)} colors={colors} />
+              min={2} max={150} onChange={v => set('k', v)} colors={colors} />
           )}
 
           {/* Run + copy */}
@@ -189,7 +189,7 @@ export function ExplorePanel({
             </button>
             <button
               onClick={handleCopyParams}
-              title="Copy params as JSON"
+              title="Copy params as JSON to clipboard"
               style={{
                 padding: '8px 10px', fontSize: 11,
                 border: `1px solid ${colors.border}`,
@@ -197,7 +197,7 @@ export function ExplorePanel({
                 color: colors.textMuted, cursor: 'pointer',
               }}
             >
-              {}
+              copy
             </button>
           </div>
         </div>
