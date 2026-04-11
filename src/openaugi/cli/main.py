@@ -271,7 +271,7 @@ def re_embed(
 ):
     """Reset embeddings and re-embed from scratch with the current model config.
 
-    Use after switching embedding models or enabling title-prepend.
+    Use after switching embedding models or changing the embedding strategy.
     Nulls out all embeddings for the given block kind, then re-embeds
     using the model in your config (~/.openaugi/config.toml).
 
@@ -418,40 +418,6 @@ def cluster_explore(
     store = SQLiteStore(db_path)
     try:
         explore_kmeans_grid(store, dims_list, k_list, n_samples=samples, input_level=input_level)
-    finally:
-        store.close()
-
-
-@app.command(name="embed-content-only")
-def embed_content_only(
-    db: str | None = typer.Option(None, "--db", help="Database path"),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-):
-    """Embed all data_blocks content-only (no title prefix) into content_only_embedding.
-
-    Does not touch the main embedding column or vec_blocks search index.
-    Used for clustering experiments — see docs/plans/embedding-strategy.md.
-
-    Run this once after ingest, then use --embedding-col content_only_embedding
-    in cluster-explore-within to compare clustering quality.
-    """
-    _setup_logging(verbose)
-
-    from openaugi.config import load_config
-    from openaugi.models import get_embedding_model
-    from openaugi.pipeline.embed import run_embed_content_only
-    from openaugi.store.sqlite import SQLiteStore
-
-    config = load_config()
-    db_path = db or str(_default_db())
-    store = SQLiteStore(db_path)
-
-    try:
-        model = get_embedding_model(config.get("models", {}).get("embedding"))
-        console.print(f"[bold]Database:[/bold] {db_path}")
-        console.print(f"[bold]Model:[/bold] {model.name} ({model.dimensions} dims)")
-        embedded = run_embed_content_only(store, model)
-        console.print(f"[green]Done. Embedded {embedded} blocks (content-only).[/green]")
     finally:
         store.close()
 
@@ -762,6 +728,7 @@ def heartbeat(
         ignore_h = list(ignore_heading or []) or config.get("heartbeat", {}).get(
             "ignore_headings", []
         )
+        skill_file = config.get("heartbeat", {}).get("skill_file")
         try:
             result = run_heartbeat(
                 store=store,
@@ -769,6 +736,7 @@ def heartbeat(
                 max_blocks=max_blocks,
                 dry_run=dry_run,
                 ignore_sources=ignore or None,
+                skill_file_path=skill_file or None,
                 ignore_headings=ignore_h or None,
             )
         except FileNotFoundError as e:
@@ -866,6 +834,7 @@ def agent_cmd(
     db_path = db or str(_default_db())
     ignore = list(ignore_source or []) or config.get("heartbeat", {}).get("ignore_sources", [])
     ignore_h = list(ignore_heading or []) or config.get("heartbeat", {}).get("ignore_headings", [])
+    skill_file = config.get("heartbeat", {}).get("skill_file")
 
     err.print(f"[bold]Vault:[/bold] {vault_path}")
     err.print(f"[bold]Heartbeat:[/bold] every {interval}m")
@@ -944,6 +913,7 @@ def agent_cmd(
                     max_blocks=max_blocks,
                     ignore_sources=ignore or None,
                     ignore_headings=ignore_h or None,
+                    skill_file_path=skill_file or None,
                 )
             except FileNotFoundError as e:
                 err.print(f"[red]{e}[/red]")

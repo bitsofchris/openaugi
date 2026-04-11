@@ -150,3 +150,28 @@ def run_embed(
     return _run_embed_batch(
         store, model, blocks, _build_embed_text, store.update_embeddings, batch_size
     )
+
+
+def run_embed_content_only(
+    store: SQLiteStore,
+    model: EmbeddingModel,
+    batch_size: int = BATCH_SIZE,
+) -> int:
+    """Embed all blocks that need content-only embeddings (no title prefix).
+
+    Writes to the content_only_embedding column. Used for clustering experiments —
+    see docs/plans/embedding-strategy.md.
+    """
+    blocks = store.get_blocks_needing_content_only_embeddings(kind="data_block")
+    if not blocks:
+        logger.info("All data_block blocks already have content_only_embedding")
+        return 0
+    logger.info(f"Content-only embedding {len(blocks)} blocks (model: {model.name})")
+    return _run_embed_batch(
+        store,
+        model,
+        blocks,
+        _clean_for_embedding,
+        store.update_content_only_embeddings,
+        batch_size,
+    )
