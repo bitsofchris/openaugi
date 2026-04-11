@@ -311,6 +311,212 @@ def re_embed(
 
 
 @app.command()
+def cluster(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    pass_id: str | None = typer.Option(None, "--pass", help="Run only this pass id"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print stats, no DB writes"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Run HDBSCAN clustering DAG, write context_block:cluster blocks to DB.
+
+    Reads [[clustering.passes]] from ~/.openaugi/config.toml.
+    Each pass produces context_block:cluster blocks linked to member data_blocks.
+    Idempotent — re-running replaces existing cluster blocks for each pass.
+
+    Example config.toml:
+
+    \b
+        [[clustering.passes]]
+        id = "life_areas"
+        dims = 64
+        scope = "all"
+        min_cluster_size = 50
+        description = "Coarse life area clusters"
+
+        [[clustering.passes]]
+        id = "life_areas_fine"
+        dims = 3072
+        scope = "within"
+        parent_pass = "life_areas"
+        min_cluster_size = 20
+        description = "Fine topic clusters within each life area"
+    """
+    _setup_logging(verbose)
+
+    from openaugi.config import load_config
+    from openaugi.pipeline.cluster import parse_cluster_passes, run_cluster_dag
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    db_path = db or str(_default_db())
+
+    try:
+        passes = parse_cluster_passes(config)
+    except (ValueError, KeyError) as e:
+        console.print(f"[red]Config error:[/red] {e}")
+        raise typer.Exit(1) from e
+
+    if not passes:
+        console.print("[yellow]No clustering passes configured.[/yellow]")
+        console.print("Add [[clustering.passes]] to ~/.openaugi/config.toml")
+        raise typer.Exit(0)
+
+    if pass_id:
+        passes = [p for p in passes if p.id == pass_id]
+        if not passes:
+            console.print(f"[red]No pass with id '{pass_id}' found in config.[/red]")
+            raise typer.Exit(1)
+
+    console.print(f"[bold]Database:[/bold] {db_path}")
+    console.print(f"[bold]Passes:[/bold] {', '.join(p.id for p in passes)}")
+    if dry_run:
+        console.print("[yellow]Dry run — no DB writes[/yellow]")
+
+    store = SQLiteStore(db_path)
+    try:
+        run_cluster_dag(store, passes, dry_run=dry_run)
+        console.print("\n[green]Done.[/green]")
+    finally:
+        store.close()
+
+
+@app.command(name="cluster-explore")
+def cluster_explore(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    dims: str = typer.Option(
+        "64,96,128,256,512", "--dims", help="Comma-separated dim sizes to try"
+    ),
+    k: str = typer.Option("5,8,10,12,15", "--k", help="Comma-separated cluster counts to try"),
+    samples: int = typer.Option(8, "--samples", help="Sample titles per cluster"),
+    input_level: str = typer.Option("document", "--input", help="'document' or 'block'"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Explore k-means cluster combinations without writing to DB.
+
+    Tries every (dims, k) combination and prints cluster summaries with sample
+    document titles so you can assess quality before committing to config.toml.
+
+    Example:
+
+    \b
+        openaugi cluster-explore --dims 64,96,128 --k 8,10,12,15
+    """
+    _setup_logging(verbose)
+
+    from openaugi.pipeline.cluster import explore_kmeans_grid
+    from openaugi.store.sqlite import SQLiteStore
+
+    db_path = db or str(_default_db())
+    dims_list = [int(x.strip()) for x in dims.split(",")]
+    k_list = [int(x.strip()) for x in k.split(",")]
+
+    console.print(f"[bold]Database:[/bold] {db_path}")
+    console.print(f"[bold]Dims:[/bold] {dims_list}")
+    console.print(f"[bold]K values:[/bold] {k_list}")
+    console.print(f"[bold]Input level:[/bold] {input_level}")
+
+    store = SQLiteStore(db_path)
+    try:
+        explore_kmeans_grid(store, dims_list, k_list, n_samples=samples, input_level=input_level)
+    finally:
+        store.close()
+
+
+@app.command(name="embed-content-only")
+def embed_content_only(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Embed all data_blocks content-only (no title prefix) into content_only_embedding.
+
+    Does not touch the main embedding column or vec_blocks search index.
+    Used for clustering experiments — see docs/plans/embedding-strategy.md.
+
+    Run this once after ingest, then use --embedding-col content_only_embedding
+    in cluster-explore-within to compare clustering quality.
+    """
+    _setup_logging(verbose)
+
+    from openaugi.config import load_config
+    from openaugi.models import get_embedding_model
+    from openaugi.pipeline.embed import run_embed_content_only
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    db_path = db or str(_default_db())
+    store = SQLiteStore(db_path)
+
+    try:
+        model = get_embedding_model(config.get("models", {}).get("embedding"))
+        console.print(f"[bold]Database:[/bold] {db_path}")
+        console.print(f"[bold]Model:[/bold] {model.name} ({model.dimensions} dims)")
+        embedded = run_embed_content_only(store, model)
+        console.print(f"[green]Done. Embedded {embedded} blocks (content-only).[/green]")
+    finally:
+        store.close()
+
+
+@app.command(name="cluster-explore-within")
+def cluster_explore_within(
+    parent_pass: str = typer.Option("life_areas", "--pass", help="Coarse pass id"),
+    cluster: str = typer.Option(..., "--cluster", help="Cluster label to explore (e.g. '7')"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    dims: str = typer.Option("1536,3072", "--dims", help="Comma-separated dims to try"),
+    hdbscan_sizes: str = typer.Option(
+        "10,20,30", "--hdbscan-sizes", help="min_cluster_size values for HDBSCAN"
+    ),
+    k: str = typer.Option("5,8,10", "--k", help="k values for k-means fallback"),
+    samples: int = typer.Option(8, "--samples", help="Sample titles per cluster"),
+    embedding_col: str = typer.Option(
+        "embedding", "--embedding-col", help="'embedding' or 'content_only_embedding'"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Explore fine clustering within one coarse cluster — HDBSCAN and k-means at multiple dims.
+
+    Tries HDBSCAN (noise = signal; recurring ideas emerge as density) and k-means
+    (every block assigned) at each dims setting. Writes nothing to DB.
+
+    Use --embedding-col content_only_embedding after running embed-content-only
+    to compare clustering with and without title-prepending.
+
+    Example:
+
+    \b
+        openaugi cluster-explore-within --cluster 7
+        openaugi cluster-explore-within --cluster 7 --embedding-col content_only_embedding
+    """
+    _setup_logging(verbose)
+
+    from openaugi.pipeline.cluster import explore_fine_cluster
+    from openaugi.store.sqlite import SQLiteStore
+
+    db_path = db or str(_default_db())
+    dims_list = [int(x.strip()) for x in dims.split(",")]
+    min_sizes = [int(x.strip()) for x in hdbscan_sizes.split(",")]
+    k_list = [int(x.strip()) for x in k.split(",")]
+
+    console.print(f"[bold]Database:[/bold] {db_path}")
+    console.print(f"[bold]Pass:[/bold] {parent_pass}  cluster={cluster}")
+    console.print(f"[bold]Dims:[/bold] {dims_list}  HDBSCAN min_sizes={min_sizes}  k={k_list}")
+    console.print(f"[bold]Embedding:[/bold] {embedding_col}")
+
+    store = SQLiteStore(db_path)
+    try:
+        explore_fine_cluster(
+            store,
+            parent_pass_id=parent_pass,
+            cluster_label=cluster,
+            dims_list=dims_list,
+            hdbscan_min_sizes=min_sizes,
+            k_list=k_list,
+            n_samples=samples,
+            embedding_col=embedding_col,
+        )
+    finally:
+        store.close()
+
+
 @app.command()
 def serve(
     db: str | None = typer.Option(None, "--db", help="Database path"),
@@ -617,10 +823,10 @@ def agent_cmd(
         "--ingest",
         help="Run incremental ingest on each heartbeat cycle (use when `up` is not running)",
     ),
-    lookback: int = typer.Option(
-        24,
+    lookback: int | None = typer.Option(
+        None,
         "--lookback",
-        help="Hours of history to process on first run (no prior state). 0 = all.",
+        help="Hours of history to process. Reseeds the start window. 0 = all. Default on first run: 24h.",  # noqa: E501
     ),
     ignore_source: IgnoreSourceOption = None,
     ignore_heading: IgnoreHeadingOption = None,
@@ -685,16 +891,25 @@ def agent_cmd(
     err.print("[bold]Task dispatch:[/bold] watching OpenAugi/Tasks/\n")
 
     # On first run (no prior state), apply lookback window to avoid processing full vault.
+    from datetime import UTC, datetime, timedelta
+
     from openaugi.pipeline.heartbeat import get_last_heartbeat, set_last_heartbeat
 
-    if get_last_heartbeat() is None and lookback > 0:
-        from datetime import UTC, datetime, timedelta
-
-        default_since = (datetime.now(UTC) - timedelta(hours=lookback)).strftime(
+    effective_lookback = (
+        lookback if lookback is not None else (24 if get_last_heartbeat() is None else None)
+    )
+    if effective_lookback is not None and effective_lookback > 0:
+        default_since = (datetime.now(UTC) - timedelta(hours=effective_lookback)).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
         set_last_heartbeat(default_since)
-        err.print(f"[dim]First run — lookback {lookback}h, starting from {default_since}[/dim]")
+        err.print(f"[dim]Lookback {effective_lookback}h — starting from {default_since}[/dim]")
+    elif effective_lookback == 0:
+        from openaugi.pipeline.heartbeat import HEARTBEAT_STATE_FILE
+
+        if HEARTBEAT_STATE_FILE.exists():
+            HEARTBEAT_STATE_FILE.unlink()
+        err.print("[dim]Lookback 0 — processing all blocks[/dim]")
 
     # Heartbeat loop — runs in the main thread
     while True:
@@ -1160,6 +1375,103 @@ def service_status():
         console.print("[yellow]Cloudflared tunnel: running (publicly reachable)[/yellow]")
     else:
         console.print("[dim]Cloudflared tunnel: not running[/dim]")
+
+
+@app.command()
+def explore(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    backend_port: int = typer.Option(8000, "--backend-port", help="API server port"),
+    frontend_port: int = typer.Option(5173, "--frontend-port", help="Vite dev server port"),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="Open browser automatically"),
+):
+    """Launch the Knowledge Explorer — WebGL cluster visualization.
+
+    Starts the FastAPI backend (UMAP projection) and Vite frontend, then opens
+    the browser. Installs Python and npm deps automatically on first run.
+
+    Example:
+
+    \b
+        openaugi explore
+        openaugi explore --db /path/to/custom.db
+    """
+    import os
+    import subprocess
+    import sys
+    import time
+    from pathlib import Path
+
+    _setup_logging(verbose=False)
+
+    repo_root = Path(__file__).resolve().parents[3]
+    experiment_dir = repo_root / "experiments" / "knowledge-explorer"
+    backend_dir = experiment_dir / "backend"
+    frontend_dir = experiment_dir / "frontend"
+
+    if not experiment_dir.exists():
+        console.print(f"[red]Knowledge Explorer not found at {experiment_dir}[/red]")
+        raise typer.Exit(1)
+
+    db_path = db or str(_default_db())
+    if not Path(db_path).exists():
+        console.print(f"[red]Database not found:[/red] {db_path}")
+        console.print("Run 'openaugi ingest --path /your/vault' first.")
+        raise typer.Exit(1)
+
+    # ── Backend deps ────────────────────────────────────────────────────────────
+    try:
+        import fastapi  # noqa: F401
+        import umap  # noqa: F401
+        import uvicorn  # noqa: F401
+    except ImportError:
+        console.print("[yellow]Installing backend deps…[/yellow]")
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "fastapi", "uvicorn", "umap-learn", "numpy"]
+        )
+
+    # ── Frontend deps ───────────────────────────────────────────────────────────
+    if not (frontend_dir / "node_modules").exists():
+        console.print("[yellow]Installing frontend deps (npm install)…[/yellow]")
+        subprocess.check_call(["npm", "install"], cwd=frontend_dir)
+
+    # ── Launch backend ──────────────────────────────────────────────────────────
+    console.print(f"[bold]Starting backend[/bold] on :{backend_port}  (db: {db_path})")
+    backend_proc = subprocess.Popen(
+        [sys.executable, "server.py", "--db", db_path, "--port", str(backend_port)],
+        cwd=backend_dir,
+    )
+
+    # ── Launch frontend ─────────────────────────────────────────────────────────
+    env = os.environ.copy()
+    env["VITE_API_PORT"] = str(backend_port)
+    console.print(f"[bold]Starting frontend[/bold] on :{frontend_port}")
+    frontend_proc = subprocess.Popen(
+        ["npm", "run", "dev", "--", "--port", str(frontend_port), "--host"],
+        cwd=frontend_dir,
+        env=env,
+    )
+
+    url = f"http://localhost:{frontend_port}"
+
+    if open_browser:
+        # Give Vite a moment to bind
+        time.sleep(2)
+        subprocess.Popen(["open", url])
+
+    console.print(f"\n  [bold green]Knowledge Explorer:[/bold green] {url}")
+    console.print(f"  [dim]Backend API:        http://localhost:{backend_port}/api[/dim]")
+    console.print("  [dim](Ctrl-C to stop)[/dim]\n")
+
+    try:
+        backend_proc.wait()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        backend_proc.terminate()
+        frontend_proc.terminate()
+        backend_proc.wait()
+        frontend_proc.wait()
+        console.print("[dim]Stopped.[/dim]")
 
 
 def _print_block(block, score: float | None = None):
