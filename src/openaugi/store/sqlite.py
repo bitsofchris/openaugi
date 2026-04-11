@@ -154,7 +154,17 @@ class SQLiteStore:
         c.executescript(_META_DDL)
         for idx_sql in _INDEXES:
             c.execute(idx_sql)
+        self._apply_migrations(c)
         c.commit()
+
+    def _apply_migrations(self, c: sqlite3.Connection) -> None:
+        """Apply additive schema migrations that are safe to re-run."""
+        # content_only_embedding: stores block content embedded without the title
+        # prefix. Used for clustering experiments — see docs/plans/embedding-strategy.md.
+        cols = {row[1] for row in c.execute("PRAGMA table_info(blocks)").fetchall()}
+        if "content_only_embedding" not in cols:
+            c.execute("ALTER TABLE blocks ADD COLUMN content_only_embedding BLOB")
+            logger.info("Migration: added content_only_embedding column to blocks")
 
     # ── Block CRUD ─────────────────────────────────────────────────
 
@@ -292,6 +302,53 @@ class SQLiteStore:
         self.conn.commit()
         return True
 
+    def delete_cluster_blocks_by_pass(self, pass_id: str) -> int:
+        """Delete all context_block:cluster and context_block:bridge blocks for a pass_id.
+        CASCADE deletes their links. Returns count deleted."""
+        cursor = self.conn.execute(
+            """DELETE FROM blocks
+               WHERE kind IN ('context_block:cluster', 'context_block:bridge')
+               AND json_extract(metadata, '$.pass_id') = ?""",
+            (pass_id,),
+        )
+        self.conn.commit()
+        return cursor.rowcount
+
+    def batch_update_cluster_assignments(
+        self, pass_id: str, assignments: list[tuple[str, str]]
+    ) -> int:
+        """Set cluster_assignments.{pass_id} = label_str on each data_block.
+
+        assignments: list of (block_id, label_str) — label_str is the cluster
+        label as a string (e.g. "3" for scope=all, "3_7" for scope=within).
+        Merges into existing metadata.cluster_assignments without overwriting
+        other keys. Returns count updated.
+        """
+        if not assignments:
+            return 0
+        block_ids = [a[0] for a in assignments]
+        # Step 1: ensure cluster_assignments key exists for any block that lacks it.
+        # Use json('{}') so SQLite stores a JSON object, not a string literal.
+        placeholders = ",".join("?" * len(block_ids))
+        self.conn.execute(
+            f"""UPDATE blocks
+               SET metadata = json_set(
+                   COALESCE(metadata, '{{}}'),
+                   '$.cluster_assignments',
+                   json('{{}}')
+               )
+               WHERE id IN ({placeholders})
+                 AND json_extract(COALESCE(metadata, '{{}}'), '$.cluster_assignments') IS NULL""",
+            block_ids,
+        )
+        # Step 2: set the specific pass_id key on each block
+        self.conn.executemany(
+            "UPDATE blocks SET metadata = json_set(metadata, '$.cluster_assignments.' || ?, ?) WHERE id = ?",
+            [(pass_id, label_str, bid) for bid, label_str in assignments],
+        )
+        self.conn.commit()
+        return len(assignments)
+
     # ── Link CRUD ──────────────────────────────────────────────────
 
     def insert_link(self, link: Link) -> None:
@@ -415,10 +472,36 @@ class SQLiteStore:
             [(blob, bid) for bid, blob in embeddings.items()],
         )
         if self._vec_table_exists():
+            ids = list(embeddings.keys())
             self.conn.executemany(
-                "INSERT OR REPLACE INTO vec_blocks(block_id, embedding) VALUES (?, ?)",
+                "DELETE FROM vec_blocks WHERE block_id = ?",
+                [(bid,) for bid in ids],
+            )
+            self.conn.executemany(
+                "INSERT INTO vec_blocks(block_id, embedding) VALUES (?, ?)",
                 [(bid, _normalize_blob(blob)) for bid, blob in embeddings.items()],
             )
+        self.conn.commit()
+
+    def get_blocks_needing_content_only_embeddings(self, kind: str = "data_block") -> list[Block]:
+        """Get blocks that need content_only_embedding (column IS NULL but content exists)."""
+        rows = self.conn.execute(
+            """SELECT id, kind, content, summary, embedding, source, title,
+                      tags, block_time, occurred_at, metadata, content_hash, ingested_at
+               FROM blocks
+               WHERE kind = ? AND content_only_embedding IS NULL AND content IS NOT NULL""",
+            (kind,),
+        ).fetchall()
+        return [_row_to_block(r) for r in rows]
+
+    def update_content_only_embeddings(self, embeddings: dict[str, bytes]) -> None:
+        """Batch update content_only_embedding blobs. {block_id: blob}."""
+        if not embeddings:
+            return
+        self.conn.executemany(
+            "UPDATE blocks SET content_only_embedding = ? WHERE id = ?",
+            [(blob, bid) for bid, blob in embeddings.items()],
+        )
         self.conn.commit()
 
     def get_blocks_by_ids(self, block_ids: list[str]) -> dict[str, Block]:
@@ -522,10 +605,9 @@ class SQLiteStore:
         blocks = self.get_blocks_with_embeddings()
         if not blocks:
             return 0
-        self.conn.executemany(
-            "INSERT OR REPLACE INTO vec_blocks(block_id, embedding) VALUES (?, ?)",
-            [(b.id, _normalize_blob(b.embedding)) for b in blocks if b.embedding],
-        )
+        rows = [(b.id, _normalize_blob(b.embedding)) for b in blocks if b.embedding]
+        self.conn.executemany("DELETE FROM vec_blocks WHERE block_id = ?", [(r[0],) for r in rows])
+        self.conn.executemany("INSERT INTO vec_blocks(block_id, embedding) VALUES (?, ?)", rows)
         self.conn.commit()
         count = len([b for b in blocks if b.embedding])
         logger.info("Migrated %d embeddings to vec_blocks", count)
@@ -722,8 +804,13 @@ class SQLiteStore:
     ) -> list[Block]:
         """Get blocks of a given kind with a note date (block_time) since an ISO timestamp.
 
-        Used by the heartbeat pipeline to find data_block blocks from notes dated since the
-        previous run. Pass `since=None` to get all blocks of the kind (first run).
+        Filters on `block_time` (the note's date) so that lookback windows match
+        when the content was *written*, not when it was ingested. block_time is
+        often date-only ("2026-04-10") while the heartbeat timestamp is a full
+        datetime — we compare only the date portion of `since` to avoid
+        "2026-04-10" < "2026-04-10T17:40:52Z" mismatches.
+
+        Pass `since=None` to get all blocks of the kind (first run).
         """
         query = """SELECT id, kind, content, summary, embedding, source, title,
                           tags, block_time, occurred_at, metadata, content_hash, ingested_at
@@ -731,7 +818,7 @@ class SQLiteStore:
                    WHERE kind = ?"""
         params: list = [kind]
         if since:
-            query += " AND block_time > ?"
+            query += " AND block_time >= SUBSTR(?, 1, 10)"
             params.append(since)
         query += " ORDER BY block_time ASC LIMIT ?"
         params.append(limit)
