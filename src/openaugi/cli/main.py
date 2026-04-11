@@ -1397,8 +1397,16 @@ def explore(
         console.print("[yellow]Installing backend deps…[/yellow]")
         subprocess.check_call(
             [
-                sys.executable, "-m", "pip", "install",
-                "fastapi", "uvicorn", "umap-learn", "numpy", "hdbscan", "scikit-learn",
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "fastapi",
+                "uvicorn",
+                "umap-learn",
+                "numpy",
+                "hdbscan",
+                "scikit-learn",
             ]
         )
 
@@ -1412,7 +1420,37 @@ def explore(
     backend_proc = subprocess.Popen(
         [sys.executable, "server.py", "--db", db_path, "--port", str(backend_port)],
         cwd=backend_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
     )
+
+    # Wait up to 8s for backend to bind, streaming output so errors are visible
+    import threading
+
+    backend_ready = threading.Event()
+    backend_lines: list[str] = []
+
+    def _stream_backend() -> None:
+        assert backend_proc.stdout
+        for line in backend_proc.stdout:
+            line = line.rstrip()
+            backend_lines.append(line)
+            console.print(f"  [dim]{line}[/dim]")
+            if "Application startup complete" in line:
+                backend_ready.set()
+
+    t = threading.Thread(target=_stream_backend, daemon=True)
+    t.start()
+
+    if not backend_ready.wait(timeout=10):
+        rc = backend_proc.poll()
+        if rc is not None:
+            console.print(f"[red]Backend exited immediately (code {rc}). Is port {backend_port} already in use?[/red]")
+            raise typer.Exit(1)
+        # Still starting — continue anyway
+    console.print(f"  [green]Backend ready[/green]")
 
     # ── Launch frontend ─────────────────────────────────────────────────────────
     env = os.environ.copy()
@@ -1427,7 +1465,6 @@ def explore(
     url = f"http://localhost:{frontend_port}"
 
     if open_browser:
-        # Give Vite a moment to bind
         time.sleep(2)
         subprocess.Popen(["open", url])
 
@@ -1436,6 +1473,8 @@ def explore(
     console.print("  [dim](Ctrl-C to stop)[/dim]\n")
 
     try:
+        # Keep streaming backend output; wait for either process to exit
+        t.join(timeout=None)  # streams until backend stdout closes (on exit)
         backend_proc.wait()
     except KeyboardInterrupt:
         pass
