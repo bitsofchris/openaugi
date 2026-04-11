@@ -46,6 +46,7 @@ FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 # Used to split sections into sub-blocks finer than H3 headers.
 # See docs/plans/zzz-instructions.md.
 QQQ_PATTERN = re.compile(r"^[ \t]*[qQ]{3}[ \t]*$", re.MULTILINE)
+DATAVIEW_BLOCK_PATTERN = re.compile(r"```dataview\b.*?```", re.DOTALL | re.IGNORECASE)
 # Per-block agent instructions: lines starting with `zzz` (case-insensitive),
 # optionally followed by a colon. Each match becomes one item in the
 # block's `zzz_instructions` metadata list. The prefix is stripped from
@@ -483,17 +484,30 @@ def _split_by_qqq(content: str) -> list[str]:
 def _has_meaningful_content(text: str) -> bool:
     """Return False if text contains only structural markdown with no real content.
 
-    Filters out template sections that are purely:
+    Filters out sections that are purely:
     - Horizontal rules (---)
     - Empty checkbox items (- [ ] with no following text)
+    - Bare dashes (-)
+    - Single-character completion markers (- x)
+    - URL-only lines (no prose)
+    - Dataview query blocks
     """
-    for line in text.splitlines():
+    # Strip dataview blocks — they are Obsidian-specific queries, not content
+    cleaned = DATAVIEW_BLOCK_PATTERN.sub("", text)
+
+    for line in cleaned.splitlines():
         s = line.strip()
         if not s:
             continue
         if s == "---":
             continue
         if re.match(r"^-\s+\[\s*\]\s*$", s):  # empty checkbox
+            continue
+        if re.match(r"^-\s*$", s):  # bare dash
+            continue
+        if re.match(r"^-\s+[xX]\s*$", s):  # single-char completion marker
+            continue
+        if re.match(r"^-?\s*https?://\S+\s*$", s):  # URL-only line
             continue
         return True
     return False
