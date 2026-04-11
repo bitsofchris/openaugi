@@ -231,6 +231,7 @@ def run_heartbeat(
     dry_run: bool = False,
     ignore_sources: list[str] | None = None,
     ignore_headings: list[str] | None = None,
+    skill_file_path: str | None = None,
 ) -> dict:
     """Run one heartbeat cycle.
 
@@ -245,12 +246,12 @@ def run_heartbeat(
     whether the agent was launched, and its return code.
     """
     vault = Path(vault_path)
-    skill_file = vault / SKILL_FILE_RELATIVE
+    skill_file = Path(skill_file_path) if skill_file_path else vault / SKILL_FILE_RELATIVE
     if not skill_file.exists():
         raise FileNotFoundError(
             f"Heartbeat skill file not found: {skill_file}\n"
             "Create it with workstreams, default rules, and what to write "
-            "back. See docs/plans/heartbeat.md for an example."
+            "back. Or set [heartbeat] skill_file in config.toml to an absolute path."
         )
 
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
