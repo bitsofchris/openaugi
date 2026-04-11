@@ -239,7 +239,7 @@ def _run_kmeans(
     large vector sets, particularly at higher dimensions, due to its BLAS-
     optimized distance computation and GPU-ready architecture.
     """
-    import faiss
+    import faiss  # pyright: ignore[reportMissingImports]
 
     valid_ids = [bid for bid in ids if bid in vecs]
     if not valid_ids:
@@ -261,7 +261,7 @@ def _run_hdbscan(
     min_samples: int | None,
 ) -> tuple[list[str], np.ndarray]:
     """Run HDBSCAN on the subset of ids present in vecs. Returns (ordered_ids, labels)."""
-    from hdbscan import HDBSCAN
+    from hdbscan import HDBSCAN  # pyright: ignore[reportMissingImports]
 
     valid_ids = [bid for bid in ids if bid in vecs]
     if not valid_ids:
@@ -763,7 +763,7 @@ def explore_kmeans_grid(
         n_samples:   Document titles to show per cluster (default 8).
         input_level: "document" (mean-pooled) or "block".
     """
-    import faiss
+    import faiss  # pyright: ignore[reportMissingImports]
 
     # Load embeddings once
     if input_level == "document":
@@ -856,7 +856,7 @@ def explore_fine_cluster(
         n_samples:         Titles to show per cluster.
         embedding_col:     "embedding" (title-prepended) or "content_only_embedding".
     """
-    import faiss
+    import faiss  # pyright: ignore[reportMissingImports]
 
     # Load block IDs whose cluster_assignment for parent_pass matches the label
     rows = store.conn.execute(
@@ -916,7 +916,7 @@ def explore_fine_cluster(
         # ── HDBSCAN ───────────────────────────────────────────────
         for min_size in hdbscan_min_sizes:
             try:
-                from hdbscan import HDBSCAN
+                from hdbscan import HDBSCAN  # pyright: ignore[reportMissingImports]
 
                 labels: np.ndarray = HDBSCAN(
                     min_cluster_size=min_size, metric="euclidean"

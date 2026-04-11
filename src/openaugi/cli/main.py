@@ -1390,8 +1390,8 @@ def explore(
 
     # ── Backend deps ────────────────────────────────────────────────────────────
     try:
-        import fastapi  # noqa: F401
-        import umap  # noqa: F401
+        import fastapi  # noqa: F401  # pyright: ignore[reportMissingImports]
+        import umap  # noqa: F401  # pyright: ignore[reportMissingImports]
         import uvicorn  # noqa: F401
     except ImportError:
         console.print("[yellow]Installing backend deps…[/yellow]")
