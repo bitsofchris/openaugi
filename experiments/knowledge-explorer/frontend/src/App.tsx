@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { fetchData } from './api';
-import type { Block, ColorMode, ExplorerData, PassInfo } from './types';
+import { fetchData, postExplore } from './api';
+import type { Block, ColorMode, ExplorerData, PassInfo, ExploreResult, ExploreCrumb, ExploreParams } from './types';
 import { ScatterPlot } from './components/ScatterPlot';
 import type { ScatterPlotRef } from './components/ScatterPlot';
 import { DetailPane } from './components/DetailPane';
 import { FilterBar } from './components/FilterBar';
 import { TimelinePlayer } from './components/TimelinePlayer';
 import { ZoomControls } from './components/ZoomControls';
+import { ExplorePanel } from './components/ExplorePanel';
 
 const COLORS = {
   bg: '#0d0d14',
@@ -20,12 +21,15 @@ const COLORS = {
   highlight: '#f59e0b',
 };
 
+// Synthetic pass_id used when explore mode is active
+const EXPLORE_LEVEL = '_explore';
+
 export default function App() {
   const [data, setData] = useState<ExplorerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // View state — level is a pass_id string
+  // Browse mode state
   const [level, setLevel] = useState<string>('');
   const [colorMode, setColorMode] = useState<ColorMode>('cluster');
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,30 +37,62 @@ export default function App() {
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [onlySource, setOnlySource] = useState<string | null>(null);
 
-  // Timeline
-  const [timelineActive, setTimelineActive] = useState(false);
+  // Timeline — active by default, starts at right (all blocks visible)
+  const [timelineActive, setTimelineActive] = useState(true);
   const [timelineDate, setTimelineDate] = useState<Date | null>(null);
 
+  // Explore mode
+  const [exploreMode, setExploreMode] = useState(false);
+  const [exploreResult, setExploreResult] = useState<ExploreResult | null>(null);
+  const [exploreLoading, setExploreLoading] = useState(false);
+  const [exploreError, setExploreError] = useState<string | null>(null);
+  const [exploreBreadcrumb, setExploreBreadcrumb] = useState<ExploreCrumb[]>([]);
+  const [exploreSelectedLabel, setExploreSelectedLabel] = useState<string | null>(null);
+
   const scatterRef = useRef<ScatterPlotRef>(null);
+
+  // Lookup map for production blocks by id (used to enrich explore blocks with source_content)
+  const productionBlockById = useMemo(() => {
+    if (!data) return new Map<string, Block>();
+    return new Map(data.blocks.map(b => [b.id, b]));
+  }, [data]);
 
   useEffect(() => {
     fetchData()
       .then(d => {
         setData(d);
-        // Default to first (coarsest) pass
         if (d.passes.length > 0) setLevel(d.passes[0].id);
       })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false));
   }, []);
 
-  // Current pass info
-  const currentPass: PassInfo | undefined = data?.passes.find(p => p.id === level);
+  // ── Explore mode: map ExploreBlock → Block for ScatterPlot ──────────────────
+  // Noise blocks (label="-1") get empty cluster_assignments so isNoise() works.
+  // Use explore x/y coords (re-projected UMAP for the subset).
+  const exploreBlocks = useMemo((): Block[] => {
+    if (!exploreResult) return [];
+    return exploreResult.blocks.map(eb => {
+      const prod = productionBlockById.get(eb.id);
+      return {
+        id: eb.id,
+        content: eb.content,
+        source_path: eb.source_path,
+        source_content: prod?.source_content ?? '',
+        x: eb.x,
+        y: eb.y,
+        date: eb.date,
+        cluster_assignments: eb.label === '-1' ? {} as Record<string, string> : { [EXPLORE_LEVEL]: eb.label },
+      };
+    });
+  }, [exploreResult, productionBlockById]);
 
-  // Filtered blocks for display
-  const visibleBlocks = useMemo(() => {
-    if (!data) return [];
-    let blocks = data.blocks;
+  // ── Active blocks & level passed to scatter ──────────────────────────────────
+  const activeLevel = exploreMode ? EXPLORE_LEVEL : level;
+  const activeBlocks = useMemo(() => {
+    const base = exploreMode ? exploreBlocks : (data?.blocks ?? []);
+
+    let blocks = base;
 
     if (timelineActive && timelineDate) {
       blocks = blocks.filter(b => {
@@ -65,42 +101,109 @@ export default function App() {
       });
     }
 
-    if (onlySource) {
-      blocks = blocks.filter(b => b.source_path === onlySource);
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      blocks = blocks.filter(b =>
-        b.content.toLowerCase().includes(q) ||
-        b.source_path.toLowerCase().includes(q)
-      );
+    if (!exploreMode) {
+      if (onlySource) blocks = blocks.filter(b => b.source_path === onlySource);
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        blocks = blocks.filter(b =>
+          b.content.toLowerCase().includes(q) ||
+          b.source_path.toLowerCase().includes(q)
+        );
+      }
     }
 
     return blocks;
-  }, [data, timelineActive, timelineDate, onlySource, searchQuery]);
+  }, [exploreMode, exploreBlocks, data, timelineActive, timelineDate, onlySource, searchQuery]);
 
-  // Highlight all members of the selected block's cluster at the current level
+  // ── Cluster highlight ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!selectedBlock || !data || !level) {
+    if (!selectedBlock) {
       setHighlightedIds(new Set());
       return;
     }
-    const clusterLabel = selectedBlock.cluster_assignments[level];
-    if (!clusterLabel) {
-      setHighlightedIds(new Set());
-      return;
+    if (exploreMode) {
+      // Highlight all blocks in the same explore cluster
+      const lbl = selectedBlock.cluster_assignments[EXPLORE_LEVEL];
+      if (!lbl) { setHighlightedIds(new Set()); return; }
+      const ids = new Set(exploreBlocks.filter(b => b.cluster_assignments[EXPLORE_LEVEL] === lbl).map(b => b.id));
+      setHighlightedIds(ids);
+    } else {
+      if (!data) { setHighlightedIds(new Set()); return; }
+      const clusterLabel = selectedBlock.cluster_assignments[level];
+      if (!clusterLabel) { setHighlightedIds(new Set()); return; }
+      const ids = new Set(data.blocks.filter(b => b.cluster_assignments[level] === clusterLabel).map(b => b.id));
+      setHighlightedIds(ids);
     }
-    const ids = new Set(
-      data.blocks
-        .filter(b => b.cluster_assignments[level] === clusterLabel)
-        .map(b => b.id)
-    );
-    setHighlightedIds(ids);
-  }, [selectedBlock, level, data]);
+  }, [selectedBlock, level, data, exploreMode, exploreBlocks]);
+
+  // ── Explore actions ──────────────────────────────────────────────────────────
+  const handleRunExplore = useCallback(async (params: ExploreParams, blockIds: string[] | null) => {
+    setExploreLoading(true);
+    setExploreError(null);
+    setExploreSelectedLabel(null);
+    try {
+      const result = await postExplore(params, blockIds);
+      setExploreResult(result);
+      // Update breadcrumb: if blockIds is null this is a fresh top-level run
+      if (blockIds === null) {
+        setExploreBreadcrumb([{
+          label: `All (${data?.block_count.toLocaleString() ?? '?'})`,
+          block_ids: null,
+          params,
+        }]);
+      }
+      // If blockIds provided, the last crumb already exists (added during drill-in)
+    } catch (e) {
+      setExploreError(String(e));
+    } finally {
+      setExploreLoading(false);
+    }
+  }, [data]);
+
+  const handleDrillInto = useCallback((label: string) => {
+    if (!exploreResult) return;
+    const memberIds = exploreResult.blocks.filter(b => b.label === label).map(b => b.id);
+    const crumb: ExploreCrumb = {
+      label: `cluster ${label} (${memberIds.length})`,
+      block_ids: memberIds,
+      params: exploreResult.params,
+    };
+    setExploreBreadcrumb(prev => [...prev, crumb]);
+    setExploreSelectedLabel(null);
+    // Run explore on just this subset with same params
+    handleRunExplore(exploreResult.params, memberIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exploreResult]);
+
+  const handleBreadcrumbNav = useCallback((index: number) => {
+    const crumb = exploreBreadcrumb[index];
+    if (!crumb) return;
+    setExploreBreadcrumb(prev => prev.slice(0, index + 1));
+    setExploreSelectedLabel(null);
+    handleRunExplore(crumb.params, crumb.block_ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exploreBreadcrumb]);
 
   const handleBlockClick = useCallback((block: Block | null) => {
     setSelectedBlock(block);
+    if (block && exploreMode) {
+      const lbl = block.cluster_assignments[EXPLORE_LEVEL];
+      if (lbl) setExploreSelectedLabel(lbl);
+    }
+  }, [exploreMode]);
+
+  const handleToggleExplore = useCallback(() => {
+    setExploreMode(prev => {
+      if (prev) {
+        // Exit explore — clear state
+        setExploreResult(null);
+        setExploreBreadcrumb([]);
+        setExploreSelectedLabel(null);
+        setSelectedBlock(null);
+        setHighlightedIds(new Set());
+      }
+      return !prev;
+    });
   }, []);
 
   const handleShowOnlySource = useCallback((sourcePath: string) => {
@@ -117,9 +220,7 @@ export default function App() {
     const cluster = data.clusters[clusterBlockId];
     if (!cluster) return;
     const ids = new Set(
-      data.blocks
-        .filter(b => b.cluster_assignments[cluster.pass_id] === cluster.label)
-        .map(b => b.id)
+      data.blocks.filter(b => b.cluster_assignments[cluster.pass_id] === cluster.label).map(b => b.id)
     );
     setHighlightedIds(ids);
   }, [data]);
@@ -132,12 +233,18 @@ export default function App() {
     setTimelineActive(prev => !prev);
   }, []);
 
+  // Timeline items — use active blocks (explore or browse)
   const timelineItems = useMemo(() => {
-    if (!data) return [];
-    return data.blocks
-      .filter(b => b.date)
-      .map(b => ({ timestamp: b.date! + '-01' }));
-  }, [data]);
+    const base = exploreMode ? exploreBlocks : (data?.blocks ?? []);
+    return base.filter(b => b.date).map(b => ({ timestamp: b.date! + '-01' }));
+  }, [exploreMode, exploreBlocks, data]);
+
+  // Detail pane: in explore mode, show the production block for rich context
+  const detailBlock = useMemo(() => {
+    if (!selectedBlock) return null;
+    if (exploreMode) return productionBlockById.get(selectedBlock.id) ?? selectedBlock;
+    return selectedBlock;
+  }, [selectedBlock, exploreMode, productionBlockById]);
 
   if (loading) {
     return (
@@ -146,7 +253,7 @@ export default function App() {
         height: '100vh', background: COLORS.bg, color: COLORS.textMuted,
         fontFamily: "'JetBrains Mono', monospace", fontSize: '14px',
       }}>
-        Loading knowledge graph...
+        Loading knowledge graph…
       </div>
     );
   }
@@ -169,9 +276,9 @@ export default function App() {
     );
   }
 
-  // Stats for header
-  const noiseCount = visibleBlocks.filter(b => !b.cluster_assignments[level]).length;
-  const clusteredCount = visibleBlocks.length - noiseCount;
+  const currentPass: PassInfo | undefined = data.passes.find(p => p.id === level);
+  const noiseCount = activeBlocks.filter(b => !b.cluster_assignments[activeLevel]).length;
+  const clusteredCount = activeBlocks.length - noiseCount;
 
   return (
     <div style={{
@@ -185,6 +292,7 @@ export default function App() {
         borderBottom: `1px solid ${COLORS.border}`,
         background: COLORS.surface,
         display: 'flex', alignItems: 'center', gap: '16px',
+        flexShrink: 0,
       }}>
         <div style={{
           fontSize: '15px', fontWeight: 600, color: COLORS.accent,
@@ -193,20 +301,24 @@ export default function App() {
           openaugi / knowledge-explorer
         </div>
         <div style={{ fontSize: '12px', color: COLORS.textMuted }}>
-          {clusteredCount.toLocaleString()} clustered · {noiseCount.toLocaleString()} noise
-          {' / '}
-          {data.block_count.toLocaleString()} total
+          {exploreMode
+            ? (exploreResult
+              ? `${exploreResult.cluster_count} clusters · ${exploreResult.noise_count} noise / ${exploreResult.blocks.length.toLocaleString()} projected`
+              : 'explore mode — run to project')
+            : `${clusteredCount.toLocaleString()} clustered · ${noiseCount.toLocaleString()} noise / ${data.block_count.toLocaleString()} total`
+          }
         </div>
-        {currentPass && (
+        {!exploreMode && currentPass && (
           <div style={{
             fontSize: '11px', color: COLORS.textMuted,
             fontFamily: "'JetBrains Mono', monospace",
-            padding: '3px 8px',
-            border: `1px solid ${COLORS.border}`,
-            borderRadius: '4px',
+            padding: '3px 8px', border: `1px solid ${COLORS.border}`, borderRadius: '4px',
           }}>
             {currentPass.description || currentPass.id} · dims={currentPass.dims}
           </div>
+        )}
+        {exploreError && (
+          <div style={{ fontSize: '11px', color: '#ef4444', maxWidth: 300 }}>{exploreError}</div>
         )}
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: '11px', color: COLORS.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>
@@ -214,31 +326,93 @@ export default function App() {
         </div>
       </header>
 
-      {/* Filter bar */}
-      <FilterBar
-        level={level}
-        onLevelChange={setLevel}
-        passes={data.passes}
-        colorMode={colorMode}
-        onColorModeChange={setColorMode}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onlySource={onlySource}
-        onClearFilters={handleClearFilters}
-        colors={COLORS}
-        timelineActive={timelineActive}
-      />
+      {/* Filter bar — hidden in explore mode (search/filter don't apply to explore) */}
+      {!exploreMode && (
+        <FilterBar
+          level={level}
+          onLevelChange={setLevel}
+          passes={data.passes}
+          colorMode={colorMode}
+          onColorModeChange={setColorMode}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onlySource={onlySource}
+          onClearFilters={handleClearFilters}
+          colors={COLORS}
+          timelineActive={timelineActive}
+          exploreMode={exploreMode}
+          onToggleExplore={handleToggleExplore}
+        />
+      )}
+
+      {/* Explore mode toolbar */}
+      {exploreMode && (
+        <div style={{
+          padding: '8px 16px',
+          background: COLORS.surface,
+          borderBottom: `1px solid ${COLORS.border}`,
+          display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+        }}>
+          <button
+            onClick={handleToggleExplore}
+            style={{
+              padding: '5px 12px', fontSize: 11, fontWeight: 600,
+              border: `1px solid ${COLORS.accent}`,
+              borderRadius: 6, background: `${COLORS.accent}20`,
+              color: COLORS.accent, cursor: 'pointer',
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          >
+            ← Browse mode
+          </button>
+          <span style={{ fontSize: 11, color: COLORS.textMuted }}>
+            Ad-hoc clustering · results are not saved to DB
+          </span>
+          <div style={{ flex: 1 }} />
+          {/* Color mode still useful in explore */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: COLORS.textMuted }}>Color:</span>
+            {(['cluster', 'date', 'source'] as ColorMode[]).map(m => (
+              <button key={m}
+                onClick={() => setColorMode(m)}
+                style={{
+                  padding: '3px 8px', fontSize: 11,
+                  border: `1px solid ${colorMode === m ? COLORS.accent : COLORS.border}`,
+                  borderRadius: 4, background: colorMode === m ? `${COLORS.accent}20` : 'transparent',
+                  color: colorMode === m ? COLORS.accent : COLORS.textMuted, cursor: 'pointer',
+                }}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main area */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        {/* Explore panel — left sidebar when in explore mode */}
+        {exploreMode && (
+          <ExplorePanel
+            onRun={handleRunExplore}
+            result={exploreResult}
+            loading={exploreLoading}
+            breadcrumb={exploreBreadcrumb}
+            onBreadcrumbNav={handleBreadcrumbNav}
+            onDrillInto={handleDrillInto}
+            selectedLabel={exploreSelectedLabel}
+            colors={COLORS}
+          />
+        )}
+
         <div style={{ flex: 1, position: 'relative' }}>
           <ScatterPlot
             ref={scatterRef}
-            blocks={visibleBlocks}
+            blocks={activeBlocks}
             selectedBlock={selectedBlock}
             highlightedIds={highlightedIds}
             colorMode={colorMode}
-            level={level}
+            level={activeLevel}
             onBlockClick={handleBlockClick}
             colors={COLORS}
             timelineActive={timelineActive}
@@ -260,7 +434,7 @@ export default function App() {
         </div>
 
         <DetailPane
-          block={selectedBlock}
+          block={detailBlock}
           clusters={data.clusters}
           clustersByPass={data.clusters_by_pass}
           passes={data.passes}

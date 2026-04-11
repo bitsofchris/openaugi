@@ -1,7 +1,7 @@
 import type { ColorMode, PassInfo } from '../types';
 
 interface Props {
-  level: string;  // current pass_id
+  level: string;
   onLevelChange: (level: string) => void;
   passes: PassInfo[];
   colorMode: ColorMode;
@@ -12,6 +12,8 @@ interface Props {
   onClearFilters: () => void;
   colors: Record<string, string>;
   timelineActive?: boolean;
+  exploreMode: boolean;
+  onToggleExplore: () => void;
 }
 
 const COLOR_MODES: { id: ColorMode; label: string }[] = [
@@ -32,6 +34,8 @@ export function FilterBar({
   onClearFilters,
   colors,
   timelineActive,
+  exploreMode,
+  onToggleExplore,
 }: Props) {
   const btn = (active: boolean): React.CSSProperties => ({
     padding: '5px 12px',
@@ -125,7 +129,7 @@ export function FilterBar({
         </>
       )}
 
-      {/* Clear search (no chip needed, just a small button) */}
+      {/* Clear search */}
       {searchQuery && !onlySource && (
         <button
           onClick={onClearFilters}
@@ -134,6 +138,26 @@ export function FilterBar({
           Clear
         </button>
       )}
+
+      <div style={{ flex: 1 }} />
+
+      {/* Explore mode toggle */}
+      <button
+        onClick={onToggleExplore}
+        style={{
+          padding: '5px 14px', fontSize: 11, fontWeight: 600,
+          border: `1px solid ${exploreMode ? colors.accent : colors.border}`,
+          borderRadius: 6,
+          background: exploreMode ? `${colors.accent}20` : 'transparent',
+          color: exploreMode ? colors.accent : colors.textMuted,
+          cursor: 'pointer',
+          fontFamily: "'JetBrains Mono', monospace",
+          letterSpacing: '0.3px',
+        }}
+        title="Switch to ad-hoc clustering exploration mode"
+      >
+        Explore
+      </button>
     </div>
   );
 }
