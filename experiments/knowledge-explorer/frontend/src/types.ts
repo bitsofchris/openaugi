@@ -49,34 +49,38 @@ export interface ExploreParams {
   k: number;
 }
 
-export interface ExploreBlock {
+// Response from POST /api/explore/umap — stable XY positions for a dims value
+export interface ExplorePoint {
   id: string;
   x: number;
   y: number;
-  label: string;      // cluster label string; "-1" = noise
-  content: string;
-  source_path: string;
   date: string | null;
 }
 
+export interface ExploreUmapResult {
+  points: ExplorePoint[];
+  block_count: number;
+  dims: number;
+}
+
+// Response from POST /api/explore/cluster — fast label assignments, no UMAP
 export interface ExploreClusterStats {
   count: number;
   sample_titles: string[];
 }
 
-export interface ExploreResult {
-  blocks: ExploreBlock[];
-  stats: Record<string, ExploreClusterStats>;  // label → stats
+export interface ExploreClusterResult {
+  labels: Record<string, string>;          // block_id → label ("-1" = noise)
+  stats: Record<string, ExploreClusterStats>;
   noise_count: number;
   cluster_count: number;
   cached: boolean;
-  params: ExploreParams;
 }
 
 // Breadcrumb entry for drill-down navigation
 export interface ExploreCrumb {
-  label: string;           // display text e.g. "All" or "cluster 3 (847 blocks)"
-  block_ids: string[] | null;  // null = all blocks
+  label: string;
+  block_ids: string[] | null;
   params: ExploreParams;
 }
 

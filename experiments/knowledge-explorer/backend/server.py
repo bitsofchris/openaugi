@@ -15,6 +15,7 @@ import json
 import logging
 import pickle
 import sqlite3
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -29,6 +30,10 @@ log = logging.getLogger(__name__)
 
 DEFAULT_DB = Path.home() / ".openaugi" / "openaugi.db"
 UMAP_CACHE_DIR = Path.home() / ".openaugi" / "umap_cache"
+
+# One UMAP runs at a time — Numba's workqueue is not re-entrant.
+# A second request hitting the same cache key will wait, then get a cache hit.
+_umap_lock = threading.Lock()
 
 app = FastAPI(title="OpenAugi Knowledge Explorer")
 app.add_middleware(
@@ -48,7 +53,7 @@ def open_db(db_path: str) -> sqlite3.Connection:
 
 
 def load_data_blocks(conn: sqlite3.Connection) -> list[dict]:
-    """Load data_blocks that have embeddings. Embedding blob stays as bytes."""
+    """Load data_blocks that have embeddings."""
     rows = conn.execute("""
         SELECT id,
                content,
@@ -69,25 +74,19 @@ def load_data_blocks(conn: sqlite3.Connection) -> list[dict]:
             ca = json.loads(ca_raw) if ca_raw else {}
         except (json.JSONDecodeError, TypeError):
             ca = {}
-        result.append(
-            {
-                "id": r["id"],
-                "content": r["content"] or "",
-                "title": r["title"] or "",
-                "block_time": r["block_time"],
-                "embedding": r["embedding"],  # raw float32 bytes
-                "source_path": r["source_path"] or r["title"] or r["id"],
-                "cluster_assignments": ca,
-            }
-        )
+        result.append({
+            "id": r["id"],
+            "content": r["content"] or "",
+            "title": r["title"] or "",
+            "block_time": r["block_time"],
+            "embedding": r["embedding"],
+            "source_path": r["source_path"] or r["title"] or r["id"],
+            "cluster_assignments": ca,
+        })
     return result
 
 
 def load_source_content(conn: sqlite3.Connection, source_paths: set[str]) -> dict[str, str]:
-    """
-    Load a snippet of each source note's content from context_block:document blocks.
-    Falls back to empty string if not found.
-    """
     if not source_paths:
         return {}
     rows = conn.execute("""
@@ -100,7 +99,6 @@ def load_source_content(conn: sqlite3.Connection, source_paths: set[str]) -> dic
 
 
 def load_cluster_blocks(conn: sqlite3.Connection) -> list[dict]:
-    """Load context_block:cluster blocks with their metadata."""
     rows = conn.execute("""
         SELECT id, content, title, metadata
         FROM blocks
@@ -113,31 +111,24 @@ def load_cluster_blocks(conn: sqlite3.Connection) -> list[dict]:
             meta = json.loads(r["metadata"]) if r["metadata"] else {}
         except (json.JSONDecodeError, TypeError):
             meta = {}
-        temporal_raw = meta.get("temporal")
-        result.append(
-            {
-                "id": r["id"],
-                "content": r["content"],
-                "title": r["title"] or "",
-                "pass_id": meta.get("pass_id", ""),
-                "parent_pass_id": meta.get("parent_pass_id"),
-                "cluster_label": meta.get("cluster_label"),
-                "dims": meta.get("dims", 0),
-                "min_cluster_size": meta.get("min_cluster_size"),
-                "member_count": meta.get("member_count", 0),
-                "noise_count": meta.get("noise_count", 0),
-                "temporal": temporal_raw,
-            }
-        )
+        result.append({
+            "id": r["id"],
+            "content": r["content"],
+            "title": r["title"] or "",
+            "pass_id": meta.get("pass_id", ""),
+            "parent_pass_id": meta.get("parent_pass_id"),
+            "cluster_label": meta.get("cluster_label"),
+            "dims": meta.get("dims", 0),
+            "min_cluster_size": meta.get("min_cluster_size"),
+            "member_count": meta.get("member_count", 0),
+            "noise_count": meta.get("noise_count", 0),
+            "temporal": meta.get("temporal"),
+        })
     return result
 
 
 def discover_passes(cluster_blocks: list[dict]) -> list[dict]:
-    """
-    Derive ordered list of passes from cluster blocks.
-    Sorted: scope=all (no parent) first by dims asc, then scope=within by dims asc.
-    """
-    seen: dict[str, dict] = {}  # pass_id → {id, dims, parent_pass_id}
+    seen: dict[str, dict] = {}
     for cb in cluster_blocks:
         pid = cb["pass_id"]
         if pid and pid not in seen:
@@ -154,16 +145,38 @@ def discover_passes(cluster_blocks: list[dict]) -> list[dict]:
     return root_passes + child_passes
 
 
-# ── UMAP helpers ──────────────────────────────────────────────────────────────
+# ── Embedding helpers ─────────────────────────────────────────────────────────
 
 
 def _matrix_hash(matrix: np.ndarray) -> str:
-    """SHA-1 of the raw embedding bytes — changes when any embedding is updated."""
+    """SHA-1 of raw bytes — unique per (content × dims) combination."""
     return hashlib.sha1(matrix.tobytes()).hexdigest()[:16]  # noqa: S324
 
 
+def _truncate_normalize(matrix: np.ndarray, dims: int) -> np.ndarray:
+    """Slice to dims and L2-normalize (required after Matryoshka truncation)."""
+    d = min(dims, matrix.shape[1])
+    m = matrix[:, :d].copy()
+    norms = np.linalg.norm(m, axis=1, keepdims=True)
+    norms = np.where(norms == 0, 1.0, norms)
+    return m / norms
+
+
+def _normalize_coords(coords: np.ndarray) -> np.ndarray:
+    """Normalize 2D projection to [-1, 1] per axis."""
+    coords = coords.copy()
+    for axis in range(2):
+        col = coords[:, axis]
+        col_range = col.max() - col.min()
+        if col_range > 0:
+            coords[:, axis] = (col - col.min()) / col_range * 2 - 1
+    return coords
+
+
+# ── UMAP (cached, serialized) ─────────────────────────────────────────────────
+
+
 def _run_umap(matrix: np.ndarray) -> np.ndarray:
-    """Pure UMAP computation, no caching."""
     try:
         import umap  # type: ignore
     except ImportError:
@@ -180,184 +193,197 @@ def _run_umap(matrix: np.ndarray) -> np.ndarray:
 
 
 def compute_umap(matrix: np.ndarray) -> np.ndarray:
-    """UMAP to 2D with disk cache keyed on matrix hash.
+    """UMAP to 2D, cached to disk, serialized via lock (Numba is not re-entrant).
 
-    Cache lives in ~/.openaugi/umap_cache/ and invalidates automatically
-    whenever embeddings change (hash of the matrix bytes changes).
+    Cache key = SHA-1 of the truncated+normalized matrix bytes, so it is unique
+    per (block set × dims). A second concurrent request waits on the lock, then
+    gets a cache hit instead of crashing Numba.
     """
     UMAP_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_key = _matrix_hash(matrix)
     cache_file = UMAP_CACHE_DIR / f"umap_{cache_key}_{len(matrix)}.pkl"
 
+    # Fast path: cache hit before acquiring lock
     if cache_file.exists():
-        log.info("UMAP cache hit — loading from %s", cache_file)
+        log.info("UMAP cache hit — %s", cache_file.name)
         with cache_file.open("rb") as f:
             return pickle.load(f)  # noqa: S301
 
-    log.info("UMAP cache miss — computing (this takes ~30-60s for large vaults)…")
-    coords = _run_umap(matrix)
+    with _umap_lock:
+        # Re-check inside lock — another thread may have computed while we waited
+        if cache_file.exists():
+            log.info("UMAP cache hit (post-lock) — %s", cache_file.name)
+            with cache_file.open("rb") as f:
+                return pickle.load(f)  # noqa: S301
 
-    with cache_file.open("wb") as f:
-        pickle.dump(coords, f)
-    log.info("UMAP result cached to %s", cache_file)
-    return coords
-
-
-def _normalize_coords(coords: np.ndarray) -> np.ndarray:
-    """Normalize 2D coords to [-1, 1] per axis."""
-    coords = coords.copy()
-    for axis in range(2):
-        col = coords[:, axis]
-        col_range = col.max() - col.min()
-        if col_range > 0:
-            coords[:, axis] = (col - col.min()) / col_range * 2 - 1
-    return coords
+        log.info("UMAP computing: %d × %d (this takes a while first time)…", *matrix.shape)
+        coords = _run_umap(matrix)
+        with cache_file.open("wb") as f:
+            pickle.dump(coords, f)
+        log.info("UMAP cached → %s", cache_file.name)
+        return coords
 
 
-def _truncate_normalize(matrix: np.ndarray, dims: int) -> np.ndarray:
-    """Truncate to dims and L2-normalize (important after Matryoshka truncation)."""
-    dims = min(dims, matrix.shape[1])
-    m = matrix[:, :dims].copy()
-    norms = np.linalg.norm(m, axis=1, keepdims=True)
-    norms = np.where(norms == 0, 1.0, norms)
-    return m / norms
+# ── Clustering helpers ────────────────────────────────────────────────────────
 
 
-# ── Explore endpoint ──────────────────────────────────────────────────────────
+def _run_kmeans(matrix: np.ndarray, k: int) -> np.ndarray:
+    try:
+        from sklearn.cluster import KMeans  # type: ignore
+    except ImportError:
+        raise HTTPException(500, "scikit-learn not installed: pip install scikit-learn") from None
+    k = min(k, len(matrix))
+    return KMeans(n_clusters=k, random_state=42, n_init="auto").fit_predict(matrix)
 
 
-class ExploreRequest(BaseModel):
-    algo: str = "hdbscan"
+def _run_hdbscan(matrix: np.ndarray, min_cluster_size: int, min_samples: int) -> np.ndarray:
+    try:
+        import hdbscan as hdbscan_lib  # type: ignore
+    except ImportError:
+        raise HTTPException(500, "hdbscan not installed: pip install hdbscan") from None
+    mcs = max(2, min(min_cluster_size, len(matrix) // 2))
+    return hdbscan_lib.HDBSCAN(
+        min_cluster_size=mcs, min_samples=min_samples, metric="euclidean"
+    ).fit_predict(matrix)
+
+
+def _cluster_stats(blocks: list[dict], labels: np.ndarray) -> dict[str, dict]:
+    stats: dict[str, dict] = {}
+    for lbl in set(labels):
+        if lbl == -1:
+            continue
+        members = [blocks[i] for i, l in enumerate(labels) if l == lbl]
+        stats[str(lbl)] = {
+            "count": len(members),
+            "sample_titles": [b["source_path"].split("/")[-1] for b in members[:6]],
+        }
+    return stats
+
+
+# ── Explore endpoints ─────────────────────────────────────────────────────────
+
+
+class UmapRequest(BaseModel):
     dims: int = 64
-    min_cluster_size: int = 20
-    min_samples: int = 5
-    k: int = 10
     block_ids: list[str] | None = None
 
 
-def _explore_cache_key(req: ExploreRequest, block_ids_sorted: list[str]) -> str:
-    ids_hash = hashlib.sha1(",".join(block_ids_sorted).encode()).hexdigest()[:12]  # noqa: S324
-    parts = f"{req.algo}:{req.dims}:{req.min_cluster_size}:{req.min_samples}:{req.k}:{ids_hash}"
-    return hashlib.sha1(parts.encode()).hexdigest()[:16]  # noqa: S324
+class ClusterRequest(BaseModel):
+    algo: str = "kmeans"
+    dims: int = 64
+    k: int = 10
+    min_cluster_size: int = 20
+    min_samples: int = 5
+    block_ids: list[str] | None = None
 
 
-@app.post("/api/explore")
-def post_explore(req: ExploreRequest, db: str = str(DEFAULT_DB)):
-    db_path = Path(db)
-    if not db_path.exists():
-        raise HTTPException(404, f"Database not found: {db_path}")
-
+def _load_blocks_for_request(
+    block_ids: list[str] | None, db_path: Path
+) -> list[dict]:
     conn = open_db(str(db_path))
     try:
         all_blocks = load_data_blocks(conn)
     finally:
         conn.close()
-
     if not all_blocks:
         raise HTTPException(404, "No data_blocks with embeddings found.")
-
-    # Filter to requested subset
-    if req.block_ids:
-        id_set = set(req.block_ids)
+    if block_ids:
+        id_set = set(block_ids)
         blocks = [b for b in all_blocks if b["id"] in id_set]
     else:
         blocks = all_blocks
-
     if len(blocks) < 5:
-        raise HTTPException(400, f"Need at least 5 blocks to cluster, got {len(blocks)}.")
+        raise HTTPException(400, f"Need at least 5 blocks, got {len(blocks)}.")
+    return blocks
 
-    # Check full-result cache
-    sorted_ids = sorted(b["id"] for b in blocks)
-    cache_key = _explore_cache_key(req, sorted_ids)
-    cache_file = UMAP_CACHE_DIR / f"explore_{cache_key}.pkl"
+
+@app.post("/api/explore/umap")
+def post_explore_umap(req: UmapRequest, db: str = str(DEFAULT_DB)):
+    """Compute (or load cached) UMAP projection for a given dims + block subset.
+
+    Returns {id, x, y, date} for each block. XY positions are stable for a given
+    (dims, block_set) — they only change when dims or the block set changes.
+    Call this once when dims changes; reuse coords when only k changes.
+    """
+    db_path = Path(db)
+    if not db_path.exists():
+        raise HTTPException(404, f"Database not found: {db_path}")
+
+    blocks = _load_blocks_for_request(req.block_ids, db_path)
+
+    full_matrix = np.stack(
+        [np.frombuffer(b["embedding"], dtype=np.float32).copy() for b in blocks]
+    )
+    matrix = _truncate_normalize(full_matrix, req.dims)
+    coords = _normalize_coords(compute_umap(matrix))
+
+    points = []
+    for i, b in enumerate(blocks):
+        date = None
+        if b["block_time"]:
+            with contextlib.suppress(ValueError):
+                date = datetime.fromisoformat(b["block_time"][:19]).strftime("%Y-%m")
+        points.append({
+            "id": b["id"],
+            "x": round(float(coords[i, 0]), 4),
+            "y": round(float(coords[i, 1]), 4),
+            "date": date,
+        })
+
+    return {"points": points, "block_count": len(points), "dims": req.dims}
+
+
+@app.post("/api/explore/cluster")
+def post_explore_cluster(req: ClusterRequest, db: str = str(DEFAULT_DB)):
+    """Run k-means or HDBSCAN on truncated embeddings. Fast — no UMAP.
+
+    Returns {id → label} assignments and per-cluster stats.
+    Combine with cached UMAP coords on the frontend to recolor the scatter.
+    """
+    db_path = Path(db)
+    if not db_path.exists():
+        raise HTTPException(404, f"Database not found: {db_path}")
+
+    blocks = _load_blocks_for_request(req.block_ids, db_path)
+
+    full_matrix = np.stack(
+        [np.frombuffer(b["embedding"], dtype=np.float32).copy() for b in blocks]
+    )
+    matrix = _truncate_normalize(full_matrix, req.dims)
+
+    # Check cluster cache
     UMAP_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    ids_hash = hashlib.sha1(  # noqa: S324
+        ",".join(sorted(b["id"] for b in blocks)).encode()
+    ).hexdigest()[:12]
+    cache_key = hashlib.sha1(  # noqa: S324
+        f"{req.algo}:{req.dims}:{req.k}:{req.min_cluster_size}:{req.min_samples}:{ids_hash}".encode()
+    ).hexdigest()[:16]
+    cache_file = UMAP_CACHE_DIR / f"cluster_{cache_key}.pkl"
 
     if cache_file.exists():
-        log.info("Explore cache hit: %s", cache_key)
+        log.info("Cluster cache hit: %s", cache_key)
         with cache_file.open("rb") as f:
             result = pickle.load(f)  # noqa: S301
         result["cached"] = True
         return result
 
-    log.info("Explore: %d blocks, algo=%s dims=%d", len(blocks), req.algo, req.dims)
+    log.info("Clustering: algo=%s dims=%d k=%d n=%d", req.algo, req.dims, req.k, len(blocks))
 
-    # Build + truncate embedding matrix
-    matrix = np.stack([np.frombuffer(b["embedding"], dtype=np.float32).copy() for b in blocks])
-    matrix = _truncate_normalize(matrix, req.dims)
-
-    # Run clustering
     if req.algo == "hdbscan":
-        try:
-            import hdbscan as hdbscan_lib  # type: ignore
-        except ImportError:
-            raise HTTPException(500, "hdbscan not installed: pip install hdbscan") from None
-        mcs = max(2, min(req.min_cluster_size, len(blocks) // 2))
-        clusterer = hdbscan_lib.HDBSCAN(
-            min_cluster_size=mcs,
-            min_samples=req.min_samples,
-            metric="euclidean",
-        )
-        labels = clusterer.fit_predict(matrix)
+        labels = _run_hdbscan(matrix, req.min_cluster_size, req.min_samples)
     else:
-        try:
-            from sklearn.cluster import KMeans  # type: ignore
-        except ImportError:
-            raise HTTPException(
-                500, "scikit-learn not installed: pip install scikit-learn"
-            ) from None
-        k = min(req.k, len(blocks))
-        km = KMeans(n_clusters=k, random_state=42, n_init="auto")
-        labels = km.fit_predict(matrix)
+        labels = _run_kmeans(matrix, req.k)
 
-    # UMAP 2D projection (cached by matrix hash — subset+dims → unique hash)
-    log.info("Running UMAP on explore subset: %d × %d", *matrix.shape)
-    coords = _normalize_coords(compute_umap(matrix))
+    stats = _cluster_stats(blocks, labels)
+    noise_count = int(sum(1 for l in labels if l == -1))
 
-    # Build cluster stats
-    stats: dict[str, dict] = {}
-    for lbl in set(labels):
-        if lbl == -1:
-            continue
-        members = [blocks[i] for i, label in enumerate(labels) if label == lbl]
-        stats[str(lbl)] = {
-            "count": len(members),
-            "sample_titles": [b["source_path"].split("/")[-1] for b in members[:6]],
-        }
-
-    # Build output blocks
-    output_blocks = []
-    for i, b in enumerate(blocks):
-        lbl = int(labels[i])
-        date = None
-        if b["block_time"]:
-            with contextlib.suppress(ValueError):
-                date = datetime.fromisoformat(b["block_time"][:19]).strftime("%Y-%m")
-        output_blocks.append(
-            {
-                "id": b["id"],
-                "x": round(float(coords[i, 0]), 4),
-                "y": round(float(coords[i, 1]), 4),
-                "label": str(lbl),
-                "content": b["content"],
-                "source_path": b["source_path"],
-                "date": date,
-            }
-        )
-
-    noise_count = int(sum(1 for label in labels if label == -1))
     result = {
-        "blocks": output_blocks,
+        "labels": {blocks[i]["id"]: str(int(labels[i])) for i in range(len(blocks))},
         "stats": stats,
         "noise_count": noise_count,
         "cluster_count": len(stats),
         "cached": False,
-        "params": {
-            "algo": req.algo,
-            "dims": req.dims,
-            "min_cluster_size": req.min_cluster_size,
-            "min_samples": req.min_samples,
-            "k": req.k,
-        },
     }
 
     with cache_file.open("wb") as f:
@@ -366,7 +392,7 @@ def post_explore(req: ExploreRequest, db: str = str(DEFAULT_DB)):
     return result
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+# ── Browse endpoint ───────────────────────────────────────────────────────────
 
 
 @app.get("/api/health")
@@ -390,8 +416,6 @@ def get_data(db: str = str(DEFAULT_DB)):
             )
 
         log.info("Loaded %d blocks with embeddings", len(data_blocks))
-
-        # Extract embedding matrix
         matrix = np.stack(
             [np.frombuffer(b["embedding"], dtype=np.float32).copy() for b in data_blocks]
         )
@@ -399,14 +423,10 @@ def get_data(db: str = str(DEFAULT_DB)):
         log.info("Running UMAP on %d × %d matrix", *matrix.shape)
         coords = _normalize_coords(compute_umap(matrix))
 
-        # Load cluster blocks
         cluster_blocks = load_cluster_blocks(conn)
-
-        # Load source note content for blocks that have a source_path
         source_paths = {b["source_path"] for b in data_blocks if b["source_path"]}
         source_content_map = load_source_content(conn, source_paths)
 
-        # Build clusters dict (cluster_block_id → ClusterInfo)
         clusters: dict[str, dict] = {}
         clusters_by_pass: dict[str, list[str]] = {}
         for cb in cluster_blocks:
@@ -424,32 +444,24 @@ def get_data(db: str = str(DEFAULT_DB)):
             }
             clusters_by_pass.setdefault(pid, []).append(bid)
 
-        # Discover pass order
         passes = discover_passes(cluster_blocks)
 
-        # Build output blocks
         output_blocks = []
         for i, b in enumerate(data_blocks):
             block_date = None
             if b["block_time"]:
-                try:
-                    dt = datetime.fromisoformat(b["block_time"][:19])
-                    block_date = dt.strftime("%Y-%m")
-                except ValueError:
-                    pass
-
-            output_blocks.append(
-                {
-                    "id": b["id"],
-                    "content": b["content"],
-                    "source_path": b["source_path"],
-                    "source_content": source_content_map.get(b["source_path"], ""),
-                    "x": round(float(coords[i, 0]), 4),
-                    "y": round(float(coords[i, 1]), 4),
-                    "date": block_date,
-                    "cluster_assignments": b["cluster_assignments"],
-                }
-            )
+                with contextlib.suppress(ValueError):
+                    block_date = datetime.fromisoformat(b["block_time"][:19]).strftime("%Y-%m")
+            output_blocks.append({
+                "id": b["id"],
+                "content": b["content"],
+                "source_path": b["source_path"],
+                "source_content": source_content_map.get(b["source_path"], ""),
+                "x": round(float(coords[i, 0]), 4),
+                "y": round(float(coords[i, 1]), 4),
+                "date": block_date,
+                "cluster_assignments": b["cluster_assignments"],
+            })
 
         return {
             "generated_at": datetime.now().isoformat(timespec="seconds"),
