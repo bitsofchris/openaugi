@@ -9,8 +9,10 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import logging
+import pickle
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -150,8 +152,31 @@ def discover_passes(cluster_blocks: list[dict]) -> list[dict]:
     return root_passes + child_passes
 
 
+UMAP_CACHE_DIR = Path.home() / ".openaugi" / "umap_cache"
+
+
+def _matrix_hash(matrix: np.ndarray) -> str:
+    """SHA-1 of the raw embedding bytes — changes when any embedding is updated."""
+    return hashlib.sha1(matrix.tobytes()).hexdigest()[:16]  # noqa: S324
+
+
 def compute_umap(matrix: np.ndarray) -> np.ndarray:
-    """UMAP to 2D. Deferred import so server starts without umap-learn."""
+    """UMAP to 2D with disk cache.
+
+    Cache key is a hash of the full embedding matrix, so it invalidates
+    automatically whenever embeddings are re-run. Cache lives in
+    ~/.openaugi/umap_cache/.
+    """
+    UMAP_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_key = _matrix_hash(matrix)
+    cache_file = UMAP_CACHE_DIR / f"umap_{cache_key}_{len(matrix)}.pkl"
+
+    if cache_file.exists():
+        log.info("UMAP cache hit — loading from %s", cache_file)
+        with cache_file.open("rb") as f:
+            return pickle.load(f)  # noqa: S301
+
+    log.info("UMAP cache miss — computing (this takes ~30-60s for large vaults)…")
     try:
         import umap  # type: ignore
     except ImportError:
@@ -164,7 +189,12 @@ def compute_umap(matrix: np.ndarray) -> np.ndarray:
         random_state=42,
         low_memory=True,
     )
-    return reducer.fit_transform(matrix)
+    coords = reducer.fit_transform(matrix)
+
+    with cache_file.open("wb") as f:
+        pickle.dump(coords, f)
+    log.info("UMAP result cached to %s", cache_file)
+    return coords
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
