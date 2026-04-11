@@ -211,6 +211,8 @@ openaugi agent  ← one terminal window (heartbeat every 5m + task dispatch)
 | `openaugi serve` | MCP server only (stdio or HTTP) |
 | `openaugi watch` | File watcher only (incremental ingest on vault changes) |
 | `openaugi re-embed` | Reset + re-embed all data blocks with current model (use after model switch) |
+| `openaugi cluster` | Run HDBSCAN clustering DAG → write `context_block:cluster` nodes to DB |
+| `openaugi cluster --dry-run` | Compute clusters + print stats, no DB writes (use for param tuning) |
 
 ### Transports
 
@@ -231,5 +233,6 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 - [docs/plans/capture-tag-stream-loop.md](docs/plans/capture-tag-stream-loop.md) — Phase 4: capture → tag → stream incremental pipeline
 - [docs/plans/from-capture-to-jarvis.md](docs/plans/from-capture-to-jarvis.md) — Longer-horizon vision (layers 1–4)
 - [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features
-- [docs/plans/hierarchical-embeddings.md](docs/plans/hierarchical-embeddings.md) — Hierarchical cluster context blocks (title-prepend re-embed → agglomerative clustering → cluster context blocks)
+- [docs/clustering.md](docs/clustering.md) — Clustering feature: config format, data model, SQL queries, param tuning guide
+- [docs/plans/hierarchical-embeddings.md](docs/plans/hierarchical-embeddings.md) — Design rationale: two-pass strategy, matryoshka truncation, bridge detection
 - [docs/plans/done/](docs/plans/done/) — Shipped milestone plans (M0, M1)
