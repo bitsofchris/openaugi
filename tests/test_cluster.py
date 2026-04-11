@@ -11,6 +11,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+pytest.importorskip("hdbscan", reason="hdbscan not installed; skipping cluster tests")
+
 from openaugi.model.block import Block
 from openaugi.pipeline.cluster import (
     ClusterPassConfig,
