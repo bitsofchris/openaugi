@@ -13,6 +13,7 @@ interface Props {
   onDrillInto: (label: string) => void;
   selectedLabel: string | null;
   colors: Record<string, string>;
+  includeFolders: string[];
 }
 
 const DIMS_OPTIONS = [32, 64, 96, 128, 256, 512, 1024, 3072];
@@ -46,7 +47,7 @@ function Slider({ label, value, min, max, onChange, colors }: {
 
 export function ExplorePanel({
   onRunUmap, onRunCluster, clusterResult, umapLoading, clusterLoading,
-  umapDims, breadcrumb, onBreadcrumbNav, onDrillInto, selectedLabel, colors,
+  umapDims, breadcrumb, onBreadcrumbNav, onDrillInto, selectedLabel, colors, includeFolders,
 }: Props) {
   const [params, setParams] = useState<ExploreParams>(DEFAULT_PARAMS);
 
@@ -118,6 +119,34 @@ export function ExplorePanel({
           </div>
         )}
       </div>
+
+      {/* Folder filter */}
+      {includeFolders.length > 0 && (
+        <div style={{ padding: '8px 16px', borderBottom: `1px solid ${colors.border}`, flexShrink: 0 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>
+            Filtering to folders
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {includeFolders.map(f => {
+              const label = f.split('/').pop() ?? f;
+              return (
+                <div key={f} style={{
+                  fontSize: 10, fontFamily: "'JetBrains Mono', monospace",
+                  color: colors.accent, background: `${colors.accent}10`,
+                  border: `1px solid ${colors.accent}30`,
+                  borderRadius: 3, padding: '2px 6px',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }} title={f}>
+                  {label}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 9, color: colors.textMuted, marginTop: 5 }}>
+            edit ~/.openaugi/explorer_config.json to change
+          </div>
+        </div>
+      )}
 
       <div style={{ flex: 1, overflow: 'auto' }}>
         {/* Breadcrumb */}
