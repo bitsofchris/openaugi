@@ -385,6 +385,41 @@ class TestMeaningfulContent:
     def test_rule_plus_real_text_is_meaningful(self):
         assert _has_meaningful_content("---\nSome notes below the divider")
 
+    def test_bare_dash_not_meaningful(self):
+        assert not _has_meaningful_content("-")
+
+    def test_bare_dash_with_surrounding_rules_not_meaningful(self):
+        assert not _has_meaningful_content("---\n-\n---")
+
+    def test_completion_marker_x_not_meaningful(self):
+        assert not _has_meaningful_content("- x")
+
+    def test_completion_marker_X_not_meaningful(self):
+        assert not _has_meaningful_content("- X")
+
+    def test_bullet_with_real_text_is_meaningful(self):
+        assert _has_meaningful_content("- x marks the spot")
+
+    def test_url_only_line_not_meaningful(self):
+        assert not _has_meaningful_content("- https://chatgpt.com/c/abc123")
+
+    def test_bare_url_not_meaningful(self):
+        assert not _has_meaningful_content("https://example.com/some/path")
+
+    def test_url_with_prose_is_meaningful(self):
+        assert _has_meaningful_content("See https://example.com for more details")
+
+    def test_dataview_block_not_meaningful(self):
+        assert not _has_meaningful_content(
+            "```dataview\nLIST from #Habit/active SORT file.mtime DESC\n```"
+        )
+
+    def test_dataview_block_with_prose_is_meaningful(self):
+        assert _has_meaningful_content("Some notes here\n```dataview\nLIST from #tag\n```")
+
+    def test_dataview_only_with_surrounding_structure_not_meaningful(self):
+        assert not _has_meaningful_content("---\n```dataview\nLIST from #Habit\n```\n---")
+
 
 class TestExcludePatterns:
     def test_obsidian_dir_excluded(self):
