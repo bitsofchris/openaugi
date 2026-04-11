@@ -94,11 +94,27 @@ Five retrieval modes — semantic, keyword, graph traversal, time-based, direct 
 
 ---
 
+## Clustering
+
+After embedding, run `openaugi cluster` to generate a hierarchical map of your vault:
+
+```bash
+openaugi cluster --dry-run    # tune params, no writes
+openaugi cluster              # write context_block:cluster nodes to DB
+```
+
+Configured as named passes in `~/.openaugi/config.toml`. Each pass runs HDBSCAN at a different embedding dimensionality — coarse pass (dim-64) surfaces life areas, fine pass (full-dim within each area) surfaces specific recurring ideas. Cross-domain pass finds connections across areas you wouldn't consciously link.
+
+Cluster assignments land in each data_block's metadata (`cluster_assignments.{pass_id}`), making them queryable and renderable without joins. See **[Clustering](docs/clustering.md)** for config, SQL queries, and param tuning.
+
+---
+
 ## Documentation
 
 - **[Getting Started](docs/GETTING_STARTED.md)** — full install guide, CLI reference, MCP tools, Claude registration
 - **[Architecture](ARCHITECTURE.md)** — data model, processing layers, module map, design decisions
 - **[Data Model](docs/data-model.md)** — philosophy, block kinds, navigation pattern, four-layer architecture
+- **[Clustering](docs/clustering.md)** — HDBSCAN clustering: config format, data model, SQL queries, param tuning
 - **[MCP Server](docs/MCP_SERVER.md)** — tool reference and tuning
 - **[Task Dispatch](docs/task-dispatch.md)** — optional Obsidian → tmux dispatch: write a task, watcher launches a Claude Code agent in a named session
 - **[Remote Access](docs/local.docs/REMOTE_ACCESS.md)** — Cloudflare Tunnel setup for Claude mobile
