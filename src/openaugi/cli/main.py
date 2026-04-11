@@ -1396,7 +1396,10 @@ def explore(
     except ImportError:
         console.print("[yellow]Installing backend deps…[/yellow]")
         subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "fastapi", "uvicorn", "umap-learn", "numpy"]
+            [
+                sys.executable, "-m", "pip", "install",
+                "fastapi", "uvicorn", "umap-learn", "numpy", "hdbscan", "scikit-learn",
+            ]
         )
 
     # ── Frontend deps ───────────────────────────────────────────────────────────
