@@ -84,7 +84,9 @@ class TestFindNewBlocks:
         assert len(blocks) == 2
 
     def test_filters_by_block_time(self, store: SQLiteStore):
-        # Insert two entries with distinct block_time values
+        # block_time is often date-only ("2026-04-10") while the heartbeat timestamp
+        # is a full datetime. The filter uses SUBSTR(since, 1, 10) so date-only
+        # block_time values compare correctly against full ISO heartbeat timestamps.
         older = Block(
             id="a" * 16,
             kind="data_block",
@@ -93,7 +95,7 @@ class TestFindNewBlocks:
             title="journal",
             content_hash="a" * 16,
             metadata={"source_path": "journal.md"},
-            block_time="2024-01-01",
+            block_time="2026-04-09",
         )
         newer = Block(
             id="b" * 16,
@@ -103,12 +105,13 @@ class TestFindNewBlocks:
             title="journal",
             content_hash="b" * 16,
             metadata={"source_path": "journal.md"},
-            block_time="2024-06-01",
+            block_time="2026-04-10",
         )
         store.insert_blocks([older, newer])
 
-        # Filter: only entries with block_time > "2024-01-01"
-        blocks = hb.find_new_blocks(store, since="2024-01-01")
+        # since is a full datetime — date portion is "2026-04-10"
+        # only the block with block_time="2026-04-10" should match
+        blocks = hb.find_new_blocks(store, since="2026-04-10T08:30:00Z")
         ids = [b.id for b in blocks]
         assert "b" * 16 in ids
         assert "a" * 16 not in ids
