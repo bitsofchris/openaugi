@@ -49,3 +49,7 @@ Plans go in docs/plans folder. Move them to docs/archive when done.
 ARCHITECTURE.md is the overall entry point map into the codebase - keep this up-to-date and walk the other docs.
 
 Docs should follow Claude skill format - name: and description: at the top that we can scan the top only to find relevant docs.
+
+### LLM
+
+Default to using an agent unless we need to call an API.

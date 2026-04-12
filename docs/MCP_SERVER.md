@@ -85,13 +85,32 @@ Both are optional if you've run `openaugi init` — the config file is the defau
 
 | Tool | Purpose |
 |------|---------|
-| `search` | Semantic (sqlite-vec KNN), keyword (FTS5), or browse with filters |
+| `search` | Semantic (sqlite-vec KNN), keyword (FTS5), or browse with filters; paginated for date-range queries |
 | `get_block` | Full block content + metadata by ID |
 | `get_blocks` | Batch fetch up to 50 blocks by ID — prefer over calling `get_block` in a loop |
 | `get_related` | Follow links from/to a block (tags, wikilinks, derivations) |
 | `traverse` | Multi-hop graph walk from a starting block |
 | `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links |
-| `recent` | Recently created blocks, filtered by kind/source/tags |
+| `recent` | Recently ingested blocks, filtered by kind/source/tags |
+
+### `search` — browse mode and date-range queries
+
+When no `query`, `keyword`, or `title` is given, `search` runs in **browse mode** — returning
+all blocks that match the provided filters. Date filtering is pushed to SQL, so results are
+accurate even across large vaults.
+
+```
+search(after="2026-04-05", before="2026-04-12")
+→ { results: [...], count: 100, total: 247, has_more: true, next_offset: 100 }
+```
+
+- `total` — full result set size before pagination; use to plan how many calls are needed
+- `has_more` + `next_offset` — call again with `offset=next_offset` to get the next page
+- Default `k` is 100; for a typical week (~200 blocks) you'll need at most 2 calls
+- Tags filtering still happens in Python — `total` reflects pre-tag counts
+
+Use this for workflows like weekly reflection where you want **every block in a time window**,
+not just top-k by relevance.
 
 ### `get_context` — retrieval pipeline
 

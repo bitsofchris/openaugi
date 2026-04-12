@@ -109,7 +109,8 @@ def search(
     query: str | None = None,
     keyword: str | None = None,
     title: str | None = None,
-    k: int = 20,
+    k: int = 100,
+    offset: int = 0,
     tags: list[str] | None = None,
     after: str | None = None,
     before: str | None = None,
@@ -129,8 +130,11 @@ def search(
 
     Prefer 'title' over 'keyword' when you know the note name.
     Must provide at least one of: query, keyword, title, or a filter.
-    Results are capped at k (default 20). If count == k, there may be more — increase k or
-    narrow your filters.
+
+    Browse mode (date-range queries): results are paginated. Use offset to fetch the next
+    page. Response includes 'total' so you know how many pages to expect.
+    Example: search(after="2026-04-05", before="2026-04-12") returns all blocks in that week.
+    Call again with offset=100 if has_more is true.
     Dates use ISO format: after="2025-01-01", before="2025-06-01"."""
     if not query and not keyword and not title and not any([tags, after, before, kind, source]):
         return _json(
@@ -212,21 +216,21 @@ def search(
             }
         )
 
-    # Browse mode — filter blocks
-    blocks = store.get_blocks_by_kind(kind or "data_block", limit=k * 3)
+    # Browse mode — SQL-filtered and paginated
+    blocks, total = store.get_blocks_filtered(
+        kind=kind or "data_block",
+        source=source,
+        after=after,
+        before=before,
+        limit=k + 1,
+        offset=offset,
+    )
+    # Tags filtering happens in Python (not pushed to SQL)
     results = []
     for b in blocks:
-        if source and b.source != source:
-            continue
         if tags and not set(tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
             continue
-        if after and (b.block_time or "") < after:
-            continue
-        if before and (b.block_time or "") > before:
-            continue
         results.append(_block_summary(b))
-        if len(results) > k:
-            break
 
     has_more = len(results) > k
     results = results[:k]
@@ -234,7 +238,9 @@ def search(
         {
             "results": results,
             "count": len(results),
+            "total": total,
             "has_more": has_more,
+            "next_offset": offset + k if has_more else None,
             "mode": "browse",
         }
     )
@@ -537,22 +543,22 @@ def recent(
     - source: filter by source (e.g. 'vault')
     - tags: filter to blocks matching any of these tags"""
     store = _get_store()
-    target_kind = kind or "data_block"
-    blocks = store.get_blocks_by_kind(target_kind, limit=k * 3)
+    blocks, _ = store.get_blocks_filtered(
+        kind=kind or "data_block",
+        source=source,
+        order_by="ingested_at",
+        limit=k * 3,  # overfetch to absorb tag filtering below
+    )
 
     results = []
     for b in blocks:
-        if source and b.source != source:
-            continue
         if tags and not set(tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
             continue
         results.append(_block_summary(b))
-        if len(results) > k:
+        if len(results) >= k:
             break
 
-    has_more = len(results) > k
-    results = results[:k]
-    return _json({"results": results, "count": len(results), "has_more": has_more})
+    return _json({"results": results, "count": len(results), "has_more": False})
 
 
 # ── Classification Tools ───────────────────────────────────────────
