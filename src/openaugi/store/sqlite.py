@@ -245,6 +245,59 @@ class SQLiteStore:
         ).fetchall()
         return [_row_to_block(r) for r in rows]
 
+    def get_blocks_filtered(
+        self,
+        kind: str | None = None,
+        source: str | None = None,
+        after: str | None = None,
+        before: str | None = None,
+        order_by: str = "block_time",
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[Block], int]:
+        """Fetch blocks with SQL-level filtering and pagination.
+
+        Filters kind/source/after/before in the database — no silent post-hoc
+        truncation. Returns (blocks, total_count) where total_count is the full
+        result set size before the LIMIT/OFFSET is applied.
+
+        order_by: 'block_time' (default, for date-range queries) or 'ingested_at'
+        (for recency queries). NULLs sort last in both cases.
+        Tags filtering is not pushed to SQL — apply in the caller if needed.
+        """
+        conditions: list[str] = []
+        params: list[str | int] = []
+
+        if kind:
+            conditions.append("kind = ?")
+            params.append(kind)
+        if source:
+            conditions.append("source = ?")
+            params.append(source)
+        if after:
+            conditions.append("block_time >= ?")
+            params.append(after)
+        if before:
+            conditions.append("block_time <= ?")
+            params.append(before)
+
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        col = "ingested_at" if order_by == "ingested_at" else "block_time"
+        total: int = self.conn.execute(f"SELECT COUNT(*) FROM blocks {where}", params).fetchone()[
+            0
+        ]
+
+        rows = self.conn.execute(
+            f"""SELECT id, kind, content, summary, embedding, source, title,
+                       tags, block_time, occurred_at, metadata, content_hash, ingested_at
+                FROM blocks {where}
+                ORDER BY {col} DESC NULLS LAST LIMIT ? OFFSET ?""",
+            params + [limit, offset],
+        ).fetchall()
+
+        return [_row_to_block(r) for r in rows], total
+
     def delete_block(self, block_id: str) -> bool:
         """Delete a block by ID. CASCADE deletes its links."""
         cursor = self.conn.execute("DELETE FROM blocks WHERE id = ?", (block_id,))
