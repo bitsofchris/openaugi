@@ -471,9 +471,11 @@ def get_data(db: str = str(DEFAULT_DB)):
             )
 
         log.info("Loaded %d blocks with embeddings", len(data_blocks))
-        matrix = np.stack(
+        full_matrix = np.stack(
             [np.frombuffer(b["embedding"], dtype=np.float32).copy() for b in data_blocks]
         )
+        # Truncate+normalize at full dims so cache key matches explore mode prewarm
+        matrix = _truncate_normalize(full_matrix, full_matrix.shape[1])
 
         log.info("Running UMAP on %d × %d matrix", *matrix.shape)
         coords = _normalize_coords(compute_umap(matrix))
