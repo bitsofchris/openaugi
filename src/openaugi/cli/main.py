@@ -1347,23 +1347,104 @@ def service_status():
         console.print("[dim]Cloudflared tunnel: not running[/dim]")
 
 
+def _explore_prewarm(db_path: str, backend_dir: Path) -> None:
+    """Pre-generate and cache UMAP projections for all dims options."""
+    import subprocess
+    import sys
+
+    DIMS_OPTIONS = [32, 64, 96, 128, 256, 512, 1024, 1280, 1536, 2048, 2560, 3072]
+
+    # Install backend deps if needed
+    try:
+        import numpy  # noqa: F401
+        import umap  # noqa: F401  # pyright: ignore[reportMissingImports]
+    except ImportError:
+        console.print("[yellow]Installing backend deps…[/yellow]")
+        subprocess.check_call(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "umap-learn",
+                "numpy",
+                "hdbscan",
+                "scikit-learn",
+            ]
+        )
+
+    # Import server helpers directly — no server needed for cache-only work
+    sys.path.insert(0, str(backend_dir))
+    try:
+        from server import (  # pyright: ignore[reportMissingImports]
+            _normalize_coords,
+            _truncate_normalize,
+            compute_umap,
+            load_data_blocks,
+            open_db,
+        )
+    except ImportError as e:
+        console.print(f"[red]Could not import server: {e}[/red]")
+        raise typer.Exit(1) from None
+
+    import numpy as np
+
+    console.print(f"[bold]Pre-warming UMAP cache[/bold] for {len(DIMS_OPTIONS)} dims values")
+    console.print(f"  db: {db_path}")
+    console.print("  cache: ~/.openaugi/umap_cache/\n")
+
+    conn = open_db(db_path)
+    try:
+        blocks = load_data_blocks(conn)
+    finally:
+        conn.close()
+
+    console.print(f"  Loaded [cyan]{len(blocks):,}[/cyan] blocks\n")
+
+    full_matrix = np.stack(
+        [np.frombuffer(b["embedding"], dtype=np.float32).copy() for b in blocks]
+    )
+
+    import time
+
+    for dims in DIMS_OPTIONS:
+        actual = min(dims, full_matrix.shape[1])
+        console.print(f"  [bold]dims={dims}[/bold]  ({actual} actual) …", end="")
+        t0 = time.time()
+        matrix = _truncate_normalize(full_matrix, dims)
+        _normalize_coords(compute_umap(matrix))
+        elapsed = time.time() - t0
+        console.print(f"  [green]done[/green] ({elapsed:.1f}s)")
+
+    console.print(
+        "\n[green]All UMAP projections cached.[/green] Run 'openaugi explore' to launch."
+    )
+
+
 @app.command()
 def explore(
     db: str | None = typer.Option(None, "--db", help="Database path"),
     backend_port: int = typer.Option(8000, "--backend-port", help="API server port"),
     frontend_port: int = typer.Option(5173, "--frontend-port", help="Vite dev server port"),
     open_browser: bool = typer.Option(True, "--open/--no-open", help="Open browser automatically"),
+    prewarm: bool = typer.Option(
+        False, "--prewarm", help="Pre-generate UMAP caches for all dims, then exit"
+    ),
 ):
     """Launch the Knowledge Explorer — WebGL cluster visualization.
 
     Starts the FastAPI backend (UMAP projection) and Vite frontend, then opens
     the browser. Installs Python and npm deps automatically on first run.
 
+    Use --prewarm to pre-generate UMAP projections for all embedding dims so
+    exploration is instant later (runs without launching the browser).
+
     Example:
 
     \b
         openaugi explore
         openaugi explore --db /path/to/custom.db
+        openaugi explore --prewarm
     """
     import os
     import subprocess
@@ -1387,6 +1468,11 @@ def explore(
         console.print(f"[red]Database not found:[/red] {db_path}")
         console.print("Run 'openaugi ingest --path /your/vault' first.")
         raise typer.Exit(1)
+
+    # ── Prewarm: generate UMAP caches for all dims, no browser ──────────────────
+    if prewarm:
+        _explore_prewarm(db_path, backend_dir)
+        return
 
     # ── Backend deps ────────────────────────────────────────────────────────────
     try:

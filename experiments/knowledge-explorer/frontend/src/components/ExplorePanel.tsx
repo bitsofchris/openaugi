@@ -16,7 +16,7 @@ interface Props {
   includeFolders: string[];
 }
 
-const DIMS_OPTIONS = [32, 64, 96, 128, 256, 512, 1024, 3072];
+const DIMS_OPTIONS = [32, 64, 96, 128, 256, 512, 1024, 1280, 1536, 2048, 2560, 3072];
 const DEFAULT_PARAMS: ExploreParams = {
   algo: 'kmeans',
   dims: 64,
