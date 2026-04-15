@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Label Review</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #111; }
+
+  #load-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100vh; gap: 12px;
+  }
+  #load-screen h2 { font-size: 1.2rem; color: #555; }
+  #load-screen input { display: none; }
+  #load-btn {
+    padding: 12px 28px; background: #2563eb; color: #fff; border: none;
+    border-radius: 8px; font-size: 1rem; cursor: pointer;
+  }
+  #load-btn:hover { background: #1d4ed8; }
+
+  #app { display: none; height: 100vh; display: none; flex-direction: column; }
+
+  /* ── Header bar ── */
+  #header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; background: #fff; border-bottom: 1px solid #e5e5e5;
+  }
+  #progress-text { font-size: 0.85rem; color: #555; white-space: nowrap; }
+  #progress-bar-wrap {
+    flex: 1; height: 6px; background: #e5e5e5; border-radius: 3px; overflow: hidden;
+  }
+  #progress-bar { height: 100%; background: #2563eb; transition: width 0.2s; }
+  #filter-wrap { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+  #filter-wrap label { color: #555; }
+  #filter-needs-review { cursor: pointer; }
+  #save-btn {
+    padding: 6px 16px; background: #16a34a; color: #fff; border: none;
+    border-radius: 6px; font-size: 0.85rem; cursor: pointer; white-space: nowrap;
+  }
+  #save-btn:hover { background: #15803d; }
+
+  /* ── Main card ── */
+  #main { flex: 1; overflow-y: auto; display: flex; justify-content: center; padding: 24px 16px; }
+  #card {
+    width: 100%; max-width: 760px; background: #fff; border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1); padding: 24px; display: flex; flex-direction: column; gap: 16px;
+  }
+
+  #meta { font-size: 0.78rem; color: #888; display: flex; gap: 12px; }
+  #block-id-display { font-family: monospace; }
+
+  #block-text {
+    font-size: 0.95rem; line-height: 1.65; color: #222;
+    max-height: 320px; overflow-y: auto; padding: 14px;
+    background: #fafafa; border: 1px solid #e8e8e8; border-radius: 8px;
+    white-space: pre-wrap; word-break: break-word;
+  }
+
+  #labels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .label-group { display: flex; flex-direction: column; gap: 4px; }
+  .label-group label { font-size: 0.78rem; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+  .label-group select {
+    padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+    font-size: 0.9rem; background: #fff; cursor: pointer;
+  }
+  .label-group select:focus { outline: none; border-color: #2563eb; }
+  .label-group select.changed { border-color: #f59e0b; background: #fffbeb; }
+
+  /* ── Actions ── */
+  #actions { display: flex; gap: 10px; align-items: center; }
+  #confirm-btn {
+    flex: 1; padding: 12px; background: #2563eb; color: #fff; border: none;
+    border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600;
+  }
+  #confirm-btn:hover { background: #1d4ed8; }
+  #back-btn, #skip-btn {
+    padding: 12px 20px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: 0.9rem; cursor: pointer;
+  }
+  #back-btn:hover, #skip-btn:hover { background: #e5e7eb; }
+  #back-btn:disabled { opacity: 0.35; cursor: default; }
+
+  #hint { font-size: 0.75rem; color: #aaa; text-align: center; }
+
+  /* ── Done screen ── */
+  #done-screen {
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    height: 100vh; gap: 14px;
+  }
+  #done-screen h2 { font-size: 1.4rem; }
+  #done-screen p { color: #555; }
+  #dl-btn {
+    padding: 12px 28px; background: #16a34a; color: #fff; border: none;
+    border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600;
+  }
+  #dl-btn:hover { background: #15803d; }
+  #restart-btn {
+    font-size: 0.85rem; color: #888; background: none; border: none; cursor: pointer; text-decoration: underline;
+  }
+</style>
+</head>
+<body>
+
+<!-- Load screen -->
+<div id="load-screen">
+  <h2>Label Reviewer</h2>
+  <button id="load-btn" onclick="document.getElementById('file-input').click()">Open labeled.json</button>
+  <input type="file" id="file-input" accept=".json">
+  <p style="font-size:0.8rem;color:#aaa">File stays local — nothing is uploaded</p>
+</div>
+
+<!-- Main app -->
+<div id="app" style="display:none; flex-direction:column; height:100vh;">
+  <div id="header">
+    <span id="progress-text">0 / 0</span>
+    <div id="progress-bar-wrap"><div id="progress-bar" style="width:0%"></div></div>
+    <div id="filter-wrap">
+      <input type="checkbox" id="filter-needs-review">
+      <label for="filter-needs-review">NEEDS_REVIEW only</label>
+    </div>
+    <button id="save-btn" onclick="downloadJSON()">Download JSON</button>
+  </div>
+  <div id="main">
+    <div id="card">
+      <div id="meta">
+        <span id="block-id-display"></span>
+        <span id="source-path-display"></span>
+        <span id="date-display"></span>
+      </div>
+      <div id="block-text"></div>
+      <div id="labels">
+        <div class="label-group">
+          <label>Coarse label</label>
+          <select id="coarse-select" onchange="markChanged(this)"></select>
+        </div>
+        <div class="label-group">
+          <label>Fine label</label>
+          <select id="fine-select" onchange="markChanged(this)"></select>
+        </div>
+      </div>
+      <div id="actions">
+        <button id="back-btn" onclick="go(-1)">← Back</button>
+        <button id="confirm-btn" onclick="confirm_and_next()">Confirm ✓</button>
+        <button id="skip-btn" onclick="go(1)">Skip →</button>
+      </div>
+      <div id="hint">Enter = confirm &nbsp;·&nbsp; ← → arrow keys to navigate &nbsp;·&nbsp; changes auto-save to memory</div>
+    </div>
+  </div>
+</div>
+
+<!-- Done screen -->
+<div id="done-screen">
+  <h2>All done!</h2>
+  <p id="done-stats"></p>
+  <button id="dl-btn" onclick="downloadJSON()">Download labeled.json</button>
+  <button id="restart-btn" onclick="restart()">Review again from start</button>
+</div>
+
+<script>
+let blocks = [];
+let filtered = [];   // indices into blocks[] based on current filter
+let cursor = 0;      // position in filtered[]
+let coarseOptions = [];
+let fineOptions = [];
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+
+document.getElementById('file-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      blocks = JSON.parse(ev.target.result);
+      init();
+    } catch (err) {
+      alert('Could not parse JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+});
+
+function init() {
+  // Collect unique label options from data
+  const coarseSet = new Set();
+  const fineSet = new Set();
+  blocks.forEach(b => {
+    if (b.coarse_label) coarseSet.add(b.coarse_label);
+    if (b.fine_label) fineSet.add(b.fine_label);
+  });
+  coarseOptions = [...coarseSet].sort();
+  fineOptions = [...fineSet].sort();
+
+  // Populate selects
+  populateSelect('coarse-select', coarseOptions);
+  populateSelect('fine-select', fineOptions);
+
+  document.getElementById('load-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  applyFilter();
+}
+
+function populateSelect(id, options) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = '';
+  options.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o;
+    opt.textContent = o;
+    sel.appendChild(opt);
+  });
+}
+
+// ── Filter ────────────────────────────────────────────────────────────────────
+
+document.getElementById('filter-needs-review').addEventListener('change', () => {
+  cursor = 0;
+  applyFilter();
+});
+
+function applyFilter() {
+  const needsOnly = document.getElementById('filter-needs-review').checked;
+  if (needsOnly) {
+    filtered = blocks
+      .map((b, i) => i)
+      .filter(i => blocks[i].coarse_label === 'NEEDS_REVIEW' || blocks[i].fine_label === 'NEEDS_REVIEW');
+  } else {
+    filtered = blocks.map((_, i) => i);
+  }
+  cursor = 0;
+  if (filtered.length === 0) {
+    showDone();
+  } else {
+    render();
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function render() {
+  if (cursor >= filtered.length) { showDone(); return; }
+
+  const b = blocks[filtered[cursor]];
+
+  document.getElementById('block-id-display').textContent = b.block_id?.slice(0, 12) + '…';
+  document.getElementById('source-path-display').textContent = b.source_path || '';
+  document.getElementById('date-display').textContent = b.date || '';
+  document.getElementById('block-text').textContent = b.text;
+
+  setSelect('coarse-select', b.coarse_label);
+  setSelect('fine-select', b.fine_label);
+  document.getElementById('coarse-select').classList.remove('changed');
+  document.getElementById('fine-select').classList.remove('changed');
+
+  const total = filtered.length;
+  const pos = cursor + 1;
+  document.getElementById('progress-text').textContent = `${pos} / ${total}`;
+  document.getElementById('progress-bar').style.width = `${(pos / total) * 100}%`;
+  document.getElementById('back-btn').disabled = cursor === 0;
+}
+
+function setSelect(id, value) {
+  const sel = document.getElementById(id);
+  // If value not in options, add it temporarily
+  const exists = [...sel.options].some(o => o.value === value);
+  if (!exists && value) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = value;
+    sel.insertBefore(opt, sel.firstChild);
+  }
+  sel.value = value;
+}
+
+function markChanged(sel) {
+  sel.classList.add('changed');
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+
+function save_current() {
+  const b = blocks[filtered[cursor]];
+  b.coarse_label = document.getElementById('coarse-select').value;
+  b.fine_label = document.getElementById('fine-select').value;
+}
+
+function confirm_and_next() {
+  save_current();
+  go(1);
+}
+
+function go(delta) {
+  save_current();
+  cursor = Math.max(0, Math.min(filtered.length - 1, cursor + delta));
+  if (delta > 0 && cursor === filtered.length - 1 && document.getElementById('coarse-select').value !== 'NEEDS_REVIEW') {
+    // at end — just render the last block
+  }
+  render();
+}
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  // Don't intercept when a select is open or we're typing
+  if (e.target.tagName === 'SELECT') return;
+  if (e.key === 'Enter') { confirm_and_next(); e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { go(1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft') { go(-1); e.preventDefault(); }
+});
+
+// ── Done / Download ───────────────────────────────────────────────────────────
+
+function showDone() {
+  document.getElementById('app').style.display = 'none';
+  const needsReview = blocks.filter(b => b.coarse_label === 'NEEDS_REVIEW').length;
+  document.getElementById('done-stats').textContent =
+    `${blocks.length} blocks total · ${needsReview} still need review`;
+  document.getElementById('done-screen').style.display = 'flex';
+}
+
+function downloadJSON() {
+  // Strip embedding from download to keep file small for sharing; keep it if present
+  const out = blocks.map(b => {
+    // Return all fields, embedding included (needed for Phase 2)
+    return b;
+  });
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'labeled.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function restart() {
+  cursor = 0;
+  document.getElementById('done-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  applyFilter();
+}
+</script>
+</body>
+</html>

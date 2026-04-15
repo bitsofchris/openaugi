@@ -1,3 +1,5 @@
+> **Deprecated** — moved to [`experiments/embedding_research/README.md`](../../experiments/embedding_research/README.md). Implementation scripts live there. This doc is kept as a reference artifact.
+
 # Matryoshka Embedding Probe Experiment
 
 ## Project Context
