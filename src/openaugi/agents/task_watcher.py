@@ -105,6 +105,34 @@ CLAUDE_SEARCH_PATHS = [
 # Temp dir for prompt context files passed to claude via `$(cat ...)`
 CONTEXT_DIR = Path(tempfile.gettempdir()) / "openaugi-tasks"
 
+# Pre-approved tools for the agent session — avoids permission prompts in tmux.
+# Scoped to standard file ops + all openaugi MCP tools. Does NOT grant Bash
+# (agent can still request it; user approves once per session if needed).
+ALLOWED_TOOLS = ",".join(
+    [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "mcp__openaugi__search",
+        "mcp__openaugi__get_context",
+        "mcp__openaugi__get_block",
+        "mcp__openaugi__get_blocks",
+        "mcp__openaugi__get_related",
+        "mcp__openaugi__traverse",
+        "mcp__openaugi__recent",
+        "mcp__openaugi__tag_block",
+        "mcp__openaugi__write_document",
+        "mcp__openaugi__write_snip",
+        "mcp__openaugi__write_thread",
+        "mcp__openaugi__list_streams",
+        "mcp__openaugi__get_stream_context",
+        "mcp__openaugi__make_stream",
+        "mcp__openaugi__update_stream",
+    ]
+)
+
 
 # ── Frontmatter helpers ────────────────────────────────────────────────────
 
@@ -388,7 +416,8 @@ def launch_tmux(
     wait_for_shell_ready(tmux, session_name)
 
     ctx = shlex.quote(str(context_file))
-    agent_cmd = f'{claude} "$(cat {ctx})"'
+    allowed = shlex.quote(ALLOWED_TOOLS)
+    agent_cmd = f'{claude} --permission-mode auto --allowedTools {allowed} "$(cat {ctx})"'
     subprocess.run(
         [tmux, "send-keys", "-t", session_name, agent_cmd, "Enter"],
         check=True,
@@ -462,7 +491,12 @@ def dispatch_task(
 
     work_dir = resolve_working_dir(fm, repo_paths)
     if work_dir:
-        logger.info("Working dir: %s", work_dir)
+        logger.info("Working dir: %s (from frontmatter)", work_dir)
+    elif vault_path:
+        # No repo/working_dir in frontmatter — default to the vault so the
+        # agent has a sane cwd instead of inheriting the parent process's.
+        work_dir = str(vault_path)
+        logger.info("Working dir: %s (vault default)", work_dir)
 
     ctx_file = write_context_file(task_id, prompt)
 
