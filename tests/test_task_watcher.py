@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from openaugi.pipeline import task_watcher as tw
+from openaugi.agents import task_watcher as tw
 
 # ── Frontmatter parsing ────────────────────────────────────────────────────
 
