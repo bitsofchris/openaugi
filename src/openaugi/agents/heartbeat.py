@@ -186,7 +186,7 @@ def launch_agent(prompt: str) -> int:
     `claude` binary is not on PATH — the CLI caller turns that into a
     helpful error for the user.
     """
-    from openaugi.pipeline.task_watcher import detect_claude
+    from openaugi.agents.task_watcher import detect_claude
 
     try:
         claude_bin = detect_claude()

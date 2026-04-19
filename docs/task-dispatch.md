@@ -128,7 +128,7 @@ If the task doesn't need a specific repo (it's editing notes in the vault itself
 ## The full flow
 
 ```
-openaugi task-dispatch → pipeline/task_watcher.py
+openaugi task-dispatch → agents/task_watcher.py
   poll loop (default every 5s):
   │
   ├── scan_pending(tasks_dir, settle=30s)
@@ -248,7 +248,7 @@ Save it, wait ~30s (the settle window), and it dispatches. Useful for mobile cap
 ## Related
 
 - [docs/taxonomy.md](taxonomy.md) — the taxonomy that defines `workstream` values and disambiguates the `status:` frontmatter field from the `status/*` tag facet on blocks
-- [src/openaugi/pipeline/task_watcher.py](../src/openaugi/pipeline/task_watcher.py) — the watcher implementation
+- [src/openaugi/agents/task_watcher.py](../src/openaugi/agents/task_watcher.py) — the watcher implementation
 - [src/openaugi/templates/task-template.md](../src/openaugi/templates/task-template.md) — the authoritative task file format
 - [src/openaugi/templates/heartbeat-skill.md](../src/openaugi/templates/heartbeat-skill.md) — the writer side: how the heartbeat agent knows to emit task files
 - [tests/test_task_watcher.py](../tests/test_task_watcher.py) — unit + contract tests

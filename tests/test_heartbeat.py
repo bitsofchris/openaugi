@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from openaugi.agents import heartbeat as hb
 from openaugi.model.block import Block
-from openaugi.pipeline import heartbeat as hb
 from openaugi.store.sqlite import SQLiteStore
 
 

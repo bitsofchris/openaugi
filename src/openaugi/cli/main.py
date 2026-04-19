@@ -741,8 +741,8 @@ def heartbeat(
     """
     _setup_logging(verbose)
 
+    from openaugi.agents.heartbeat import run_heartbeat
     from openaugi.config import load_config
-    from openaugi.pipeline.heartbeat import run_heartbeat
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
@@ -878,9 +878,9 @@ def agent_cmd(
 
     err = Console(stderr=True)
 
+    from openaugi.agents.heartbeat import run_heartbeat
+    from openaugi.agents.task_watcher import watch_tasks
     from openaugi.config import load_config
-    from openaugi.pipeline.heartbeat import run_heartbeat
-    from openaugi.pipeline.task_watcher import watch_tasks
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
@@ -922,7 +922,7 @@ def agent_cmd(
     # On first run (no prior state), apply lookback window to avoid processing full vault.
     from datetime import UTC, datetime, timedelta
 
-    from openaugi.pipeline.heartbeat import get_last_heartbeat, set_last_heartbeat
+    from openaugi.agents.heartbeat import get_last_heartbeat, set_last_heartbeat
 
     effective_lookback = (
         lookback if lookback is not None else (24 if get_last_heartbeat() is None else None)
@@ -934,7 +934,7 @@ def agent_cmd(
         set_last_heartbeat(default_since)
         err.print(f"[dim]Lookback {effective_lookback}h — starting from {default_since}[/dim]")
     elif effective_lookback == 0:
-        from openaugi.pipeline.heartbeat import HEARTBEAT_STATE_FILE
+        from openaugi.agents.heartbeat import HEARTBEAT_STATE_FILE
 
         if HEARTBEAT_STATE_FILE.exists():
             HEARTBEAT_STATE_FILE.unlink()
@@ -1152,8 +1152,8 @@ def task_dispatch(
     """
     _setup_logging(verbose)
 
+    from openaugi.agents.task_watcher import watch_tasks
     from openaugi.config import load_config
-    from openaugi.pipeline.task_watcher import watch_tasks
 
     config = load_config()
     vault_path = path or config.get("vault", {}).get("default_path")

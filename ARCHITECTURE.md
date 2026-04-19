@@ -42,13 +42,14 @@ src/openaugi/
 ├── adapters/
 │   ├── splitter.py       # Deterministic block splitter — shared primitive (see docs/splitter.md)
 │   └── vault.py          # Obsidian vault → blocks + links (wraps splitter)
-├── pipeline/
+├── pipeline/              # Passive data plane — transforms on blocks (what `up` runs)
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
-│   ├── heartbeat.py       # Heartbeat orchestrator — new blocks → Claude Code agent session
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
-│   ├── watcher.py         # File watcher — debounced incremental ingest on vault changes
+│   └── watcher.py         # File watcher — debounced incremental ingest on vault changes
+├── agents/                # Proactive agent plane — spawns Claude Code sessions (what `agent` runs)
+│   ├── heartbeat.py       # Heartbeat orchestrator — new blocks → Claude Code agent session
 │   └── task_watcher.py    # Task dispatch — OpenAugi/Tasks/ → tmux-hosted Claude sessions (optional)
 ├── store/
 │   └── sqlite.py          # SQLite backend (WAL, FTS5, sqlite-vec vec0, CASCADE)
@@ -109,7 +110,7 @@ Claude → MCP tool call → server.py
 See [docs/plans/heartbeat.md](docs/plans/heartbeat.md) for the full design.
 
 ```
-openaugi heartbeat → pipeline/heartbeat.py
+openaugi heartbeat → agents/heartbeat.py
   → run incremental ingest (only if --ingest; default assumes `up` is running)
   → read ~/.openaugi/last_heartbeat timestamp
   → store.get_blocks_created_since(since) → data_block blocks (capped at --max-blocks)
@@ -142,7 +143,7 @@ task-file `status:` frontmatter lifecycle.
 See [docs/task-dispatch.md](docs/task-dispatch.md) for the full feature doc.
 
 ```
-openaugi task-dispatch → pipeline/task_watcher.py
+openaugi task-dispatch → agents/task_watcher.py
   poll loop (default every 5s):
   ├── scan_pending(OpenAugi/Tasks/, settle=30s)
   ├── hydrate_note(file) — assign task_id, flip status→active, inject ## Session

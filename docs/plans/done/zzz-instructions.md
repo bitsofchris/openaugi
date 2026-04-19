@@ -259,7 +259,7 @@ The agent already reads the skill file, so it knows what "make this a task" mean
    - Add the "no delimiters → one block" fallback path.
    - Add case-insensitive `qqq` splitting within and outside headers.
    - Add case-insensitive `zzz:` extraction + content stripping.
-3. Update the heartbeat prompt builder in [heartbeat.py](../../src/openaugi/pipeline/heartbeat.py) to surface `zzz_instructions` (the new list field) per block instead of the current single `zzz_instruction`.
+3. Update the heartbeat prompt builder in [heartbeat.py](../../src/openaugi/agents/heartbeat.py) to surface `zzz_instructions` (the new list field) per block instead of the current single `zzz_instruction`.
 4. Copy [src/openaugi/templates/heartbeat-skill.md](../../src/openaugi/templates/heartbeat-skill.md) to `<vault>/OpenAugi/heartbeat-skill.md` and customize the workstreams.
 5. Write a real daily note with 2-3 `zzz:` instructions, run `openaugi heartbeat`, read the log, iterate on the skill file based on what the agent did wrong.
 
