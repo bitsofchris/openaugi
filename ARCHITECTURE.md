@@ -40,7 +40,8 @@ src/openaugi/
 │   ├── link.py           # Link Pydantic model
 │   └── protocols.py      # EmbeddingModel, LLMModel protocols
 ├── adapters/
-│   └── vault.py          # Obsidian vault → blocks + links
+│   ├── splitter.py       # Deterministic block splitter — shared primitive (see docs/splitter.md)
+│   └── vault.py          # Obsidian vault → blocks + links (wraps splitter)
 ├── pipeline/
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
