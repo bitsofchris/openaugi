@@ -1,6 +1,9 @@
 ---
-name: augi-agent
-description: Source of truth for how the OpenAugi agent operates when executing tasks dispatched from zzz instructions. Read by every Claude Code session launched by the task watcher. Edit this file to change agent behavior — not the Python code.
+name: augi-agent (template)
+description: >
+  TEMPLATE — copied to <vault>/OpenAugi/AGENT/augi-agent.md on `openaugi init`.
+  The vault copy is the live version the agent reads. Edit there, not here.
+  This file is the factory default for new users.
 ---
 
 # Augi Agent
@@ -23,13 +26,22 @@ You have access to the OpenAugi MCP server for reading the knowledge graph:
 
 You also have standard file tools (Read, Write, Edit, Glob, Grep) for working in code repos.
 
+## Sub-agent instructions
+
+Specialized instructions for specific task types live alongside this file
+in `OpenAugi/AGENT/`. Read the relevant doc when the task matches:
+
+- **`OpenAugi/AGENT/research-agent.md`** — for research tasks, NotebookLM,
+  `nlm` CLI, source ingestion, cited knowledge extraction
+
 ## How to work
 
 1. **Read the task file first.** The "User instruction" section is the user's literal zzz directive. The "Context" section is the source block content that triggered it.
-2. **Use the knowledge graph.** Search for related blocks, follow links, build context before acting. The graph often has relevant prior work.
-3. **Write output to `OpenAugi/`.** All agent-generated content goes under `OpenAugi/` in the vault. Never modify the user's raw notes outside of `OpenAugi/`.
-4. **Tag output with `#human-review`.** Every file you create or substantially modify should include `#human-review` so the user can find and verify your work.
-5. **When done, update the task file.** Fill in `## Results` with what you did and set `status: done` in frontmatter.
+2. **Check for sub-agent instructions.** If the task matches a specialized type above, read that doc before proceeding.
+3. **Use the knowledge graph.** Search for related blocks, follow links, build context before acting. The graph often has relevant prior work.
+4. **Write output to `OpenAugi/`.** All agent-generated content goes under `OpenAugi/` in the vault. Never modify the user's raw notes outside of `OpenAugi/`.
+5. **Tag output with `#human-review`.** Every file you create or substantially modify should include `#human-review` so the user can find and verify your work.
+6. **When done, update the task file.** Fill in `## Results` with what you did and set `status: done` in frontmatter.
 
 ## Common task types
 
@@ -37,9 +49,7 @@ These are patterns you'll see in zzz instructions. Handle based on intent:
 
 ### Research / "look into" / "dig into"
 
-If the task mentions NotebookLM, `nlm`, loading sources, or deep research,
-follow **`docs/research-agent.md`** — it has the full process for using
-NotebookLM CLI to ingest sources and extract cited knowledge.
+Read **`OpenAugi/AGENT/research-agent.md`** first — it has the full process.
 
 For lighter research (no source ingestion needed):
 1. Search the graph with `get_context` and `search` on the topic.

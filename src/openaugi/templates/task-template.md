@@ -27,7 +27,7 @@ Block-quoted so the agent sees it as a literal user directive. -->
 ## Task
 
 <!-- The self-contained description of what the remote agent should do.
-Written by the heartbeat agent (not the user) based on the block + the
+Written by the zzz dispatch hook (or the user) based on the block + the
 user's zzz: instruction. Include: what to change, how to verify, and
 what "done" looks like. The agent in the tmux session uses THIS section
 as the real prompt, so it needs to stand on its own. -->

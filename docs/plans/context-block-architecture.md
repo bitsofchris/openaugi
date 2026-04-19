@@ -23,7 +23,7 @@ Current impl already has the right structure. This phase makes the code and docs
 | `document` | `context_block:document` | Identity + path — routes agent to a file |
 | `tag` | `context_block:tag` | Tag node — routes agent to a concept cluster |
 
-**Migration:** add a `kind` prefix for context blocks, keep `data_block` as the primary embeddable kind. `get_blocks_needing_embeddings` and heartbeat continue filtering on the data block kind only.
+**Migration:** add a `kind` prefix for context blocks, keep `data_block` as the primary embeddable kind. `get_blocks_needing_embeddings` and zzz dispatch continue filtering on the data block kind only.
 
 ### Rename link kinds
 
