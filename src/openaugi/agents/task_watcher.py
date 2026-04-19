@@ -2,8 +2,10 @@
 and launches Claude Code agents in named tmux sessions.
 
 Workflow:
-  1. The heartbeat agent (or a user, or a mobile capture) writes a task
-     file to <vault>/OpenAugi/Tasks/ with frontmatter `status: pending`.
+  1. The file watcher detects vault changes and ingests them. If any block
+     carries a `zzz:` instruction, `pipeline/dispatch.py` writes a task
+     file to <vault>/OpenAugi/Tasks/ with `status: pending`. Users and
+     mobile capture can also write task files directly.
   2. This watcher scans that folder. Each .md file that has been stable
      for `settle` seconds is picked up.
   3. The file is hydrated: `task_id`, `created`, `tmux_session`, and
@@ -12,8 +14,8 @@ Workflow:
   4. The working directory is resolved from `working_dir` / `working-dir`
      / `repo` in frontmatter — either an absolute path, or a short name
      that maps to a path via `OpenAugi/Repos.md`'s `repos:` dict.
-  5. A small prompt (task_id + the task body + linked notes) is written
-     to a temp context file.
+  5. A prompt is built: the augi-agent skill file (source of truth for
+     agent behavior) + task_id + task body + linked notes.
   6. A detached tmux session is created (with optional `-c <cwd>`), the
      shell is allowed to settle, and the claude CLI is launched via
      send-keys so the user's login-shell PATH and aliases apply.
@@ -22,7 +24,7 @@ No LLM calls in this module. Dispatch only.
 
 ## Task file format — the contract
 
-The heartbeat agent (writer) and this watcher (reader) agree on one file
+The zzz dispatch hook (writer) and this watcher (reader) agree on one file
 format. The authoritative, annotated version lives in ONE place:
 
     src/openaugi/templates/task-template.md
@@ -32,8 +34,6 @@ the watcher keeps up. A minimal pending task looks like:
 
     ---
     status: pending
-    workstream: <workstream slug>
-    repo: <short repo name from OpenAugi/Repos.md, or omit for vault-local>
     source_block_id: <block id>
     source_note: "[[<source note title>]]"
     ---
@@ -54,9 +54,13 @@ the watcher keeps up. A minimal pending task looks like:
 
 Hydration adds `task_id`, `created`, `tmux_session`, and a `## Session`
 block with the `tmux attach` command. It does NOT add defaults for
-`workstream`, `priority`, etc. — those are the writer's responsibility.
-See src/openaugi/templates/heartbeat-skill.md for the writer side and
-docs/plans/done/heartbeat.md for the overall design.
+`workstream`, `priority`, etc. �� those are the writer's responsibility.
+
+## Agent skill
+
+The agent's behavior is governed by `templates/augi-agent.md`, which is
+copied to `<vault>/OpenAugi/augi-agent.md` on init. Edit that file to
+change how the agent handles tasks — not this Python code.
 """
 
 from __future__ import annotations
@@ -169,7 +173,7 @@ def hydrate_note(filepath: Path) -> tuple[str, str, Path]:
     fm.setdefault("created", now)
     fm["tmux_session"] = session_name
 
-    # No default workstream / priority. The writer (heartbeat agent or the
+    # No default workstream / priority. The writer (zzz dispatch or the
     # user) owns those fields. If they're missing, they stay missing — the
     # watcher logs the task as-is rather than labeling it under a surprise
     # workstream the user didn't choose.
@@ -286,27 +290,39 @@ def detect_claude() -> str:
 # ── Agent dispatch ─────────────────────────────────────────────────────────
 
 
-def build_prompt(task_id: str, body: str, links: list[str]) -> str:
+SKILL_FILE_RELATIVE = "OpenAugi/augi-agent.md"
+
+
+def build_prompt(
+    task_id: str,
+    body: str,
+    links: list[str],
+    skill_file: Path | None = None,
+) -> str:
     """Build the initial prompt handed to the Claude agent in its tmux session.
 
-    The task body is the real prompt — the writer (heartbeat agent or
-    user) is responsible for making it self-contained. The watcher just
-    wraps it with the task_id, any linked notes to pull, and a one-line
-    finish instruction. No MCP tool lists, no `needs-input` protocol —
-    those are the writer's / the heartbeat-skill's concern.
+    Injects the augi-agent skill file reference so the agent reads it first,
+    then provides the task body and a finish instruction.
     """
-    links_line = ""
+    lines: list[str] = []
+
+    # Skill file — source of truth for agent behavior
+    if skill_file and skill_file.exists():
+        lines.append(f"Read your skill file first:\n  {skill_file}\n")
+
+    lines.append(f"You are working on task {task_id}.\n")
+
     if links:
         joined = ", ".join(f"[[{lnk}]]" for lnk in links)
-        links_line = f"\nLinked notes (pull via openaugi MCP): {joined}\n"
+        lines.append(f"Linked notes (pull via openaugi MCP): {joined}\n")
 
-    return (
-        f"You are working on task {task_id}.\n"
-        f"{links_line}\n"
-        f"{body.strip()}\n\n"
+    lines.append(f"{body.strip()}\n")
+    lines.append(
         f"When done, edit OpenAugi/Tasks/{task_id}.md: fill in `## Results` "
         f"and set frontmatter `status: done`.\n"
     )
+
+    return "\n".join(lines)
 
 
 def write_context_file(task_id: str, prompt: str) -> Path:
@@ -419,6 +435,7 @@ def dispatch_task(
     tmux: str,
     claude: str,
     repo_paths: dict[str, str],
+    vault_path: Path | None = None,
 ) -> str | None:
     """Hydrate a single pending task and launch it in tmux.
 
@@ -433,7 +450,15 @@ def dispatch_task(
     text = new_path.read_text()
     fm, body = parse_note(text)
     links = extract_wiki_links(body)
-    prompt = build_prompt(task_id, body, links)
+
+    # Resolve the augi-agent skill file
+    skill_file = None
+    if vault_path:
+        candidate = vault_path / SKILL_FILE_RELATIVE
+        if candidate.exists():
+            skill_file = candidate
+
+    prompt = build_prompt(task_id, body, links, skill_file=skill_file)
 
     work_dir = resolve_working_dir(fm, repo_paths)
     if work_dir:
@@ -488,7 +513,7 @@ def watch_tasks(
                 if key in processed:
                     continue
                 try:
-                    dispatch_task(filepath, tmux, claude, repo_paths)
+                    dispatch_task(filepath, tmux, claude, repo_paths, vault_path=vault)
                 except Exception as e:
                     logger.error("Dispatch failed for %s: %s", filepath.name, e)
                 processed.add(key)

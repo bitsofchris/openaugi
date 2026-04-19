@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -21,28 +20,6 @@ app = typer.Typer(
     invoke_without_command=True,
 )
 console = Console()
-
-IgnoreSourceOption = Annotated[
-    list[str] | None,
-    typer.Option(
-        "--ignore-source",
-        help=(
-            "fnmatch pattern on source_path to exclude "
-            "(repeatable, e.g. --ignore-source 'journals/HW/*')"
-        ),
-    ),
-]
-
-IgnoreHeadingOption = Annotated[
-    list[str] | None,
-    typer.Option(
-        "--ignore-heading",
-        help=(
-            "Section heading text to exclude (case-insensitive, repeatable, "
-            "e.g. --ignore-heading HW --ignore-heading Private)"
-        ),
-    ),
-]
 
 
 def _setup_logging(verbose: bool):
@@ -587,15 +564,20 @@ def up(
         None, "--auth", help="Auth provider for remote access (e.g. cloudflare)"
     ),
     debounce: float = typer.Option(30.0, "--debounce", "-d", help="Watcher debounce seconds"),
+    no_agent: bool = typer.Option(
+        False, "--no-agent", help="Disable task dispatch (watcher + MCP only, no agent sessions)"
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
-    """Ingest, watch, and serve — the one command to run OpenAugi.
+    """Ingest, watch, dispatch, and serve — the one command to run OpenAugi.
 
     1. Runs incremental ingest (fast if already up-to-date)
-    2. Starts file watcher as a background thread
-    3. Starts MCP server in the foreground
+    2. Starts file watcher as a background thread (zzz → task files)
+    3. Starts task dispatch as a background thread (task files → tmux agents)
+    4. Starts MCP server in the foreground
     """
     import os
+    import threading
 
     _setup_logging(verbose)
 
@@ -632,6 +614,15 @@ def up(
             f"({result['blocks_added']} new, {result['blocks_removed']} removed)"
         )
 
+        # Dispatch any zzz instructions from initial ingest
+        new_blocks = result.get("new_data_blocks", [])
+        if new_blocks:
+            from openaugi.pipeline.dispatch import dispatch_zzz_blocks
+
+            dispatched = dispatch_zzz_blocks(new_blocks, vault_path)
+            if dispatched:
+                err.print(f"  Dispatched {len(dispatched)} zzz task(s)")
+
         # Embedding — graceful fallback
         try:
             from openaugi.models import get_embedding_model
@@ -647,15 +638,29 @@ def up(
     finally:
         store.close()
 
-    # Step 2: File watcher
+    # Step 2: File watcher (includes zzz dispatch post-ingest)
     from openaugi.pipeline.watcher import start_watcher_thread
 
     start_watcher_thread(vault_path, db_path, config, debounce_seconds=debounce)
     err.print(f"\n[bold]Watcher:[/bold] debounce={debounce}s")
+
+    # Step 3: Task dispatch (picks up pending task files → tmux agents)
+    if not no_agent:
+        from openaugi.agents.task_watcher import watch_tasks
+
+        dispatch_thread = threading.Thread(
+            target=watch_tasks,
+            kwargs=dict(vault_path=vault_path),
+            daemon=True,
+            name="task-dispatch",
+        )
+        dispatch_thread.start()
+        err.print("[bold]Agent:[/bold] watching OpenAugi/Tasks/")
+
     err.print(f"[bold]MCP:[/bold] {transport}")
     err.print()
 
-    # Step 3: MCP server (blocks main thread)
+    # Step 4: MCP server (blocks main thread)
     if db:
         os.environ["OPENAUGI_DB"] = db
 
@@ -700,301 +705,6 @@ def watch(
     console.print()
 
     watch_vault(vault_path, db_path, config, debounce_seconds=debounce)
-
-
-@app.command()
-def heartbeat(
-    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
-    db: str | None = typer.Option(None, "--db", help="Database path"),
-    max_blocks: int = typer.Option(
-        50, "--max-blocks", "-n", help="Max new blocks to process in one run"
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Build the prompt but do not launch the agent"
-    ),
-    ingest: bool = typer.Option(
-        False,
-        "--ingest",
-        help="Run incremental ingest before processing (use when `up` is not running)",
-    ),
-    ignore_source: IgnoreSourceOption = None,
-    ignore_heading: IgnoreHeadingOption = None,
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-):
-    """Heartbeat — find new blocks and hand them to a Claude Code agent.
-
-    The Python side is a dumb script:
-      1. Finds entry blocks added since ~/.openaugi/last_heartbeat
-      2. Builds a prompt listing the blocks + any `zzz:` instructions
-      3. Spawns `claude -p <prompt>` with openaugi MCP tools allowed
-      4. Updates the timestamp on success
-
-    Assumes `openaugi up` is already running and keeping the DB current.
-    Pass --ingest to run a one-off incremental ingest first if `up` is not
-    running.
-
-    The reasoning lives in the skill file at
-    <vault>/OpenAugi/heartbeat-skill.md. Edit the skill file, not the code,
-    when the agent does the wrong thing.
-
-    See docs/plans/heartbeat.md for the full design.
-    """
-    _setup_logging(verbose)
-
-    from openaugi.agents.heartbeat import run_heartbeat
-    from openaugi.config import load_config
-    from openaugi.store.sqlite import SQLiteStore
-
-    config = load_config()
-
-    vault_path = path or config.get("vault", {}).get("default_path")
-    if not vault_path:
-        console.print("[red]No vault path specified.[/red]")
-        console.print("Use --path or run 'openaugi init' to set a default.")
-        raise typer.Exit(1)
-
-    db_path = db or str(_default_db())
-    store = SQLiteStore(db_path)
-
-    try:
-        # Step 1: incremental ingest — opt-in when `up` is not running.
-        if ingest:
-            from openaugi.pipeline.runner import run_layer0
-
-            console.print(f"[bold]Syncing vault:[/bold] {vault_path}")
-            exclude = config.get("vault", {}).get("exclude_patterns")
-            workers = config.get("vault", {}).get("max_workers", 4)
-            result = run_layer0(vault_path, store, exclude_patterns=exclude, max_workers=workers)
-            stats = result["stats"]
-            console.print(
-                f"  {stats['total_blocks']} blocks, {stats['total_links']} links "
-                f"({result['blocks_added']} new, {result['blocks_removed']} removed)"
-            )
-
-            # Embedding — graceful fallback (agent search still works via FTS without it).
-            try:
-                from openaugi.models import get_embedding_model
-                from openaugi.pipeline.embed import run_embed
-
-                model = get_embedding_model(config.get("models", {}).get("embedding"))
-                count = run_embed(store, model)
-                if count:
-                    console.print(f"  Embedded {count} blocks")
-            except Exception as e:
-                console.print(f"  [dim]Embeddings skipped: {e}[/dim]")
-
-        # Step 2–4: find blocks, build prompt, spawn agent.
-        ignore = list(ignore_source or []) or config.get("heartbeat", {}).get("ignore_sources", [])
-        ignore_h = list(ignore_heading or []) or config.get("heartbeat", {}).get(
-            "ignore_headings", []
-        )
-        skill_file = config.get("heartbeat", {}).get("skill_file")
-        try:
-            result = run_heartbeat(
-                store=store,
-                vault_path=vault_path,
-                max_blocks=max_blocks,
-                dry_run=dry_run,
-                ignore_sources=ignore or None,
-                skill_file_path=skill_file or None,
-                ignore_headings=ignore_h or None,
-            )
-        except FileNotFoundError as e:
-            console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1) from None
-
-        since = result["since"] or "(first run)"
-        console.print(f"\n[bold]Heartbeat window:[/bold] {since} → {result['now']}")
-        console.print(f"[bold]Skill file:[/bold] {result['skill_file']}")
-        console.print(f"[bold]Heartbeat log:[/bold] {result['heartbeat_log']}")
-        console.print(f"[bold]New blocks:[/bold] {result['block_count']}")
-
-        if result["batch_capped"]:
-            console.print(
-                f"[yellow]Batch capped at {max_blocks}.[/yellow] "
-                "Run again to process the next batch, or raise --max-blocks."
-            )
-
-        if result["block_count"] == 0:
-            console.print("[dim]Nothing to process. Timestamp advanced.[/dim]")
-            return
-
-        if dry_run:
-            console.print("\n[bold]--- Prompt (dry run) ---[/bold]")
-            console.print(result["prompt"])
-            return
-
-        if result["return_code"] == 0:
-            console.print(
-                f"\n[green]Heartbeat complete.[/green] Review the log at {result['heartbeat_log']}"
-            )
-        else:
-            console.print(
-                f"\n[yellow]Agent exited with {result['return_code']}.[/yellow] "
-                "Timestamp was NOT advanced — the next run will retry these blocks."
-            )
-            raise typer.Exit(result["return_code"] or 1)
-    finally:
-        store.close()
-
-
-@app.command("agent")
-def agent_cmd(
-    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
-    db: str | None = typer.Option(None, "--db", help="Database path"),
-    interval: int = typer.Option(5, "--interval", "-i", help="Heartbeat interval in minutes"),
-    max_blocks: int = typer.Option(
-        50, "--max-blocks", "-n", help="Max blocks per heartbeat batch"
-    ),
-    ingest: bool = typer.Option(
-        False,
-        "--ingest",
-        help="Run incremental ingest on each heartbeat cycle (use when `up` is not running)",
-    ),
-    lookback: int | None = typer.Option(
-        None,
-        "--lookback",
-        help="Hours of history to process. Reseeds the start window. 0 = all. Default on first run: 24h.",  # noqa: E501
-    ),
-    ignore_source: IgnoreSourceOption = None,
-    ignore_heading: IgnoreHeadingOption = None,
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-):
-    """Heartbeat loop + task dispatch — the agent processing companion to `up`.
-
-    While `up` handles vault sync and the MCP server, `agent` handles processing:
-
-      1. Runs heartbeat every --interval minutes (default 5)
-      2. Watches OpenAugi/Tasks/ and dispatches pending tasks as Claude Code
-         agents in named tmux sessions
-
-    Assumes `openaugi up` is running and keeping the DB current.
-    Pass --ingest if `up` is not running.
-    """
-    import threading
-    import time
-
-    _setup_logging(verbose)
-
-    err = Console(stderr=True)
-
-    from openaugi.agents.heartbeat import run_heartbeat
-    from openaugi.agents.task_watcher import watch_tasks
-    from openaugi.config import load_config
-    from openaugi.store.sqlite import SQLiteStore
-
-    config = load_config()
-
-    vault_path = path or config.get("vault", {}).get("default_path")
-    if not vault_path:
-        err.print("[red]No vault path specified.[/red]")
-        err.print("Use --path or run 'openaugi init' to set a default.")
-        raise typer.Exit(1)
-
-    db_path = db or str(_default_db())
-    ignore = list(ignore_source or []) or config.get("heartbeat", {}).get("ignore_sources", [])
-    ignore_h = list(ignore_heading or []) or config.get("heartbeat", {}).get("ignore_headings", [])
-    skill_file = config.get("heartbeat", {}).get("skill_file")
-
-    err.print(f"[bold]Vault:[/bold] {vault_path}")
-    err.print(f"[bold]Heartbeat:[/bold] every {interval}m")
-    if ignore:
-        err.print(f"[bold]Ignoring sources:[/bold] {', '.join(ignore)}")
-    if ignore_h:
-        err.print(f"[bold]Ignoring headings:[/bold] {', '.join(ignore_h)}")
-
-    # Start task-dispatch in a background daemon thread
-    dispatch_thread = threading.Thread(
-        target=watch_tasks,
-        kwargs=dict(
-            vault_path=vault_path,
-            tasks_folder="OpenAugi/Tasks",
-            repos_note="OpenAugi/Repos.md",
-            poll_interval=5.0,
-            settle=30.0,
-        ),
-        daemon=True,
-        name="task-dispatch",
-    )
-    dispatch_thread.start()
-    err.print("[bold]Task dispatch:[/bold] watching OpenAugi/Tasks/\n")
-
-    # On first run (no prior state), apply lookback window to avoid processing full vault.
-    from datetime import UTC, datetime, timedelta
-
-    from openaugi.agents.heartbeat import get_last_heartbeat, set_last_heartbeat
-
-    effective_lookback = (
-        lookback if lookback is not None else (24 if get_last_heartbeat() is None else None)
-    )
-    if effective_lookback is not None and effective_lookback > 0:
-        default_since = (datetime.now(UTC) - timedelta(hours=effective_lookback)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
-        set_last_heartbeat(default_since)
-        err.print(f"[dim]Lookback {effective_lookback}h — starting from {default_since}[/dim]")
-    elif effective_lookback == 0:
-        from openaugi.agents.heartbeat import HEARTBEAT_STATE_FILE
-
-        if HEARTBEAT_STATE_FILE.exists():
-            HEARTBEAT_STATE_FILE.unlink()
-        err.print("[dim]Lookback 0 — processing all blocks[/dim]")
-
-    # Heartbeat loop — runs in the main thread
-    while True:
-        store = SQLiteStore(db_path)
-        try:
-            if ingest:
-                from openaugi.pipeline.runner import run_layer0
-
-                exclude = config.get("vault", {}).get("exclude_patterns")
-                workers = config.get("vault", {}).get("max_workers", 4)
-                res = run_layer0(vault_path, store, exclude_patterns=exclude, max_workers=workers)
-                stats = res["stats"]
-                err.print(
-                    f"  Synced: {stats['total_blocks']} blocks "
-                    f"({res['blocks_added']} new, {res['blocks_removed']} removed)"
-                )
-                try:
-                    from openaugi.models import get_embedding_model
-                    from openaugi.pipeline.embed import run_embed
-
-                    model = get_embedding_model(config.get("models", {}).get("embedding"))
-                    count = run_embed(store, model)
-                    if count:
-                        err.print(f"  Embedded {count} blocks")
-                except Exception as e:
-                    err.print(f"  [dim]Embeddings skipped: {e}[/dim]")
-
-            try:
-                result = run_heartbeat(
-                    store=store,
-                    vault_path=vault_path,
-                    max_blocks=max_blocks,
-                    ignore_sources=ignore or None,
-                    ignore_headings=ignore_h or None,
-                    skill_file_path=skill_file or None,
-                )
-            except FileNotFoundError as e:
-                err.print(f"[red]{e}[/red]")
-                raise typer.Exit(1) from None
-
-            if result["block_count"] == 0:
-                err.print(f"[dim]Heartbeat: nothing new. Next run in {interval}m.[/dim]")
-            elif result["return_code"] == 0:
-                err.print(
-                    f"[green]Heartbeat complete[/green] ({result['block_count']} blocks). "
-                    f"Next run in {interval}m."
-                )
-            else:
-                err.print(
-                    f"[yellow]Heartbeat agent exited {result['return_code']}.[/yellow] "
-                    f"Retrying same window next run in {interval}m."
-                )
-        finally:
-            store.close()
-
-        time.sleep(interval * 60)
 
 
 @app.command()
@@ -1147,8 +857,8 @@ def task_dispatch(
     `tmux attach -t <task_id>`.
 
     Raw notes are never modified — the watcher only touches files in the
-    configured Tasks folder. See src/openaugi/templates/heartbeat-skill.md
-    for the task file format the heartbeat agent writes.
+    configured Tasks folder. Task files are written by the zzz dispatch
+    hook (pipeline/dispatch.py) or manually by the user.
     """
     _setup_logging(verbose)
 

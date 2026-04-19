@@ -389,7 +389,7 @@ class TestDispatchTask:
 # src/openaugi/templates/task-template.md. This test reads that file and
 # runs it through the full dispatch pipeline. Any change to the template
 # that the watcher can't hydrate + launch cleanly fails here. The intent
-# is to keep a single source of truth for the heartbeat agent (writer) and
+# is to keep a single source of truth for the zzz dispatch hook (writer) and
 # the watcher (reader) so the contract can't silently drift.
 
 TASK_TEMPLATE_PATH = (
@@ -409,8 +409,8 @@ class TestTaskTemplateContract:
         text = TASK_TEMPLATE_PATH.read_text(encoding="utf-8")
         fm, body = tw.parse_note(text)
         # The contract: every pending task must carry at least status.
-        # `workstream` should be present in the example so the heartbeat
-        # agent sees it modeled.
+        # `workstream` should be present in the example so the dispatch
+        # hook sees it modeled.
         assert fm.get("status") == "pending"
         assert "workstream" in fm, "template should model a workstream field"
         # Sections the remote agent depends on

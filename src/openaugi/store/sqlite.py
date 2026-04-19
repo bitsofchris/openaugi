@@ -862,7 +862,7 @@ class SQLiteStore:
 
         Filters on `block_time` (the note's date) so that lookback windows match
         when the content was *written*, not when it was ingested. block_time is
-        often date-only ("2026-04-10") while the heartbeat timestamp is a full
+        often date-only ("2026-04-10") while the query timestamp is a full
         datetime — we compare only the date portion of `since` to avoid
         "2026-04-10" < "2026-04-10T17:40:52Z" mismatches.
 

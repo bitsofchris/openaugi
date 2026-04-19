@@ -27,19 +27,19 @@ See [docs/data-model.md](docs/data-model.md) for the full data model philosophy.
 
 | Layer | Plane | Cost | What | Requires |
 |-------|-------|------|------|----------|
-| **Layer 0** | Data | FREE | Split, tag/link extract, FTS, dedup hash | Python + SQLite |
+| **Layer 0** | Data | FREE | Split, tag/link extract, FTS, dedup hash, zzz dispatch | Python + SQLite |
 | **Layer 1** | Data | ~$0 | Embed (local default), hub scoring (SQL) | sentence-transformers (local) |
-| **Heartbeat** | Agent | FREE | Per-block classification → `augi_tags` on blocks, task dispatch | Claude Code agent |
+| **Agent** | Agent | per-task | Execute zzz-dispatched tasks in tmux Claude sessions | Claude Code CLI + tmux |
 
 ## Two Planes
 
-The codebase separates two fundamentally different kinds of work, each with its own CLI entry point:
+The codebase separates two fundamentally different kinds of work, both run by `openaugi up`:
 
-**Data plane (`pipeline/`)** — passive transforms on blocks. Ingest, embed, watch for file changes, re-rank search results. All in-process Python, no external processes. This is what `openaugi up` runs.
+**Data plane (`pipeline/`)** — passive transforms on blocks. Ingest, embed, watch for file changes, dispatch zzz instructions as task files, re-rank search results. All in-process Python, no external processes.
 
-**Agent plane (`agents/`)** — proactive orchestrators that spawn Claude Code sessions. Heartbeat finds new blocks and hands them to an agent for classification. Task dispatch watches for pending task files and launches them in tmux. This is what `openaugi agent` runs.
+**Agent plane (`agents/`)** — task dispatch watches `OpenAugi/Tasks/` for pending task files and launches Claude Code sessions in tmux. The agent's behavior is governed by `templates/augi-agent.md` (copied to `<vault>/OpenAugi/augi-agent.md` on init).
 
-The two planes share the store and the block/link data model but have no code dependencies between them. `pipeline/` never spawns agents; `agents/` never transforms data directly. The MCP server (`mcp/`) sits alongside both as the read/write API surface that Claude calls.
+The two planes share the store and the block/link data model. The bridge between them is `pipeline/dispatch.py`: when ingest finds blocks with `zzz:` instructions, it writes task files that the agent plane picks up. The MCP server (`mcp/`) sits alongside both as the read/write API surface that Claude calls.
 
 ## Module Map
 
@@ -52,15 +52,15 @@ src/openaugi/
 ├── adapters/
 │   ├── splitter.py       # Deterministic block splitter — shared primitive (see docs/splitter.md)
 │   └── vault.py          # Obsidian vault → blocks + links (wraps splitter)
-├── pipeline/              # Passive data plane — transforms on blocks (what `up` runs)
+├── pipeline/              # Data plane — transforms on blocks + zzz dispatch
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
+│   ├── dispatch.py        # Post-ingest: zzz instructions → task files in OpenAugi/Tasks/
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
-│   └── watcher.py         # File watcher — debounced incremental ingest on vault changes
-├── agents/                # Proactive agent plane — spawns Claude Code sessions (what `agent` runs)
-│   ├── heartbeat.py       # Heartbeat orchestrator — new blocks → Claude Code agent session
-│   └── task_watcher.py    # Task dispatch — OpenAugi/Tasks/ → tmux-hosted Claude sessions (optional)
+│   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch
+├── agents/                # Agent plane — launches Claude Code sessions
+│   └── task_watcher.py    # Task dispatch — OpenAugi/Tasks/ → tmux-hosted Claude sessions
 ├── store/
 │   └── sqlite.py          # SQLite backend (WAL, FTS5, sqlite-vec vec0, CASCADE)
 ├── models/
@@ -75,7 +75,7 @@ src/openaugi/
 │   ├── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
 │   └── stream_manager.py  # StreamManager — workstream CRUD (OpenAugi/Streams/)
 ├── cli/
-│   └── main.py            # typer CLI (up, ingest, serve, watch, heartbeat, search, hubs, status, service)
+│   └── main.py            # typer CLI (up, ingest, serve, watch, search, hubs, status, service)
 └── config.py              # TOML config loader + .env loader
 ```
 
@@ -115,60 +115,37 @@ Claude → MCP tool call → server.py
   → list_streams / get_stream_context / make_stream / update_stream: workstream CRUD
 ```
 
-### Heartbeat (dumb script, smart agent)
-
-See [docs/plans/heartbeat.md](docs/plans/heartbeat.md) for the full design.
+### ZZZ Dispatch (zzz → task file → agent)
 
 ```
-openaugi heartbeat → agents/heartbeat.py
-  → run incremental ingest (only if --ingest; default assumes `up` is running)
-  → read ~/.openaugi/last_heartbeat timestamp
-  → store.get_blocks_created_since(since) → data_block blocks (capped at --max-blocks)
-  → build prompt: skill file ref + per-block content + zzz_instructions metadata
-  → spawn `claude -p <prompt>` with openaugi MCP tools allowed
-  → agent classifies each block → calls tag_block MCP tool → augi_tags on block
-  → agent dispatches tasks → writes OpenAugi/Tasks/<slug>.md
-  → agent writes heartbeat log → OpenAugi/Heartbeat/YYYY-MM-DD.md
-  → on success: advance ~/.openaugi/last_heartbeat
+you write `zzz: <instruction>` in a vault note
+  → file watcher detects change (30s debounce)
+  → ingest: parse, split, extract blocks + tags + links
+  → pipeline/dispatch.py: blocks with zzz_instructions
+    → write task file to OpenAugi/Tasks/<slug>.md (status: pending)
+  → agents/task_watcher.py picks it up (5s poll, 30s settle)
+    → hydrate: assign task_id, flip status→active, inject ## Session
+    → resolve working dir via OpenAugi/Repos.md
+    → build prompt: augi-agent skill file + task body + linked notes
+    → launch tmux: detached session + `claude "$(cat ctx)"`
+  → agent reads skill file, uses MCP tools, does the work
+  → writes output to OpenAugi/ tagged #human-review
+  → marks task file status: done
 ```
 
-The Python side is deliberately dumb: it does not classify. The reasoning
-lives in `<vault>/OpenAugi/heartbeat-skill.md`, a user-maintained markdown
-file (template: `src/openaugi/templates/heartbeat-skill.md`). Per-block
-`zzz:` lines are extracted by the vault adapter into
+Per-block `zzz:` lines are extracted by the vault adapter into
 `metadata["zzz_instructions"]` (a list, one item per line; stripped from
-the clean content) so the agent can honor each as an independent per-block
-directive. Blocks are split on `###` headers and `qqq` markers
+the clean content). Blocks are split on `###` headers and `qqq` markers
 (case-insensitive) — see [docs/plans/zzz-instructions.md](docs/plans/zzz-instructions.md).
 
-The tag taxonomy the skill applies — `area/*` evolution streams, `type/task`
-for actionable items, and `status/*` task states — is documented in
-[docs/taxonomy.md](docs/taxonomy.md). That doc is the single source of truth
-for what `workstream:` means in task-dispatch frontmatter and for the
-disambiguation between the block-level `status/*` tag facet and the
-task-file `status:` frontmatter lifecycle.
+The agent's behavior is governed by `templates/augi-agent.md` (source of
+truth, copied to `<vault>/OpenAugi/augi-agent.md`). Edit that file to
+change how the agent handles tasks — not the Python code.
 
-### Task Dispatch (optional add-on)
-
-See [docs/task-dispatch.md](docs/task-dispatch.md) for the full feature doc.
-
-```
-openaugi task-dispatch → agents/task_watcher.py
-  poll loop (default every 5s):
-  ├── scan_pending(OpenAugi/Tasks/, settle=30s)
-  ├── hydrate_note(file) — assign task_id, flip status→active, inject ## Session
-  ├── resolve_working_dir — OpenAugi/Repos.md short-name → absolute path
-  ├── build_prompt — small wrapper around the task body
-  └── launch_tmux — detached `tmux new-session` + send-keys `claude "$(cat ctx)"`
-```
-
-Optional add-on: if you don't run `openaugi task-dispatch`, task files from
-heartbeat (or hand-written) just sit in `OpenAugi/Tasks/`. Opt in by
-running the watcher. The **task file format is a single contract**
-defined in `src/openaugi/templates/task-template.md` and enforced by
-`test_task_template_hydrates_cleanly`. Both the heartbeat skill (writer)
-and `task_watcher.py` (reader) point at that template rather than
-redefine the format — see the contract diagram in [docs/task-dispatch.md](docs/task-dispatch.md).
+The **task file format is a single contract** defined in
+`src/openaugi/templates/task-template.md` and enforced by
+`test_task_template_hydrates_cleanly`. Both `dispatch.py` (writer)
+and `task_watcher.py` (reader) point at that template.
 
 ### Hub Scoring
 
@@ -205,21 +182,19 @@ openaugi up            # daily: sync vault + file watcher + MCP server
 
 Embedding is attempted with the user's configured model. If it fails, blocks are saved without embeddings and retried on the next watcher cycle. SQLite WAL mode handles concurrent reads (MCP) and writes (watcher) without locking.
 
-### Daily use — two entry points
+### Daily use — one command
 
 ```
-openaugi up     ← Claude Desktop MCP config (vault sync + MCP server)
-openaugi agent  ← one terminal window (heartbeat every 5m + task dispatch)
+openaugi up     ← ingest + watcher + zzz dispatch + task agent + MCP server
 ```
 
 ### All commands
 
 | Command | What |
 |---------|------|
-| `openaugi up` | Ingest + watcher + MCP server in one process |
-| `openaugi agent` | Heartbeat loop (every `--interval` min) + task dispatch |
-| `openaugi heartbeat` | One-shot: find new blocks → spawn Claude Code agent |
-| `openaugi task-dispatch` | Watch `OpenAugi/Tasks/` and launch pending tasks in tmux |
+| `openaugi up` | Ingest + watcher + zzz dispatch + task agent + MCP server |
+| `openaugi up --no-agent` | Same but without task dispatch (no tmux agent sessions) |
+| `openaugi task-dispatch` | Watch `OpenAugi/Tasks/` and launch pending tasks in tmux (standalone) |
 | `openaugi serve` | MCP server only (stdio or HTTP) |
 | `openaugi watch` | File watcher only (incremental ingest on vault changes) |
 | `openaugi re-embed` | Reset + re-embed all data blocks with current model (use after model switch) |
@@ -241,7 +216,7 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
 - [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
-- [docs/plans/heartbeat.md](docs/plans/heartbeat.md) — Heartbeat: dumb script spawns a Claude Code agent session to process new blocks
+- [docs/plans/done/heartbeat.md](docs/plans/done/heartbeat.md) — (shipped, then replaced by zzz dispatch) Heartbeat design history
 - [docs/plans/capture-tag-stream-loop.md](docs/plans/capture-tag-stream-loop.md) — Phase 4: capture → tag → stream incremental pipeline
 - [docs/plans/from-capture-to-jarvis.md](docs/plans/from-capture-to-jarvis.md) — Longer-horizon vision (layers 1–4)
 - [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features
