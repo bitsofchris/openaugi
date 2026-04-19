@@ -1,18 +1,17 @@
 ---
 name: taxonomy
-description: The three-facet tag taxonomy (area/type/status) used by the heartbeat agent to classify captured blocks. Single source of truth — referenced by heartbeat-skill.md and task-dispatch.md. Explains what each facet is for, the classification rules, and disambiguates the block-level `status/*` tag from the task-file `status:` frontmatter.
+description: The three-facet tag taxonomy (area/type/status) for classifying captured blocks. Single source of truth — referenced by augi-agent.md and task-dispatch.md. Explains what each facet is for, the classification rules, and disambiguates the block-level `status/*` tag from the task-file `status:` frontmatter.
 ---
 
 # OpenAugi Taxonomy
 
-A tiny, load-bearing tag taxonomy applied to captured blocks by the heartbeat agent. Three facets, six values total in the default template. Everything else lives in the link graph and embeddings.
+A tiny, load-bearing tag taxonomy for captured blocks. Three facets, six values total in the default template. Everything else lives in the link graph and embeddings.
 
 ## When to use this doc
 
 Read this when you're:
 
-- Customizing `<vault>/OpenAugi/heartbeat-skill.md` for your own practice
-- Wondering why the heartbeat tagged a block a certain way
+- Customizing `<vault>/OpenAugi/AGENT/augi-agent.md` for your own practice
 - Working on task-dispatch and need to know what `workstream:` means or why `status:` and `status/*` aren't the same thing
 - Tempted to add a new tag facet (answer: probably not)
 
@@ -25,7 +24,7 @@ Read this when you're:
 
 That's it. Topic, theme, and relationship live in the link graph and embeddings, where they're handled better than any tag could.
 
-**Rule of thumb:** if you're not going to re-read the heartbeat log for `area/X` later, `area/X` shouldn't exist. If you're not going to filter by `type/Y`, `type/Y` shouldn't exist. The graph handles everything else.
+**Rule of thumb:** if you're not going to query `area/X` later, `area/X` shouldn't exist. If you're not going to filter by `type/Y`, `type/Y` shouldn't exist. The graph handles everything else.
 
 ## The three facets
 
@@ -64,16 +63,16 @@ Absence of a status tag on a task means *"queued, not yet triaged."* That's a fi
 
 ## Classification precedence
 
-The heartbeat agent applies these rules, in order. **Path beats tags beats content beats guess** — cheapest, most reliable signals first.
+When classifying blocks (manually or via the agent), apply these rules in order. **Path beats tags beats content beats guess** — cheapest, most reliable signals first.
 
 1. **Area from source path.** `journals/work/` → `area/work`. Stop if a folder rule matches.
 2. **Respect existing facet tags on the block.** If the user already tagged it, trust them.
 3. **Type from content shape.** Is it an actionable task? Tag `type/task`. Otherwise, no type tag.
 4. **Area from content, as a last resort.** Only when path and tags aren't decisive.
 5. **Status only if type is task, and only when obvious.** Default to no status tag. Never guess `parked` or `done`.
-6. **Unsure? Tag what you're confident about and flag the rest.** One solid tag > three weak ones. Ambiguous blocks go to the heartbeat log for review.
+6. **Unsure? Tag what you're confident about and flag the rest.** One solid tag > three weak ones.
 
-The heartbeat never modifies source notes — these tags are recorded in the heartbeat log for the user to apply (or not) in Obsidian.
+Agents never modify source notes — classifications are stored as `augi_tags` in block metadata via the `tag_block` MCP tool.
 
 ## Disambiguation — block `status/*` tag vs task-file `status:` field
 
@@ -89,13 +88,13 @@ They describe different things:
 - The **tag facet** on blocks is your personal, manual tracking for any `type/task` block, whether or not it ever gets dispatched as an agent task.
 - The **frontmatter field** on task files is the watcher's state machine for dispatched task files only.
 
-A single task can exist in both places at once — a block in your journal tagged `#type/task #status/active`, linked via `source_block_id` to a task file in `OpenAugi/Tasks/` with frontmatter `status: active` (meaning the agent is currently running in tmux). The two values overlap on vocabulary but not on meaning. The heartbeat agent does **not** modify block tags when it dispatches a task — source notes are never touched. You manage block-level `status/*` yourself.
+A single task can exist in both places at once — a block in your journal tagged `#type/task #status/active`, linked via `source_block_id` to a task file in `OpenAugi/Tasks/` with frontmatter `status: active` (meaning the agent is currently running in tmux). The two values overlap on vocabulary but not on meaning. The zzz dispatch hook does **not** modify block tags when it writes a task file — source notes are never touched. You manage block-level `status/*` yourself.
 
 ## `workstream:` in task frontmatter
 
 The `workstream:` field in [task-template.md](../src/openaugi/templates/task-template.md) holds the **area slug without the `area/` prefix** — e.g., `openaugi`, not `area/openaugi`.
 
-When the heartbeat writes a task file from a `zzz: task` instruction, it fills `workstream:` from the block's classified area. If you write a task file by hand, put your area slug there. If the area isn't part of your taxonomy yet, add it to `<vault>/OpenAugi/heartbeat-skill.md` first — the heartbeat reads that file every run, so changes take effect immediately.
+When the zzz dispatch hook writes a task file, you can fill `workstream:` from the block's area. If you write a task file by hand, put your area slug there.
 
 See [task-dispatch.md](task-dispatch.md) for the full dispatch flow.
 
@@ -103,10 +102,10 @@ See [task-dispatch.md](task-dispatch.md) for the full dispatch flow.
 
 - `type/idea`, `type/insight`, `type/question`, `type/reference`, `type/reflection` — use the graph and semantic search instead.
 - `status/next`, `status/should-do`, `status/someday`, `status/blocked` — the GTD priority ladder. Most people don't actually change behavior based on these distinctions.
-- `channel/*`, `action/*` — workflow tags you apply manually if at all, not heartbeat-time classifications.
+- `channel/*`, `action/*` — workflow tags you apply manually if at all, not agent-time classifications.
 
 If you later find yourself wishing you had one of these, add it back. But start lean.
 
 ## Customizing for your vault
 
-Your personal `<vault>/OpenAugi/heartbeat-skill.md` overrides the repo template. Edit the area list there, not in `src/openaugi/templates/heartbeat-skill.md`. The skill file is read every heartbeat run, so changes take effect immediately.
+Your personal `<vault>/OpenAugi/AGENT/augi-agent.md` is where you customize agent behavior. The agent reads this skill file every time it runs a task, so changes take effect immediately.

@@ -275,4 +275,4 @@ openaugi configure --vault ~/zk-backup --refresh --dry-run
   not reasoning. Cheap and fast.
 - **What to do with note_type_hints?** The LLM will likely identify `YT - *`, `PMOC - *`,
   `BOOK - *` etc. as note types. We don't use these yet but should capture them in config
-  for future features (type-aware retrieval, type-specific prompts in heartbeat agent).
+  for future features (type-aware retrieval, type-specific prompts in augi-agent).

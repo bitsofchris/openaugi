@@ -42,16 +42,13 @@ Obsidian Vault --> split --> extract --> embed --> SQLite --> MCP Server --> Cla
 
 **Query:** Claude gets MCP tools to search (semantic + keyword), traverse your knowledge graph, fetch full context, and understand how your ideas connect. It can also write notes back to your vault.
 
-**Two entry points:**
+**One command:**
 
 ```
-openaugi up     ← runs via Claude Desktop (ingest + file watcher + MCP server)
-openaugi agent  ← run in a terminal (heartbeat every 5m + task dispatch)
+openaugi up     ← ingest + file watcher + zzz dispatch + task agent + MCP server
 ```
 
-**Process:** `openaugi agent` runs heartbeat on an interval — finds new blocks since the last run, hands them to a Claude Code agent that classifies them, dispatches tasks, and honors inline `zzz:` instructions you write in your notes. Rules live in a markdown skill file you edit in Obsidian. See [Getting Started](docs/GETTING_STARTED.md).
-
-**Dispatch:** The agent also watches `OpenAugi/Tasks/` — when heartbeat writes a task file, it launches a Claude Code agent in a named tmux session automatically. Attach any time with `tmux attach -t <task_id>`. See [Task Dispatch](docs/task-dispatch.md).
+**ZZZ dispatch:** Write `zzz: <instruction>` anywhere in your notes — any capitalization works (`zzz`, `ZZZ`, `Zzz`). The file watcher detects changes, ingests the block, and writes a task file to `OpenAugi/Tasks/`. The task watcher picks it up and launches a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>`. The agent's behavior is governed by a skill file you edit in Obsidian. See [Getting Started](docs/GETTING_STARTED.md).
 
 ---
 
@@ -85,7 +82,7 @@ Most agent systems do brute-force retrieval — semantic search that stuffs the 
 
 OpenAugi's data model is two tables — `blocks` and `links`:
 
-- **Blocks** — raw content (documents, entries, tags) with deterministic identity and `augi_tags` from heartbeat classification
+- **Blocks** — raw content (documents, entries, tags) with deterministic identity and optional `augi_tags` from agent classification
 - **Links** — typed edges (split_from, tagged, links_to) that let agents traverse connections they wouldn't find through search alone
 
 Five retrieval modes — semantic, keyword, graph traversal, time-based, direct lookup — all operating on the same graph.

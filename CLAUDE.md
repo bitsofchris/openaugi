@@ -40,8 +40,24 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system map.
 - `src/openaugi/store/sqlite.py` — SQLite backend (WAL, FTS5, sqlite-vec vec0, CASCADE)
 - `src/openaugi/pipeline/runner.py` — Layer 0 orchestrator
 - `src/openaugi/pipeline/embed.py` — Layer 1 embedding step
-- `src/openaugi/mcp/server.py` — 5 MCP tools for Claude
-- `src/openaugi/cli/main.py` — typer CLI (ingest, serve, search, hubs, status)
+- `src/openaugi/pipeline/dispatch.py` — Post-ingest: zzz instructions → task files
+- `src/openaugi/agents/task_watcher.py` — Task files → tmux Claude sessions
+- `src/openaugi/mcp/server.py` — MCP tools for Claude
+- `src/openaugi/cli/main.py` — typer CLI (up, ingest, serve, search, hubs, status)
+
+# Agent skill files
+
+Agent skill files live in the user's vault at `<vault>/OpenAugi/AGENT/`.
+Templates (factory defaults for new users) live in `src/openaugi/templates/`.
+
+- `augi-agent.md` — base skill, read by every agent session
+- `research-agent.md` — research sub-agent (NotebookLM, source ingestion)
+
+**The vault copy is the source of truth.** When improving agent instructions,
+edit the vault copy directly. The repo templates are seed files copied on
+`openaugi init` — they are NOT read at runtime.
+
+To update the factory defaults for new users, copy from vault → repo templates.
 
 # Document as you go
 Plans go in docs/plans folder. Move them to docs/archive when done.
