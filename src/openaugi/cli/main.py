@@ -173,10 +173,55 @@ def init():
         env_path.chmod(0o600)  # owner-only read/write
         console.print(f"  Keys written to [cyan]{env_path}[/cyan] (chmod 600)")
 
+    # Copy agent templates to vault (only if files don't already exist)
+    import importlib.resources
+
+    vault = Path(vault_path)
+    agent_dir = vault / "OpenAugi" / "AGENT"
+    agent_dir.mkdir(parents=True, exist_ok=True)
+
+    templates = importlib.resources.files("openaugi") / "templates"
+    agent_templates = {
+        "augi-agent.md": "Base agent skill — how the agent handles tasks",
+        "research-agent.md": "Research sub-agent — NotebookLM, source ingestion",
+    }
+
+    copied = 0
+    for filename, desc in agent_templates.items():
+        dest = agent_dir / filename
+        if dest.exists():
+            console.print(f"  [dim]Skipping {filename} (already exists)[/dim]")
+            continue
+        source = templates / filename
+        dest.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+        # Strip the TEMPLATE marker from the vault copy's frontmatter
+        text = dest.read_text(encoding="utf-8")
+        text = text.replace(" (template)", "")
+        text = text.replace(
+            "  TEMPLATE — copied to <vault>/OpenAugi/AGENT/",
+            "  Live agent skill file at OpenAugi/AGENT/",
+        )
+        text = text.replace(
+            "  The vault copy is the live version the agent reads. Edit there, not here.\n"
+            "  This file is the factory default for new users.\n",
+            "  Edit this file to change agent behavior.\n",
+        )
+        text = text.replace(
+            "  The vault copy is the live version the agent reads. Edit there, not here.\n",
+            "  Edit this file to change agent behavior.\n",
+        )
+        dest.write_text(text, encoding="utf-8")
+        console.print(f"  [green]Copied {filename}[/green] — {desc}")
+        copied += 1
+
+    if copied:
+        console.print(f"\n  Agent skills at [cyan]{agent_dir}[/cyan]")
+        console.print("  Edit these in Obsidian to customize agent behavior.")
+
     console.print("\n[bold green]Setup complete![/bold green]\n")
     console.print("Next steps:")
-    console.print("  openaugi ingest          # uses default vault path from config")
-    console.print("  openaugi serve           # start MCP server for Claude")
+    console.print("  openaugi up              # sync vault + start everything")
+    console.print("  openaugi serve           # MCP server only (for Claude Desktop)")
 
 
 @app.command()

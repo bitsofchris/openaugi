@@ -59,8 +59,8 @@ block with the `tmux attach` command. It does NOT add defaults for
 ## Agent skill
 
 The agent's behavior is governed by `templates/augi-agent.md`, which is
-copied to `<vault>/OpenAugi/augi-agent.md` on init. Edit that file to
-change how the agent handles tasks — not this Python code.
+copied to `<vault>/OpenAugi/AGENT/augi-agent.md` on init. Edit the vault
+copy to change how the agent handles tasks — not this Python code.
 """
 
 from __future__ import annotations
@@ -290,7 +290,7 @@ def detect_claude() -> str:
 # ── Agent dispatch ─────────────────────────────────────────────────────────
 
 
-SKILL_FILE_RELATIVE = "OpenAugi/augi-agent.md"
+SKILL_FILE_RELATIVE = "OpenAugi/AGENT/augi-agent.md"
 
 
 def build_prompt(
