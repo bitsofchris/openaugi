@@ -25,11 +25,21 @@ See [docs/data-model.md](docs/data-model.md) for the full data model philosophy.
 
 ## Processing Layers
 
-| Layer | Cost | What | Requires |
-|-------|------|------|----------|
-| **Layer 0** | FREE | Split, tag/link extract, FTS, dedup hash | Python + SQLite |
-| **Layer 1** | ~$0 | Embed (local default), hub scoring (SQL) | sentence-transformers (local) |
-| **Heartbeat** | FREE | Per-block classification → `augi_tags` on blocks, task dispatch | Claude Code agent |
+| Layer | Plane | Cost | What | Requires |
+|-------|-------|------|------|----------|
+| **Layer 0** | Data | FREE | Split, tag/link extract, FTS, dedup hash | Python + SQLite |
+| **Layer 1** | Data | ~$0 | Embed (local default), hub scoring (SQL) | sentence-transformers (local) |
+| **Heartbeat** | Agent | FREE | Per-block classification → `augi_tags` on blocks, task dispatch | Claude Code agent |
+
+## Two Planes
+
+The codebase separates two fundamentally different kinds of work, each with its own CLI entry point:
+
+**Data plane (`pipeline/`)** — passive transforms on blocks. Ingest, embed, watch for file changes, re-rank search results. All in-process Python, no external processes. This is what `openaugi up` runs.
+
+**Agent plane (`agents/`)** — proactive orchestrators that spawn Claude Code sessions. Heartbeat finds new blocks and hands them to an agent for classification. Task dispatch watches for pending task files and launches them in tmux. This is what `openaugi agent` runs.
+
+The two planes share the store and the block/link data model but have no code dependencies between them. `pipeline/` never spawns agents; `agents/` never transforms data directly. The MCP server (`mcp/`) sits alongside both as the read/write API surface that Claude calls.
 
 ## Module Map
 
