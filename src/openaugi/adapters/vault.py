@@ -1,18 +1,10 @@
 """Obsidian vault adapter — reads .md files into blocks + links.
 
-Port of augi-engine-v1's ObsidianEntryParser into the blocks+links data model.
+Splitting is delegated to [splitter.py](splitter.py) — the shared deterministic
+primitive. This module owns file walking, wikilink resolution, and wrapping
+segments into `Block` + `Link` for the store.
 
-What stays from v1:
-- Regex patterns (H3_DATE, TAG, LINK, FILENAME_DATE, FRONTMATTER)
-- Splitting logic (_split_by_h3_dates)
-- Date resolution priority (h3 > filename > file mtime)
-- Exclude patterns, concurrent file reading
-
-What changes:
-- Output: Block + Link instead of Entry dataclass
-- Tags become Block(kind="context_block:tag") + Link(kind="groups")
-- File hashes tracked via document block content_hash
-- Block ID = hash(source_path + content_hash) — stable across reordering
+Block ID = hash(source_path + content_hash) — stable across reordering.
 """
 
 from __future__ import annotations
@@ -20,39 +12,43 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
+from openaugi.adapters import splitter as _splitter
+
+# Re-export the shared splitter helpers so existing importers (including tests)
+# keep working. All splitting logic lives in splitter.py — see its module
+# docstring and [docs/splitter.md](../../../docs/splitter.md).
+from openaugi.adapters.splitter import (
+    _code_fence_ranges,  # noqa: F401
+    _extract_filename_date,
+    _extract_links,  # noqa: F401
+    _extract_tags,  # noqa: F401
+    _extract_wk_date,
+    _extract_zzz_instructions,  # noqa: F401
+    _has_meaningful_content,  # noqa: F401
+    _parse_date,
+    _split_by_headings,  # noqa: F401
+    _split_by_qqq,  # noqa: F401
+    _strip_frontmatter,
+)
 from openaugi.model.block import Block
 from openaugi.model.link import Link
 
 logger = logging.getLogger(__name__)
 
-# ── Regex patterns ───────────────────────────────────────────────
-
-ANY_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*?)$", re.MULTILINE)
-H3_DATE_PATTERN = re.compile(r"^###\s+(\d{4}-\d{2}-\d{2})", re.MULTILINE)  # kept for reference
-TAG_PATTERN = re.compile(r"(?<!\w)#([a-zA-Z0-9_/\-]+)")
-LINK_PATTERN = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
-FILENAME_DATE_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})")
-# Two-digit year date found anywhere in the stem, e.g. "WK - 25-11-09".
-# Negative lookbehind prevents matching the last two digits of a 4-digit year
-# (e.g. "2024-03-15" should not match as "24-03-15").
-WK_DATE_PATTERN = re.compile(r"(?<!\d)(\d{2})-(\d{2})-(\d{2})(?!\d)")
-FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
-# Atomic thought delimiter: a line containing only `qqq` (case-insensitive).
-# Used to split sections into sub-blocks finer than H3 headers.
-# See docs/plans/zzz-instructions.md.
-QQQ_PATTERN = re.compile(r"^[ \t]*[qQ]{3}[ \t]*$", re.MULTILINE)
-DATAVIEW_BLOCK_PATTERN = re.compile(r"```dataview\b.*?```", re.DOTALL | re.IGNORECASE)
-# Per-block agent instructions: lines starting with `zzz` (case-insensitive),
-# optionally followed by a colon. Each match becomes one item in the
-# block's `zzz_instructions` metadata list. The prefix is stripped from
-# clean content before hashing. Multiple zzz lines in one block are kept
-# as separate instructions. See docs/plans/zzz-instructions.md.
-ZZZ_PATTERN = re.compile(r"^[ \t]*[zZ]{3}\b[:\s]*(.*?)\s*$", re.MULTILINE)
+# Re-export splitter regexes so existing importers keep working.
+ANY_HEADING_PATTERN = _splitter.ANY_HEADING_PATTERN
+TAG_PATTERN = _splitter.TAG_PATTERN
+LINK_PATTERN = _splitter.LINK_PATTERN
+FILENAME_DATE_PATTERN = _splitter.FILENAME_DATE_PATTERN
+WK_DATE_PATTERN = _splitter.WK_DATE_PATTERN
+FRONTMATTER_PATTERN = _splitter.FRONTMATTER_PATTERN
+QQQ_PATTERN = _splitter.QQQ_PATTERN
+DATAVIEW_BLOCK_PATTERN = _splitter.DATAVIEW_BLOCK_PATTERN
+ZZZ_PATTERN = _splitter.ZZZ_PATTERN
 
 DEFAULT_EXCLUDE_PATTERNS = [
     ".obsidian/**",
@@ -257,356 +253,84 @@ def _parse_file(
     )
     blocks.append(doc_block)
 
-    # Strip frontmatter, extract frontmatter tags
-    content_body, fm_tags = _strip_frontmatter(content)
+    # Delegate splitting to the shared splitter — same rules everywhere.
+    # We strip frontmatter here ourselves only to capture fm_tags; splitter
+    # would drop them otherwise.
+    body, fm_tags = _strip_frontmatter(content)
 
-    # Date from filename — 4-digit year takes priority; fall back to WK 2-digit year
     title_date = _extract_filename_date(file_path)
     wk_date = _extract_wk_date(file_path)
     effective_title_date = title_date or wk_date
     file_created = _get_file_created_time(file_path)
 
-    # Weekly reflection notes: embed as one block — heading-splitting would
-    # fragment question/answer pairs into disconnected pieces.
-    sections = [(content_body, wk_date, None)] if wk_date else _split_by_headings(content_body)
+    segments = (
+        _splitter._segments_from_single_section(body, wk_date, None)
+        if wk_date
+        else _splitter._segments_from_body(body)
+    )
 
-    for section_content, section_date_str, section_heading in sections:
-        # Each section is further split on `qqq` markers. When a section
-        # has no qqq, _split_by_qqq returns [section_content] unchanged so
-        # notes that don't use qqq behave exactly like before.
-        sub_sections = _split_by_qqq(section_content)
+    for seg in segments:
+        entry_hash = seg.raw_hash  # sha256(raw_content)[:16]
+        entry_id = Block.make_id(rel_path, entry_hash)
 
-        for sub_content in sub_sections:
-            stripped = sub_content.strip()
-            if not stripped or not _has_meaningful_content(stripped):
-                continue
+        section_date = _parse_date(seg.section_date) if seg.section_date else None
+        resolved_ts = _resolve_timestamp(section_date, effective_title_date, file_created)
 
-            # Extract `zzz` agent instructions. The hash is computed on the
-            # *raw* sub-section (including zzz) so that adding or editing a
-            # zzz instruction triggers a new block — the heartbeat agent
-            # then picks it up on the next run. The block's stored content
-            # is the clean version (zzz stripped) so downstream readers see
-            # only the note.
-            clean_content, zzz_instructions = _extract_zzz_instructions(stripped)
-            if not clean_content:
-                # Sub-block contained only zzz lines — nothing meaningful to store
-                continue
+        all_tags = _unique_ordered(fm_tags + seg.tags)
 
-            # Data block — identity keyed by raw sub-content (zzz-sensitive)
-            entry_hash = Block.hash_content(stripped)
-            entry_id = Block.make_id(rel_path, entry_hash)
+        entry_metadata: dict = {
+            "source_path": rel_path,
+            "section_date": seg.section_date,
+            "section_heading": seg.section_heading,
+            "parent_note_title": parent_title,
+            "file_created_at": file_created,
+            "granularity": seg.granularity,
+        }
+        if seg.zzz_instructions:
+            entry_metadata["zzz_instructions"] = seg.zzz_instructions
 
-            section_date = _parse_date(section_date_str) if section_date_str else None
-            resolved_ts = _resolve_timestamp(section_date, effective_title_date, file_created)
+        entry_block = Block(
+            id=entry_id,
+            kind="data_block",
+            content=seg.clean_content,
+            source="vault",
+            title=parent_title,
+            tags=all_tags,
+            block_time=resolved_ts,
+            content_hash=entry_hash,
+            metadata=entry_metadata,
+        )
+        blocks.append(entry_block)
 
-            # Extract tags (inline + frontmatter) from clean content
-            inline_tags = _extract_tags(clean_content)
-            all_tags = _unique_ordered(fm_tags + inline_tags)
+        links.append(Link(from_id=entry_id, to_id=doc_id, kind="contains"))
 
-            # Extract wikilinks from clean content
-            entry_links = _extract_links(clean_content)
-
-            entry_metadata: dict = {
-                "source_path": rel_path,
-                "section_date": section_date_str,
-                "section_heading": section_heading,
-                "parent_note_title": parent_title,
-                "file_created_at": file_created,
-            }
-            if zzz_instructions:
-                entry_metadata["zzz_instructions"] = zzz_instructions
-
-            entry_block = Block(
-                id=entry_id,
-                kind="data_block",
-                content=clean_content,
-                source="vault",
-                title=parent_title,
-                tags=all_tags,
-                block_time=resolved_ts,
-                content_hash=entry_hash,
-                metadata=entry_metadata,
-            )
-            blocks.append(entry_block)
-
-            # Link: data_block -> context_block:document (contains)
-            links.append(Link(from_id=entry_id, to_id=doc_id, kind="contains"))
-
-            # context_block:tag blocks + groups links
-            for tag_name in all_tags:
-                tag_id = Block.make_tag_id(tag_name)
-                if tag_name not in tag_blocks:
-                    tag_blocks[tag_name] = Block(
-                        id=tag_id, kind="context_block:tag", title=tag_name, source="vault"
-                    )
-                links.append(Link(from_id=entry_id, to_id=tag_id, kind="groups"))
-
-            # Wikilink links
-            for link_target in entry_links:
-                # Resolve to document block if it exists in this vault
-                target_doc_id = Block.make_document_id(_resolve_wikilink(link_target, file_index))
-                links.append(
-                    Link(
-                        from_id=entry_id,
-                        to_id=target_doc_id,
-                        kind="links_to",
-                        metadata={"target_title": link_target},
-                    )
+        for tag_name in all_tags:
+            tag_id = Block.make_tag_id(tag_name)
+            if tag_name not in tag_blocks:
+                tag_blocks[tag_name] = Block(
+                    id=tag_id, kind="context_block:tag", title=tag_name, source="vault"
                 )
+            links.append(Link(from_id=entry_id, to_id=tag_id, kind="groups"))
 
-    # Tag every data_block with its granularity — recorded once at ingest time so
-    # downstream consumers (clustering, retrieval) don't have to re-derive it.
-    #
-    # "document"       — the block IS the whole file (no heading or qqq split occurred).
-    #                    Safe to treat as a document-level semantic unit.
-    # "section"        — the file was split by a heading or qqq marker; this block is
-    #                    one intentional structural unit the author created.
-    #                    Each section is a real idea and should cluster individually.
-    # "document_chunk" — reserved for length/sentence-based chunking (future adapters,
-    #                    e.g. PDF or web importers). Not produced by the vault adapter.
-    #                    For clustering: aggregate to document level before use.
+        for link_target in seg.links:
+            target_doc_id = Block.make_document_id(_resolve_wikilink(link_target, file_index))
+            links.append(
+                Link(
+                    from_id=entry_id,
+                    to_id=target_doc_id,
+                    kind="links_to",
+                    metadata={"target_title": link_target},
+                )
+            )
+
+    # Granularity is set per-segment by the splitter, but the splitter sees
+    # each WK section independently. When the whole file yields exactly one
+    # data_block (no heading or qqq split), upgrade it to "document".
     entry_blocks = [b for b in blocks if b.kind == "data_block"]
-    granularity = "document" if len(entry_blocks) == 1 else "section"
-    for b in entry_blocks:
-        b.metadata["granularity"] = granularity
+    if len(entry_blocks) == 1:
+        entry_blocks[0].metadata["granularity"] = "document"
 
     return blocks, links, tag_blocks
-
-
-def _code_fence_ranges(content: str) -> list[tuple[int, int]]:
-    """Return (start, end) character ranges for all fenced code blocks.
-
-    Handles ``` and ~~~ fences (3+ chars). Pairs greedily: the first fence
-    opens, the next matching fence closes. An unclosed fence extends to EOF.
-    Used to exclude # comments inside code blocks from heading detection.
-    """
-    ranges: list[tuple[int, int]] = []
-    fence_re = re.compile(r"^(`{3,}|~{3,})", re.MULTILINE)
-    fence_matches = list(fence_re.finditer(content))
-    i = 0
-    while i < len(fence_matches):
-        opener = fence_matches[i]
-        fence_char = opener.group(1)[0]
-        fence_len = len(opener.group(1))
-        # Find the next closing fence: same character, same or more length
-        j = i + 1
-        while j < len(fence_matches):
-            closer = fence_matches[j]
-            if closer.group(1)[0] == fence_char and len(closer.group(1)) >= fence_len:
-                ranges.append((opener.start(), closer.end()))
-                i = j + 1
-                break
-            j += 1
-        else:
-            # Unclosed fence — treat rest of content as fenced
-            ranges.append((opener.start(), len(content)))
-            break
-    return ranges
-
-
-def _split_by_headings(content: str) -> list[tuple[str, str | None, str | None]]:
-    """Split content by any markdown heading (# through ######).
-
-    Date context flows down: the nearest ancestor heading whose text begins
-    with YYYY-MM-DD establishes the date for all subsequent sections until
-    the next date heading appears.
-
-    Heading matches inside fenced code blocks (``` or ~~~) are ignored so that
-    shell/Python # comments don't get treated as headings.
-
-    Returns list of (section_content, date_str, heading_text):
-    - section_content: text after the heading line (heading line not included)
-    - date_str: inherited YYYY-MM-DD string, or None
-    - heading_text: heading text without # prefix, or None for preamble
-    """
-    all_matches = list(ANY_HEADING_PATTERN.finditer(content))
-
-    # Filter out # lines that are inside fenced code blocks
-    fence_ranges = _code_fence_ranges(content)
-    matches = [
-        m for m in all_matches if not any(start <= m.start() < end for start, end in fence_ranges)
-    ]
-
-    if not matches:
-        return [(content, None, None)]
-
-    sections: list[tuple[str, str | None, str | None]] = []
-    current_date: str | None = None
-
-    # Preamble before the first heading
-    if matches[0].start() > 0:
-        preamble = content[: matches[0].start()]
-        if preamble.strip():
-            sections.append((preamble, None, None))
-
-    for i, match in enumerate(matches):
-        heading_text = match.group(2).strip()
-
-        # Update date context if this heading begins with a date
-        date_match = re.match(r"(\d{4}-\d{2}-\d{2})", heading_text)
-        if date_match:
-            current_date = date_match.group(1)
-
-        # Content is everything after the heading line to the next heading
-        content_start = match.end()
-        content_end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
-        section_content = content[content_start:content_end]
-
-        sections.append((section_content, current_date, heading_text))
-
-    return sections
-
-
-def _split_by_qqq(content: str) -> list[str]:
-    """Split a section on standalone `qqq` lines (case-insensitive).
-
-    Each segment is the text between two qqq markers (or between start/end
-    and a qqq marker). Empty / whitespace-only segments are NOT dropped
-    here — the caller decides, since it also needs to reject zzz-only
-    segments after zzz extraction.
-
-    If there are no qqq markers, returns [content] unchanged, so callers
-    that don't use qqq markers see the same behavior as before.
-    """
-    matches = list(QQQ_PATTERN.finditer(content))
-    if not matches:
-        return [content]
-
-    segments: list[str] = []
-    cursor = 0
-    for match in matches:
-        segments.append(content[cursor : match.start()])
-        cursor = match.end()
-    segments.append(content[cursor:])
-    return segments
-
-
-def _has_meaningful_content(text: str) -> bool:
-    """Return False if text contains only structural markdown with no real content.
-
-    Filters out sections that are purely:
-    - Horizontal rules (---)
-    - Empty checkbox items (- [ ] with no following text)
-    - Bare dashes (-)
-    - Single-character completion markers (- x)
-    - URL-only lines (no prose)
-    - Dataview query blocks
-    """
-    # Strip dataview blocks — they are Obsidian-specific queries, not content
-    cleaned = DATAVIEW_BLOCK_PATTERN.sub("", text)
-
-    for line in cleaned.splitlines():
-        s = line.strip()
-        if not s:
-            continue
-        if s == "---":
-            continue
-        if re.match(r"^-\s+\[\s*\]\s*$", s):  # empty checkbox
-            continue
-        if re.match(r"^-\s*$", s):  # bare dash
-            continue
-        if re.match(r"^-\s+[xX]\s*$", s):  # single-char completion marker
-            continue
-        if re.match(r"^-?\s*https?://\S+\s*$", s):  # URL-only line
-            continue
-        return True
-    return False
-
-
-def _strip_frontmatter(content: str) -> tuple[str, list[str]]:
-    """Remove YAML frontmatter, extract tags from it."""
-    match = FRONTMATTER_PATTERN.match(content)
-    if not match:
-        return content, []
-
-    fm_text = match.group(1)
-    body = content[match.end() :]
-
-    # Simple YAML tag extraction (avoid full yaml dependency)
-    tags: list[str] = []
-    in_tags = False
-    for line in fm_text.split("\n"):
-        stripped = line.strip()
-        if stripped.startswith("tags:"):
-            in_tags = True
-            # Handle inline tags: [tag1, tag2]
-            rest = stripped[5:].strip()
-            if rest.startswith("["):
-                tags.extend(
-                    t.strip().strip("'\"") for t in rest.strip("[]").split(",") if t.strip()
-                )
-                in_tags = False
-            continue
-        if in_tags:
-            if stripped.startswith("- "):
-                tags.append(stripped[2:].strip().strip("'\""))
-            elif stripped and not stripped.startswith("-"):
-                in_tags = False
-
-    return body, tags
-
-
-def _extract_tags(text: str) -> list[str]:
-    """Extract inline #tags, preserving order, deduped."""
-    matches = TAG_PATTERN.findall(text)
-    return _unique_ordered(matches)
-
-
-def _extract_links(text: str) -> list[str]:
-    """Extract [[wikilinks]], preserving order, deduped."""
-    matches = LINK_PATTERN.findall(text)
-    return _unique_ordered(matches)
-
-
-def _extract_zzz_instructions(text: str) -> tuple[str, list[str]]:
-    """Extract `zzz` agent instruction lines from block content.
-
-    Lines starting with `zzz` (case-insensitive, optionally `zzz: ...`) are
-    per-block directives for the heartbeat agent. They're stripped from the
-    clean content and returned as a list of instruction strings — one per
-    `zzz` line, in document order.
-
-    Multiple zzz lines in the same block are kept as separate instructions
-    so the agent can honor each independently. Bare `zzz` lines with no body
-    are dropped (nothing to act on).
-
-    Returns (clean_content, instructions) where instructions is `[]` if none.
-    """
-    instructions: list[str] = []
-
-    def _capture(match: re.Match[str]) -> str:
-        body = match.group(1).strip()
-        if body:
-            instructions.append(body)
-        return ""  # strip the line entirely
-
-    stripped = ZZZ_PATTERN.sub(_capture, text)
-    # Collapse any blank lines left behind by the strip
-    stripped = re.sub(r"\n{3,}", "\n\n", stripped).strip("\n")
-    return stripped, instructions
-
-
-def _extract_filename_date(file_path: Path) -> str | None:
-    """Extract YYYY-MM-DD from filename."""
-    match = FILENAME_DATE_PATTERN.match(file_path.stem)
-    if match:
-        return match.group(1)
-    return None
-
-
-def _extract_wk_date(file_path: Path) -> str | None:
-    """Extract YYYY-MM-DD from filenames with a 2-digit year (e.g. 'WK - 25-11-09').
-
-    Only applies when the standard 4-digit pattern doesn't match. Assumes 2000s
-    for all 2-digit years (YY → 20YY). Returns None for non-WK filenames.
-    """
-    if FILENAME_DATE_PATTERN.match(file_path.stem):
-        return None  # already handled by _extract_filename_date
-    match = WK_DATE_PATTERN.search(file_path.stem)
-    if match:
-        yy, mm, dd = match.group(1), match.group(2), match.group(3)
-        return f"20{yy}-{mm}-{dd}"
-    return None
 
 
 def _get_file_created_time(file_path: Path) -> str | None:
@@ -632,15 +356,6 @@ def _resolve_timestamp(
     if file_created:
         return file_created
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _parse_date(date_str: str) -> str | None:
-    """Validate YYYY-MM-DD string."""
-    try:
-        datetime.strptime(date_str, "%Y-%m-%d")
-        return date_str
-    except (ValueError, TypeError):
-        return None
 
 
 def _build_file_index(files: list[Path], vault_root: Path) -> dict[str, str]:
