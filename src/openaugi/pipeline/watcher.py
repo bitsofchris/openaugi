@@ -83,7 +83,7 @@ def _run_ingest_cycle(
     config: dict[str, Any],
     changed_paths: set[str],
 ) -> None:
-    """Run one Layer 0 + Layer 1 cycle."""
+    """Run one Layer 0 + Layer 1 cycle, then dispatch any zzz instructions."""
     from openaugi.pipeline.runner import run_layer0
     from openaugi.store.sqlite import SQLiteStore
 
@@ -115,6 +115,16 @@ def _run_ingest_cycle(
         except Exception as e:
             logger.warning(f"Embedding skipped: {e}")
             logger.info("Blocks saved without embeddings — will retry on next cycle")
+
+        # Post-ingest: dispatch zzz instructions as task files
+        new_blocks = result.get("new_data_blocks", [])
+        if new_blocks:
+            try:
+                from openaugi.pipeline.dispatch import dispatch_zzz_blocks
+
+                dispatch_zzz_blocks(new_blocks, vault_path)
+            except Exception as e:
+                logger.error(f"ZZZ dispatch failed: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Ingest cycle failed: {e}", exc_info=True)
     finally:

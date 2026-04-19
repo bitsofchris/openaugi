@@ -154,6 +154,9 @@ def run_layer0(
     stats = store.get_stats()
     logger.info(f"Store: {stats['total_blocks']} blocks, {stats['total_links']} links")
 
+    # Collect newly added data_block blocks for post-ingest hooks (e.g. zzz dispatch)
+    new_data_blocks = [b for b in blocks_to_insert if b.kind == "data_block"]
+
     return {
         "blocks_inserted": len(blocks_to_insert),
         "blocks_kept": blocks_kept,
@@ -163,6 +166,7 @@ def run_layer0(
         "files_changed": len(doc_blocks),
         "files_deleted": len(deleted_paths),
         "stats": stats,
+        "new_data_blocks": new_data_blocks,
     }
 
 

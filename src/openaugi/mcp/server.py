@@ -571,7 +571,7 @@ def tag_block(block_id: str, augi_tags: list[str]) -> str:
 
     Writes augi_tags to block.metadata["augi_tags"]. Overwrites any prior
     classification — call once per block after classifying. Used by the
-    heartbeat agent to persist area/type/status classifications.
+    augi-agent to persist area/type/status classifications.
 
     augi_tags: list of tag strings, e.g. ["area/work", "type/task", "status/active"]
     """
