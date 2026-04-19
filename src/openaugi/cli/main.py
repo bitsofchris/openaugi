@@ -261,6 +261,66 @@ def ingest(
         store.close()
 
 
+@app.command()
+def split(
+    file: str = typer.Argument(..., help="Path to a markdown file to split"),
+    format: str = typer.Option("json", "--format", "-f", help="Output format: json | md | ndjson"),
+):
+    """Split a markdown file into blocks — deterministic, no DB, no LLM.
+
+    Prints segments to stdout using the same rules as `openaugi ingest`. Useful
+    from agents, skills, scripts, or cron jobs that need "give me the blocks
+    OpenAugi would see in this file" without touching a store.
+
+    Formats:
+      json    — single JSON object: {source_path, doc_hash, filename_date,
+                frontmatter_tags, segments: [...]}
+      ndjson  — one JSON line per segment (stream-friendly)
+      md      — human-readable markdown, one section per segment
+    """
+    import json as _json
+    import sys
+
+    from openaugi.adapters.splitter import split_file
+
+    result = split_file(file)
+
+    if format == "json":
+        sys.stdout.write(result.model_dump_json(indent=2) + "\n")
+        return
+    if format == "ndjson":
+        for seg in result.segments:
+            sys.stdout.write(_json.dumps(seg.model_dump(), ensure_ascii=False) + "\n")
+        return
+    if format == "md":
+        sys.stdout.write(f"# {result.source_path}\n")
+        sys.stdout.write(
+            f"_{len(result.segments)} segments · doc_hash={result.doc_hash}"
+            + (f" · date={result.filename_date}" if result.filename_date else "")
+            + "_\n\n"
+        )
+        for i, seg in enumerate(result.segments, 1):
+            head = f"Block {i}"
+            if seg.section_heading:
+                head += f" — {seg.section_heading}"
+            if seg.section_date:
+                head += f" ({seg.section_date})"
+            sys.stdout.write(f"## {head}\n\n{seg.clean_content}\n\n")
+            if seg.zzz_instructions:
+                sys.stdout.write(f"**zzz:** {' | '.join(seg.zzz_instructions)}\n\n")
+            meta = []
+            if seg.tags:
+                meta.append("tags: " + ", ".join(f"#{t}" for t in seg.tags))
+            if seg.links:
+                meta.append("links: " + ", ".join(f"[[{ln}]]" for ln in seg.links))
+            if meta:
+                sys.stdout.write("_" + " · ".join(meta) + "_\n\n")
+        return
+
+    console.print(f"[red]Unknown format: {format}[/red] (use json | ndjson | md)")
+    raise typer.Exit(1)
+
+
 @app.command(name="re-embed")
 def re_embed(
     db: str | None = typer.Option(None, "--db", help="Database path"),
