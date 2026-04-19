@@ -97,9 +97,19 @@ def _run_embed_batch(
     total = 0
     start = time.time()
 
+    skipped_empty = 0
     for i in range(0, len(blocks), batch_size):
-        batch = blocks[i : i + batch_size]
-        texts = [model.truncate(text_fn(b)) for b in batch]  # type: ignore[operator]
+        raw_batch = blocks[i : i + batch_size]
+        pairs = [(b, model.truncate(text_fn(b))) for b in raw_batch]  # type: ignore[operator]
+        # Drop blocks whose cleaned text is empty — OpenAI rejects empty inputs
+        # and fails the entire batch. Common for blocks that were only an image
+        # embed or a bare URL.
+        filtered = [(b, t) for b, t in pairs if t and t.strip()]
+        skipped_empty += len(pairs) - len(filtered)
+        if not filtered:
+            continue
+        batch = [b for b, _ in filtered]
+        texts = [t for _, t in filtered]
         block_ids = [b.id for b in batch]
 
         try:
@@ -128,6 +138,8 @@ def _run_embed_batch(
         logger.info(f"Embedded {total} / {total_to_embed}")
 
     elapsed = time.time() - start
+    if skipped_empty:
+        logger.info(f"Skipped {skipped_empty} blocks with empty cleaned text")
     logger.info(f"Done embedding {total} blocks in {elapsed:.1f}s")
     return total
 

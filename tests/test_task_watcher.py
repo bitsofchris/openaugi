@@ -327,6 +327,75 @@ class TestWriteContextFile:
         assert "TASK-y" in path.name
 
 
+# ── tmux argv construction ────────────────────────────────────────────────
+
+
+class TestBuildTmuxArgv:
+    """`build_tmux_argv` must produce a pure argv list — no shell, no
+    `$(cat …)`, no quoting dance. The prompt reaches claude as one argv
+    element regardless of its content.
+    """
+
+    def test_no_shell_metacharacters_in_argv(self, tmp_path: Path):
+        # A prompt packed with every character that would break shell quoting.
+        nasty = "quotes \" and ' and $(rm -rf /) and `whoami` and ; && || newlines\nin here"
+        argv = tw.build_tmux_argv(
+            "/usr/bin/tmux", "/usr/local/bin/claude", "SESSION", nasty, working_dir=None
+        )
+        # The prompt is one discrete element — not interpolated into a shell string.
+        assert nasty in argv
+        # No OTHER argv element should contain `$(`, which would indicate the
+        # old cat-substitution approach has sneaked back in. (The prompt itself
+        # is allowed to contain `$(` — that's the whole point: it reaches claude
+        # intact instead of being interpreted by a shell.)
+        non_prompt = [a for a in argv if a != nasty]
+        assert not any("$(" in a for a in non_prompt)
+        assert not any(a in ("sh", "bash", "zsh", "-c") for a in non_prompt)
+
+    def test_execs_claude_directly_after_session_flags(self):
+        argv = tw.build_tmux_argv(
+            "/usr/bin/tmux", "/opt/claude", "TASK-x", "do the thing", working_dir=None
+        )
+        # Structure: tmux new-session -d -s NAME [--] claude ...prompt
+        assert argv[0] == "/usr/bin/tmux"
+        assert argv[1] == "new-session"
+        assert "-d" in argv
+        assert "/opt/claude" in argv
+        # The prompt must be the final argv element so no flags consume it.
+        assert argv[-1] == "do the thing"
+
+    def test_working_dir_added_only_if_valid(self, tmp_path: Path):
+        real = str(tmp_path)
+        argv = tw.build_tmux_argv("tmux", "claude", "S", "p", working_dir=real)
+        # `-c <cwd>` should appear before the command
+        assert "-c" in argv
+        assert real in argv
+
+        # Nonexistent dir is silently dropped (don't crash dispatch on a typo)
+        argv2 = tw.build_tmux_argv("tmux", "claude", "S", "p", working_dir="/nope/nope")
+        assert "-c" not in argv2
+
+    def test_settings_json_carries_allowed_tools(self):
+        """Permissions go through `--settings` JSON, not `--allowedTools`.
+
+        The `--allowedTools` flag causes the positional prompt to load as an
+        unsubmitted draft in the TUI — tasks never start. `--settings` has the
+        same effect on permissions without breaking auto-submit. See the
+        ALLOWED_TOOLS comment in task_watcher.py.
+        """
+        import json as _json
+
+        argv = tw.build_tmux_argv("tmux", "claude", "S", "p", working_dir=None)
+        assert "--allowedTools" not in argv, (
+            "--allowedTools breaks prompt auto-submit in Claude Code v2.1+; "
+            "use --settings with permissions.allow instead"
+        )
+        assert "--settings" in argv
+        i = argv.index("--settings")
+        settings = _json.loads(argv[i + 1])
+        assert settings["permissions"]["allow"] == tw.ALLOWED_TOOLS
+
+
 # ── Dispatch (mocked launch) ───────────────────────────────────────────────
 
 
@@ -336,10 +405,10 @@ class TestDispatchTask:
 
         calls: dict = {}
 
-        def fake_launch(tmux, claude, session_name, context_file, working_dir=None):
+        def fake_launch(tmux, claude, session_name, prompt, working_dir=None):
             calls["session"] = session_name
             calls["working_dir"] = working_dir
-            calls["context_exists"] = Path(context_file).exists()
+            calls["prompt"] = prompt
             return True
 
         monkeypatch.setattr(tw, "launch_tmux", fake_launch)
@@ -361,7 +430,8 @@ class TestDispatchTask:
         assert task_id.startswith("TASK-")
         assert calls["session"] == task_id
         assert calls["working_dir"] == "/tmp"
-        assert calls["context_exists"] is True
+        assert task_id in calls["prompt"]
+        assert "work work work" in calls["prompt"]
 
         # The original file should have been renamed to match the task_id
         new_file = tmp_path / f"{task_id}.md"
@@ -425,10 +495,10 @@ class TestTaskTemplateContract:
 
         calls: dict = {}
 
-        def fake_launch(tmux, claude, session_name, context_file, working_dir=None):
+        def fake_launch(tmux, claude, session_name, prompt, working_dir=None):
             calls["session"] = session_name
             calls["working_dir"] = working_dir
-            calls["prompt"] = Path(context_file).read_text()
+            calls["prompt"] = prompt
             return True
 
         monkeypatch.setattr(tw, "launch_tmux", fake_launch)

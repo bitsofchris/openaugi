@@ -16,9 +16,10 @@ Workflow:
      that maps to a path via `OpenAugi/Repos.md`'s `repos:` dict.
   5. A prompt is built: the augi-agent skill file (source of truth for
      agent behavior) + task_id + task body + linked notes.
-  6. A detached tmux session is created (with optional `-c <cwd>`), the
-     shell is allowed to settle, and the claude CLI is launched via
-     send-keys so the user's login-shell PATH and aliases apply.
+  6. A detached tmux session is created that execs the claude CLI directly
+     (no shell middleman). The prompt is passed as an argv element, so
+     there is no shell quoting or startup race. `remain-on-exit` keeps
+     the pane around so the user can attach later and see the transcript.
 
 No LLM calls in this module. Dispatch only.
 
@@ -65,10 +66,10 @@ copy to change how the agent handles tasks — not this Python code.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
-import shlex
 import subprocess
 import tempfile
 import time
@@ -102,36 +103,43 @@ CLAUDE_SEARCH_PATHS = [
     Path("/opt/homebrew/bin/claude"),
 ]
 
-# Temp dir for prompt context files passed to claude via `$(cat ...)`
+# Temp dir for prompt context files (kept for debugging / audit; the prompt
+# is passed to claude as argv, not read from this file at runtime).
 CONTEXT_DIR = Path(tempfile.gettempdir()) / "openaugi-tasks"
 
 # Pre-approved tools for the agent session — avoids permission prompts in tmux.
 # Scoped to standard file ops + all openaugi MCP tools. Does NOT grant Bash
-# (agent can still request it; user approves once per session if needed).
-ALLOWED_TOOLS = ",".join(
-    [
-        "Read",
-        "Write",
-        "Edit",
-        "Glob",
-        "Grep",
-        "mcp__openaugi__search",
-        "mcp__openaugi__get_context",
-        "mcp__openaugi__get_block",
-        "mcp__openaugi__get_blocks",
-        "mcp__openaugi__get_related",
-        "mcp__openaugi__traverse",
-        "mcp__openaugi__recent",
-        "mcp__openaugi__tag_block",
-        "mcp__openaugi__write_document",
-        "mcp__openaugi__write_snip",
-        "mcp__openaugi__write_thread",
-        "mcp__openaugi__list_streams",
-        "mcp__openaugi__get_stream_context",
-        "mcp__openaugi__make_stream",
-        "mcp__openaugi__update_stream",
-    ]
-)
+# (agent can still request it; auto mode will approve safe ones).
+#
+# NOTE: passed to claude via `--settings '{"permissions":{"allow":[...]}}'`
+# rather than `--allowedTools`. The `--allowedTools` flag causes the positional
+# prompt to load as a *draft* in the TUI (requires user Enter), which
+# stranded dispatched tasks in an unsubmitted state. `--settings` has the
+# same effect on permissions but leaves the auto-submit behavior intact.
+ALLOWED_TOOLS = [
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep",
+    "mcp__openaugi__search",
+    "mcp__openaugi__get_context",
+    "mcp__openaugi__get_block",
+    "mcp__openaugi__get_blocks",
+    "mcp__openaugi__get_related",
+    "mcp__openaugi__traverse",
+    "mcp__openaugi__recent",
+    "mcp__openaugi__tag_block",
+    "mcp__openaugi__write_document",
+    "mcp__openaugi__write_snip",
+    "mcp__openaugi__write_thread",
+    "mcp__openaugi__list_streams",
+    "mcp__openaugi__get_stream_context",
+    "mcp__openaugi__make_stream",
+    "mcp__openaugi__update_stream",
+]
+
+SETTINGS_JSON = json.dumps({"permissions": {"allow": ALLOWED_TOOLS}})
 
 
 # ── Frontmatter helpers ────────────────────────────────────────────────────
@@ -354,51 +362,61 @@ def build_prompt(
 
 
 def write_context_file(task_id: str, prompt: str) -> Path:
-    """Write the prompt to a temp file so claude can read it via `$(cat ...)`."""
+    """Write the prompt to a temp file for debugging / audit.
+
+    The prompt is passed to claude as argv (see `launch_tmux`). This file is
+    not read at runtime — it exists so you can inspect what was sent if a
+    task behaves unexpectedly.
+    """
     CONTEXT_DIR.mkdir(parents=True, exist_ok=True)
     path = CONTEXT_DIR / f"task-{task_id}-context.md"
     path.write_text(prompt)
     return path
 
 
-def wait_for_shell_ready(tmux: str, session_name: str, max_attempts: int = 10) -> None:
-    """Poll a tmux pane until the shell prompt appears, with a short cap."""
-    for _ in range(max_attempts):
-        time.sleep(0.2)
-        try:
-            result = subprocess.run(
-                [tmux, "capture-pane", "-t", session_name, "-p"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if result.stdout.strip():
-                return
-        except subprocess.SubprocessError:
-            pass
-    # Proceed anyway — better than hanging forever.
+def build_tmux_argv(
+    tmux: str,
+    claude: str,
+    session_name: str,
+    prompt: str,
+    working_dir: str | None = None,
+) -> list[str]:
+    """Build the argv for `tmux new-session` that execs claude directly.
+
+    Returns a pure argv list — no shell involved, no quoting concerns.
+    The prompt is one argv element and reaches claude intact.
+    """
+    cmd = [tmux, "new-session", "-d", "-s", session_name]
+    if working_dir and os.path.isdir(working_dir):
+        cmd += ["-c", working_dir]
+    cmd += [
+        claude,
+        "--permission-mode",
+        "auto",
+        "--settings",
+        SETTINGS_JSON,
+        prompt,
+    ]
+    return cmd
 
 
 def launch_tmux(
     tmux: str,
     claude: str,
     session_name: str,
-    context_file: Path,
+    prompt: str,
     working_dir: str | None = None,
 ) -> bool:
-    """Launch claude in a named detached tmux session.
+    """Launch claude in a named detached tmux session, no shell middleman.
 
-    Strategy (same as v1 / the openaugi-obsidian-plugin):
-      1. Create a detached session with a login shell (no command yet).
-      2. Wait for the shell prompt to appear.
-      3. Send the claude command via send-keys, using `$(cat file)` so the
-         prompt is not limited by argv length.
+    `tmux new-session [args...] command` forks/execs `command` directly —
+    no zsh startup, no `$(cat …)`, no send-keys race. The prompt is an
+    argv element, so it reaches claude intact regardless of shell quoting.
+    `remain-on-exit` is set so the pane persists after claude finishes,
+    letting the user attach later and see the transcript.
 
-    This ensures the user's PATH/aliases are available and the session
-    survives if the command exits. Returns True if launched, False if the
-    session already existed.
+    Returns True if launched, False if the session already existed.
     """
-    # Check if session already exists
     result = subprocess.run(
         [tmux, "has-session", "-t", session_name],
         capture_output=True,
@@ -408,19 +426,12 @@ def launch_tmux(
         logger.warning("tmux session %s already exists, skipping", session_name)
         return False
 
-    new_cmd = [tmux, "new-session", "-d", "-s", session_name]
-    if working_dir and os.path.isdir(working_dir):
-        new_cmd += ["-c", working_dir]
-    subprocess.run(new_cmd, check=True)
+    argv = build_tmux_argv(tmux, claude, session_name, prompt, working_dir=working_dir)
+    subprocess.run(argv, check=True)
 
-    wait_for_shell_ready(tmux, session_name)
-
-    ctx = shlex.quote(str(context_file))
-    allowed = shlex.quote(ALLOWED_TOOLS)
-    agent_cmd = f'{claude} --permission-mode auto --allowedTools {allowed} "$(cat {ctx})"'
     subprocess.run(
-        [tmux, "send-keys", "-t", session_name, agent_cmd, "Enter"],
-        check=True,
+        [tmux, "set-option", "-t", session_name, "remain-on-exit", "on"],
+        check=False,
     )
     return True
 
@@ -498,9 +509,9 @@ def dispatch_task(
         work_dir = str(vault_path)
         logger.info("Working dir: %s (vault default)", work_dir)
 
-    ctx_file = write_context_file(task_id, prompt)
+    write_context_file(task_id, prompt)  # debug/audit only; not read at runtime
 
-    launched = launch_tmux(tmux, claude, session_name, ctx_file, working_dir=work_dir)
+    launched = launch_tmux(tmux, claude, session_name, prompt, working_dir=work_dir)
     if launched:
         logger.info("Launched tmux session: %s", session_name)
         return task_id
