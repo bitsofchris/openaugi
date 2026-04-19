@@ -173,7 +173,11 @@ def _segments_from_single_section(
         if not stripped or not _has_meaningful_content(stripped):
             continue
         clean, zzz = _extract_zzz_instructions(stripped)
-        if not clean:
+        # Drop only if the sub has no content AND no zzz directive. A
+        # zzz-only block (header + just a `zzz:` line) is still meaningful
+        # — it's a directive to the agent, so we keep the segment so
+        # dispatch can fire.
+        if not clean and not zzz:
             continue
         results.append(
             Segment(

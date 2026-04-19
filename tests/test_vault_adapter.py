@@ -721,13 +721,18 @@ class TestEdgeCases:
             "also tag as openaugi/design",
         ]
 
-    def test_zzz_only_block_skipped(self, tmp_path: Path):
-        """A section containing only a zzz line produces no entry."""
+    def test_zzz_only_block_kept_for_dispatch(self, tmp_path: Path):
+        """A section containing only a zzz line IS still a block — the
+        directive itself is meaningful, so dispatch can fire on it.
+        """
         note = tmp_path / "scratch.md"
         note.write_text("zzz just a note to self\n", encoding="utf-8")
         blocks, _ = parse_vault(tmp_path)
         entries = [b for b in blocks if b.kind == "data_block"]
-        assert len(entries) == 0
+        assert len(entries) == 1
+        assert entries[0].metadata.get("zzz_instructions") == ["just a note to self"]
+        # Clean content is empty — the zzz line WAS the block
+        assert entries[0].content == ""
 
     def test_zzz_changes_block_identity(self, tmp_path: Path):
         """Adding a zzz to a block changes its content_hash so it shows up as new."""

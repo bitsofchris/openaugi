@@ -69,10 +69,18 @@ class TestSplitText:
         assert "Empty" not in headings
         assert headings == ["Real", "Real2"]
 
-    def test_zzz_only_block_dropped(self):
+    def test_zzz_only_block_kept_as_directive(self):
+        """A sub-section containing only a zzz directive is still meaningful —
+        the directive itself IS the block, dispatched as an agent task."""
         segs = split_text("# H\nreal\nqqq\nzzz just a directive\nqqq\nalso real")
-        # middle sub-section has no content after zzz-strip — should drop
-        assert [s.clean_content for s in segs] == ["real", "also real"]
+        # All three subs survive: "real", zzz-only (empty clean), "also real"
+        cleans = [s.clean_content for s in segs]
+        assert "real" in cleans
+        assert "also real" in cleans
+        # zzz-only segment has empty clean_content but carries the directive
+        zzz_only = [s for s in segs if not s.clean_content]
+        assert len(zzz_only) == 1
+        assert zzz_only[0].zzz_instructions == ["just a directive"]
 
     def test_frontmatter_stripped_in_split_text(self):
         segs = split_text("---\ntags: [a, b]\n---\n# H\nhello")
