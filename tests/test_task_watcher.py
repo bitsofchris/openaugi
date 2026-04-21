@@ -284,6 +284,43 @@ class TestScanPending:
         assert good in pending
 
 
+class TestReapDoneSessions:
+    def test_kills_only_done_with_live_session(self, tmp_path: Path, monkeypatch):
+        (tmp_path / "done.md").write_text(
+            "---\nstatus: done\ntmux_session: S-done\n---\n", encoding="utf-8"
+        )
+        (tmp_path / "active.md").write_text(
+            "---\nstatus: active\ntmux_session: S-active\n---\n", encoding="utf-8"
+        )
+        (tmp_path / "done-dead.md").write_text(
+            "---\nstatus: done\ntmux_session: S-gone\n---\n", encoding="utf-8"
+        )
+        (tmp_path / "done-nosession.md").write_text("---\nstatus: done\n---\n", encoding="utf-8")
+
+        live = {"S-done", "S-active"}
+        killed: list[str] = []
+
+        def fake_run(argv, check=False, capture_output=False):
+            import subprocess
+
+            if argv[1] == "has-session":
+                rc = 0 if argv[3] in live else 1
+                return subprocess.CompletedProcess(argv, rc, b"", b"")
+            if argv[1] == "kill-session":
+                killed.append(argv[3])
+                live.discard(argv[3])
+                return subprocess.CompletedProcess(argv, 0, b"", b"")
+            return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+        monkeypatch.setattr(tw.subprocess, "run", fake_run)
+        n = tw.reap_done_sessions(tmp_path, "tmux")
+        assert n == 1
+        assert killed == ["S-done"]
+
+    def test_missing_dir_is_noop(self, tmp_path: Path):
+        assert tw.reap_done_sessions(tmp_path / "nope", "tmux") == 0
+
+
 # ── Prompt building ────────────────────────────────────────────────────────
 
 
