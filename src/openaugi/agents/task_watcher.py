@@ -84,6 +84,7 @@ DEFAULT_TASKS_FOLDER = "OpenAugi/Tasks"
 DEFAULT_REPOS_NOTE = "OpenAugi/Repos.md"
 DEFAULT_POLL_INTERVAL = 5.0  # seconds between scans
 DEFAULT_SETTLE_TIME = 30.0  # seconds a file must be unchanged before processing
+DEFAULT_REAP_INTERVAL = 3600.0  # seconds between reaps of tmux sessions for done tasks
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
@@ -519,12 +520,47 @@ def dispatch_task(
     return None
 
 
+def reap_done_sessions(tasks_dir: Path, tmux: str) -> int:
+    """Kill tmux sessions for tasks whose file is `status: done`.
+
+    The Claude conversation is preserved on disk and can be resumed later via
+    `claude --resume <session-id>` — only the tmux wrapper is torn down.
+    Returns the count killed.
+    """
+    if not tasks_dir.exists():
+        return 0
+    killed = 0
+    for f in tasks_dir.glob("*.md"):
+        try:
+            fm, _ = parse_note(f.read_text())
+        except Exception as e:
+            logger.error("Error reading %s: %s", f.name, e)
+            continue
+        if fm.get("status") != "done":
+            continue
+        session = fm.get("tmux_session")
+        if not session:
+            continue
+        has = subprocess.run(
+            [tmux, "has-session", "-t", session],
+            check=False,
+            capture_output=True,
+        )
+        if has.returncode != 0:
+            continue
+        subprocess.run([tmux, "kill-session", "-t", session], check=False)
+        logger.info("Reaped tmux session for done task: %s", session)
+        killed += 1
+    return killed
+
+
 def watch_tasks(
     vault_path: str | Path,
     tasks_folder: str = DEFAULT_TASKS_FOLDER,
     repos_note: str = DEFAULT_REPOS_NOTE,
     poll_interval: float = DEFAULT_POLL_INTERVAL,
     settle: float = DEFAULT_SETTLE_TIME,
+    reap_interval: float = DEFAULT_REAP_INTERVAL,
 ) -> None:
     """Watch `<vault>/<tasks_folder>/` for pending tasks and dispatch them.
 
@@ -549,6 +585,7 @@ def watch_tasks(
     logger.info("Waiting for tasks with status: pending...")
 
     processed: set[str] = set()
+    last_reap_at = 0.0
 
     while True:
         try:
@@ -562,6 +599,14 @@ def watch_tasks(
                 except Exception as e:
                     logger.error("Dispatch failed for %s: %s", filepath.name, e)
                 processed.add(key)
+
+            now = time.time()
+            if now - last_reap_at >= reap_interval:
+                try:
+                    reap_done_sessions(tasks_dir, tmux)
+                except Exception as e:
+                    logger.error("Reap failed: %s", e)
+                last_reap_at = now
 
             time.sleep(poll_interval)
 
