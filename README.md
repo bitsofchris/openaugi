@@ -14,7 +14,7 @@ You've built years of thinking in Obsidian, Google, ChatGPT — ideas, decisions
 
 **OpenAugi fixes this.** It turns your personal data vault turned into a knowledge graph that agents can search, traverse, and understand — semantically, by keyword, by tag, by time. One SQLite file. One MCP server. Everything stays on your machine.
 
-> **Status:** Alpha. `pip install openaugi` and go. Evolving — expect rough edges. [MIT licensed.](LICENSE)
+> **Status:** Alpha. `pip install openaugi` and go. Evolving — expect rough edges. [Apache-2.0 licensed.](LICENSE)
 
 ---
 
@@ -70,7 +70,7 @@ This started as a personal tool to make Claude useful with a large Obsidian vaul
 ## Values
 
 - **Privacy as foundation** — your data stays on your machine
-- **Open by default** — MIT licensed, all code public
+- **Open by default** — Apache-2.0 licensed, all code public
 - **Augment, stay human** — amplify your thinking, don't replace it
 - **Composable ecosystem** — building blocks that work together
 
@@ -131,4 +131,4 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system map.
 
 ## License
 
-MIT
+Apache-2.0
