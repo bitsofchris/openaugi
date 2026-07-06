@@ -5,6 +5,23 @@ description: The v1 review/maintenance pass — route new blocks to containers, 
 
 # Review Pass V1 — route blocks, materialize views
 
+## STATUS / LEFT OFF (update this section every session)
+
+**As of 2026-07-06 (end of build day):** SHIPPED and run once. All
+implementation checkboxes below are done: high-water mark + review-state MCP
+tools, `route_block`, `write_document(overwrite)`, review-pass + distill-lens
+skills (vault + templates), streams/snips removed (merged cleanup branch).
+Run #1 processed 256 blocks → 274 routed_to links, 7+ views, Dashboard
+nominations answered and executed (3 new containers: trading MOC, Health,
+Fiction). View shape settled: recap + remote-only log, two refresh tiers.
+
+**NEXT:** (1) Chris: add `OpenAugi/Views/` to Obsidian Excluded Files.
+(2) Run pass #2 — any day, Sunday 7/12 floor — **this is the DoD test**
+(new-container views generate then; trading MOC was renamed, regenerate its
+view under the new title and delete the stale one). (3) After DoD passes:
+`openaugi review` CLI / plugin command (task-file trigger), then
+[lens-framework.md](lens-framework.md) when a third lens diverges.
+
 **Decided:** 2026-07-06 (session with Claude). Supersedes the Streams subsystem as the
 write-back mechanism. Companion vault docs: `OpenAugi/Docs/OpenAugi - The Picture.md`,
 `OpenAugi/Docs/OpenAugi - Design Brief - The Note-Thread Context Graph.md`,

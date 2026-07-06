@@ -121,6 +121,10 @@ the user to configure:**
 So the container note reads as one surface: the user's optional head/pins →
 their in-place journal → the transcluded view (recap + remote feed).
 
+If a container note was **renamed**, regenerate its view under the new
+title and delete the stale `View - <old title>.md` — views are caches;
+deleting them is always safe.
+
 A view exists to be **embedded, never visited** — one transclusion
 (`![[View - ...]]`) per container note. When YOU create a new container note
 (promotion), include the transclusion line in it at birth. Suggest the user

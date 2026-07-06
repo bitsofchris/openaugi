@@ -132,10 +132,37 @@ history is harvested incrementally, pulled by live threads (promotion flow)
 or one topic at a time (distill lens). Agent instructions:
 `<vault>/OpenAugi/AGENT/distill-lens.md`.
 
+## Obsidian setup (one-time)
+
+1. **Transclude each container's view** into the container note:
+   `![[View - <container title>]]` (agent-created containers get this at
+   birth; hand-made ones need the paste once). The Dashboard can be embedded
+   too — e.g. into a home/Current-Focus note via `![[View - Dashboard]]`.
+2. **Hide the Views folder from search/switcher:** Settings → Files and links
+   → Excluded files → add `OpenAugi/Views/`. Views remain browsable in the
+   file explorer, but stop appearing in Quick Switcher and search — they
+   exist to be embedded, not visited. Invariant: **every view is transcluded
+   somewhere**; a view with no embed home is a smell the pass should flag.
+3. **Renames:** if a container note is renamed, the next pass regenerates its
+   view under the new title and deletes the stale view file (views are
+   caches — deleting them is always safe).
+
+## Triggering — the task file is the API
+
+Any of these fire a pass; they all converge on the same mechanism:
+
+- Say **"run the review pass"** / **"process the dashboard"** in a Claude
+  session with the openaugi MCP.
+- Write `zzz: run the review pass` in any note — dispatch writes a task file
+  to `OpenAugi/Tasks/`, the task watcher launches a tmux Claude session.
+- (Planned) `openaugi review` CLI and an **Obsidian plugin command/button** —
+  both just write that same task file. Anything that can create a markdown
+  file can trigger the system; the task-file contract is the integration
+  point (this is also how mobile will trigger it later).
+
 ## What the human does
 
-- **One-time:** add `![[View - <AMOC name>]]` transclusions to each area MOC's
-  top matter, so the MOC renders its derived head in place.
+- **One-time:** the Obsidian setup above.
 - **Weekly:** read `View - Dashboard.md`; answer the gravity nominations
   (inline note or zzz) — that's the entire review burden.
 - **Anytime:** correct a bad route by telling the agent, or with an `aaa:`
