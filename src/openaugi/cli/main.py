@@ -185,6 +185,7 @@ def init():
         "augi-agent.md": "Base agent skill — how the agent handles tasks",
         "research-agent.md": "Research sub-agent — NotebookLM, source ingestion",
         "review-pass.md": "Review pass — route blocks, regenerate derived views",
+        "distill-lens.md": "Distill lens — on-command topic distillation with provenance",
     }
 
     copied = 0

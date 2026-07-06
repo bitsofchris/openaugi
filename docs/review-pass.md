@@ -96,6 +96,25 @@ openaugi MCP server: say **"run the review pass"** (or dispatch
 Cadence: manual, attached to the Sunday weekly plan. Schedule only after it's
 boringly reliable.
 
+## Lenses: views vs. distillations
+
+A **lens** = an intent applied to a scope, producing a derived artifact.
+Two lens families exist, with different trust levels:
+
+| | View (review pass) | Distillation (distill lens) |
+|---|---|---|
+| Trigger | Scheduled / "run the review pass" | On command: "distill X" |
+| Scope | Container's routed blocks since last run | Topic (agentic search + links) or user-selected context |
+| Output | `OpenAugi/Views/` — regenerable cache, no review | One note in `OpenAugi/Notes|Research/`, `#status/needs-review`, wikilinked provenance |
+| Lifecycle | Overwritten every run | Created once, user reviews, graduates toward their curated notes |
+
+Default is neither: **just-in-time distillation in chat** (retrieve + answer,
+persist nothing). Persist a distillation only on reuse — the signal is
+re-deriving the same synthesis repeatedly. No vault-wide batch distillation:
+history is harvested incrementally, pulled by live threads (promotion flow)
+or one topic at a time (distill lens). Agent instructions:
+`<vault>/OpenAugi/AGENT/distill-lens.md`.
+
 ## What the human does
 
 - **One-time:** add `![[View - <AMOC name>]]` transclusions to each area MOC's
