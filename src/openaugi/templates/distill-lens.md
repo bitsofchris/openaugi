@@ -49,7 +49,7 @@ is repetition: re-deriving the same synthesis a third time means save it once.
 4. **Write ONE note** via `write_document` to `OpenAugi/Notes/` (concepts)
    or `OpenAugi/Research/` (topic research):
    - frontmatter description = the intent it answers
-   - `#status/needs-review` tag in the body
+   - `#human-review` tag in the body (the user's agent-output convention)
    - wikilinks to every source note (these become graph edges at ingest)
    - footer: `*Distilled YYYY-MM-DD from N blocks. Source block IDs: …*`
    - a **placement nomination** line: "Suggest linking from [[<gold/silver

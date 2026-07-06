@@ -80,6 +80,9 @@ The pass is an agent skill, not a pipeline. In any Claude session with the
 openaugi MCP server: say **"run the review pass"** (or dispatch
 `zzz: run the review pass`). The agent then:
 
+0. Reads the current Dashboard for the user's inline answers to prior
+   nominations and executes approved ones — before any regeneration
+   overwrites them
 1. `get_review_state()` → the high-water mark (`meta` table keys
    `review_pass_last_run` / `review_pass_last_summary`)
 2. `search(after=last_run)` → new blocks (excludes `OpenAugi/`-sourced blocks)
@@ -105,7 +108,7 @@ Two lens families exist, with different trust levels:
 |---|---|---|
 | Trigger | Scheduled / "run the review pass" | On command: "distill X" |
 | Scope | Container's routed blocks since last run | Topic (agentic search + links) or user-selected context |
-| Output | `OpenAugi/Views/` — regenerable cache, no review | One note in `OpenAugi/Notes|Research/`, `#status/needs-review`, wikilinked provenance |
+| Output | `OpenAugi/Views/` — regenerable cache, no review | One note in `OpenAugi/Notes|Research/`, `#human-review`, wikilinked provenance |
 | Lifecycle | Overwritten every run | Created once, user reviews, graduates toward their curated notes |
 
 Default is neither: **just-in-time distillation in chat** (retrieve + answer,

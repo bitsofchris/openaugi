@@ -122,6 +122,12 @@ Always regenerate `View - Dashboard.md` (same folder):
 
 ## The pass, step by step
 
+0. **Process the user's Dashboard responses first.** Read the current
+   `View - Dashboard.md` for inline answers to prior nominations (and any
+   `aaa:` lines). Execute approved ones — update the registry, route the
+   relevant blocks, draft paste-lines for anything that touches the user's
+   notes — BEFORE regenerating anything, or the answers are lost to the
+   overwrite. Record each outcome in the new Dashboard.
 1. `get_review_state()` → `since` = last_run. If null, this is the first
    run: backfill from a sensible recent date (e.g. two weeks back, or the
    date the user gives).
