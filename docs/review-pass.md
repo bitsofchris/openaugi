@@ -87,7 +87,9 @@ openaugi MCP server: say **"run the review pass"** (or dispatch
    `tag_block(id, augi_tags)` only where classification has signal
 4. Regenerates `View - <container>.md` for touched containers via
    `write_document(..., subfolder="Views", overwrite=True)`
-   (`overwrite=True` is only legal for Views)
+   (`overwrite=True` is only legal for Views). Regeneration is a **merge**:
+   the prior view is read first as the head state; new blocks are the delta;
+   stale items fall out. Untouched containers keep their old view.
 5. Regenerates `View - Dashboard.md` — rollup, task union, gravity nominations
 6. `mark_review_complete(summary)` → advances the mark
 
