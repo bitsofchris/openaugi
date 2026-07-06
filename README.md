@@ -36,11 +36,13 @@ Then [register with Claude](docs/GETTING_STARTED.md#register-with-claude) and st
 
 ```
 Obsidian Vault --> split --> extract --> embed --> SQLite --> MCP Server --> Claude
+                     ^                                                        |
+                     └------- derived views written back to your vault <-----┘
 ```
 
 **Ingest:** Splits your vault by headings, extracts tags and links, builds a graph of blocks and links in SQLite. Embeds everything for semantic search. Watches for changes and re-ingests automatically.
 
-**Query:** Claude gets MCP tools to search (semantic + keyword), traverse your knowledge graph, fetch full context, and understand how your ideas connect. It can also write notes back to your vault.
+**Query:** Claude gets MCP tools to search (semantic + keyword), traverse your knowledge graph, fetch full context, and understand how your ideas connect. Writes are scoped to an `OpenAugi/` folder in your vault — your own notes are never touched.
 
 **One command:**
 
@@ -49,6 +51,10 @@ openaugi up     ← ingest + file watcher + zzz dispatch + task agent + MCP serv
 ```
 
 **ZZZ dispatch:** Write `zzz: <instruction>` anywhere in your notes — any capitalization works (`zzz`, `ZZZ`, `Zzz`). The file watcher detects changes, ingests the block, and writes a task file to `OpenAugi/Tasks/`. The task watcher picks it up and launches a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>`. The agent's behavior is governed by a skill file you edit in Obsidian. See [Getting Started](docs/GETTING_STARTED.md).
+
+**Review pass (write-back):** The loop that keeps the knowledge base maintained. On trigger ("run the review pass"), an agent routes new blocks to your area/project notes as graph links, regenerates derived view notes under `OpenAugi/Views/` — a where-did-I-leave-off head per area/project plus a Dashboard — and nominates structure changes (new tags, new notes) for your approval. Agents never edit your notes; views are regenerable caches. See [Review Pass](docs/review-pass.md).
+
+**Capture grammar** — three tokens: `qqq` on its own line splits blocks · `zzz:` dispatches a task *immediately* (file watcher acts at ingest) · `aaa:` is a filing instruction that stays inert in the block until the next review pass reads it. Nothing else to learn.
 
 ---
 
@@ -82,8 +88,10 @@ Most agent systems do brute-force retrieval — semantic search that stuffs the 
 
 OpenAugi's data model is two tables — `blocks` and `links`:
 
-- **Blocks** — raw content (documents, entries, tags) with deterministic identity and optional `augi_tags` from agent classification
-- **Links** — typed edges (split_from, tagged, links_to) that let agents traverse connections they wouldn't find through search alone
+- **Blocks** — raw content (documents, entries, tags) with deterministic identity and optional `augi_tags` from agent classification (same taxonomy as your own tags, stored DB-side only)
+- **Links** — typed edges (contains, groups, links_to, routed_to) that let agents traverse connections they wouldn't find through search alone
+
+**Classification is tags; membership is links.** Tags say what kind of thing a block is (one closed taxonomy, whether you or the agent applied it). `routed_to` links say which area/project threads a block belongs to — a block can belong to many, or none.
 
 Five retrieval modes — semantic, keyword, graph traversal, time-based, direct lookup — all operating on the same graph.
 
@@ -115,6 +123,7 @@ Cluster assignments land in each data_block's metadata (`cluster_assignments.{pa
 - **[Data Model](docs/data-model.md)** — philosophy, block kinds, navigation pattern, four-layer architecture
 - **[Clustering](docs/clustering.md)** — HDBSCAN clustering: config format, data model, SQL queries, param tuning
 - **[MCP Server](docs/MCP_SERVER.md)** — tool reference and tuning
+- **[Review Pass](docs/review-pass.md)** — the write-back loop: routing, capture grammar (`qqq`/`zzz:`/`aaa:`), derived views, Dashboard nominations
 - **[Task Dispatch](docs/task-dispatch.md)** — optional Obsidian → tmux dispatch: write a task, watcher launches a Claude Code agent in a named session
 - **[Remote Access](docs/local.docs/REMOTE_ACCESS.md)** — Cloudflare Tunnel setup for Claude mobile
 
