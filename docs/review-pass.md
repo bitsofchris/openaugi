@@ -97,13 +97,16 @@ mark. The full pass:
    stale items fall out. Untouched containers keep their old view.
    Every view ends with a `## Log` section — the container's routed blocks,
    newest first, linked to source notes — so membership is visible in
-   Obsidian (DB links otherwise aren't). **Head ownership is per container**:
-   delegated (agent writes the TLDR — signalled by the user transcluding the
-   view) or maintained (user curates the head; the view is mechanical only —
-   log + delta, zero synthesis — so it never competes with the user's voice).
-   New containers default to maintained. Views are for embedding, not
-   visiting: add `OpenAugi/Views/` to Obsidian's Excluded Files so the
-   container note is the single reading surface.
+   Obsidian (DB links otherwise aren't). Every view = **recap + remote log**:
+   the recap is synthesized from ALL member blocks *including the user's own
+   writing in the container note* (their words are upstream input — never
+   contradicted; drift gets flagged in one line), and the log lists ONLY
+   blocks living in other files, so transclusion never duplicates what's
+   already on the page. The container note is the single reading surface:
+   user's head/pins → their in-place journal → the transcluded view. Views
+   are for embedding, not visiting — add `OpenAugi/Views/` to Obsidian's
+   Excluded Files. Agent-created container notes include the transclusion
+   at birth.
 5. Regenerates `View - Dashboard.md` — rollup, task union, gravity nominations
 6. `mark_review_complete(summary)` → advances the mark
 
