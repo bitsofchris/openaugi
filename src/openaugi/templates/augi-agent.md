@@ -36,6 +36,9 @@ in `OpenAugi/AGENT/`. Read the relevant doc when the task matches:
 - **`OpenAugi/AGENT/review-pass.md`** — for the recurring review/maintenance
   pass: "run the review pass", route new blocks, regenerate views/heads,
   update the Dashboard
+- **`OpenAugi/AGENT/distill-lens.md`** — for on-command distillation:
+  "distill X", "synthesize my thinking on X", or user-selected context →
+  one derived note with provenance
 
 ## How to work
 
