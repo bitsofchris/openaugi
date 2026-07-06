@@ -4,6 +4,30 @@ You document as you go - keeping docs up-to-date from the overall ARCHITECTURE.m
 You write unit tests but also make sure we are able to test end to end either with integration or mocking components.
 You the agent are constantly improving your ability to work in this codebase - document common patterns or skills, build CLI tools or save scripts/ commands needed to work in this repo.
 
+# Where to resume (new session entry point)
+
+1. **Active plans live in `docs/plans/`** — anything there is in flight; done
+   plans move to `docs/archive/`. Start a session with "what's next in the
+   active plan" and read the newest plan's checklist.
+2. **System manual for the write-back loop:** [docs/review-pass.md](docs/review-pass.md)
+   (augi_tags, routing, capture grammar, views).
+3. **Vault-side entry** (Chris's daily driver): `View - Dashboard.md` under
+   `<vault>/OpenAugi/Views/` — regenerated every review pass, links everything.
+   Two verbs: "run the review pass" (full loop) · "process the dashboard"
+   (execute nomination answers only).
+
+# Related repos
+
+- `/Users/chris/repos/private-augi-mobile` — **OpenAugi Mobile** (Expo/RN thin
+  capture client). Its mock contract server pins the API this repo will serve
+  later (`POST /capture` → markdown block; `GET /context-pack` → taxonomy +
+  recent concepts for tag/route suggestions). Captured blocks flow into this
+  repo's ingest; the registry/routing built here is what mobile's tag-assist
+  (M4) will suggest from. See its `docs/plans/mvp-build-plan.md`.
+- `/Users/chris/repos/openaugi-private` — parked; not a source of decisions.
+- Vault agent config maps short repo names for zzz task dispatch:
+  `<vault>/OpenAugi/AGENT/Repos.md`.
+
 # Quick reference
 
 ```bash
