@@ -31,6 +31,7 @@ class VaultWriter:
         description: str,
         content: str,
         subfolder: str = "Notes",
+        overwrite: bool = False,
     ) -> dict:
         """Create a markdown note in OpenAugi/{subfolder}/.
 
@@ -40,9 +41,11 @@ class VaultWriter:
             content: Markdown body. Frontmatter is auto-generated.
             subfolder: Subfolder under OpenAugi/ (e.g. "Notes", "Docs", "Research").
                        Defaults to "Notes". Cannot escape OpenAugi/ root.
+            overwrite: Replace the file if it exists. For regenerable derived
+                       views (e.g. Views/) — default False protects notes.
 
         Returns:
-            {"status": "created", "path": str, "vault_relative": str, "title": str}
+            {"status": "created"|"updated", "path": str, "vault_relative": str, "title": str}
             {"status": "error", "reason": str}
         """
         title = title.strip()
@@ -63,7 +66,8 @@ class VaultWriter:
             }
 
         filepath = folder / f"{title}.md"
-        if filepath.exists():
+        existed = filepath.exists()
+        if existed and not overwrite:
             return {
                 "status": "error",
                 "reason": f"Note already exists: {filepath.relative_to(self.vault_path)}",
@@ -85,7 +89,7 @@ class VaultWriter:
         logger.info("Wrote document: %s", filepath)
 
         return {
-            "status": "created",
+            "status": "updated" if existed else "created",
             "path": str(filepath),
             "vault_relative": str(filepath.relative_to(self.vault_path)),
             "title": title,

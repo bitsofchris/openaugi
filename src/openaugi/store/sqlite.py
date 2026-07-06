@@ -682,6 +682,22 @@ class SQLiteStore:
     def _set_meta(self, key: str, value: str) -> None:
         self.conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)", (key, value))
 
+    # ── Review pass state ──────────────────────────────────────────
+
+    def get_review_state(self) -> dict:
+        """Review-pass high-water mark: {'last_run': iso|None, 'last_summary': str|None}."""
+        return {
+            "last_run": self._get_meta("review_pass_last_run"),
+            "last_summary": self._get_meta("review_pass_last_summary"),
+        }
+
+    def set_review_state(self, last_run: str, summary: str = "") -> None:
+        """Record a completed review-pass run (high-water mark + one-line summary)."""
+        self._set_meta("review_pass_last_run", last_run)
+        if summary:
+            self._set_meta("review_pass_last_summary", summary)
+        self.conn.commit()
+
     # ── Hub scoring ────────────────────────────────────────────────
 
     def get_hub_scores(

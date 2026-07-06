@@ -470,3 +470,29 @@ class TestStats:
         assert stats["total_links"] == 2
         assert stats["blocks_by_kind"]["data_block"] == 1
         assert stats["embedded_blocks"] == 1
+
+
+class TestReviewState:
+    def test_default_state_is_empty(self, store: SQLiteStore):
+        state = store.get_review_state()
+        assert state == {"last_run": None, "last_summary": None}
+
+    def test_set_and_get_roundtrip(self, store: SQLiteStore):
+        store.set_review_state("2026-07-06T12:00:00+00:00", "routed 10 blocks")
+        state = store.get_review_state()
+        assert state["last_run"] == "2026-07-06T12:00:00+00:00"
+        assert state["last_summary"] == "routed 10 blocks"
+
+    def test_empty_summary_preserves_previous(self, store: SQLiteStore):
+        store.set_review_state("2026-07-06T12:00:00+00:00", "first run")
+        store.set_review_state("2026-07-07T12:00:00+00:00")
+        state = store.get_review_state()
+        assert state["last_run"] == "2026-07-07T12:00:00+00:00"
+        assert state["last_summary"] == "first run"
+
+    def test_persists_across_reconnect(self, store: SQLiteStore):
+        store.set_review_state("2026-07-06T12:00:00+00:00", "persisted")
+        store.close()
+        state = store.get_review_state()
+        assert state["last_run"] == "2026-07-06T12:00:00+00:00"
+        assert state["last_summary"] == "persisted"

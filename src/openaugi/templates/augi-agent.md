@@ -33,6 +33,9 @@ in `OpenAugi/AGENT/`. Read the relevant doc when the task matches:
 
 - **`OpenAugi/AGENT/research-agent.md`** — for research tasks, NotebookLM,
   `nlm` CLI, source ingestion, cited knowledge extraction
+- **`OpenAugi/AGENT/review-pass.md`** — for the recurring review/maintenance
+  pass: "run the review pass", route new blocks, regenerate views/heads,
+  update the Dashboard
 
 ## How to work
 
