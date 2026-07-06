@@ -196,14 +196,21 @@ These are the tools Claude gets when connected to OpenAugi:
 
 | Tool | What |
 |------|------|
-| `write_document` | Create a markdown note in your vault (`OpenAugi/{subfolder}/`) |
+| `write_document` | Create a markdown note in your vault (`OpenAugi/{subfolder}/`); `overwrite=true` only for regenerable `Views/` |
 
 ### Review Pass Tools
 
 | Tool | What |
 |------|------|
+| `route_block` | Route a block into a container note (AMOC/PMOC/MOC) as a `routed_to` link — membership is links, tags stay taxonomy-only |
 | `get_review_state` | Read the review-pass high-water mark |
 | `mark_review_complete` | Advance the high-water mark after a completed pass |
+
+The review pass is the write-back loop: it routes new blocks, regenerates
+derived view notes under `OpenAugi/Views/`, and surfaces nominations on a
+Dashboard. Capture grammar: `qqq` (block delimiter) · `zzz:` (dispatch a
+task) · `aaa:` (routing instruction to the review pass). See
+[review-pass.md](review-pass.md).
 
 See [MCP Server docs](MCP_SERVER.md) for tool parameters and tuning.
 
