@@ -6,9 +6,10 @@ You the agent are constantly improving your ability to work in this codebase - d
 
 # Where to resume (new session entry point)
 
-1. **Active plans live in `docs/plans/`** — anything there is in flight; done
-   plans move to `docs/archive/`. Start a session with "what's next in the
-   active plan" and read the newest plan's checklist.
+1. **Start at [docs/plans/master-plan.md](docs/plans/master-plan.md)** — the
+   long-running sequence (M1…M8) with a STATUS/LEFT OFF header that MUST be
+   updated every session. Other docs in `docs/plans/` are per-milestone
+   detail; done plans move to `docs/archive/`.
 2. **System manual for the write-back loop:** [docs/review-pass.md](docs/review-pass.md)
    (augi_tags, routing, capture grammar, views).
 3. **Vault-side entry** (Chris's daily driver): `View - Dashboard.md` under

@@ -568,6 +568,69 @@ def cluster_explore_within(
 
 
 @app.command()
+def review(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    dashboard_only: bool = typer.Option(
+        False,
+        "--dashboard-only",
+        help="Process Dashboard nomination answers only (no new-block routing)",
+    ),
+):
+    """Trigger a review pass by writing a task file (the task watcher runs it).
+
+    The task file is the API: this command, the zzz grammar, and (future)
+    Obsidian plugin buttons all converge on the same OpenAugi/Tasks/ contract.
+    Requires `openaugi up` (or the task watcher) running to pick it up.
+    """
+    from datetime import datetime
+
+    from openaugi.config import load_config
+    from openaugi.pipeline.dispatch import DEFAULT_TASKS_FOLDER
+
+    config = load_config()
+    vault_path = path or config.get("vault", {}).get("default_path")
+    if not vault_path:
+        console.print("[red]No vault path specified.[/red]")
+        console.print("Use --path or run 'openaugi init' to set a default.")
+        raise typer.Exit(1)
+
+    instruction = "process the dashboard" if dashboard_only else "run the review pass"
+    slug = instruction.replace(" ", "-")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    tasks_dir = Path(vault_path) / DEFAULT_TASKS_FOLDER
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    filepath = tasks_dir / f"{slug}-{timestamp}.md"
+
+    task = f"""---
+status: pending
+source_block_id: cli
+source_note: "[[openaugi review]]"
+---
+
+# {instruction}
+
+## Context
+
+Triggered via `openaugi review` CLI at {timestamp}.
+
+## User instruction
+
+> {instruction}
+
+## Task
+
+Read OpenAugi/AGENT/review-pass.md and execute: {instruction}.
+
+## Human Todo
+
+## Results
+"""
+    filepath.write_text(task, encoding="utf-8")
+    console.print(f"[green]Task file written:[/green] {filepath}")
+    console.print("The task watcher will pick it up (requires 'openaugi up' running).")
+
+
+@app.command()
 def serve(
     db: str | None = typer.Option(None, "--db", help="Database path"),
     transport: str = typer.Option(

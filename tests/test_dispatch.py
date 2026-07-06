@@ -128,3 +128,32 @@ class TestDispatchZzzBlocks:
         written = dispatch_zzz_blocks(blocks, vault)
 
         assert len(written) == 2
+
+
+class TestReviewCLI:
+    def test_review_writes_task_file(self, tmp_path, monkeypatch):
+        from typer.testing import CliRunner
+
+        from openaugi.cli.main import app
+
+        monkeypatch.setattr("openaugi.config.load_config", lambda: {})
+        runner = CliRunner()
+        result = runner.invoke(app, ["review", "--path", str(tmp_path)])
+        assert result.exit_code == 0
+        tasks = list((tmp_path / "OpenAugi" / "Tasks").glob("run-the-review-pass-*.md"))
+        assert len(tasks) == 1
+        text = tasks[0].read_text()
+        assert "status: pending" in text
+        assert "run the review pass" in text
+
+    def test_review_dashboard_only(self, tmp_path, monkeypatch):
+        from typer.testing import CliRunner
+
+        from openaugi.cli.main import app
+
+        monkeypatch.setattr("openaugi.config.load_config", lambda: {})
+        runner = CliRunner()
+        result = runner.invoke(app, ["review", "--path", str(tmp_path), "--dashboard-only"])
+        assert result.exit_code == 0
+        tasks = list((tmp_path / "OpenAugi" / "Tasks").glob("process-the-dashboard-*.md"))
+        assert len(tasks) == 1
