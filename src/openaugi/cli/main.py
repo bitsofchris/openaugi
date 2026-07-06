@@ -184,6 +184,7 @@ def init():
     agent_templates = {
         "augi-agent.md": "Base agent skill — how the agent handles tasks",
         "research-agent.md": "Research sub-agent — NotebookLM, source ingestion",
+        "review-pass.md": "Review pass — route blocks, regenerate derived views",
     }
 
     copied = 0

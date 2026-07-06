@@ -30,6 +30,7 @@ import functools
 import json
 import logging
 import os
+from datetime import UTC
 from pathlib import Path
 from typing import Literal
 
@@ -582,6 +583,40 @@ def tag_block(block_id: str, augi_tags: list[str]) -> str:
     return _json({"status": "ok", "block_id": block_id, "augi_tags": augi_tags})
 
 
+# ── Review Pass Tools ──────────────────────────────────────────────
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@_release_conn
+def get_review_state() -> str:
+    """Get the review-pass high-water mark.
+
+    Returns last_run (ISO timestamp of the last completed review pass) and
+    last_summary (its one-line summary). Call at the start of a review pass
+    to scope which blocks are new: search(after=last_run). If last_run is
+    null this is the first run — backfill from a sensible date instead.
+    """
+    store = _get_store()
+    return _json(store.get_review_state())
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@_release_conn
+def mark_review_complete(summary: str) -> str:
+    """Mark a review pass complete — advances the high-water mark to now.
+
+    Call ONCE at the end of a successful review pass with a one-line summary
+    of the run (e.g. "routed 42 blocks; regenerated 4 views + Dashboard").
+    The next pass will only process blocks newer than this point.
+    """
+    from datetime import datetime
+
+    now = datetime.now(UTC).isoformat()
+    store = _get_store()
+    store.set_review_state(now, summary)
+    return _json({"status": "ok", "last_run": now, "summary": summary})
+
+
 # ── Write Tools ────────────────────────────────────────────────────
 
 
@@ -591,6 +626,7 @@ def write_document(
     description: str,
     content: str,
     subfolder: str = "Notes",
+    overwrite: bool = False,
 ) -> str:
     """Save something to the user's vault under OpenAugi/{subfolder}/.
 
@@ -604,8 +640,11 @@ def write_document(
     - subfolder: Where to write under OpenAugi/. Infer from content:
         'Notes' for raw ideas or captures (default),
         'Docs' for structured reference output,
-        'Research' for investigation results.
+        'Research' for investigation results,
+        'Views' for regenerable derived views (review pass output).
       Cannot escape the OpenAugi/ root.
+    - overwrite: Replace an existing file. Use ONLY for regenerable derived
+      views (subfolder='Views'); never overwrite notes.
 
     Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""
     from openaugi.mcp.doc_writer import VaultWriter
@@ -624,7 +663,11 @@ def write_document(
         )
 
     writer = VaultWriter(vault_path)
-    return _json(writer.write_document(title, description, content, subfolder=subfolder))
+    return _json(
+        writer.write_document(
+            title, description, content, subfolder=subfolder, overwrite=overwrite
+        )
+    )
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))

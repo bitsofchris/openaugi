@@ -414,3 +414,50 @@ class TestMCPTools:
         monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
         result = json.loads(update_stream("nonexistent", left_off="x"))
         assert result["status"] == "error"
+
+
+class TestReviewPassTools:
+    def test_get_review_state_initially_empty(self):
+        from openaugi.mcp.server import get_review_state
+
+        result = json.loads(get_review_state())
+        assert result["last_run"] is None
+        assert result["last_summary"] is None
+
+    def test_mark_review_complete_advances_mark(self):
+        from openaugi.mcp.server import get_review_state, mark_review_complete
+
+        result = json.loads(mark_review_complete(summary="routed 5 blocks; 2 views"))
+        assert result["status"] == "ok"
+        assert result["last_run"] is not None
+
+        state = json.loads(get_review_state())
+        assert state["last_run"] == result["last_run"]
+        assert state["last_summary"] == "routed 5 blocks; 2 views"
+
+
+class TestWriteDocumentOverwrite:
+    def test_overwrite_replaces_view(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_document
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        write_document("openaugi", "view of OpenAugi area", "old head", "Views")
+        result = json.loads(
+            write_document(
+                "openaugi", "view of OpenAugi area", "new head", "Views", overwrite=True
+            )
+        )
+        assert result["status"] == "updated"
+        path = tmp_path / "OpenAugi" / "Views" / "openaugi.md"
+        text = path.read_text()
+        assert "new head" in text
+        assert "old head" not in text
+
+    def test_no_overwrite_still_errors(self, tmp_path, monkeypatch):
+        from openaugi.mcp.server import write_document
+
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(tmp_path))
+        write_document("openaugi", "view", "first", "Views")
+        result = json.loads(write_document("openaugi", "view", "second", "Views"))
+        assert result["status"] == "error"
+        assert "already exists" in result["reason"]
