@@ -132,12 +132,6 @@ ALLOWED_TOOLS = [
     "mcp__openaugi__recent",
     "mcp__openaugi__tag_block",
     "mcp__openaugi__write_document",
-    "mcp__openaugi__write_snip",
-    "mcp__openaugi__write_thread",
-    "mcp__openaugi__list_streams",
-    "mcp__openaugi__get_stream_context",
-    "mcp__openaugi__make_stream",
-    "mcp__openaugi__update_stream",
 ]
 
 SETTINGS_JSON = json.dumps({"permissions": {"allow": ALLOWED_TOOLS}})

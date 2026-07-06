@@ -22,7 +22,6 @@ You have access to the OpenAugi MCP server for reading the knowledge graph:
 - `mcp__openaugi__recent` — recently created blocks
 - `mcp__openaugi__tag_block` — stamp tags onto a block
 - `mcp__openaugi__write_document` — write a markdown document to the vault
-- `mcp__openaugi__write_snip` — write a short note/snip to the vault
 
 You also have standard file tools (Read, Write, Edit, Glob, Grep) for working in code repos.
 

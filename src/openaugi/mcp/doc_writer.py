@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -94,139 +94,6 @@ class VaultWriter:
             "vault_relative": str(filepath.relative_to(self.vault_path)),
             "title": title,
         }
-
-    def write_thread(self, topic: str, description: str, content: str) -> dict:
-        """Write a session thread note to OpenAugi/Threads/YYYY-MM-DD - {topic}.md.
-
-        Handles filename collisions by appending -2, -3, etc.
-
-        Returns:
-            {"status": "created", "path": str, "vault_relative": str, "title": str}
-            {"status": "error", "reason": str}
-        """
-        topic = topic.strip()
-        if not topic:
-            return {"status": "error", "reason": "Topic cannot be empty"}
-        if _INVALID_TITLE_RE.search(topic):
-            invalid = _INVALID_TITLE_RE.findall(topic)
-            return {"status": "error", "reason": f"Topic contains invalid characters: {invalid}"}
-
-        folder = self._resolve_folder("Threads")
-        if folder is None:
-            return {"status": "error", "reason": "Could not resolve Threads folder"}
-
-        folder.mkdir(parents=True, exist_ok=True)
-
-        today = date.today().isoformat()
-        base_title = f"{today} - {topic}"
-        filepath = self._unique_path(folder, base_title)
-
-        created = datetime.now().isoformat(timespec="seconds")
-        note = (
-            f"---\n"
-            f"type: thread\n"
-            f"description: {description}\n"
-            f"created: {created}\n"
-            f"---\n\n"
-            f"# {topic}\n\n"
-            f"{content.strip()}\n"
-        )
-        filepath.write_text(note, encoding="utf-8")
-        logger.info("Wrote thread: %s", filepath)
-
-        title = filepath.stem
-        return {
-            "status": "created",
-            "path": str(filepath),
-            "vault_relative": str(filepath.relative_to(self.vault_path)),
-            "title": title,
-        }
-
-    def write_snip(
-        self,
-        title: str,
-        content: str,
-        description: str = "",
-        stream: str | None = None,
-        tags: list[str] | None = None,
-        source_session: str | None = None,
-    ) -> dict:
-        """Save a curated snippet to OpenAugi/Snips/.
-
-        Args:
-            title: Snip title (becomes filename).
-            content: Markdown body — the captured/refined text.
-            description: One-line summary for scanning.
-            stream: Workstream slug this snip originated from (e.g. "product-management").
-            tags: Optional tags for categorization.
-            source_session: Claude session ID that produced this content.
-
-        Returns:
-            {"status": "created", "path": str, "vault_relative": str, "title": str}
-            {"status": "error", "reason": str}
-        """
-        title = title.strip()
-        if not title:
-            return {"status": "error", "reason": "Title cannot be empty"}
-        if _INVALID_TITLE_RE.search(title):
-            invalid = _INVALID_TITLE_RE.findall(title)
-            return {"status": "error", "reason": f"Title contains invalid characters: {invalid}"}
-
-        folder = self._resolve_folder("Snips")
-        if folder is None:
-            return {"status": "error", "reason": "Could not resolve Snips folder"}
-
-        folder.mkdir(parents=True, exist_ok=True)
-
-        filepath = self._unique_path(folder, title)
-
-        created = datetime.now().isoformat(timespec="seconds")
-
-        # Build frontmatter — only include non-empty optional fields
-        fm_lines = ["---", "type: snip"]
-        if description:
-            fm_lines.append(f"description: {description}")
-        if stream:
-            fm_lines.append(f"stream: {stream}")
-        if tags:
-            tag_str = ", ".join(tags)
-            fm_lines.append(f"tags: [{tag_str}]")
-        if source_session:
-            fm_lines.append(f"source_session: {source_session}")
-        fm_lines.append(f"created: {created}")
-        fm_lines.append("---")
-
-        note = "\n".join(fm_lines) + f"\n\n# {title}\n\n{content.strip()}\n"
-        filepath.write_text(note, encoding="utf-8")
-        logger.info("Wrote snip: %s", filepath)
-
-        final_title = filepath.stem
-
-        # Backlink: append wikilink to the stream's Log section if stream exists
-        if stream:
-            from openaugi.mcp.stream_manager import StreamManager
-
-            manager = StreamManager(str(self.vault_path))
-            manager.append_to_log(stream, f"Saved snip [[{final_title}]]")
-
-        return {
-            "status": "created",
-            "path": str(filepath),
-            "vault_relative": str(filepath.relative_to(self.vault_path)),
-            "title": final_title,
-        }
-
-    def _unique_path(self, folder: Path, base_title: str) -> Path:
-        """Return a non-colliding path, appending -2, -3 as needed."""
-        candidate = folder / f"{base_title}.md"
-        if not candidate.exists():
-            return candidate
-        counter = 2
-        while True:
-            candidate = folder / f"{base_title}-{counter}.md"
-            if not candidate.exists():
-                return candidate
-            counter += 1
 
     def _resolve_folder(self, subfolder: str) -> Path | None:
         """Resolve subfolder to an absolute path under OpenAugi/.
