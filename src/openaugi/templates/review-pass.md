@@ -102,8 +102,23 @@ collisions and makes provenance visible). Write with
 The description should state the question the view answers
 (e.g. "Where I left off and what's next in OpenAugi").
 
-Body by container kind (convention — keep each section 3–5 high-signal
-bullets, every claim linked to its source note):
+**Head ownership — decide this per container before writing any synthesis:**
+
+- **Delegated head**: the user has handed the head to the agent (signalled by
+  transcluding the view into the container note): the view carries the
+  synthesized head (TLDR / LEFT OFF).
+- **Maintained head**: the user actively curates the container note's own
+  summary: the view is **mechanical only** — Log + new-this-period +
+  extracted tasks, ZERO synthesis. The user's head is the only head; never
+  write a competing summary. **Default for newly approved containers:
+  maintained**, until the user says "take over the head."
+
+A view exists to be **embedded, never visited** — one reading surface per
+container (the container note, via `![[View - ...]]`). Suggest the user add
+`OpenAugi/Views/` to Obsidian's Excluded Files so views only appear embedded.
+
+Body by container kind, when the head is delegated (keep each section 3–5
+high-signal bullets, every claim linked to its source note):
 
 - **Area (AMOC)** — rolling TLDR of the area · new-this-period highlights
   (linked) · task/idea rollup · links to active child PMOCs. No LEFT OFF.
