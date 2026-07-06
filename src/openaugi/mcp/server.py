@@ -586,6 +586,50 @@ def tag_block(block_id: str, augi_tags: list[str]) -> str:
 # ── Review Pass Tools ──────────────────────────────────────────────
 
 
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@_release_conn
+def route_block(block_id: str, container_title: str) -> str:
+    """Route a block into a container note (AMOC/PMOC/MOC) with a routed_to link.
+
+    Membership is a LINK, not a tag — tags are reserved for the closed
+    taxonomy vocabulary. A block may be routed to multiple containers.
+    Re-calling with the same pair is a no-op (duplicate links are ignored).
+
+    - block_id: the data block to route
+    - container_title: exact title of the container note
+      (e.g. "AMOC - OpenAugi Main")
+    """
+    from openaugi.model.link import Link
+
+    store = _get_store()
+    if store.get_block(block_id) is None:
+        return _json({"status": "error", "reason": f"Block {block_id} not found."})
+    row = store.conn.execute(
+        "SELECT id FROM blocks WHERE kind = 'context_block:document' AND title = ? LIMIT 1",
+        (container_title,),
+    ).fetchone()
+    if not row:
+        return _json(
+            {
+                "status": "error",
+                "reason": f"Container note not found: {container_title}",
+                "hint": "Use search(title=...) to find the exact note title.",
+            }
+        )
+    # insert_links (not insert_link) — it commits, and _release_conn closes
+    # the connection right after this call.
+    store.insert_links([Link(from_id=block_id, to_id=row[0], kind="routed_to")])
+    return _json(
+        {
+            "status": "ok",
+            "block_id": block_id,
+            "container": container_title,
+            "container_id": row[0],
+            "kind": "routed_to",
+        }
+    )
+
+
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 @_release_conn
 def get_review_state() -> str:

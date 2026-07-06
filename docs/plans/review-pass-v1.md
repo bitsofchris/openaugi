@@ -101,8 +101,13 @@ Routing precedence (highest wins; multi-routing allowed):
    wins (active PMOC beats parent AMOC).
 5. Low confidence → Dashboard unrouted/gravity section. Never force-fit.
 
-Persistence in v1: `augi_tags` on block metadata only (existing `tag_block`).
-No new link kinds; views query tags + dates.
+Persistence (amended 2026-07-06 after run #1): **membership = `routed_to`
+links** via the `route_block` MCP tool (tags are a closed taxonomy — a
+`routed/*` facet was wrong and was migrated to links); **classification =
+`augi_tags`** drawn only from My Taxonomy, applied only where there's signal
+and never duplicating user tags. Untagged/unrouted is the default for
+life-log blocks. Registry notes' `description` frontmatter is the routing
+map (skill-file style: when to route here).
 
 **Stable contracts (future-proofing):** (1) append-only truth, (2) block IDs +
 tags as routing substrate (mobile becomes just another block writer),

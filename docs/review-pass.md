@@ -23,23 +23,42 @@ is a stale cache entry, not damage). Human review gates only **structure changes
 new tags/areas, promoting a block cluster to a new note, merges. The agent
 nominates on the Dashboard; the human commands; the agent assembles.
 
-## augi_tags — the two tag layers
+## Tags vs. routing — two mechanisms, one taxonomy
 
-Every block has two independent tag sets:
+**Classification is tags; membership is links. Never conflate them.**
 
-| Layer | Where it lives | Who writes it | What it means |
-|---|---|---|---|
-| `block.tags` | Parsed from the user's markdown (`#area/self` etc.) | The user | Ground truth |
-| `block.metadata["augi_tags"]` | SQLite only — **never written into notes** | The agent, via the `tag_block` MCP tool | Derived classification + routing |
+**Tags — one closed vocabulary, two authors.** There is exactly one taxonomy
+(the user's `My Taxonomy`). What differs is who applied a tag:
 
-The review pass stamps each new block's `augi_tags` with facet tags
-(`area/*`, `type/*`) plus one `routed/<container-slug>` tag per container the
-block belongs to (e.g. `routed/amoc-openaugi-main`). `tag_block` overwrites the
-whole list — re-routing a block is one call. `search(tags=[...])` matches both
-layers, so views and lenses can query either.
+| Layer | Where it lives | Who writes it |
+|---|---|---|
+| `block.tags` | Parsed from the user's markdown (`#area/self` etc.) | The user — ground truth |
+| `block.metadata["augi_tags"]` | SQLite only — **never written into notes** | The agent, via `tag_block`, using the *same* taxonomy vocabulary |
 
-This is why routing costs nothing and is always correctable: the user's files
-never change; only DB metadata does.
+`augi_tags` is not a second tagging system — it is "tags the agent applied,"
+kept out of the user's files. The agent never invents a tag or facet, and
+never re-tags a block the user already tagged; it only fills gaps.
+`search(tags=[...])` matches both layers. **Untagged is a valid state** —
+life-log blocks (daily memories) usually carry no tags at all; tag only what
+you'd query.
+
+**Routing — `routed_to` links.** The `route_block(block_id, container_title)`
+MCP tool records "this block belongs to that container" as a link in the DB
+(a block can route to many containers). Views distill a container's routed
+blocks. Unrouted is also a valid state — route only what a view should
+distill.
+
+Both live in the DB only, which is why routing costs nothing and is always
+correctable: the user's files never change.
+
+## The registry is the routing map
+
+Routing targets are the notes tagged `#note-type/amoc` / `#note-type/pmoc` /
+`#note-type/moc` (active ones). Each should carry a `description` frontmatter
+that says *when to route here* — skill-file style. Human-owned frontmatter on
+gold notes = the map the router reads; generated frontmatter under
+`OpenAugi/Views/` = agent output. If a registry note lacks a description, the
+pass nominates one on the Dashboard instead of guessing.
 
 ## Capture grammar
 
@@ -64,7 +83,8 @@ openaugi MCP server: say **"run the review pass"** (or dispatch
 1. `get_review_state()` → the high-water mark (`meta` table keys
    `review_pass_last_run` / `review_pass_last_summary`)
 2. `search(after=last_run)` → new blocks (excludes `OpenAugi/`-sourced blocks)
-3. Routes each block → `tag_block(id, augi_tags)`
+3. Routes each block → `route_block(id, container_title)` for membership;
+   `tag_block(id, augi_tags)` only where classification has signal
 4. Regenerates `View - <container>.md` for touched containers via
    `write_document(..., subfolder="Views", overwrite=True)`
    (`overwrite=True` is only legal for Views)
