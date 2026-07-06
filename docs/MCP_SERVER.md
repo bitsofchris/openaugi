@@ -15,8 +15,7 @@ openaugi serve  (stdio transport)
 ├── SQLiteStore (read-only, lazy connection)
 │   ├── FTS5 virtual table  (keyword search)
 │   └── vec0 virtual table  (semantic vector search via sqlite-vec)
-├── VaultWriter (writes .md files to OpenAugi/ in vault)
-└── StreamManager (reads/writes workstream files in OpenAugi/Streams/)
+└── VaultWriter (writes .md files to OpenAugi/ in vault)
 ```
 
 **No startup needed.** Claude starts the server as a child process on first use (stdio transport).
@@ -181,11 +180,10 @@ Rarely needs changing.
 
 | Tool | Purpose |
 |------|---------|
-| `write_document` | Save anything to `OpenAugi/{subfolder}/` — triggered by "save this", "write this to augi", or explicit save requests. Agent infers subfolder from content (`Notes`, `Docs`, `Research`). |
-| `write_thread` | Save a distilled session note to `OpenAugi/Threads/YYYY-MM-DD - {topic}.md`. Triggered by "save this thread", "log this session". Not a transcript — synthesize intent, decisions, and what was learned. |
-| `write_snip` | Save a curated snippet to `OpenAugi/Snips/`. Triggered by "save this", "snip this", or when capturing a key insight. Accepts optional `stream` (workstream slug) and `tags` for categorization. |
+| `write_document` | Save anything to `OpenAugi/{subfolder}/` — triggered by "save this", "write this to augi", or explicit save requests. Agent infers subfolder from content (`Notes`, `Docs`, `Research`, `Views`). Supports `overwrite=true` for regenerable derived views. |
+| `tag_block` | Stamp AI-classified `augi_tags` onto a block's metadata. Used by the augi-agent for area/type/status classification. |
 
-All write tools take a `description` field — a one-liner that goes in frontmatter for scanning.
+`write_document` takes a `description` field — a one-liner that goes in frontmatter for scanning.
 
 **Write scope**: All writes are constrained to `{vault_path}/OpenAugi/`.
 The agent picks the subfolder but cannot escape the `OpenAugi/` root.
@@ -193,17 +191,18 @@ This keeps agent output separate from your own notes.
 
 After writing, run `openaugi ingest` to pick up new notes into the knowledge graph.
 
-### Stream tools
-
-Workstreams are persistent threads of work tracked as markdown files in `OpenAugi/Streams/`.
-Each stream has a Context section, a LEFT OFF marker, and an append-only Log.
+### Review pass tools
 
 | Tool | Purpose |
 |------|---------|
-| `list_streams` | List all workstreams with status and left-off preview. Filter by `status` ("active" or "done"). |
-| `get_stream_context` | Load full workstream state for resuming work — context, LEFT OFF marker, session log. Accepts slug or display name. |
-| `make_stream` | Create a new workstream. Name is slugified for filename (e.g. "Product Management" → `product-management.md`). |
-| `update_stream` | Update a workstream: replace LEFT OFF, update context, append to log, link a session ID, change status. All params optional — does whatever you pass. Always updates `last_active` to today. |
+| `get_review_state` | Read the review-pass high-water mark (`last_run` timestamp + `last_summary`). Called at the start of a pass to scope new blocks. |
+| `mark_review_complete` | Advance the high-water mark to now with a one-line run summary. Called once at the end of a successful pass. |
+
+> **Removed 2026-07-06:** the Streams subsystem (`make_stream`, `update_stream`,
+> `get_stream_context`, `list_streams`) and the chat-capture tools (`write_snip`,
+> `write_thread`) were superseded by the review-pass derived views
+> (see [docs/plans/review-pass-v1.md](plans/review-pass-v1.md)). Use `write_document`
+> for all vault writes.
 
 ## Resources
 

@@ -71,9 +71,8 @@ src/openaugi/
 │   └── llms/
 │       └── openai.py               # OpenAI-compatible LLM (gpt-5.4-nano default)
 ├── mcp/
-│   ├── server.py          # MCP tools (read + write + streams), stdio + streamable-http transport
-│   ├── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
-│   └── stream_manager.py  # StreamManager — workstream CRUD (OpenAugi/Streams/)
+│   ├── server.py          # MCP tools (read + write + review pass), stdio + streamable-http transport
+│   └── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
 ├── cli/
 │   └── main.py            # typer CLI (up, ingest, serve, watch, search, hubs, status, service)
 └── config.py              # TOML config loader + .env loader
@@ -111,9 +110,15 @@ Claude → MCP tool call → server.py
                  → MMR re-rank
                  → expand via links
   → recent: recently created blocks
-  → write_document / write_thread / write_snip: save notes to vault
-  → list_streams / get_stream_context / make_stream / update_stream: workstream CRUD
+  → write_document: save a note to the vault (OpenAugi/{subfolder}/)
+  → tag_block: stamp AI-classified augi_tags onto a block
+  → get_review_state / mark_review_complete: review-pass high-water mark
 ```
+
+The Streams subsystem (StreamManager + `make_stream`/`update_stream`/
+`get_stream_context`/`list_streams`) and the chat-capture tools
+(`write_snip`/`write_thread`) were removed on 2026-07-06 — superseded by the
+review-pass derived views (see [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)).
 
 ### ZZZ Dispatch (zzz → task file → agent)
 
