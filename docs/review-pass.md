@@ -67,7 +67,9 @@ Three tokens, written anywhere in a note:
 - `qqq` — block delimiter (splits a note into blocks at ingest)
 - `zzz: <instruction>` — agent dispatch: spawn a task (see [task-dispatch.md](task-dispatch.md))
 - `aaa: <instruction>` — routing instruction to the review pass:
-  "aaa: route to OpenAugi Mobile", "aaa: find my note on X and link this"
+  "aaa: route to OpenAugi Mobile", "aaa: find my note on X and link this".
+  **Not processed at ingest** — unlike `zzz:`, no watcher acts on it. It
+  stays as plain text in the block and is read only when a review pass runs.
 
 Routing precedence: `aaa:` > explicit `[[MOC link]]`/`#area/*` in the block >
 location (a block in a MOC's journal is home) > inference (most specific

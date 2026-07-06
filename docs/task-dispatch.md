@@ -7,10 +7,11 @@ description: ZZZ dispatch + task watcher. Blocks with zzz instructions become ta
 
 Write `zzz: <instruction>` in your notes. The file watcher ingests the block, the dispatch hook writes a task file, and the task watcher launches a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>` to watch it work.
 
-> **`zzz:` vs `aaa:`** — `zzz:` means *go do this* (spawns an agent task,
-> this doc). `aaa:` means *route/file this block* — it is NOT dispatched;
-> the [review pass](review-pass.md) reads it when routing blocks to
-> containers. Third token: `qqq` on its own line splits blocks at ingest.
+> **`zzz:` vs `aaa:`** — `zzz:` means *go do this now* (the watcher acts on
+> it at ingest and spawns an agent task, this doc). `aaa:` means *file this
+> block* — nothing acts on it at ingest; it sits inert in the block until
+> the next [review pass](review-pass.md) reads it while routing. Third
+> token: `qqq` on its own line splits blocks at ingest.
 
 Task dispatch runs as part of `openaugi up` by default. Pass `--no-agent` to disable it. You can also run it standalone with `openaugi task-dispatch`.
 
