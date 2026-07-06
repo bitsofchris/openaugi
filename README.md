@@ -89,6 +89,8 @@ Five retrieval modes — semantic, keyword, graph traversal, time-based, direct 
 
 **[Read the full data model](docs/data-model.md)** | Based on [Context Engineering is Index Design](https://bitsofchris.com/p/context-engineering-is-index-design)
 
+**[Read the guide to agentic knowledge bases](https://bitsofchris.com/p/how-to-build-your-agentic-knowledge)**
+
 ---
 
 ## Clustering
