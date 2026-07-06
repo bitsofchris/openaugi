@@ -156,6 +156,20 @@ note (purpose superseded by views / done manually). Keep `write_document`.
 
 ## Later (explicitly parked)
 
+- **Lens spec as data** — when 3+ lenses exist and their policies actually
+  diverge: each lens = a frontmatter spec {intent prompt, scope/retrieval
+  recipe, refresh policy (on-pass | on-demand | after-N-blocks | every-N-days),
+  render target}, files under OpenAugi/AGENT/lenses/, the pass becomes the
+  scheduler that reads them. Chris re-derived this 7/6 ("modular context
+  block recap type") — correct end-state, deferred per the two-real-cases rule.
+- **`openaugi review` CLI** — writes the task file directly so the existing
+  task watcher launches the pass without opening a Claude session.
+- **Merged chronological log** — a view option that interleaves in-container
+  journal blocks with remote blocks into one time-ordered stream (DB has all
+  timestamps); Obsidian transclusion can't interleave, but the mobile/HTML
+  render can, and a view file could carry the merged log for containers
+  where the user stops journaling in-place.
+
 - Proactive lenses as additional view types (habit trends, pattern detection,
   "you thought this in March" in-the-moment surfacing)
 - HTML/JARVIS dashboard + Augi-the-Otter proactive surface (build on the

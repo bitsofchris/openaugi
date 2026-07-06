@@ -177,8 +177,16 @@ Always regenerate `View - Dashboard.md` (same folder):
    not input. Use `recent`/`get_context`/`get_related` for extra context.
 3. Route each block per the precedence above; persist membership with
    `route_block`, classification (when there's signal) with `tag_block`.
-4. Regenerate a view for every container that received blocks
-   (`overwrite=True`). Untouched containers keep their old view.
+4. Regenerate views for containers that received blocks (`overwrite=True`).
+   Untouched containers keep their old view. **Two refresh tiers — don't
+   re-derive what didn't change:**
+   - **Log section: always refresh** (mechanical render of routed_to links —
+     no LLM judgment, effectively free).
+   - **Recap: refresh only when it would change** — salient new blocks
+     arrived, drift appeared, or the user asked. A handful of life-log
+     blocks routing through does NOT warrant re-synthesizing a recap; carry
+     the old recap forward verbatim and only update the log. When in doubt,
+     keep the old recap.
    **Regeneration is a merge, not a reset:** read the existing view first —
    it is the prior head state. Carry forward what's still true (the TLDR
    evolves; LEFT OFF advances or stands), integrate the new blocks, drop
