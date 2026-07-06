@@ -15,12 +15,14 @@ Run #1 processed 256 blocks → 274 routed_to links, 7+ views, Dashboard
 nominations answered and executed (3 new containers: trading MOC, Health,
 Fiction). View shape settled: recap + remote-only log, two refresh tiers.
 
-**NEXT:** (1) Chris: add `OpenAugi/Views/` to Obsidian Excluded Files.
-(2) Run pass #2 — any day, Sunday 7/12 floor — **this is the DoD test**
-(new-container views generate then; trading MOC was renamed, regenerate its
-view under the new title and delete the stale one). (3) After DoD passes:
-`openaugi review` CLI / plugin command (task-file trigger), then
-[lens-framework.md](lens-framework.md) when a third lens diverges.
+**Update 2026-07-06 late:** Excluded Files done; `openaugi review` CLI
+shipped (writes the task file; watcher runs the pass). Sequencing moved to
+[master-plan.md](master-plan.md) — start there.
+
+**NEXT:** run pass #2 (`openaugi review`) — it regenerates the renamed
+trading MOC's view under the new title (delete the stale one), generates
+Health/Fiction views, merges heads. Then the **DoD call** gates M3
+(plugin trigger buttons — spec in master-plan.md).
 
 **Decided:** 2026-07-06 (session with Claude). Supersedes the Streams subsystem as the
 write-back mechanism. Companion vault docs: `OpenAugi/Docs/OpenAugi - The Picture.md`,
