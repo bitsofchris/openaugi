@@ -196,18 +196,14 @@ These are the tools Claude gets when connected to OpenAugi:
 
 | Tool | What |
 |------|------|
-| `write_document` | Create a markdown note in your vault |
-| `write_thread` | Save a conversation thread as a note |
-| `write_snip` | Save a curated snippet to `OpenAugi/Snips/` |
+| `write_document` | Create a markdown note in your vault (`OpenAugi/{subfolder}/`) |
 
-### Workstream Tools
+### Review Pass Tools
 
 | Tool | What |
 |------|------|
-| `list_streams` | List workstreams with status and left-off preview |
-| `get_stream_context` | Load full workstream state for resuming work |
-| `make_stream` | Create a new workstream |
-| `update_stream` | Update workstream left-off, context, log, or status |
+| `get_review_state` | Read the review-pass high-water mark |
+| `mark_review_complete` | Advance the high-water mark after a completed pass |
 
 See [MCP Server docs](MCP_SERVER.md) for tool parameters and tuning.
 
