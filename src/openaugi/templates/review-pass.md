@@ -132,6 +132,12 @@ Always regenerate `View - Dashboard.md` (same folder):
    `route_block`, classification (when there's signal) with `tag_block`.
 4. Regenerate a view for every container that received blocks
    (`overwrite=True`). Untouched containers keep their old view.
+   **Regeneration is a merge, not a reset:** read the existing view first —
+   it is the prior head state. Carry forward what's still true (the TLDR
+   evolves; LEFT OFF advances or stands), integrate the new blocks, drop
+   what's no longer salient. "New this period" covers only the current
+   window. If deeper context is needed, pull the container's full membership
+   via its `routed_to` links (`get_related` on the container, direction=in).
 5. Regenerate `View - Dashboard.md`.
 6. `mark_review_complete(summary)` — one line, e.g.
    "routed 42 blocks; regenerated 4 views + Dashboard; 2 nominations".
