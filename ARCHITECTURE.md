@@ -214,6 +214,7 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 
 ## Plans
 
+- [docs/review-pass.md](docs/review-pass.md) — **The write-back loop (active):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass, derived views in OpenAugi/Views/. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
 - [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
 - [docs/plans/done/heartbeat.md](docs/plans/done/heartbeat.md) — (shipped, then replaced by zzz dispatch) Heartbeat design history
