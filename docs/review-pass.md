@@ -78,7 +78,9 @@ routes, views surface only what's salient.
 
 The pass is an agent skill, not a pipeline. In any Claude session with the
 openaugi MCP server: say **"run the review pass"** (or dispatch
-`zzz: run the review pass`). The agent then:
+`zzz: run the review pass`). Saying **"process the dashboard"** runs step 0
+alone — executes your nomination answers without advancing the high-water
+mark. The full pass:
 
 0. Reads the current Dashboard for the user's inline answers to prior
    nominations and executes approved ones — before any regeneration
@@ -93,6 +95,9 @@ openaugi MCP server: say **"run the review pass"** (or dispatch
    (`overwrite=True` is only legal for Views). Regeneration is a **merge**:
    the prior view is read first as the head state; new blocks are the delta;
    stale items fall out. Untouched containers keep their old view.
+   Every view ends with a `## Log` section — the container's routed blocks,
+   newest first, linked to source notes — so membership is visible in
+   Obsidian (DB links otherwise aren't).
 5. Regenerates `View - Dashboard.md` — rollup, task union, gravity nominations
 6. `mark_review_complete(summary)` → advances the mark
 

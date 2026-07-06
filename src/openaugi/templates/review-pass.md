@@ -11,6 +11,15 @@ description: >
 
 # Review Pass
 
+**Two triggers:**
+
+- **"run the review pass"** — the full loop below.
+- **"process the dashboard"** — step 0 alone: read the user's inline answers
+  on `View - Dashboard.md`, execute approved nominations (registry updates,
+  routing, paste-lines), regenerate the Dashboard recording outcomes, and
+  regenerate any views affected by new routing. Do NOT advance the
+  high-water mark — no new blocks were processed.
+
 You are running the OpenAugi review pass. One loop:
 
 > new blocks → route (tag in DB) → regenerate views → nominate structure changes → advance the high-water mark
@@ -101,6 +110,13 @@ bullets, every claim linked to its source note):
 - **Project (PMOC)** — TLDR · **LEFT OFF + next physical action** · open
   task list · new-this-period blocks.
 - **Concept (MOC)** — "current understanding" summary, updated on revisit.
+
+**Every view ends with a `## Log` section** — the container's routed blocks
+(membership via `routed_to` links), newest first, one line per block:
+`- YYYY-MM-DD — <one-line gist> ([[source note]])`. This materializes the
+append-only log so the user can SEE membership in Obsidian (DB links are
+otherwise invisible there). Small containers: full log. Big containers:
+most recent ~30 with a total count line.
 
 Footer line on every view:
 `*Generated YYYY-MM-DD from N blocks since YYYY-MM-DD.*`
