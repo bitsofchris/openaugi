@@ -111,7 +111,8 @@ Claude → MCP tool call → server.py
                  → expand via links
   → recent: recently created blocks
   → write_document: save a note to the vault (OpenAugi/{subfolder}/)
-  → tag_block: stamp AI-classified augi_tags onto a block
+  → tag_block: stamp AI-classified augi_tags onto a block (taxonomy-only)
+  → route_block: block → container membership (routed_to link)
   → get_review_state / mark_review_complete: review-pass high-water mark
 ```
 

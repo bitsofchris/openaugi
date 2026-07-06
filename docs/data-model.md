@@ -73,8 +73,15 @@ Links are typed, weighted edges between blocks. The composite primary key `(from
 | `groups` | data_block has this tag | Entry -> context_block:tag |
 | `links_to` | Explicit reference (wikilink) | Note A -> Note B |
 | `summarizes` | Context block summarizes source | Hub summary -> tag block |
+| `routed_to` | Review-pass membership: block belongs to a container note (AMOC/PMOC/MOC) | Idea block -> project MOC document |
 
 The graph that emerges from these links is what the agent actually navigates.
+
+**Classification is tags; membership is links.** Tags (`block.tags` from the
+user's markdown, `metadata.augi_tags` applied by the agent from the same
+closed taxonomy) say *what kind of thing* a block is. `routed_to` links say
+*which container threads* it belongs to — a block can belong to many, or
+none. See [review-pass.md](review-pass.md).
 
 ## Context Blocks
 

@@ -15,6 +15,7 @@ Write tools:
 - tag_block: stamp AI-classified augi_tags onto a block
 
 Review pass tools:
+- route_block: route a block into a container note (routed_to link)
 - get_review_state: read the review-pass high-water mark
 - mark_review_complete: advance the high-water mark after a pass
 
