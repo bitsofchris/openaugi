@@ -461,3 +461,39 @@ class TestWriteDocumentOverwrite:
         result = json.loads(write_document("openaugi", "view", "second", "Views"))
         assert result["status"] == "error"
         assert "already exists" in result["reason"]
+
+
+class TestRouteBlock:
+    def test_route_block_creates_link(self):
+        from openaugi.mcp.server import get_related, route_block, search
+
+        blocks = json.loads(search(keyword="career"))["results"]
+        block_id = next(b["id"] for b in blocks if b["kind"] == "data_block")
+        docs = json.loads(search(kind="context_block:document", k=5))["results"]
+        title = docs[0]["title"]
+
+        result = json.loads(route_block(block_id, title))
+        assert result["status"] == "ok"
+        assert result["kind"] == "routed_to"
+
+        related = json.loads(get_related(block_id, direction="out", kind="routed_to"))
+        assert any(r["block"]["id"] == result["container_id"] for r in related["related"])
+
+    def test_route_block_bad_container(self):
+        from openaugi.mcp.server import route_block, search
+
+        blocks = json.loads(search(keyword="career"))["results"]
+        block_id = blocks[0]["id"]
+        result = json.loads(route_block(block_id, "No Such Note Title"))
+        assert result["status"] == "error"
+
+    def test_route_block_idempotent(self):
+        from openaugi.mcp.server import route_block, search
+
+        blocks = json.loads(search(keyword="career"))["results"]
+        block_id = next(b["id"] for b in blocks if b["kind"] == "data_block")
+        docs = json.loads(search(kind="context_block:document", k=5))["results"]
+        title = docs[0]["title"]
+        route_block(block_id, title)
+        result = json.loads(route_block(block_id, title))
+        assert result["status"] == "ok"

@@ -45,6 +45,11 @@ projects (`#note-type/pmoc` AND `#status/active`). List each area note with
 its `area/*` tag here after `openaugi init` — the AMOCs are the stable
 routing targets; active PMOCs are discovered per run.
 
+**The registry notes' `description` frontmatter is the routing map** — it
+tells you *when to route here* (skill-file style: name + description). If a
+registry note has no description, nominate one on the Dashboard rather than
+guessing broadly.
+
 ## Routing
 
 **Routing ≠ surfacing.** Every block routes (cheap DB tags); views surface
@@ -64,10 +69,20 @@ Precedence (highest wins; a block may route to multiple containers):
 5. **Low confidence** → leave unrouted; it goes to the Dashboard's
    Unrouted/Gravity section. Never force-fit.
 
-Persist routing with `tag_block(block_id, augi_tags)`: the facet tags plus a
-`routed/<container-slug>` tag per container, e.g.
-`["area/openaugi", "type/idea", "routed/amoc-openaugi-main"]`.
-Tags live in the DB only — never write tags into the user's notes.
+**Persistence — two separate mechanisms, never conflate them:**
+
+- **Membership = links.** `route_block(block_id, container_title)` creates a
+  `routed_to` edge in the DB. A block can route to multiple containers.
+- **Classification = tags.** `tag_block(block_id, augi_tags)` with facets drawn
+  ONLY from the user's taxonomy — it is a closed vocabulary; never invent a
+  tag or a facet. If the user already tagged the block, do not re-tag; only
+  fill gaps.
+
+**Untagged and unrouted is the default, not a failure.** Life-log blocks
+(daily entries, memories) usually need no tag and no route — they stay
+reachable by time and semantic search. Tag only what you'd query; route only
+what a view should distill. Both live in the DB only — never write into the
+user's notes.
 
 ## Views
 
@@ -100,6 +115,10 @@ Always regenerate `View - Dashboard.md` (same folder):
   only then assemble the new note (gathering related older blocks too —
   that is the resurfacing feature).
 - Anything unroutable or confusing, listed honestly.
+- Permanent footer: `*How this works: docs/review-pass.md in the openaugi
+  repo · design record: docs/plans/review-pass-v1.md · agent instructions:
+  OpenAugi/AGENT/review-pass.md*` — the Dashboard is the discovery surface;
+  this line keeps the docs findable without remembering them.
 
 ## The pass, step by step
 
@@ -109,7 +128,8 @@ Always regenerate `View - Dashboard.md` (same folder):
 2. Pull new blocks: `search(after=since)` (browse mode, paginate via offset).
    Exclude blocks whose source path is under `OpenAugi/` — those are derived,
    not input. Use `recent`/`get_context`/`get_related` for extra context.
-3. Route each block per the precedence above; persist with `tag_block`.
+3. Route each block per the precedence above; persist membership with
+   `route_block`, classification (when there's signal) with `tag_block`.
 4. Regenerate a view for every container that received blocks
    (`overwrite=True`). Untouched containers keep their old view.
 5. Regenerate `View - Dashboard.md`.
