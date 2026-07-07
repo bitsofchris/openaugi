@@ -80,8 +80,12 @@ launches the session. Already true for: zzz grammar, `openaugi review` CLI.
 4. (later) **"Augi: aaa this block"** — prompt for a container, append an
    `aaa: route to X` line at cursor.
 
-No new server API needed for any of these — file writes only. Buttons =
-command palette entries; optionally a ribbon icon for #1.
+**Implementation details TBD** — decide in the plugin repo when building.
+Options, all landing on the same contract: (a) shell out to `openaugi review`
+(which writes the task file), (b) write the task file directly from the
+plugin, (c) later, an HTTP endpoint on the MCP server. No commitment yet;
+the only fixed point is that every trigger converges on the task-file
+contract so the watcher stays the single execution path.
 
 ## Content pipeline (extract as you go, per the operating system)
 
