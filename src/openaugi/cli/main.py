@@ -528,6 +528,40 @@ def cluster(
         store.close()
 
 
+@app.command(name="cluster-weather")
+def cluster_weather(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    window: int = typer.Option(14, "--window", help="Activity/delta window in days"),
+    top: int = typer.Option(10, "--top", help="Clusters shown per pass (markdown output)"),
+    json_out: bool = typer.Option(False, "--json", help="Emit full report as JSON"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Deterministic cluster growth/death report for the cluster-weather lens.
+
+    Diffs the latest cluster_run snapshot against the most recent one older
+    than the window (clusters matched across runs by member overlap), plus
+    per-cluster recent activity from block timestamps. Run 'openaugi cluster'
+    first to refresh clusters and record a snapshot.
+    """
+    _setup_logging(verbose)
+
+    import json as json_mod
+
+    from openaugi.pipeline.cluster_weather import compute_weather, render_weather_markdown
+    from openaugi.store.sqlite import SQLiteStore
+
+    db_path = db or str(_default_db())
+    store = SQLiteStore(db_path)
+    try:
+        report = compute_weather(store, window_days=window)
+        if json_out:
+            print(json_mod.dumps(report, indent=2))
+        else:
+            print(render_weather_markdown(report, top=top))
+    finally:
+        store.close()
+
+
 @app.command(name="cluster-explore")
 def cluster_explore(
     db: str | None = typer.Option(None, "--db", help="Database path"),
