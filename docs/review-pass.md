@@ -109,8 +109,27 @@ mark. The full pass:
    are for embedding, not visiting — add `OpenAugi/Views/` to Obsidian's
    Excluded Files. Agent-created container notes include the transclusion
    at birth.
-5. Regenerates `View - Dashboard.md` — rollup, task union, gravity nominations
-6. `mark_review_complete(summary)` → advances the mark
+5. Regenerates `View - Dashboard.md` — rollup, task union, gravity
+   nominations. **Nomination format:** one bullet per nomination ending in a
+   stable block anchor, with a nested answer slot:
+
+   ```
+   - **Promote:** 5 blocks orbit *capture UX* — make it a note? ^nom-promote-capture-ux
+       - answer:
+   ```
+
+   `^nom-<verb>-<subject-slug>` is deterministic — the same nomination keeps
+   the same anchor across passes, so unanswered nominations (and answers
+   written by other tools, e.g. the future mobile review UI upserting by
+   anchor) survive regeneration. Answering = filling the `- answer:` slot
+   (yes / no / free-text); free-form inline notes still work.
+6. `write_context_pack()` → regenerates `OpenAugi/context-pack.json` — the
+   machine-readable sidecar (taxonomy, recent containers, note titles) the
+   mobile bridge serves to the phone for tag/wikilink suggestions. Also
+   available as `openaugi context-pack` on the CLI. Shape is pinned by the
+   mobile repo's `shared/contract.ts` (`ContextPack`); builder:
+   `src/openaugi/pipeline/context_pack.py`.
+7. `mark_review_complete(summary)` → advances the mark
 
 Cadence: manual, attached to the Sunday weekly plan. Schedule only after it's
 boringly reliable.
@@ -157,10 +176,12 @@ Any of these fire a pass; they all converge on the same mechanism:
   session with the openaugi MCP.
 - Write `zzz: run the review pass` in any note — dispatch writes a task file
   to `OpenAugi/Tasks/`, the task watcher launches a tmux Claude session.
-- (Planned) `openaugi review` CLI and an **Obsidian plugin command/button** —
-  both just write that same task file. Anything that can create a markdown
-  file can trigger the system; the task-file contract is the integration
-  point (this is also how mobile will trigger it later).
+- Run `openaugi review` — the CLI writes that same task file.
+- (In progress, plugin repo) **Obsidian plugin commands** — also just write
+  the task file. Anything that can create a markdown file can trigger the
+  system; the task-file contract is the integration point. Mobile needs no
+  trigger surface of its own: a `zzz:` line in a captured block dispatches
+  after ingest.
 
 ## What the human does
 
