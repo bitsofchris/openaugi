@@ -60,6 +60,8 @@ src/openaugi/
 │   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar (see docs/review-pass.md)
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
 │   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch
+├── render/                # M6 — static HTML surfaces from the DB (no server)
+│   └── lifestream.py      # Merged chronological stream + heat strip → OpenAugi/render/
 ├── agents/                # Agent plane — launches Claude Code sessions
 │   └── task_watcher.py    # Task dispatch — OpenAugi/Tasks/ → tmux-hosted Claude sessions
 ├── store/
