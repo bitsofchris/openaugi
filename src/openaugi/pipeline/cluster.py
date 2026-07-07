@@ -539,6 +539,11 @@ def _write_pass(
     if deleted:
         logger.info("Deleted %d existing cluster blocks for pass '%s'", deleted, pass_cfg.id)
 
+    # Document-level passes cluster context_block:document IDs, which carry no
+    # block_time — expand to the underlying data_blocks so temporal metadata
+    # (first/last/block_timestamps) reflects actual writing activity.
+    doc_to_blocks = _build_doc_to_blocks(store) if pass_cfg.input_level == "document" else None
+
     cluster_blocks: list[Block] = []
     cluster_links: list[Link] = []
     cluster_block_ids: dict[str, str] = {}
@@ -563,7 +568,11 @@ def _write_pass(
                     result.centroids[label].astype(np.float32).tobytes()
                 ).decode()
 
-            temporal = _compute_temporal(member_ids, store)
+            if doc_to_blocks is not None:
+                temporal_ids = [b for mid in member_ids for b in doc_to_blocks.get(mid, [])]
+            else:
+                temporal_ids = member_ids
+            temporal = _compute_temporal(temporal_ids, store)
             noise_count = int(np.sum(result.labels == -1))
 
             metadata: dict[str, Any] = {
@@ -1077,5 +1086,11 @@ def run_cluster_dag(
 
     if dry_run:
         print("\n[dry-run] No data written to DB.")
+    elif pass_results:
+        # Append-only history for the cluster-weather lens: cluster blocks are
+        # replaced every run, snapshots let consecutive runs be diffed.
+        from openaugi.pipeline.cluster_weather import snapshot_cluster_run
+
+        snapshot_cluster_run(store, pass_results)
 
     return pass_results
