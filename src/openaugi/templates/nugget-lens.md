@@ -54,18 +54,20 @@ search. When unsure, skip.
    for an existing note covering it — if one exists, skip or suggest a
    link instead).
 3. **Nominate on `View - Dashboard.md`** under a `## Nuggets` section,
-   using the standard nomination grammar (stable anchor + answer slot):
+   using the standard nomination grammar (checkbox + stable anchor +
+   answer slot):
 
    ```
-   - **Nugget:** "capture is a database write" — post seed? promote to a note? ([[2026-07-03]]) ^nom-promote-capture-is-a-db-write
+   - [ ] **Nugget:** "capture is a database write" — post seed? promote to a note? ([[2026-07-03]]) ^nom-promote-capture-is-a-db-write
        - answer:
    ```
 
    Quote the nugget verbatim (trimmed), link the source note, suggest a
    disposition (note / post seed / link into [[existing note]]). End the
    section with `*Nugget lens last run: YYYY-MM-DD over N blocks.*`
-4. **On an answered nomination** (this run's step 1, or when processing
-   the dashboard): assemble per the answer — usually ONE small note via
+4. **On a decided nomination** — the box is checked (`- [x]`, a plain
+   "yes") or the answer slot is filled (this run's step 1, or when
+   processing the dashboard): assemble per the answer — usually ONE small note via
    `write_document` to `OpenAugi/Notes/` with `#human-review`, the verbatim
    nugget, a line of context, and a wikilink back to the source note.
    Post seeds get appended to the content-pipeline section instead.
@@ -76,5 +78,6 @@ search. When unsure, skip.
   nomination.
 - User's voice only — never nominate third-party material as a nugget.
 - Never edit notes outside `OpenAugi/`. Sources are never marked or moved.
-- Preserve unanswered nominations verbatim (anchor included) when the
-  Dashboard regenerates — same rule as all nominations.
+- Preserve undecided nominations verbatim (anchor and unchecked checkbox
+  included) when the Dashboard regenerates — same rule as all nominations.
+  A checked box or a filled answer means decided.

@@ -110,19 +110,23 @@ mark. The full pass:
    Excluded Files. Agent-created container notes include the transclusion
    at birth.
 5. Regenerates `View - Dashboard.md` — rollup, task union, gravity
-   nominations. **Nomination format:** one bullet per nomination ending in a
-   stable block anchor, with a nested answer slot:
+   nominations. **Nomination format:** one markdown checkbox bullet per
+   nomination ending in a stable block anchor, with a nested answer slot:
 
    ```
-   - **Promote:** 5 blocks orbit *capture UX* — make it a note? ^nom-promote-capture-ux
+   - [ ] **Promote:** 5 blocks orbit *capture UX* — make it a note? ^nom-promote-capture-ux
        - answer:
    ```
 
    `^nom-<verb>-<subject-slug>` is deterministic — the same nomination keeps
    the same anchor across passes, so unanswered nominations (and answers
-   written by other tools, e.g. the future mobile review UI upserting by
-   anchor) survive regeneration. Answering = filling the `- answer:` slot
-   (yes / no / free-text); free-form inline notes still work.
+   written by other tools, e.g. the mobile review UI upserting by
+   anchor) survive regeneration. **Decided = box checked OR answer filled**
+   — two input surfaces, one signal: the checkbox is the Obsidian
+   quick-tap, the answer slot is typed/mobile free text. Checked + empty
+   answer = plain "yes, as proposed." A filled answer (checked or not) is a
+   specific instruction and takes precedence. Unchecked + empty = still
+   pending: carried forward verbatim. Free-form inline notes still work.
 6. `write_context_pack()` → regenerates `OpenAugi/context-pack.json` — the
    machine-readable sidecar (taxonomy, recent containers, note titles) the
    mobile bridge serves to the phone for tag/wikilink suggestions. Also

@@ -161,11 +161,11 @@ Always regenerate `View - Dashboard.md` (same folder):
   that is the resurfacing feature).
 - **Nomination format (machine-readable — mobile review will read/write
   it):** every nomination, in the Gravity section or anywhere else on the
-  Dashboard, is ONE bullet ending in a stable Obsidian block anchor, with
-  an empty answer slot nested under it:
+  Dashboard, is ONE markdown checkbox bullet ending in a stable Obsidian
+  block anchor, with an empty answer slot nested under it:
 
   ```
-  - **Promote:** 5 blocks over 3 weeks orbit *capture UX* — make it a note? ^nom-promote-capture-ux
+  - [ ] **Promote:** 5 blocks over 3 weeks orbit *capture UX* — make it a note? ^nom-promote-capture-ux
       - answer:
   ```
 
@@ -173,8 +173,14 @@ Always regenerate `View - Dashboard.md` (same folder):
   (promote / describe / tag / merge / route), slug is kebab-case of the
   subject. Deterministic: the SAME nomination gets the SAME anchor on every
   pass, so unanswered nominations — and answers upserted by anchor from the
-  phone — survive Dashboard regeneration. An empty `- answer:` means
-  unanswered: carry the nomination forward verbatim, anchor included.
+  phone — survive Dashboard regeneration.
+
+  **Decided = box checked OR answer filled** — two input surfaces, one
+  signal: the checkbox is the Obsidian quick-tap, the answer slot is
+  typed/mobile free text. A checked box with an empty answer is a plain
+  "yes, as proposed." A filled answer (checked or not) is a specific
+  instruction and takes precedence. **Unchecked + empty = still pending:**
+  carry the nomination forward verbatim, anchor and checkbox included.
 - Anything unroutable or confusing, listed honestly.
 - Permanent footer: `*How this works: docs/review-pass.md in the openaugi
   repo · design record: docs/plans/review-pass-v1.md · agent instructions:
@@ -184,12 +190,16 @@ Always regenerate `View - Dashboard.md` (same folder):
 ## The pass, step by step
 
 0. **Process the user's Dashboard responses first.** Read the current
-   `View - Dashboard.md` for answers to prior nominations: each
-   nomination's `- answer:` slot (yes / no / free-text instruction), plus
-   any free-form inline notes or `aaa:` lines. Execute approved ones — update the registry, route the
-   relevant blocks, draft paste-lines for anything that touches the user's
-   notes — BEFORE regenerating anything, or the answers are lost to the
-   overwrite. Record each outcome in the new Dashboard.
+   `View - Dashboard.md` for answers to prior nominations — decided means
+   checked (`- [x]`) or the `- answer:` slot is filled. Checked + empty
+   answer = plain "yes, as proposed." Filled answer = specific instruction,
+   takes precedence over the checkbox. Unchecked + empty = still pending —
+   carry it forward verbatim, anchor and checkbox included; take no action.
+   Also read any free-form inline notes or `aaa:` lines. Execute approved
+   ones — update the registry, route the relevant blocks, draft paste-lines
+   for anything that touches the user's notes — BEFORE regenerating
+   anything, or the answers are lost to the overwrite. Record each outcome
+   in the new Dashboard.
 1. `get_review_state()` → `since` = last_run. If null, this is the first
    run: backfill from a sensible recent date (e.g. two weeks back, or the
    date the user gives).
