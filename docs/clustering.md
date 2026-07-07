@@ -1,6 +1,6 @@
 ---
 name: clustering
-description: Config-driven HDBSCAN clustering pipeline that generates context_block:cluster nodes — a hierarchical map of your vault for self-understanding and agent routing. Documents the config format, data model, SQL queries for each view, and how to tune params.
+description: Config-driven clustering pipeline (k-means/HDBSCAN) that generates context_block:cluster nodes — a hierarchical map of your vault for self-understanding and agent routing. Includes cluster weather (per-run snapshots + growth/death diffs for the cluster-weather lens). Documents the config format, data model, SQL queries, and tuning.
 ---
 
 # Clustering
@@ -18,9 +18,10 @@ Clustering is offline and optional — it doesn't run on ingest. Run it after em
 ## Quick start
 
 ```bash
-openaugi cluster              # run all configured passes, write to DB
+openaugi cluster              # run all configured passes, write to DB + snapshot
 openaugi cluster --dry-run    # compute and print stats, write nothing
 openaugi cluster --pass life_areas  # run one pass only
+openaugi cluster-weather      # growth/death report vs previous snapshot (--json for machines)
 ```
 
 ---
@@ -45,37 +46,26 @@ embedding_col = "content_only_embedding"
 store_centroid = true
 
 # Lens 1B — Concept/idea clusters within each life area
-# Block-level so individual moments of engagement with an idea are preserved.
-# block_timestamps in metadata → plot each block as an event on a timeline.
+# Document-level k-means, like the coarse pass: block-level HDBSCAN gave 100%
+# noise on the live DB (long docs dominate density — see
+# docs/plans/clustering-findings.md). dims=1536 finds sub-topic structure
+# within a shared life area.
 [[clustering.passes]]
 id = "concepts"
 description = "Recurring concept/idea clusters within each life area"
-type = "hdbscan"
-min_cluster_size = 15
-min_samples = 5
+type = "kmeans"
+n_clusters = 8
 dims = 1536
 scope = "within"
 parent_pass = "life_areas"
-input_level = "block"
-embedding_col = "content_only_embedding"
+input_level = "document"
 store_centroid = true
-
-# Lens 2 — Unconstrained cross-domain
-# No coarse scoping — blocks from different life areas can cluster together.
-# bridge_detection surfaces noise points near 2+ centroids (cross-domain ideas).
-[[clustering.passes]]
-id = "cross_domain"
-description = "Unconstrained cross-area connections and bridge ideas"
-type = "hdbscan"
-min_cluster_size = 20
-min_samples = 5
-dims = 1536
-scope = "all"
-input_level = "block"
-embedding_col = "content_only_embedding"
-store_centroid = true
-bridge_detection = true
 ```
+
+A cross-domain pass (bridge ideas across life areas) is currently disabled:
+the block-level HDBSCAN version is the known-bad config. Revisit as doc-level
+k-means when a lens needs bridge detection (`bridge_detection = true`
+surfaces noise points near 2+ centroids; HDBSCAN passes only).
 
 ### Pass fields
 
@@ -306,6 +296,41 @@ JOIN blocks db ON db.id = json_extract(b.metadata, '$.source_block_id')
 WHERE b.kind = 'context_block:bridge'
 LIMIT 20;
 ```
+
+---
+
+## Cluster weather
+
+The deterministic pre-compute behind the **cluster-weather lens** ("what's
+heating up, cooling off, newly forming?"). Implementation:
+`src/openaugi/pipeline/cluster_weather.py`.
+
+**Snapshots.** Every committed `openaugi cluster` run appends one
+`context_block:cluster_run` block recording, per pass, each cluster's label,
+member IDs, and count. Cluster blocks are *replaced* each run; snapshots are
+the append-only history that makes diffing possible (they survive
+`delete_cluster_blocks_by_pass`).
+
+**Diffing.** `openaugi cluster-weather --window 14 [--json]` compares each
+pass's latest snapshot against the most recent snapshot at least a window
+older (fallback: the oldest available). Clusters are matched across runs by
+**member overlap** — Jaccard ≥ 0.5, or containment ≥ 0.7 for clusters that
+grew/shrank a lot — because k-means labels are not stable between runs.
+Per cluster the report gives: status (`grew`/`shrank`/`stable`/`born`/`died`),
+member delta, `new_member_titles`, `recent_activity` (member blocks written
+inside the window, from the live cluster's `temporal.block_timestamps`),
+`last_block`, and `sample_titles` for naming.
+
+**First run** has no baseline: statuses read `stable` with no delta, but
+`recent_activity` already works — activity-only weather from day one.
+
+**Doc-level temporal note:** document-level passes cluster
+`context_block:document` IDs, which carry no `block_time`; `_write_pass`
+expands members to their data_blocks when computing temporal metadata, so
+doc-level clusters still get real `block_timestamps`.
+
+Interpretation (which movements deserve a Dashboard nomination) belongs to
+the lens: `<vault>/OpenAugi/AGENT/lenses/cluster-weather.md`.
 
 ---
 

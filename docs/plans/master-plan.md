@@ -20,6 +20,25 @@ pass is the first to exercise nomination anchors + `write_context_pack()`
 — watch it. **M4 (routing quality) is now IN PROGRESS** — usage-gated, two
 weeks of passes; see "M4 posture" note at the end of this doc.
 
+**2026-07-07 (night): cluster-weather lens shipped — first lens with real
+machinery.** Assessment first, on the live DB: coarse doc-level k-means
+(dims=96, k=10) reproduces the April life-area quality; the config's
+block-level HDBSCAN fine passes were confirmed dead (100% noise on cluster
+5's 4,072 blocks) — `~/.openaugi/config.toml` rewritten: `concepts` is now
+doc-level k-means (k=8, dims=1536, nameable sub-clusters verified),
+`cross_domain` commented out. Built on top: per-run
+`context_block:cluster_run` snapshots (auto on every committed
+`openaugi cluster`), cross-run diffing by member overlap (k-means labels
+drift; Jaccard ≥.5 or containment ≥.7), `openaugi cluster-weather [--json]`
+report (grew/shrank/born/died + recent_activity from block timestamps —
+first run works activity-only), and a temporal fix so doc-level clusters
+carry real block_timestamps. Lens spec: vault `lenses/cluster-weather.md`
+(mirrored to repo templates), nominations in gravity grammar. Live DB now
+has 10 life areas + 80 concept clusters + snapshot #1; Dashboard has a
+try-it line. Next weather run gets real deltas. See docs/clustering.md
+("Cluster weather"). Remaining M5: habit/tornado lens (needs accumulated
+passes).
+
 **2026-07-07 (later): lens system MVP shipped; lifestream parked.**
 Chris reframed M5: the lens is the product primitive ("saved questions"),
 and the MVP had to be end-to-end before refining individual lenses. Built:
@@ -94,9 +113,11 @@ distill · nuggets · **morning-briefing** (daily "what matters today" →
 rationale: user guide §3b; vision + release-video treatment:
 `docs/scratch/2026-07-06-session/vision-jarvis-in-your-pocket.md`
 (demo video target: end of week 2026-07-11).
-Remaining M5 work: cluster-weather lens (needs clustering pipeline),
-habit/tornado (needs accumulated passes), spec engine only if prose
-visibly fails.
+**cluster-weather** shipped 2026-07-07 (night) — the first lens with
+deterministic machinery behind it: cluster snapshots + growth/death diffs
+(`openaugi cluster-weather`; see docs/clustering.md "Cluster weather").
+Remaining M5 work: habit/tornado (needs accumulated passes), spec engine
+only if prose visibly fails.
 
 ### M6 — Rich render surface (lifestream PARKED 2026-07-07 — verdict: no value add)
 Lifestream v1 shipped and Chris's verdict was it doesn't add anything
