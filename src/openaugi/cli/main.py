@@ -186,6 +186,7 @@ def init():
         "research-agent.md": "Research sub-agent — NotebookLM, source ingestion",
         "review-pass.md": "Review pass — route blocks, regenerate derived views",
         "distill-lens.md": "Distill lens — on-command topic distillation with provenance",
+        "nugget-lens.md": "Nugget lens — nominate promotable insights from working notes",
     }
 
     copied = 0
@@ -309,6 +310,38 @@ def context_pack(
     try:
         out = write_context_pack(store, vault_path)
         console.print(f"[green]Wrote[/green] {out}")
+    finally:
+        store.close()
+
+
+@app.command()
+def render(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    days: int = typer.Option(180, "--days", help="Window of recent days to include"),
+    out: str | None = typer.Option(
+        None, "--out", help="Output HTML path (default: vault OpenAugi/render/)"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Render the lifestream — static HTML stream + heat strip from the DB."""
+    _setup_logging(verbose)
+
+    from openaugi.config import load_config
+    from openaugi.render.lifestream import render_lifestream
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    vault_path = path or config.get("vault", {}).get("default_path")
+    if not vault_path and not out:
+        console.print("[red]No vault path specified.[/red]")
+        console.print("Use --path / --out, or run 'openaugi init' to set a default.")
+        raise typer.Exit(1)
+
+    store = SQLiteStore(db or str(_default_db()), read_only=True)
+    try:
+        target = render_lifestream(store, vault_path or ".", days=days, out=out)
+        console.print(f"[green]Wrote[/green] {target}")
     finally:
         store.close()
 
