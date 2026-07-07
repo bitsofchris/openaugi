@@ -850,6 +850,35 @@ class SQLiteStore:
         ).fetchall()
         return [_row_to_block(r) for r in rows]
 
+    def get_recent_route_targets(self, limit: int = 5) -> list[Block]:
+        """Container notes (targets of routed_to links), most recently routed-into first."""
+        rows = self.conn.execute(
+            """SELECT b.id, b.kind, b.content, b.summary, b.embedding, b.source,
+                      b.title, b.tags, b.block_time, b.occurred_at, b.metadata,
+                      b.content_hash, b.ingested_at
+               FROM blocks b
+               JOIN (SELECT to_id, MAX(ingested_at) AS last_routed
+                     FROM links WHERE kind = 'routed_to' GROUP BY to_id) r
+                 ON r.to_id = b.id
+               ORDER BY r.last_routed DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [_row_to_block(r) for r in rows]
+
+    def get_recent_documents(self, limit: int = 500) -> list[Block]:
+        """Document blocks ordered by note date (falling back to ingest time), newest first."""
+        rows = self.conn.execute(
+            """SELECT id, kind, content, summary, embedding, source, title,
+                      tags, block_time, occurred_at, metadata, content_hash, ingested_at
+               FROM blocks
+               WHERE kind = 'context_block:document'
+               ORDER BY COALESCE(block_time, ingested_at) DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [_row_to_block(r) for r in rows]
+
     def get_recent_blocks(
         self, days: int = 30, kind: str | None = None, limit: int = 500
     ) -> list[Block]:

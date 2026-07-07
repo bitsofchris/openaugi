@@ -159,6 +159,22 @@ Always regenerate `View - Dashboard.md` (same folder):
   Take NO action on nominations. The user answers inline or via zzz;
   only then assemble the new note (gathering related older blocks too —
   that is the resurfacing feature).
+- **Nomination format (machine-readable — mobile review will read/write
+  it):** every nomination, in the Gravity section or anywhere else on the
+  Dashboard, is ONE bullet ending in a stable Obsidian block anchor, with
+  an empty answer slot nested under it:
+
+  ```
+  - **Promote:** 5 blocks over 3 weeks orbit *capture UX* — make it a note? ^nom-promote-capture-ux
+      - answer:
+  ```
+
+  Anchor = `^nom-<verb>-<subject-slug>` — verb is the action asked
+  (promote / describe / tag / merge / route), slug is kebab-case of the
+  subject. Deterministic: the SAME nomination gets the SAME anchor on every
+  pass, so unanswered nominations — and answers upserted by anchor from the
+  phone — survive Dashboard regeneration. An empty `- answer:` means
+  unanswered: carry the nomination forward verbatim, anchor included.
 - Anything unroutable or confusing, listed honestly.
 - Permanent footer: `*How this works: docs/review-pass.md in the openaugi
   repo · design record: docs/plans/review-pass-v1.md · agent instructions:
@@ -168,8 +184,9 @@ Always regenerate `View - Dashboard.md` (same folder):
 ## The pass, step by step
 
 0. **Process the user's Dashboard responses first.** Read the current
-   `View - Dashboard.md` for inline answers to prior nominations (and any
-   `aaa:` lines). Execute approved ones — update the registry, route the
+   `View - Dashboard.md` for answers to prior nominations: each
+   nomination's `- answer:` slot (yes / no / free-text instruction), plus
+   any free-form inline notes or `aaa:` lines. Execute approved ones — update the registry, route the
    relevant blocks, draft paste-lines for anything that touches the user's
    notes — BEFORE regenerating anything, or the answers are lost to the
    overwrite. Record each outcome in the new Dashboard.
@@ -198,7 +215,10 @@ Always regenerate `View - Dashboard.md` (same folder):
    window. If deeper context is needed, pull the container's full membership
    via its `routed_to` links (`get_related` on the container, direction=in).
 5. Regenerate `View - Dashboard.md`.
-6. `mark_review_complete(summary)` — one line, e.g.
+6. `write_context_pack()` — regenerates `OpenAugi/context-pack.json`, the
+   sidecar the mobile app's tag/link suggestions are served from. One call,
+   no arguments; the tool assembles it from the DB.
+7. `mark_review_complete(summary)` — one line, e.g.
    "routed 42 blocks; regenerated 4 views + Dashboard; 2 nominations".
    Only call this after views are written successfully.
 

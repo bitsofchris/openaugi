@@ -306,3 +306,25 @@ class TestRouteBlock:
         route_block(block_id, title)
         result = json.loads(route_block(block_id, title))
         assert result["status"] == "ok"
+
+
+class TestWriteContextPack:
+    def test_requires_vault_path(self, monkeypatch: pytest.MonkeyPatch):
+        from openaugi.mcp.server import write_context_pack
+
+        monkeypatch.delenv("OPENAUGI_VAULT_PATH", raising=False)
+        monkeypatch.setattr("openaugi.mcp.server.load_config", lambda: {})
+        result = json.loads(write_context_pack())
+        assert result["status"] == "error"
+
+    def test_writes_pack_to_vault(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from openaugi.mcp.server import write_context_pack
+
+        vault = tmp_path / "vault-out"
+        vault.mkdir()
+        monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(vault))
+        result = json.loads(write_context_pack())
+        assert result["status"] == "ok"
+        pack = json.loads((vault / "OpenAugi" / "context-pack.json").read_text())
+        assert set(pack) >= {"agentFile", "taxonomy", "recentConcepts", "noteTitles"}
+        assert pack["noteTitles"]  # fixture vault has documents

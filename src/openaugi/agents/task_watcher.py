@@ -131,7 +131,11 @@ ALLOWED_TOOLS = [
     "mcp__openaugi__traverse",
     "mcp__openaugi__recent",
     "mcp__openaugi__tag_block",
+    "mcp__openaugi__route_block",
+    "mcp__openaugi__get_review_state",
+    "mcp__openaugi__mark_review_complete",
     "mcp__openaugi__write_document",
+    "mcp__openaugi__write_context_pack",
 ]
 
 SETTINGS_JSON = json.dumps({"permissions": {"allow": ALLOWED_TOOLS}})
