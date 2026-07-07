@@ -55,6 +55,10 @@ is repetition: re-deriving the same synthesis a third time means save it once.
    - a **placement nomination** line: "Suggest linking from [[<gold/silver
      note>]] — say the word and I'll draft the link line for you to paste."
      (Never edit the user's notes; placement is theirs.)
+   - **Mirror every nomination onto `View - Dashboard.md`** under a
+     "Pending your answer" section — the Dashboard is the one place the
+     user answers things; a nomination living only in a note footer is
+     invisible.
 
 ## Hard rules
 
