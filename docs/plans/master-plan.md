@@ -87,6 +87,13 @@ substrate and delivery. MVP shipped end-to-end as files + prose:
 - **Mobile:** context pack now carries `lenses: [{name, description}]`
   → app renders apply-chips (tap → `zzz: apply lens X` in block text).
 - **Scheduling dormant** until M4 passes; specs already declare triggers.
+Lenses shipped 2026-07-07 (vault-side, `OpenAugi/AGENT/lenses/`):
+distill · nuggets · **morning-briefing** (daily "what matters today" →
+`View - Morning Briefing.md`) · **open-loops** (unclosed commitments →
+`View - Open Loops.md`, checkbox = closed). Starter library + JARVIS
+rationale: user guide §3b; vision + release-video treatment:
+`docs/scratch/2026-07-06-session/vision-jarvis-in-your-pocket.md`
+(demo video target: end of week 2026-07-11).
 Remaining M5 work: cluster-weather lens (needs clustering pipeline),
 habit/tornado (needs accumulated passes), spec engine only if prose
 visibly fails.
