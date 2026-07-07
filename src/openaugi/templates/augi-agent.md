@@ -35,9 +35,52 @@ in `OpenAugi/AGENT/`. Read the relevant doc when the task matches:
 - **`OpenAugi/AGENT/review-pass.md`** — for the recurring review/maintenance
   pass: "run the review pass", route new blocks, regenerate views/heads,
   update the Dashboard
-- **`OpenAugi/AGENT/distill-lens.md`** — for on-command distillation:
-  "distill X", "synthesize my thinking on X", or user-selected context →
-  one derived note with provenance
+- **`OpenAugi/AGENT/lenses/`** — the lens registry (see "Lenses" below).
+  "distill X" → `lenses/distill.md` · "run the nugget lens" / "find the
+  nuggets" → `lenses/nuggets.md` · "apply lens <name>" → that file.
+
+## Lenses
+
+A **lens** = a saved question applied to your data: scope + intent →
+derived artifact. Every lens is ONE markdown file in
+`OpenAugi/AGENT/lenses/` — the file registry IS the system. Frontmatter:
+`name`, `description` (what it answers — surfaces show this), `scope`
+(default retrieval recipe), `trigger` (`on-demand` now; `on-pass` /
+`every: <period>` activate when scheduled runs turn on), `target`
+(`dashboard` | `note` | `view:<container>`). Body = the intent prose.
+
+**Applying a lens** — instruction shapes: "apply lens <name>",
+"apply lens <name> to <scope>", or a lens name used naturally
+("distill X", "find the nuggets"). Process:
+
+1. Read `OpenAugi/AGENT/lenses/<name>.md`. Unknown name → list the
+   folder, match by name/description; if still ambiguous, ask.
+2. Resolve the scope. An explicit scope in the instruction OVERRIDES the
+   spec default. Scope grammar is loose text — interpret it:
+   `this block` (the task's Context section) · `[[Note]]` ·
+   `container: <title>` (its routed blocks) · `since: 14d` ·
+   `query: <terms>` · pasted/selected context (then that IS the scope —
+   never expand it uninvited).
+3. Run the intent over the scope. The lens body is your instruction;
+   augi-agent hard rules still apply on top.
+4. Write to the target: `dashboard` → a section on `View - Dashboard.md`
+   using the standard nomination grammar (checkbox + `^nom-*` anchor +
+   answer slot) · `note` → ONE note via `write_document` with
+   `#human-review` and provenance · `view:<container>` → regenerate that
+   view file (`overwrite=True` is legal only for Views).
+
+**Creating a lens** — instruction shape: "new lens <name>: <intent>"
+(from any surface, including mobile zzz). Write the spec file directly to
+`OpenAugi/AGENT/lenses/<slug>.md` (kebab-case slug; agent-space, so no
+nomination needed): draft sensible `scope`/`trigger`/`target` defaults
+from the intent, tag the body `#human-review`, and add one line to the
+Dashboard noting the new lens exists. The user edits or deletes the file
+to tune it — the file is the interface.
+
+**Lens rules:** a lens never edits notes outside `OpenAugi/` · targets
+follow the trust model (dashboard/note output is nominate-or-reviewed;
+only Views regenerate silently) · one artifact per apply — a lens that
+wants to write many things should nominate instead.
 
 ## How to work
 

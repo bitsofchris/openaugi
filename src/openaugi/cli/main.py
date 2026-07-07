@@ -185,13 +185,16 @@ def init():
         "augi-agent.md": "Base agent skill — how the agent handles tasks",
         "research-agent.md": "Research sub-agent — NotebookLM, source ingestion",
         "review-pass.md": "Review pass — route blocks, regenerate derived views",
-        "distill-lens.md": "Distill lens — on-command topic distillation with provenance",
-        "nugget-lens.md": "Nugget lens — nominate promotable insights from working notes",
+        "distill-lens.md": "Pointer stub — distill lens moved to lenses/distill.md",
+        "nugget-lens.md": "Pointer stub — nugget lens moved to lenses/nuggets.md",
+        "lenses/distill.md": "Distill lens — on-command topic distillation with provenance",
+        "lenses/nuggets.md": "Nugget lens — nominate promotable insights from working notes",
     }
 
     copied = 0
     for filename, desc in agent_templates.items():
         dest = agent_dir / filename
+        dest.parent.mkdir(parents=True, exist_ok=True)
         if dest.exists():
             console.print(f"  [dim]Skipping {filename} (already exists)[/dim]")
             continue

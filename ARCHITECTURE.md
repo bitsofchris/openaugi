@@ -57,7 +57,7 @@ src/openaugi/
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
 │   ├── dispatch.py        # Post-ingest: zzz instructions → task files in OpenAugi/Tasks/
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
-│   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar (see docs/review-pass.md)
+│   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar + lens list (docs/lenses.md)
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
 │   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch
 ├── render/                # M6 — static HTML surfaces from the DB (no server)

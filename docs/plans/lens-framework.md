@@ -5,10 +5,16 @@ description: NEXT UP (not started). Lenses as data — scope + trigger + prompt(
 
 # Lens Framework — lenses as data
 
-**Status: parked, next-up candidate. Build trigger: a third lens whose policy
-genuinely diverges from the existing two** (review-pass views, distill-lens).
-Until then, lens behavior lives as prose in the agent skill files — editable
-prompt-ware, no engine.
+**Status: MVP SHIPPED 2026-07-07 as files + prose** — see
+[docs/lenses.md](../lenses.md) for the live system. Lens specs are
+markdown files in `<vault>/OpenAugi/AGENT/lenses/` (spec shape below,
+lightly adapted); the "engine" is the generic apply-lens section in
+`augi-agent.md`; the lens list rides the context pack so mobile can render
+apply-chips. distill + nuggets migrated as the first two specs. Still
+deliberately deferred: a code engine (deterministic scope resolution,
+run-state tracking) — build trigger unchanged: when lens prose visibly
+outgrows what the agent can follow reliably. Scheduling stays dormant
+until master-plan M4 passes.
 
 ## Chris's definition (2026-07-06, verbatim intent)
 
