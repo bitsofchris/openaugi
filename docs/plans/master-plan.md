@@ -18,9 +18,26 @@ build):** (1) Chris verifies the plugin commands in Obsidian, then cuts a
 plugin release; (2) phone-loop verify for vault mode; (3) the next review
 pass is the first to exercise nomination anchors + `write_context_pack()`
 — watch it. **M4 (routing quality) is now IN PROGRESS** — usage-gated, two
-weeks of passes; see "M4 posture" note at the end of this doc. M5/M6
-exploration can run in parallel (read-only / prompt-level, can't
-destabilize the loop).
+weeks of passes; see "M4 posture" note at the end of this doc.
+
+**2026-07-07 (later): lens system MVP shipped; lifestream parked.**
+Chris reframed M5: the lens is the product primitive ("saved questions"),
+and the MVP had to be end-to-end before refining individual lenses. Built:
+lens registry (`OpenAugi/AGENT/lenses/`, distill + nuggets migrated),
+prose engine in `augi-agent.md` (apply/create from any surface), `lenses`
+field in the context pack for mobile chips, dormant scheduler note in
+review-pass. See M5 below + [docs/lenses.md](../lenses.md). Lifestream
+(M6 first screen) got Chris's verdict — no value add — and is parked.
+Nomination format meanwhile evolved to checkboxes (other thread).
+
+**Mobile ↔ backend contract (how the repos work together):** the wire
+types are pinned in mobile's `shared/contract.ts`; openaugi owns payload
+ASSEMBLY (`pipeline/context_pack.py` builds the dict); TRANSPORT is
+mobile's choice — today the bridge serves `OpenAugi/context-pack.json`,
+and if mobile moves to an HTTP endpoint, that endpoint serves the same
+builder's output (nothing here changes). New fields are additive (`lenses`
+added 2026-07-07 — mobile ignores it until it renders lens chips).
+Cross-repo changes get a heads-up line in each repo's plan STATUS.
 
 ## The value (why any of this)
 
@@ -55,29 +72,32 @@ Chris's corrections; `description` frontmatter on all registry notes;
 rename handling exercised. **Gate:** two weeks of passes with <handful of
 manual corrections each.
 
-### M5 — Lenses ([lens-framework.md](lens-framework.md)) — lens #3 shipped as prose
-Lens specs as data when lenses visibly diverge — never before. **Nugget
-lens shipped 2026-07-07 as a prose skill file**
-(`<vault>/OpenAugi/AGENT/nugget-lens.md`, + template): scans recent
-working notes for individually valuable insights, nominates 3–7 on the
-Dashboard (`## Nuggets`, standard anchor + answer-slot grammar),
-nominate-only. Trigger: "run the nugget lens" / zzz / task file. **Next
-lens: cluster weather** (growth/death feeding gravity — needs the
-clustering pipeline, pairs with an M6 cluster map). Then habit/tornado
-trends (needs accumulated passes). The spec engine gets built the moment
-lens prose starts duplicating — extracted from real cases, not designed.
-Scheduled runs land here too (only after passes are boringly reliable).
+### M5 — Lens system (MVP SHIPPED 2026-07-07 — [docs/lenses.md](../lenses.md))
+**Reframed 2026-07-07 (Chris): the lens is the product primitive** —
+saved questions applied to your life data; blocks/routing/surfaces are
+substrate and delivery. MVP shipped end-to-end as files + prose:
+- **Registry:** one markdown file per lens in `OpenAugi/AGENT/lenses/`
+  (name/description/scope/trigger/target + intent body). distill +
+  nuggets migrated in; old skill-file paths are pointer stubs.
+- **Engine:** the generic apply-lens + create-lens sections in
+  `augi-agent.md` (prose, not code). Apply from chat / zzz / task file;
+  scope grammar is loose text; explicit scope overrides the spec default.
+- **Create from anywhere:** "new lens NAME: INTENT" → agent writes the
+  spec file directly (agent-space), `#human-review`, Dashboard note.
+- **Mobile:** context pack now carries `lenses: [{name, description}]`
+  → app renders apply-chips (tap → `zzz: apply lens X` in block text).
+- **Scheduling dormant** until M4 passes; specs already declare triggers.
+Remaining M5 work: cluster-weather lens (needs clustering pipeline),
+habit/tornado (needs accumulated passes), spec engine only if prose
+visibly fails.
 
-### M6 — Rich render surface (IN PROGRESS 2026-07-07 — lifestream v1 shipped)
-**Decided: static self-contained HTML from the DB — the file contract
-again, no server.** `openaugi render` → `OpenAugi/render/lifestream.html`
-(data inlined as JSON, client-side filters, syncs to phone via the
-vault). First screen shipped: **lifestream** — merged chronological block
-stream + commit-graph heat strip, filterable by area/day/search
-(`src/openaugi/render/lifestream.py`; 5.3k blocks live-verified).
-Iterate in scratch → promote; next screens: cluster map (pairs with
-cluster-weather lens), container timelines. A live server only if
-staleness ever bites.
+### M6 — Rich render surface (lifestream PARKED 2026-07-07 — verdict: no value add)
+Lifestream v1 shipped and Chris's verdict was it doesn't add anything
+(plus a heat-strip UTC/local filter bug — not fixed, not worth it).
+Gate discipline: built cheap, looked, parked. The `render/` package +
+`openaugi render` CLI stay as infrastructure. Next candidate only when a
+lens WANTS a visual: cluster map alongside cluster weather. Static
+self-contained HTML remains the decided shape if/when revived.
 
 ### M7 — Mobile review flow (was: mobile capture — capture moved into M3)
 Mobile capture landed early: the Node bridge writing vault markdown *is*
