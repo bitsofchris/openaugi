@@ -285,6 +285,34 @@ def ingest(
         store.close()
 
 
+@app.command(name="context-pack")
+def context_pack(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Regenerate OpenAugi/context-pack.json (mobile capture-assist sidecar)."""
+    _setup_logging(verbose)
+
+    from openaugi.config import load_config
+    from openaugi.pipeline.context_pack import write_context_pack
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    vault_path = path or config.get("vault", {}).get("default_path")
+    if not vault_path:
+        console.print("[red]No vault path specified.[/red]")
+        console.print("Use --path or run 'openaugi init' to set a default.")
+        raise typer.Exit(1)
+
+    store = SQLiteStore(db or str(_default_db()))
+    try:
+        out = write_context_pack(store, vault_path)
+        console.print(f"[green]Wrote[/green] {out}")
+    finally:
+        store.close()
+
+
 @app.command()
 def split(
     file: str = typer.Argument(..., help="Path to a markdown file to split"),

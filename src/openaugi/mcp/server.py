@@ -713,6 +713,36 @@ def write_document(
     )
 
 
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@_release_conn
+def write_context_pack() -> str:
+    """Regenerate <vault>/OpenAugi/context-pack.json — the mobile capture-assist sidecar.
+
+    Call once near the end of a review pass (after routing, alongside the
+    Dashboard regeneration). Assembles taxonomy (curated note + top DB tags),
+    recentConcepts (containers by routing recency), and noteTitles from the
+    DB, then writes the JSON file the mobile bridge serves to the phone.
+
+    Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""
+    from openaugi.pipeline.context_pack import write_context_pack as _write_pack
+
+    vault_path = _get_vault_path()
+    if not vault_path:
+        return _json(
+            {
+                "status": "error",
+                "reason": (
+                    "No vault path configured. "
+                    "Run 'openaugi init' to set a default vault, "
+                    "or set OPENAUGI_VAULT_PATH environment variable."
+                ),
+            }
+        )
+
+    out = _write_pack(_get_store(), vault_path)
+    return _json({"status": "ok", "path": str(out)})
+
+
 # ── Resources ──────────────────────────────────────────────────────
 
 
