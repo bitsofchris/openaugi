@@ -55,16 +55,29 @@ Chris's corrections; `description` frontmatter on all registry notes;
 rename handling exercised. **Gate:** two weeks of passes with <handful of
 manual corrections each.
 
-### M5 — Lenses ([lens-framework.md](lens-framework.md))
-Lens specs as data when a third lens diverges. First candidates: nugget
-nominations from working notes (bronze→silver extraction), cluster weather
-(growth/death feeding gravity), habit/tornado trend lens. Scheduled runs
-land here too (only after passes are boringly reliable).
+### M5 — Lenses ([lens-framework.md](lens-framework.md)) — lens #3 shipped as prose
+Lens specs as data when lenses visibly diverge — never before. **Nugget
+lens shipped 2026-07-07 as a prose skill file**
+(`<vault>/OpenAugi/AGENT/nugget-lens.md`, + template): scans recent
+working notes for individually valuable insights, nominates 3–7 on the
+Dashboard (`## Nuggets`, standard anchor + answer-slot grammar),
+nominate-only. Trigger: "run the nugget lens" / zzz / task file. **Next
+lens: cluster weather** (growth/death feeding gravity — needs the
+clustering pipeline, pairs with an M6 cluster map). Then habit/tornado
+trends (needs accumulated passes). The spec engine gets built the moment
+lens prose starts duplicating — extracted from real cases, not designed.
+Scheduled runs land here too (only after passes are boringly reliable).
 
-### M6 — Rich render surface
-HTML dashboard / JARVIS view: merged chronological logs, timelines,
-cluster maps (knowledge-timeline + cluster-viewer precedent). Read-only
-over the same DB.
+### M6 — Rich render surface (IN PROGRESS 2026-07-07 — lifestream v1 shipped)
+**Decided: static self-contained HTML from the DB — the file contract
+again, no server.** `openaugi render` → `OpenAugi/render/lifestream.html`
+(data inlined as JSON, client-side filters, syncs to phone via the
+vault). First screen shipped: **lifestream** — merged chronological block
+stream + commit-graph heat strip, filterable by area/day/search
+(`src/openaugi/render/lifestream.py`; 5.3k blocks live-verified).
+Iterate in scratch → promote; next screens: cluster map (pairs with
+cluster-weather lens), container timelines. A live server only if
+staleness ever bites.
 
 ### M7 — Mobile review flow (was: mobile capture — capture moved into M3)
 Mobile capture landed early: the Node bridge writing vault markdown *is*
