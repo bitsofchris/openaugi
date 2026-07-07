@@ -44,8 +44,11 @@ target: dashboard           # dashboard | note | view:<container>
 
 Shipped lenses: `lenses/distill.md` (topic → one curated note with
 provenance), `lenses/nuggets.md` (working notes → 3–7 promotion
-nominations). The old `distill-lens.md` / `nugget-lens.md` paths are
-pointer stubs.
+nominations), `lenses/cluster-weather.md` (concept-cluster growth/death →
+Dashboard nominations; backed by the deterministic pre-compute in
+[docs/clustering.md](clustering.md) — `openaugi cluster` +
+`openaugi cluster-weather`). The old `distill-lens.md` / `nugget-lens.md`
+paths are pointer stubs.
 
 ## Applying a lens — from any surface
 
