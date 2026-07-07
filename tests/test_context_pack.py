@@ -130,6 +130,20 @@ class TestBuildContextPack:
         (agent_dir / "capture-conventions.md").write_text("# My conventions\n")
         assert build_context_pack(populated, tmp_path)["agentFile"] == "# My conventions\n"
 
+    def test_lenses_from_registry(self, populated: SQLiteStore, tmp_path: Path):
+        lens_dir = tmp_path / "OpenAugi" / "AGENT" / "lenses"
+        lens_dir.mkdir(parents=True)
+        (lens_dir / "nuggets.md").write_text(
+            "---\nname: nuggets\ndescription: Find stand-alone insights.\n"
+            "scope: recent writing\ntrigger: on-demand\ntarget: dashboard\n---\n\nIntent.\n"
+        )
+        (lens_dir / "no-frontmatter.md").write_text("just prose")
+        pack = build_context_pack(populated, tmp_path)
+        assert pack["lenses"] == [{"name": "nuggets", "description": "Find stand-alone insights."}]
+
+    def test_lenses_empty_without_registry(self, populated: SQLiteStore, tmp_path: Path):
+        assert build_context_pack(populated, tmp_path)["lenses"] == []
+
     def test_empty_store(self, store: SQLiteStore, tmp_path: Path):
         pack = build_context_pack(store, tmp_path)
         assert pack["taxonomy"] == []

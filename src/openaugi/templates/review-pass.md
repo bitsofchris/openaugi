@@ -232,6 +232,14 @@ Always regenerate `View - Dashboard.md` (same folder):
    "routed 42 blocks; regenerated 4 views + Dashboard; 2 nominations".
    Only call this after views are written successfully.
 
+## Lens scheduling (NOT ACTIVE YET)
+
+The lens registry (`OpenAugi/AGENT/lenses/`) declares per-lens triggers
+(`on-pass`, `every: <period>`). **Do not run them yet.** Scheduled lens
+runs activate only after passes are boringly reliable; until then all
+lenses are on-demand. When activated, this section will say: after the
+Dashboard step, list the lens folder, run whatever is due, then continue.
+
 ## Hard rules
 
 - Never modify notes outside `OpenAugi/`. Never use `overwrite=True` outside

@@ -18,6 +18,9 @@ Sources, in trust order:
 - noteTitles: containers first, then documents by recency (capped).
 - agentFile: `OpenAugi/AGENT/capture-conventions.md` if present, else a
   built-in default.
+- lenses: name + description of every spec in `OpenAugi/AGENT/lenses/`
+  (additive field — mobile renders these as apply-lens chips; a tapped
+  chip appends `zzz: apply lens <name>` to the block text).
 """
 
 from __future__ import annotations
@@ -35,6 +38,9 @@ logger = logging.getLogger(__name__)
 OUTPUT_RELPATH = "OpenAugi/context-pack.json"
 TAXONOMY_NOTE = "OpenAugi/AGENT/My Taxonomy.md"
 CONVENTIONS_NOTE = "OpenAugi/AGENT/capture-conventions.md"
+LENSES_DIR = "OpenAugi/AGENT/lenses"
+
+_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 MAX_TAXONOMY = 40
 MAX_RECENT_CONCEPTS = 5
@@ -63,6 +69,28 @@ def _parse_taxonomy_note(vault: Path) -> list[str]:
         if tag not in tags:
             tags.append(tag)
     return tags
+
+
+def _read_lenses(vault: Path) -> list[dict]:
+    """Name + description of each lens spec in the registry, sorted by name."""
+    import yaml
+
+    lenses = []
+    lens_dir = vault / LENSES_DIR
+    if not lens_dir.is_dir():
+        return lenses
+    for f in sorted(lens_dir.glob("*.md")):
+        m = _FRONTMATTER_RE.match(f.read_text())
+        if not m:
+            continue
+        try:
+            fm = yaml.safe_load(m.group(1)) or {}
+        except yaml.YAMLError:
+            logger.warning("Skipping lens with bad frontmatter: %s", f.name)
+            continue
+        name = str(fm.get("name") or f.stem)
+        lenses.append({"name": name, "description": str(fm.get("description") or "")})
+    return lenses
 
 
 def _read_agent_file(vault: Path) -> str:
@@ -117,6 +145,7 @@ def build_context_pack(store: SQLiteStore, vault_path: str | Path) -> dict:
         "taxonomy": taxonomy,
         "recentConcepts": recent_concepts,
         "noteTitles": titles,
+        "lenses": _read_lenses(vault),
         "generatedAt": datetime.now(UTC).isoformat(timespec="seconds"),
     }
 
