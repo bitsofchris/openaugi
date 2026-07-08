@@ -61,6 +61,32 @@ Absence of a status tag on a task means *"queued, not yet triaged."* That's a fi
 
 **Not the same as the task-file `status:` frontmatter field.** See [disambiguation](#disambiguation--block-status-tag-vs-task-file-status-field) below.
 
+## Source attribution — [vault.source_rules] (the voice firewall)
+
+The taxonomy's `source/*` facet marks ingest origin (readwise, ai-chat,
+webclip, notebookLM) — the mechanical half of "his voice vs third-party."
+Lenses with a "user's voice only" rule (nuggets, open-loops) and
+idea-lineage's influences section depend on it, but hand-tagging
+bulk-import folders never happens in practice. So attribution is
+config-driven:
+
+```toml
+# ~/.openaugi/config.toml — first matching rule wins, order = file order
+[vault.source_rules]
+"Reference/Readwise/**" = "source/readwise"
+"Reference/AI Conversations/**" = "source/ai-chat"
+"Reference/Articles/**" = "source/webclip"
+```
+
+- Applied at ingest in the vault adapter; an **explicit `source/*` tag
+  written in the note always wins** (text is truth — the rule only fills
+  the gap).
+- Ingest skips unchanged files, so after adding rules run
+  `openaugi backfill-source-tags` once (idempotent, `--dry-run` to
+  preview) to attribute existing rows.
+- Tags come from this taxonomy's closed `source/*` vocabulary — rules
+  never invent new tags.
+
 ## Classification precedence
 
 When classifying blocks (manually or via the agent), apply these rules in order. **Path beats tags beats content beats guess** — cheapest, most reliable signals first.

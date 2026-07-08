@@ -94,8 +94,15 @@ def _run_ingest_cycle(
     try:
         exclude = config.get("vault", {}).get("exclude_patterns")
         workers = config.get("vault", {}).get("max_workers", 4)
+        source_rules = config.get("vault", {}).get("source_rules")
 
-        result = run_layer0(vault_path, store, exclude_patterns=exclude, max_workers=workers)
+        result = run_layer0(
+            vault_path,
+            store,
+            exclude_patterns=exclude,
+            max_workers=workers,
+            source_rules=source_rules,
+        )
         stats = result["stats"]
         logger.info(
             f"Layer 0 done: {result['blocks_added']} added, "

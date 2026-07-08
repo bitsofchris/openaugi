@@ -73,8 +73,13 @@ def parse_vault(
     vault_path: str | Path,
     exclude_patterns: list[str] | None = None,
     max_workers: int = 4,
+    source_rules: dict[str, str] | None = None,
 ) -> tuple[list[Block], list[Link]]:
     """Parse an Obsidian vault into blocks and links.
+
+    source_rules: {path glob → source/* tag} from [vault.source_rules] config;
+    stamps ingest-origin attribution on blocks in matching folders (explicit
+    source/* tags in the note text always win — text is truth).
 
     Returns (blocks, links) ready to insert into the store.
     """
@@ -82,6 +87,7 @@ def parse_vault(
     if not vault.is_dir():
         raise FileNotFoundError(f"Vault path does not exist: {vault}")
     excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
+    rules = _normalize_source_rules(source_rules)
 
     all_files = list(vault.rglob("*.md"))
     if not all_files:
@@ -96,7 +102,7 @@ def parse_vault(
     tag_blocks: dict[str, Block] = {}  # dedupe tag blocks globally
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(_parse_file, f, vault, file_index): f for f in included}
+        futures = {executor.submit(_parse_file, f, vault, file_index, rules): f for f in included}
         for future in as_completed(futures):
             file_path = futures[future]
             try:
@@ -123,6 +129,7 @@ def parse_vault_incremental(
     known_doc_hashes: dict[str, str],
     exclude_patterns: list[str] | None = None,
     max_workers: int = 4,
+    source_rules: dict[str, str] | None = None,
 ) -> tuple[list[Block], list[Link], dict[str, str], list[str]]:
     """Parse vault with incremental change detection.
 
@@ -131,6 +138,7 @@ def parse_vault_incremental(
         known_doc_hashes: {relative_path: content_hash} from previous run.
         exclude_patterns: Glob patterns to skip.
         max_workers: Thread pool size.
+        source_rules: {path glob → source/* tag}; see parse_vault.
 
     Returns:
         (new_blocks, new_links, current_hashes, deleted_paths)
@@ -142,6 +150,7 @@ def parse_vault_incremental(
     if not vault.is_dir():
         raise FileNotFoundError(f"Vault path does not exist: {vault}")
     excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
+    rules = _normalize_source_rules(source_rules)
 
     all_files = list(vault.rglob("*.md"))
     if not all_files:
@@ -183,7 +192,9 @@ def parse_vault_incremental(
     tag_blocks: dict[str, Block] = {}
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(_parse_file, f, vault, file_index): f for f in files_to_parse}
+        futures = {
+            executor.submit(_parse_file, f, vault, file_index, rules): f for f in files_to_parse
+        }
         for future in as_completed(futures):
             file_path = futures[future]
             try:
@@ -221,7 +232,10 @@ def _check_readable(vault: Path) -> None:
 
 
 def _parse_file(
-    file_path: Path, vault_root: Path, file_index: dict[str, str]
+    file_path: Path,
+    vault_root: Path,
+    file_index: dict[str, str],
+    source_rules: list[tuple[str, str]] | None = None,
 ) -> tuple[list[Block], list[Link], dict[str, Block]]:
     """Parse a single .md file into blocks + links.
 
@@ -276,7 +290,7 @@ def _parse_file(
         section_date = _parse_date(seg.section_date) if seg.section_date else None
         resolved_ts = _resolve_timestamp(section_date, effective_title_date, file_created)
 
-        all_tags = _unique_ordered(fm_tags + seg.tags)
+        all_tags = _apply_source_rules(rel_path, _unique_ordered(fm_tags + seg.tags), source_rules)
 
         entry_metadata: dict = {
             "source_path": rel_path,
@@ -418,6 +432,93 @@ def _matches_pattern(path: str, pattern: str) -> bool:
         parts = pattern.split("*")
         return path.startswith(parts[0]) and path.endswith(parts[1])
     return False
+
+
+def _normalize_source_rules(source_rules: dict[str, str] | None) -> list[tuple[str, str]] | None:
+    """[vault.source_rules] config dict → ordered (pattern, tag) list.
+
+    Tags may be written with or without a leading '#'; stored without.
+    First matching rule wins (dict order = file order in TOML).
+    """
+    if not source_rules:
+        return None
+    return [(pattern, tag.lstrip("#")) for pattern, tag in source_rules.items()]
+
+
+def _apply_source_rules(
+    rel_path: str,
+    tags: list[str],
+    source_rules: list[tuple[str, str]] | None,
+) -> list[str]:
+    """Stamp a source/* tag from folder rules — unless the text already has one.
+
+    An explicit source/* tag in the note text always wins: text is truth,
+    the rule only fills the gap for bulk-imported folders.
+    """
+    if not source_rules or any(t.startswith("source/") for t in tags):
+        return tags
+    for pattern, tag in source_rules:
+        if _matches_pattern(rel_path, pattern):
+            return [*tags, tag]
+    return tags
+
+
+def backfill_source_tags(
+    store,
+    source_rules: dict[str, str],
+    dry_run: bool = False,
+) -> dict[str, int]:
+    """Apply source rules to data_blocks already in the DB.
+
+    Ingest only touches changed files, so turning on [vault.source_rules]
+    does nothing for existing rows — this walks every data_block, applies
+    the same explicit-tag-wins logic as _parse_file, and updates tags +
+    groups links in place. Idempotent. Returns {tag: blocks_updated}.
+    """
+    import json as _json
+
+    from openaugi.model.link import Link as _Link
+
+    rules = _normalize_source_rules(source_rules)
+    if not rules:
+        return {}
+
+    rows = store.conn.execute(
+        """SELECT id, tags, json_extract(metadata, '$.source_path')
+           FROM blocks WHERE kind = 'data_block'"""
+    ).fetchall()
+
+    updates: list[tuple[str, str]] = []  # (block_id, new_tags_json)
+    tag_links: list[Link] = []
+    stats: dict[str, int] = {}
+    needed_tag_blocks: dict[str, Block] = {}
+
+    for block_id, tags_json, source_path in rows:
+        if not source_path:
+            continue
+        tags = _json.loads(tags_json) if tags_json else []
+        new_tags = _apply_source_rules(source_path, tags, rules)
+        if new_tags == tags:
+            continue
+        added = new_tags[-1]
+        stats[added] = stats.get(added, 0) + 1
+        updates.append((_json.dumps(new_tags), block_id))
+        tag_id = Block.make_tag_id(added)
+        if added not in needed_tag_blocks:
+            needed_tag_blocks[added] = Block(
+                id=tag_id, kind="context_block:tag", title=added, source="vault"
+            )
+        tag_links.append(_Link(from_id=block_id, to_id=tag_id, kind="groups"))
+
+    if dry_run or not updates:
+        return stats
+
+    store.insert_blocks(list(needed_tag_blocks.values()))
+    store.conn.executemany("UPDATE blocks SET tags = ? WHERE id = ?", updates)
+    store.conn.commit()
+    store.insert_links(tag_links)
+    logger.info("Backfilled source tags on %d blocks: %s", len(updates), stats)
+    return stats
 
 
 def _unique_ordered(items: list[str]) -> list[str]:
