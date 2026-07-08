@@ -101,18 +101,21 @@ Five retrieval modes — semantic, keyword, graph traversal, time-based, direct 
 
 ---
 
-## Clustering
+## Clustering & Cluster Weather
 
-After embedding, run `openaugi cluster` to generate a hierarchical map of your vault:
+Where this sits in the pipeline: **ingest and embedding happen automatically** (`openaugi up` / the file watcher embed every block as it lands). **Clustering is offline and on-demand** — it never runs during ingest, so a fresh database has no clusters until you run it:
 
 ```bash
 openaugi cluster --dry-run    # tune params, no writes
-openaugi cluster              # write context_block:cluster nodes to DB
+openaugi cluster              # write context_block:cluster nodes + a run snapshot to DB
+openaugi cluster-weather      # growth/death report vs the previous snapshot (--json for agents)
 ```
 
-Configured as named passes in `~/.openaugi/config.toml`. Each pass runs HDBSCAN at a different embedding dimensionality — coarse pass (dim-64) surfaces life areas, fine pass (full-dim within each area) surfaces specific recurring ideas. Cross-domain pass finds connections across areas you wouldn't consciously link.
+Configured as named passes in `~/.openaugi/config.toml`. Both shipped passes are **document-level k-means** (each document mean-pooled to one vector — long transcripts get one vote, not 150): a coarse pass (dims=96, k=10) surfaces life areas, and a `concepts` pass (dims=1536, k=8 within each area) surfaces the recurring ideas inside them. Block-level HDBSCAN was tested and retired — long documents dominate density and everything else becomes noise (see [clustering-findings](docs/plans/clustering-findings.md)).
 
-Cluster assignments land in each data_block's metadata (`cluster_assignments.{pass_id}`), making them queryable and renderable without joins. See **[Clustering](docs/clustering.md)** for config, SQL queries, and param tuning.
+Every committed run also records a **snapshot** (cluster membership per pass), and `openaugi cluster-weather` diffs the latest snapshot against one a window ago — which clusters grew, shrank, were born, or died, plus recent writing activity per cluster. This feeds the **cluster-weather lens**: say "apply lens cluster-weather" and the agent turns the report into Dashboard nominations ("*AI distillation service* grew +8 notes in 14d — distill it into a note?").
+
+Cluster assignments land in each data_block's metadata (`cluster_assignments.{pass_id}`), making them queryable and renderable without joins. See **[Clustering](docs/clustering.md)** for config, the weather data model, SQL queries, and param tuning.
 
 ---
 
@@ -121,7 +124,7 @@ Cluster assignments land in each data_block's metadata (`cluster_assignments.{pa
 - **[Getting Started](docs/GETTING_STARTED.md)** — full install guide, CLI reference, MCP tools, Claude registration
 - **[Architecture](ARCHITECTURE.md)** — data model, processing layers, module map, design decisions
 - **[Data Model](docs/data-model.md)** — philosophy, block kinds, navigation pattern, four-layer architecture
-- **[Clustering](docs/clustering.md)** — HDBSCAN clustering: config format, data model, SQL queries, param tuning
+- **[Clustering](docs/clustering.md)** — clustering + cluster weather: config format, data model, snapshots & diffs, SQL queries, param tuning
 - **[MCP Server](docs/MCP_SERVER.md)** — tool reference and tuning
 - **[Review Pass](docs/review-pass.md)** — the write-back loop: routing, capture grammar (`qqq`/`zzz:`/`aaa:`), derived views, Dashboard nominations
 - **[Task Dispatch](docs/task-dispatch.md)** — optional Obsidian → tmux dispatch: write a task, watcher launches a Claude Code agent in a named session
