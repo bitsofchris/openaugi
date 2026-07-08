@@ -27,20 +27,32 @@ file. The "engine" is the agent following the generic apply-lens
 instructions in augi-agent.md; a code engine is deliberately deferred
 until lens specs visibly outgrow prose.
 
-## The spec — one file per lens
+## The spec — one file per lens (the contract)
 
+**The authoritative, annotated contract is
+`src/openaugi/templates/lens-template.md`** (vault copy:
+`OpenAugi/AGENT/lens-template.md` — copy it to start a new lens). Same
+pattern as the task-file contract: one file defines the format, writers
+and readers agree on it, and `tests/test_lens_contract.py` breaks if a
+shipped lens or the reader drifts. In brief —
 `<vault>/OpenAugi/AGENT/lenses/<name>.md`:
 
 ```yaml
 ---
-name: nuggets
-description: what this lens answers, one line (surfaces display this)
-scope: default retrieval recipe, plain prose (overridable at apply time)
-trigger: on-demand          # on-pass / every: 7d — dormant until scheduled runs activate
-target: dashboard           # dashboard | note | view:<container>
+name: nuggets                # kebab-case, matches filename. REQUIRED (all five are)
+description: >-
+  What this lens answers, one line (surfaces display this).
+scope: >-
+  Default retrieval recipe, plain prose (overridable at apply time).
+trigger: on-demand           # on-pass / every 7d (no colon!) — dormant until scheduling activates
+target: >-
+  dashboard                  # dashboard | note — <path> | view — overwrite <View - X.md>
 ---
 <intent — the prompt body. Optional persona/reference links.>
 ```
+
+`description`/`scope`/`target` are folded scalars (`>-`) — bare values
+with quotes or `: ` are invalid YAML. Validate: `openaugi lenses --check`.
 
 Shipped lenses: `lenses/distill.md` (topic → one curated note with
 provenance), `lenses/nuggets.md` (working notes → 3–7 promotion
@@ -95,7 +107,7 @@ scalars: `description: >-` with the text indented on the next line.
 
 ## Scheduling (dormant)
 
-Specs declare `trigger: on-pass` / `every: <period>` now, but the review
+Specs declare `trigger: on-pass` / `every <period>` now, but the review
 pass does NOT run them until the routing-quality gate (master plan M4)
 passes. Then the pass becomes the scheduler: list the folder, run what's
 due. No cron, no daemon — the pass is already the heartbeat.

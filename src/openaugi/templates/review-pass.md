@@ -235,7 +235,7 @@ Always regenerate `View - Dashboard.md` (same folder):
 ## Lens scheduling (NOT ACTIVE YET)
 
 The lens registry (`OpenAugi/AGENT/lenses/`) declares per-lens triggers
-(`on-pass`, `every: <period>`). **Do not run them yet.** Scheduled lens
+(`on-pass`, `every <period>`). **Do not run them yet.** Scheduled lens
 runs activate only after passes are boringly reliable; until then all
 lenses are on-demand. When activated, this section will say: after the
 Dashboard step, list the lens folder, run whatever is due, then continue.

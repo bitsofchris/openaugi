@@ -187,6 +187,7 @@ def init():
         "review-pass.md": "Review pass — route blocks, regenerate derived views",
         "distill-lens.md": "Pointer stub — distill lens moved to lenses/distill.md",
         "nugget-lens.md": "Pointer stub — nugget lens moved to lenses/nuggets.md",
+        "lens-template.md": "THE lens contract — copy to start a new lens",
         "lenses/distill.md": "Distill lens — on-command topic distillation with provenance",
         "lenses/nuggets.md": "Nugget lens — nominate promotable insights from working notes",
     }
