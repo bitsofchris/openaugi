@@ -110,6 +110,18 @@ ChatGPT, Readwise, Research output, and a LlamaIndex bridge are planned for Phas
 
 ---
 
+## Queued tasks (2026-07-07, Chris's call)
+
+- **Tailscale reachability** — mobile capture away from home wifi; per the
+  M3 connectivity note it's an env-var change on the bridge, not a build.
+  Do when away-from-home capture starts mattering.
+- **ChatGPT history ingest** — two steps: (1) Chris re-exports his ChatGPT
+  history (the old copy at `~/Downloads/chatgpt-history` is gone); (2) we
+  convert it to markdown files with `source/ai-chat` attribution and let
+  the vault adapter ingest them — a one-time converter script, NOT a live
+  API adapter (supersedes the phase3-adapters API-adapter approach; the
+  vault filesystem is the API, per M3).
+
 ## Other Deferred Items
 
 - **Adapter protocol / registry / entry points** — to be defined in Phase 3 alongside the first non-vault adapters
