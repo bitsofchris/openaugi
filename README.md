@@ -141,6 +141,23 @@ Cluster assignments land in each data_block's metadata (`cluster_assignments.{pa
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system map.
 
+### Contract fixtures
+
+Three text/file contracts couple this repo to **OpenAugi Mobile** and are
+enforced only by lenient parsers: the Dashboard **nomination grammar**, the
+**context-pack.json** shape, and mobile's **capture daily-note anchors**. The
+golden fixtures live in [`tests/fixtures/contracts/`](tests/fixtures/contracts/)
+and are the shared source of truth — the mobile repo vendors copies of them.
+`tests/test_contract_fixtures.py` pins openaugi's side.
+
+When a contract changes: regenerate the context-pack sample with
+`.venv/bin/python scripts/gen_contract_fixtures.py` (it runs the real builder
+over `tests/contract_corpus.py`; the two Markdown fixtures are hand-edited),
+run `pytest`, then in the mobile repo run `scripts/sync-contract-fixtures.sh`
+and its `npm test`. **Both suites must pass before either repo ships** — a
+green fixture on one side and a stale copy on the other is the drift these
+tests exist to catch.
+
 ---
 
 ## License

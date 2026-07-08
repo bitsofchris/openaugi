@@ -7,6 +7,24 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-08: cross-repo contract fixtures landed (tests+fixtures only, no
+behavior change).** The three text/file contracts that couple this repo to
+OpenAugi Mobile — Dashboard **nomination grammar**, **context-pack.json**
+shape, and mobile's **capture daily-note anchors** — now have golden fixtures
+in `tests/fixtures/contracts/` (shared source of truth; mobile vendors copies).
+`tests/test_contract_fixtures.py` pins openaugi's side; regenerate the
+context-pack sample via `scripts/gen_contract_fixtures.py` (real builder over
+`tests/contract_corpus.py`). Refresh ritual: README "Contract fixtures".
+**Cross-repo heads-up:** private-augi-mobile got the vendored copies +
+`scripts/sync-contract-fixtures.sh` + its parser tests repointed at the
+fixtures the same day (task-contract-fixtures.md; item 5 in that repo's
+engineering queue). Both suites green; deliberately breaking the `^nom-` anchor
+prefix was demonstrated to fail a test in BOTH repos. Documented latent
+behavior worth noting: a mobile daily note (one `# YYYY-MM-DD` header,
+blank-line-separated entries) ingests as a SINGLE content-hash block — the
+splitter cuts on headings/`qqq` only — so editing any entry rehashes the whole
+note; consistent with "text is truth," pinned not fixed.
+
 **2026-07-07 (last session of the day): M8 opened — source firewall LIVE
 + idea-lineage lens.** Two builds, both grounded in Chris's own notes
 (History RAG PMOC, "Persistent Memory Artifact System" 6/6): (1)
