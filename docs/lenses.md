@@ -59,7 +59,12 @@ provenance), `lenses/nuggets.md` (working notes → 3–7 promotion
 nominations), `lenses/cluster-weather.md` (concept-cluster growth/death →
 Dashboard nominations; backed by the deterministic pre-compute in
 [docs/clustering.md](clustering.md) — `openaugi cluster` +
-`openaugi cluster-weather`). The old `distill-lens.md` / `nugget-lens.md`
+`openaugi cluster-weather`), `lenses/idea-lineage.md` (one topic → its
+full biography in the Persistent Memory Artifact shape; backed by
+`openaugi lineage "<topic>" --json --write`, whose
+`OpenAugi/lineage/<slug>.json` sidecar doubles as the mobile timeline
+payload), plus the vault-side JARVIS starter set (morning-briefing,
+open-loops, echoes, …). The old `distill-lens.md` / `nugget-lens.md`
 paths are pointer stubs.
 
 ## Applying a lens — from any surface
