@@ -1,0 +1,32 @@
+{
+  "agentFile": "# Capture conventions\n\nOne idea per capture; tag with facet tags.\n",
+  "taxonomy": [
+    "#area/openaugi",
+    "#area/content",
+    "#idea",
+    "#question",
+    "#todo"
+  ],
+  "recentConcepts": [
+    {
+      "title": "PMOC - Season 2",
+      "path": "OpenAugi/PMOC - Season 2.md"
+    },
+    {
+      "title": "AMOC - OpenAugi Main",
+      "path": "OpenAugi/AMOC - OpenAugi Main.md"
+    }
+  ],
+  "noteTitles": [
+    "PMOC - Season 2",
+    "AMOC - OpenAugi Main",
+    "Local-first capture"
+  ],
+  "lenses": [
+    {
+      "name": "distill",
+      "description": "Gather everything on a topic into ONE curated note with provenance."
+    }
+  ],
+  "generatedAt": "2026-07-08T00:00:00+00:00"
+}
