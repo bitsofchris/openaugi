@@ -7,6 +7,21 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-08: salience gating centralized here (cross-repo with mobile).**
+`get_context` gained an additive optional `purpose` parameter (other MCP
+clients unaffected) that applies a min-score gate from config `[salience]`
+(`resurface = 0.06` live-calibrated, `push = 0.15` reserved for the future
+push surface) — the resurfacing threshold that lived in mobile's
+`server/resurface.ts` now belongs to the intelligence layer. Scoring math
+untouched (gate filters only); live probe reproduced the 2026-07-07
+calibration (substantive capture → 1 hit @ 0.0604, "picked up the dry
+cleaning" → all 0.0, silent). Mobile's bridge passes
+`purpose: 'resurface'` through the RelatedSource seam;
+`RESURFACE_MIN_SCORE` env survives one release as a deprecated local
+override (effective gate = max of the two). See mobile's
+`docs/plans/task-salience-gating.md` (moved to archive there when done)
++ its ROADMAP STATUS. Docs: MCP_SERVER.md §salience.
+
 **2026-07-08: full-system shakedown on the prod vault — pass #2 ran
 agent-run end-to-end.** Everything built this week was exercised for real:
 review pass #2 (17 blocks routed, first pass with nomination anchors +

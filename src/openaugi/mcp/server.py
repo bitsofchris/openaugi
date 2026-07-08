@@ -413,6 +413,7 @@ def get_context(
     query: str,
     k: int = 10,
     expand: bool = True,
+    purpose: str | None = None,
 ) -> str:
     """Primary research tool. Use this as the default for answering questions against the
     knowledge base — it runs a full retrieval pipeline in one call:
@@ -424,7 +425,11 @@ def get_context(
     or fine-grained control over results.
 
     - k: number of final results (default 10). Internally overfetches 3x for dedup.
-    - expand: follow links from top results for richer context (default true)"""
+    - expand: follow links from top results for richer context (default true)
+    - purpose: optional salience gate for proactive surfaces (e.g. 'resurface').
+      Applies the min-score from config [salience] and drops results below it —
+      scores themselves are unchanged. Unknown purpose or no config key = no gate.
+      Regular research calls should omit this."""
     store = _get_store()
     config = load_config()
     retrieval = config.get("retrieval", {})
@@ -479,6 +484,16 @@ def get_context(
     else:
         final_ids = sorted(all_ids, key=lambda bid: candidate_scores[bid], reverse=True)[:k]
 
+    # Salience gate — purpose-based min-score policy owned here, not by callers
+    # (mobile resurfacing today, push notifications later). Drops low-salience
+    # results after reranking; the scores themselves are untouched.
+    min_score: float | None = None
+    if purpose is not None:
+        threshold = config.get("salience", {}).get(purpose)
+        if isinstance(threshold, int | float) and not isinstance(threshold, bool):
+            min_score = float(threshold)
+            final_ids = [bid for bid in final_ids if candidate_scores[bid] >= min_score]
+
     # Batch-fetch full blocks for the final k IDs
     final_blocks = store.get_blocks_by_ids(final_ids)
     fts_ids = {b.id for b in fts_results}
@@ -514,14 +529,15 @@ def get_context(
                     expanded.append(entry)
                     blocks_seen[to_id] = entry
 
-    return _json(
-        {
-            "query": query,
-            "direct_results": list(blocks_seen.values())[:k],
-            "expanded": expanded[:k],
-            "total_blocks": len(blocks_seen),
-        }
-    )
+    result = {
+        "query": query,
+        "direct_results": list(blocks_seen.values())[:k],
+        "expanded": expanded[:k],
+        "total_blocks": len(blocks_seen),
+    }
+    if purpose is not None:
+        result["salience"] = {"purpose": purpose, "min_score": min_score}
+    return _json(result)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
