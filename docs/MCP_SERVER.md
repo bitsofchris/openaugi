@@ -89,7 +89,7 @@ Both are optional if you've run `openaugi init` — the config file is the defau
 | `get_blocks` | Batch fetch up to 50 blocks by ID — prefer over calling `get_block` in a loop |
 | `get_related` | Follow links from/to a block (tags, wikilinks, derivations) |
 | `traverse` | Multi-hop graph walk from a starting block |
-| `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links |
+| `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links; optional `purpose` applies a `[salience]` min-score gate for proactive surfaces |
 | `recent` | Recently ingested blocks, filtered by kind/source/tags |
 
 ### `search` — browse mode and date-range queries
@@ -175,6 +175,27 @@ when you want tight focus on the most relevant content.
 **`overfetch_ratio`** — multiplier on `k` for the initial candidate pool. Higher values
 give the deduplication step more to work with, at the cost of a slightly larger DB query.
 Rarely needs changing.
+
+#### Salience gating (`purpose` parameter)
+
+Proactive surfaces — things that speak up *unprompted*, like mobile resurfacing —
+need a precision bias that a research query doesn't: a wrong resurface costs trust,
+a missing one costs nothing. `get_context(purpose="resurface")` applies a per-purpose
+minimum score and drops results below it. Scores are computed exactly as before —
+the gate only filters; it never changes ranking or scoring math.
+
+```toml
+[salience]
+resurface = 0.06  # in-app resurfacing (mobile bridge). Calibrated live 2026-07-07:
+                  # mundane captures ~0, weak associations 0.01-0.05, real hits 0.06-0.14
+push = 0.15       # reserved — push notifications need a stricter gate (no consumer yet)
+```
+
+- Omitting `purpose` (the default) applies no gate — regular research calls are
+  unaffected. The parameter is additive; existing callers need no changes.
+- An unknown purpose (no matching `[salience]` key) applies no gate.
+- When `purpose` is passed, the response carries a `salience: {purpose, min_score}`
+  field so callers can see which gate ran.
 
 ### Write tools
 

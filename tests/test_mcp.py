@@ -24,6 +24,13 @@ def populated_db(tmp_path: Path, vault_path: Path) -> Path:
     return db_path
 
 
+def _config_with(salience: dict) -> dict:
+    """Default config with a [salience] override, as load_config would merge it."""
+    from openaugi.config import DEFAULT_CONFIG, _merge
+
+    return _merge(DEFAULT_CONFIG, {"salience": salience})
+
+
 @pytest.fixture(autouse=True)
 def _set_db_env(populated_db: Path, monkeypatch: pytest.MonkeyPatch):
     """Point MCP server at the test DB."""
@@ -161,6 +168,56 @@ class TestMCPTools:
         assert "direct_results" in result
         assert "expanded" in result
         assert result["total_blocks"] > 0
+
+    def test_get_context_purpose_gates_low_scores(self, monkeypatch):
+        """purpose applies the [salience] min-score: results below it are dropped."""
+        import openaugi.mcp.server as srv
+        from openaugi.mcp.server import get_context
+
+        # Fixture-vault candidates score 1.0 (FTS prong); a gate above that
+        # silences everything, proving the filter path works end to end.
+        monkeypatch.setattr(srv, "load_config", lambda: _config_with({"resurface": 2.0}))
+        gated = json.loads(get_context("career direction", purpose="resurface"))
+        assert gated["direct_results"] == []
+        assert gated["expanded"] == []
+        assert gated["salience"] == {"purpose": "resurface", "min_score": 2.0}
+
+        # A gate below the scores passes everything through — identical to ungated.
+        # expand=False so direct_results holds only scored direct hits.
+        monkeypatch.setattr(srv, "load_config", lambda: _config_with({"resurface": 0.5}))
+        passed = json.loads(get_context("career direction", expand=False, purpose="resurface"))
+        ungated = json.loads(get_context("career direction", expand=False))
+        assert passed["total_blocks"] == ungated["total_blocks"]
+        assert all(r["score"] >= 0.5 for r in passed["direct_results"])
+        assert "salience" not in ungated
+
+    def test_get_context_unknown_purpose_no_gate(self, monkeypatch):
+        """A purpose with no [salience] key applies no gate (and reports none)."""
+        import openaugi.mcp.server as srv
+        from openaugi.mcp.server import get_context
+
+        monkeypatch.setattr(srv, "load_config", lambda: _config_with({"resurface": 2.0}))
+        result = json.loads(get_context("career direction", purpose="mystery"))
+        ungated = json.loads(get_context("career direction"))
+        assert result["total_blocks"] == ungated["total_blocks"]
+        assert result["total_blocks"] > 0
+        assert result["salience"] == {"purpose": "mystery", "min_score": None}
+
+    def test_get_context_salience_config_override(self, monkeypatch):
+        """config.toml [salience] overrides the default threshold per purpose."""
+        import openaugi.mcp.server as srv
+        from openaugi.config import DEFAULT_CONFIG
+        from openaugi.mcp.server import get_context
+
+        # Defaults ship the calibrated gates (2026-07-07): resurface permissive,
+        # push reserved stricter.
+        assert DEFAULT_CONFIG["salience"]["resurface"] == 0.06
+        assert DEFAULT_CONFIG["salience"]["push"] == 0.15
+
+        monkeypatch.setattr(srv, "load_config", lambda: _config_with({"push": 3.0}))
+        result = json.loads(get_context("career direction", purpose="push"))
+        assert result["salience"]["min_score"] == 3.0
+        assert result["direct_results"] == []
 
     def test_recent(self):
         from openaugi.mcp.server import recent

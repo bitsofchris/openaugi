@@ -46,6 +46,13 @@ DEFAULT_CONFIG = {
         "mmr_lambda": 0.5,  # 1.0 = pure relevance, 0.0 = pure diversity
         "representative": "centroid",  # "centroid" | "score"
     },
+    "salience": {
+        # Min retrieval score per purpose — get_context(purpose=...) drops results
+        # below the threshold. Calibrated live 2026-07-07: mundane captures ~0,
+        # weak associations 0.01-0.05, genuinely related past thinking 0.06-0.14.
+        "resurface": 0.06,  # in-app resurfacing (mobile bridge)
+        "push": 0.15,  # reserved: push notifications need a stricter gate (no consumer yet)
+    },
 }
 
 
