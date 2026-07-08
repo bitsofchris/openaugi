@@ -259,11 +259,18 @@ def ingest(
     try:
         exclude = config.get("vault", {}).get("exclude_patterns")
         workers = config.get("vault", {}).get("max_workers", 4)
+        source_rules = config.get("vault", {}).get("source_rules")
 
         console.print(f"[bold]Ingesting vault:[/bold] {vault_path}")
         console.print(f"[bold]Database:[/bold] {db_path}")
 
-        result = run_layer0(vault_path, store, exclude_patterns=exclude, max_workers=workers)
+        result = run_layer0(
+            vault_path,
+            store,
+            exclude_patterns=exclude,
+            max_workers=workers,
+            source_rules=source_rules,
+        )
 
         stats = result["stats"]
         console.print(
@@ -579,6 +586,106 @@ def cluster(
         store.close()
 
 
+@app.command()
+def lineage(
+    query: str = typer.Argument(..., help="The idea/topic to trace, e.g. 'dopamine'"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    k: int = typer.Option(150, "--k", help="Semantic candidates to consider"),
+    max_distance: float = typer.Option(
+        1.2, "--max-distance", help="Similarity cutoff (L2 on unit vectors; lower = stricter)"
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Emit full report as JSON"),
+    write: bool = typer.Option(
+        False, "--write", help="Also write <vault>/OpenAugi/lineage/<slug>.json (mobile payload)"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Time-ordered semantic evidence for one idea — feeds the idea-lineage lens.
+
+    Semantic search across all history, bucketed into quarters: first mention,
+    activity per era, dormant gaps, last mention. Deterministic evidence; the
+    narrative (revisions, dead branches, strongest form) is the lens's job.
+    """
+    _setup_logging(verbose)
+
+    import json as json_mod
+
+    from openaugi.config import load_config
+    from openaugi.models import get_embedding_model
+    from openaugi.pipeline.lineage import (
+        compute_lineage,
+        render_lineage_markdown,
+        write_lineage_sidecar,
+    )
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    db_path = db or str(_default_db())
+    store = SQLiteStore(db_path)
+    try:
+        model = get_embedding_model(config.get("models", {}).get("embedding"))
+        report = compute_lineage(store, model, query, k=k, max_distance=max_distance)
+        if json_out:
+            print(json_mod.dumps(report, indent=2))
+        else:
+            print(render_lineage_markdown(report))
+        if write:
+            vault_path = config.get("vault", {}).get("default_path")
+            if not vault_path:
+                console.print("[red]--write needs [vault] default_path in config.toml[/red]")
+                raise typer.Exit(1)
+            out = write_lineage_sidecar(report, vault_path)
+            console.print(f"[green]Sidecar written:[/green] {out}")
+    finally:
+        store.close()
+
+
+@app.command(name="backfill-source-tags")
+def backfill_source_tags_cmd(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report matches, write nothing"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Apply [vault.source_rules] to data_blocks already in the DB.
+
+    Ingest only touches changed files, so enabling source rules does nothing
+    for existing rows — run this once after adding rules to config.toml.
+    Explicit source/* tags in note text always win. Idempotent.
+    """
+    _setup_logging(verbose)
+
+    from openaugi.adapters.vault import backfill_source_tags
+    from openaugi.config import load_config
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    rules = config.get("vault", {}).get("source_rules")
+    if not rules:
+        console.print("[yellow]No [vault.source_rules] in ~/.openaugi/config.toml[/yellow]")
+        raise typer.Exit(0)
+
+    db_path = db or str(_default_db())
+    console.print(f"[bold]Database:[/bold] {db_path}")
+    console.print(f"[bold]Rules:[/bold] {rules}")
+    if dry_run:
+        console.print("[yellow]Dry run — no DB writes[/yellow]")
+
+    store = SQLiteStore(db_path)
+    try:
+        stats = backfill_source_tags(store, rules, dry_run=dry_run)
+        if not stats:
+            console.print("[green]Nothing to do — all matching blocks already attributed.[/green]")
+        else:
+            for tag, count in sorted(stats.items()):
+                console.print(f"  {tag}: {count} blocks")
+            console.print(
+                f"[green]{'Would update' if dry_run else 'Updated'} "
+                f"{sum(stats.values())} blocks.[/green]"
+            )
+    finally:
+        store.close()
+
+
 @app.command(name="cluster-weather")
 def cluster_weather(
     db: str | None = typer.Option(None, "--db", help="Database path"),
@@ -866,7 +973,14 @@ def up(
     try:
         exclude = config.get("vault", {}).get("exclude_patterns")
         workers = config.get("vault", {}).get("max_workers", 4)
-        result = run_layer0(vault_path, store, exclude_patterns=exclude, max_workers=workers)
+        source_rules = config.get("vault", {}).get("source_rules")
+        result = run_layer0(
+            vault_path,
+            store,
+            exclude_patterns=exclude,
+            max_workers=workers,
+            source_rules=source_rules,
+        )
         stats = result["stats"]
         err.print(
             f"  {stats['total_blocks']} blocks, {stats['total_links']} links "
