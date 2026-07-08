@@ -46,8 +46,10 @@ derived artifact. Every lens is ONE markdown file in
 `OpenAugi/AGENT/lenses/` — the file registry IS the system. Frontmatter:
 `name`, `description` (what it answers — surfaces show this), `scope`
 (default retrieval recipe), `trigger` (`on-demand` now; `on-pass` /
-`every: <period>` activate when scheduled runs turn on), `target`
+`every <period>` activate when scheduled runs turn on), `target`
 (`dashboard` | `note` | `view:<container>`). Body = the intent prose.
+**The contract is `OpenAugi/AGENT/lens-template.md`** — copy it to start
+any new lens; don't freestyle the frontmatter.
 
 **Applying a lens** — instruction shapes: "apply lens <name>",
 "apply lens <name> to <scope>", or a lens name used naturally

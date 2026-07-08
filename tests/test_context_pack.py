@@ -166,7 +166,8 @@ class TestBuildContextPack:
         lens_dir = tmp_path / "OpenAugi" / "AGENT" / "lenses"
         lens_dir.mkdir(parents=True)
         (lens_dir / "good.md").write_text(
-            "---\nname: good\ndescription: >-\n  Fine.\ntrigger: on-pass\n---\nBody.\n"
+            "---\nname: good\ndescription: >-\n  Fine.\nscope: >-\n  Recent writing.\n"
+            "trigger: on-pass\ntarget: >-\n  dashboard\n---\nBody.\n"
         )
         (lens_dir / "bad.md").write_text(
             '---\nname: bad\ndescription: "quoted" — and: broken\n---\nBody.\n'

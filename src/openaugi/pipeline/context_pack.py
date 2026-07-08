@@ -71,6 +71,17 @@ def _parse_taxonomy_note(vault: Path) -> list[str]:
     return tags
 
 
+# ── The lens contract ───────────────────────────────────────────────
+# Authoritative annotated spec: src/openaugi/templates/lens-template.md
+# (vault copy: OpenAugi/AGENT/lens-template.md). Writers (agents/humans)
+# and readers (this module, `openaugi lenses`, the apply-lens engine)
+# agree on that file; tests/test_lens_contract.py breaks on drift.
+LENS_REQUIRED_KEYS = ("name", "description", "scope", "trigger", "target")
+# `every 7d` (space form) is the documented style — `every: 7d` written
+# bare is itself invalid YAML (two colons); the quoted form is accepted.
+LENS_TRIGGER_RE = re.compile(r"^(on-demand|on-pass|every[:\s]\s*\S+)$")
+
+
 def _salvage_field(fm_text: str, key: str) -> str:
     """Best-effort single-line value for `key:` from broken frontmatter text."""
     m = re.search(rf"^{key}:\s*(?:>-?\s*\n\s+)?(.+)$", fm_text, re.MULTILINE)
@@ -78,12 +89,13 @@ def _salvage_field(fm_text: str, key: str) -> str:
 
 
 def read_lens_specs(vault: Path) -> list[dict]:
-    """Every lens spec in the registry, sorted by filename.
+    """Every lens spec in the registry, sorted by filename, contract-checked.
 
-    Never silently drops a lens: files with broken YAML frontmatter are
-    salvaged (regex name/description, filename fallback) and flagged with
-    `error` so `openaugi lenses --check` and logs can surface them. Only
-    files with no frontmatter block at all are treated as non-lenses.
+    Contract violations never silently drop a lens: broken YAML is
+    salvaged (regex name/description, filename fallback) and schema
+    problems (missing required keys, bad trigger) are recorded — both
+    land in `error` so `openaugi lenses --check` and logs surface them.
+    Only files with no frontmatter block at all are treated as non-lenses.
     """
     import yaml
 
@@ -103,17 +115,23 @@ def read_lens_specs(vault: Path) -> list[dict]:
                 raise ValueError("frontmatter is not a mapping")
             entry["name"] = str(fm.get("name") or f.stem)
             entry["description"] = str(fm.get("description") or "").strip()
-            entry["trigger"] = str(fm.get("trigger") or "on-demand")
-            entry["target"] = str(fm.get("target") or "")
+            entry["trigger"] = str(fm.get("trigger") or "").strip()
+            entry["target"] = str(fm.get("target") or "").strip()
+            problems = [
+                f"missing `{k}`" for k in LENS_REQUIRED_KEYS if not str(fm.get(k) or "").strip()
+            ]
+            if entry["trigger"] and not LENS_TRIGGER_RE.match(entry["trigger"]):
+                problems.append(
+                    f"trigger {entry['trigger']!r} not on-demand | on-pass | every: <period>"
+                )
+            if problems:
+                entry["error"] = "; ".join(problems)
         except (yaml.YAMLError, ValueError) as e:
             entry["name"] = _salvage_field(m.group(1), "name") or f.stem
             entry["description"] = _salvage_field(m.group(1), "description")
-            entry["error"] = str(e).splitlines()[0]
-            logger.warning(
-                "Lens %s has invalid frontmatter (salvaged name/description): %s",
-                f.name,
-                entry["error"],
-            )
+            entry["error"] = f"invalid YAML: {str(e).splitlines()[0]}"
+        if entry.get("error"):
+            logger.warning("Lens %s violates the contract: %s", f.name, entry["error"])
         lenses.append(entry)
     return lenses
 
