@@ -144,6 +144,39 @@ class TestBuildContextPack:
     def test_lenses_empty_without_registry(self, populated: SQLiteStore, tmp_path: Path):
         assert build_context_pack(populated, tmp_path)["lenses"] == []
 
+    def test_broken_yaml_lens_is_salvaged_not_dropped(
+        self, populated: SQLiteStore, tmp_path: Path
+    ):
+        # The exact failure shipped on 2026-07-07: a description starting with
+        # a quoted phrase is invalid YAML. The lens must still reach the pack.
+        lens_dir = tmp_path / "OpenAugi" / "AGENT" / "lenses"
+        lens_dir.mkdir(parents=True)
+        (lens_dir / "echoes.md").write_text(
+            '---\nname: echoes\ndescription: "Have I thought this before?" — lineage: growth\n'
+            "trigger: on-demand\n---\n\nIntent.\n"
+        )
+        pack = build_context_pack(populated, tmp_path)
+        assert len(pack["lenses"]) == 1
+        assert pack["lenses"][0]["name"] == "echoes"
+        assert "Have I thought this before?" in pack["lenses"][0]["description"]
+
+    def test_read_lens_specs_flags_errors(self, tmp_path: Path):
+        from openaugi.pipeline.context_pack import read_lens_specs
+
+        lens_dir = tmp_path / "OpenAugi" / "AGENT" / "lenses"
+        lens_dir.mkdir(parents=True)
+        (lens_dir / "good.md").write_text(
+            "---\nname: good\ndescription: >-\n  Fine.\ntrigger: on-pass\n---\nBody.\n"
+        )
+        (lens_dir / "bad.md").write_text(
+            '---\nname: bad\ndescription: "quoted" — and: broken\n---\nBody.\n'
+        )
+        specs = {s["name"]: s for s in read_lens_specs(tmp_path)}
+        assert "error" not in specs["good"]
+        assert specs["good"]["trigger"] == "on-pass"
+        assert "error" in specs["bad"]
+        assert specs["bad"]["file"] == "bad.md"
+
     def test_empty_store(self, store: SQLiteStore, tmp_path: Path):
         pack = build_context_pack(store, tmp_path)
         assert pack["taxonomy"] == []

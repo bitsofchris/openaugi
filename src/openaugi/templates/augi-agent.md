@@ -77,11 +77,13 @@ from the intent, tag the body `#human-review`, and add one line to the
 Dashboard noting the new lens exists. The user edits or deletes the file
 to tune it — the file is the interface.
 
-**Frontmatter MUST be valid YAML** — the context pack parses it and
-silently skips broken files. Write `description`/`scope`/`target` as
-folded scalars (`key: >-` then the text indented on the next line);
+**Frontmatter MUST be valid YAML.** Write `description`/`scope`/`target`
+as folded scalars (`key: >-` then the text indented on the next line);
 never as bare values starting with a `"quote"` or containing `: ` —
-both break YAML parsing.
+both break YAML parsing. The system salvages broken frontmatter (the
+lens still reaches the context pack, flagged in logs), and
+`openaugi lenses --check` lists every lens with its status — but write
+it clean the first time.
 
 **Lens rules:** a lens never edits notes outside `OpenAugi/` · targets
 follow the trust model (dashboard/note output is nominate-or-reviewed;

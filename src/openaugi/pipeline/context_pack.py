@@ -71,8 +71,20 @@ def _parse_taxonomy_note(vault: Path) -> list[str]:
     return tags
 
 
-def _read_lenses(vault: Path) -> list[dict]:
-    """Name + description of each lens spec in the registry, sorted by name."""
+def _salvage_field(fm_text: str, key: str) -> str:
+    """Best-effort single-line value for `key:` from broken frontmatter text."""
+    m = re.search(rf"^{key}:\s*(?:>-?\s*\n\s+)?(.+)$", fm_text, re.MULTILINE)
+    return m.group(1).strip().strip("\"'") if m else ""
+
+
+def read_lens_specs(vault: Path) -> list[dict]:
+    """Every lens spec in the registry, sorted by filename.
+
+    Never silently drops a lens: files with broken YAML frontmatter are
+    salvaged (regex name/description, filename fallback) and flagged with
+    `error` so `openaugi lenses --check` and logs can surface them. Only
+    files with no frontmatter block at all are treated as non-lenses.
+    """
     import yaml
 
     lenses = []
@@ -82,15 +94,36 @@ def _read_lenses(vault: Path) -> list[dict]:
     for f in sorted(lens_dir.glob("*.md")):
         m = _FRONTMATTER_RE.match(f.read_text())
         if not m:
+            logger.warning("Lens file has no frontmatter, ignoring: %s", f.name)
             continue
+        entry = {"name": f.stem, "description": "", "file": f.name}
         try:
             fm = yaml.safe_load(m.group(1)) or {}
-        except yaml.YAMLError:
-            logger.warning("Skipping lens with bad frontmatter: %s", f.name)
-            continue
-        name = str(fm.get("name") or f.stem)
-        lenses.append({"name": name, "description": str(fm.get("description") or "")})
+            if not isinstance(fm, dict):
+                raise ValueError("frontmatter is not a mapping")
+            entry["name"] = str(fm.get("name") or f.stem)
+            entry["description"] = str(fm.get("description") or "").strip()
+            entry["trigger"] = str(fm.get("trigger") or "on-demand")
+            entry["target"] = str(fm.get("target") or "")
+        except (yaml.YAMLError, ValueError) as e:
+            entry["name"] = _salvage_field(m.group(1), "name") or f.stem
+            entry["description"] = _salvage_field(m.group(1), "description")
+            entry["error"] = str(e).splitlines()[0]
+            logger.warning(
+                "Lens %s has invalid frontmatter (salvaged name/description): %s",
+                f.name,
+                entry["error"],
+            )
+        lenses.append(entry)
     return lenses
+
+
+def _read_lenses(vault: Path) -> list[dict]:
+    """Lens list for the context pack: name + description only, no internals."""
+    return [
+        {"name": lens["name"], "description": lens["description"]}
+        for lens in read_lens_specs(vault)
+    ]
 
 
 def _read_agent_file(vault: Path) -> str:
