@@ -318,6 +318,56 @@ def context_pack(
 
 
 @app.command()
+def lenses(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    check: bool = typer.Option(
+        False, "--check", help="Exit non-zero if any lens has broken frontmatter"
+    ),
+):
+    """List the lens registry (OpenAugi/AGENT/lenses/) and flag broken specs."""
+    from openaugi.config import load_config
+    from openaugi.pipeline.context_pack import LENSES_DIR, read_lens_specs
+
+    config = load_config()
+    vault_path = path or config.get("vault", {}).get("default_path")
+    if not vault_path:
+        console.print("[red]No vault path specified.[/red]")
+        console.print("Use --path or run 'openaugi init' to set a default.")
+        raise typer.Exit(1)
+
+    specs = read_lens_specs(Path(vault_path))
+    if not specs:
+        console.print(f"[yellow]No lenses found[/yellow] in {Path(vault_path) / LENSES_DIR}")
+        raise typer.Exit(1 if check else 0)
+
+    table = Table(title=f"Lens registry — {len(specs)} lens(es)")
+    table.add_column("name", style="bold")
+    table.add_column("trigger")
+    table.add_column("description", max_width=60)
+    table.add_column("status")
+    broken = 0
+    for lens in specs:
+        if "error" in lens:
+            broken += 1
+            status = f"[red]INVALID YAML[/red] {lens['error'][:40]}"
+        elif not lens["description"]:
+            status = "[yellow]no description[/yellow] (mobile chip will be blank)"
+        else:
+            status = "[green]ok[/green]"
+        table.add_row(lens["name"], lens.get("trigger", ""), lens["description"], status)
+    console.print(table)
+
+    if broken:
+        console.print(
+            f"\n[red]{broken} lens(es) have invalid frontmatter[/red] — they still ship "
+            "to the context pack (salvaged), but fix them: use folded scalars "
+            "(`description: >-`) for values with quotes or colons."
+        )
+        if check:
+            raise typer.Exit(1)
+
+
+@app.command()
 def render(
     path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
     db: str | None = typer.Option(None, "--db", help="Database path"),

@@ -84,6 +84,15 @@ the spec file directly — lenses live in agent-space, so no nomination
 gate — tagged `#human-review`, with a one-line Dashboard note. You tune a
 lens by editing its file; you delete a lens by deleting its file.
 
+**Robustness (productionized 2026-07-07):** broken frontmatter cannot
+lose a lens. Invalid YAML (e.g. a description starting with a `"quoted
+phrase"` or containing `: `) is **salvaged, not skipped** — the lens
+still ships to the context pack with a best-effort name/description, and
+a warning lands in the log. Validate any time with **`openaugi lenses`**
+(table of every lens + status) or `openaugi lenses --check` (non-zero
+exit on broken specs — CI-able). The safe authoring style is folded
+scalars: `description: >-` with the text indented on the next line.
+
 ## Scheduling (dormant)
 
 Specs declare `trigger: on-pass` / `every: <period>` now, but the review
