@@ -7,6 +7,29 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-07 (last session of the day): M8 opened — source firewall LIVE
++ idea-lineage lens.** Two builds, both grounded in Chris's own notes
+(History RAG PMOC, "Persistent Memory Artifact System" 6/6): (1)
+**Source attribution:** `[vault.source_rules]` config (folder glob →
+`source/*` tag, explicit text tags win), applied at ingest +
+`openaugi backfill-source-tags` for existing rows — Chris's DB now has
+684 blocks attributed (533 readwise / 128 webclip / 23 ai-chat); rules
+live in his config for Readwise/Instapaper/Articles/Reddit/AI
+Conversations. No Readwise API adapter, ever — Readwise→Obsidian plugin
++ folder rules replace phase3's API-adapter plan (files are the API).
+(2) **Idea lineage:** `openaugi lineage "<topic>" [--json --write]`
+(pipeline/lineage.py) — semantic evidence over all history, quarter
+eras, dormant gaps, third_party flags; `--write` emits
+`OpenAugi/lineage/<slug>.json`, the mobile timeline payload (heads-up
+filed in mobile's ROADMAP parking lot; mobile also shipped M13 read tab
++ M14 lens chips today in a parallel thread). Lens:
+`lenses/idea-lineage.md` (vault + template, `lenses --check` ok) —
+distinct from echoes (current thinking → recognition) as topic → full
+biography. Live demo: `OpenAugi/lineage/dopamine.json` (100 blocks,
+2024-03 → 2026-05). **Next in M8:** ChatGPT-history converter when
+Chris re-exports (queued in future-work.md); curator waits for
+nomination-answer signal.
+
 **2026-07-07 (late night): milestone reset + surface decision (Chris's
 call).** M4 and M5 are CLOSED — no more gating on them; M5 shakedowns are
 parked (the try-it checklist lives in the user guide §0, docs/scratch/
