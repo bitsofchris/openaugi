@@ -7,6 +7,26 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-07 (late night): milestone reset + surface decision (Chris's
+call).** M4 and M5 are CLOSED — no more gating on them; M5 shakedowns are
+parked (the try-it checklist lives in the user guide §0, docs/scratch/
+2026-07-06-session/user-guide.html — Chris runs it when he can, nothing
+blocks on it). **Surface decision: no web app, ever, for now** — the two
+surfaces are the mobile app (the one UI we own) and Obsidian as the
+desktop app (vault files are the API; the plugin stays a thin task-file
+writer). M6 (HTML render) goes from parked to closed as a product
+surface; `render/` survives only as internal infra. **Discovery while
+resequencing:** the mobile repo is ahead of this plan — its M10 (mobile
+review: triage nominations from the phone, answers written back as
+capture-block commands), M11 (share-to-LLM bundles), M12 (resurfacing)
+are BUILT, pending phone verification — so this repo's M7 is mostly
+already delivered from the mobile side; what remains here is
+reachability (Tailscale) and verification. **Next build: M8 (data lake
++ curator), starting with the source firewall + first third-party
+adapter — see M8 section (resequenced 2026-07-07).** Note: the ChatGPT
+export at ~/Downloads/chatgpt-history no longer exists; Chris re-exports
+when M8's ChatGPT adapter comes up.
+
 **2026-07-07 (eod):** M2 passed (Chris's call). M3 rescoped to "converge
 every surface on the file contracts" (spec below) and **built the same
 day** across all three repos: M3a shipped here (context-pack writer +
