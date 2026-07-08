@@ -1,11 +1,13 @@
 ---
 name: cluster-weather
-description: "What's heating up, cooling off, or newly forming in my thinking?" — growth/death report over the vault's concept clusters, nominated for promotion.
-scope: all concept clusters (clustering pass `concepts`), 14-day window by default — override with "since: 30d" etc. Not a per-note lens; the scope is the whole map.
+description: >-
+  "What's heating up, cooling off, or newly forming in my thinking?" — growth/death report over the vault's concept clusters, nominated for promotion.
+scope: >-
+  all concept clusters (clustering pass `concepts`), 14-day window by default — override with "since: 30d" etc. Not a per-note lens; the scope is the whole map.
 trigger: on-demand   # on-pass once scheduling activates (after M4 gate)
-target: dashboard
+target: >-
+  dashboard
 ---
-
 # Cluster Weather
 
 ## Intent
