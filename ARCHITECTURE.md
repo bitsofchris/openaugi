@@ -21,7 +21,7 @@ links  (from_id, to_id, kind, weight, metadata)  — PK: (from_id, to_id, kind)
 
 Everything is a block. Structure lives in the links, not in the schema.
 
-See [docs/data-model.md](docs/data-model.md) for the full data model philosophy.
+See [docs/reference/data-model.md](docs/reference/data-model.md) for the full data model philosophy.
 
 ## Processing Layers
 
@@ -50,14 +50,14 @@ src/openaugi/
 │   ├── link.py           # Link Pydantic model
 │   └── protocols.py      # EmbeddingModel, LLMModel protocols
 ├── adapters/
-│   ├── splitter.py       # Deterministic block splitter — shared primitive (see docs/splitter.md)
+│   ├── splitter.py       # Deterministic block splitter — shared primitive (see docs/reference/splitter.md)
 │   └── vault.py          # Obsidian vault → blocks + links (wraps splitter)
 ├── pipeline/              # Data plane — transforms on blocks + zzz dispatch
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
 │   ├── dispatch.py        # Post-ingest: zzz instructions → task files in OpenAugi/Tasks/
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
-│   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar + lens list (docs/lenses.md)
+│   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar + lens list (docs/reference/lenses.md)
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
 │   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch
 ├── render/                # M6 — static HTML surfaces from the DB (no server)
@@ -172,7 +172,7 @@ See [docs/plans/m0.md](docs/plans/m0.md) § Key Design Decisions for full ration
 - **Content hash as block identity**: `hash(source_path + content_hash)` — stable across section reordering.
 - **Tags as blocks**: First-class graph nodes. Hub scoring, traversal, entity resolution work uniformly.
 - **Default local embeddings**: sentence-transformers, no API key. Users upgrade via config.
-- **`get_context` dedup + MMR**: Over-fetches 3× candidates, collapses near-duplicates via cosine grouping, re-ranks for diversity before returning. See [docs/MCP_SERVER.md](docs/MCP_SERVER.md) for tuning.
+- **`get_context` dedup + MMR**: Over-fetches 3× candidates, collapses near-duplicates via cosine grouping, re-ranks for diversity before returning. See [docs/reference/MCP_SERVER.md](docs/reference/MCP_SERVER.md) for tuning.
 
 ## Running
 
@@ -230,15 +230,21 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 - **openaugi-obsidian-plugin** — Obsidian-side capture/context tooling.
 - **openaugi-private** — parked; not a source of decisions.
 
-## Plans
+## Docs & plans
 
-- [docs/review-pass.md](docs/review-pass.md) — **The write-back loop (active):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass, derived views in OpenAugi/Views/. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
+Docs live in three tiers: **`docs/reference/`** — durable "how it works"
+manuals (the reference docs linked below); **`docs/plans/`** — design
+records and active plans (→ `docs/plans/done/` when shipped);
+**`docs/scratch/`** — gitignored throwaway. Reference docs use the skill
+format (`name:`/`description:` frontmatter) so they're scannable.
+
+- [docs/reference/review-pass.md](docs/reference/review-pass.md) — **The write-back loop (active):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass, derived views in OpenAugi/Views/. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
 - [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
 - [docs/plans/done/heartbeat.md](docs/plans/done/heartbeat.md) — (shipped, then replaced by zzz dispatch) Heartbeat design history
 - [docs/plans/capture-tag-stream-loop.md](docs/plans/capture-tag-stream-loop.md) — Phase 4: capture → tag → stream incremental pipeline
 - [docs/plans/from-capture-to-jarvis.md](docs/plans/from-capture-to-jarvis.md) — Longer-horizon vision (layers 1–4)
 - [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features
-- [docs/clustering.md](docs/clustering.md) — Clustering feature: config format, data model, cluster weather (snapshots + diffs), SQL queries, param tuning guide
+- [docs/reference/clustering.md](docs/reference/clustering.md) — Clustering feature: config format, data model, cluster weather (snapshots + diffs), SQL queries, param tuning guide
 - [docs/plans/hierarchical-embeddings.md](docs/plans/hierarchical-embeddings.md) — Design rationale: two-pass strategy, matryoshka truncation, bridge detection
 - [docs/plans/done/](docs/plans/done/) — Shipped milestone plans (M0, M1)

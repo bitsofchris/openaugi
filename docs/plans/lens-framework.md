@@ -6,7 +6,7 @@ description: NEXT UP (not started). Lenses as data — scope + trigger + prompt(
 # Lens Framework — lenses as data
 
 **Status: MVP SHIPPED 2026-07-07 as files + prose** — see
-[docs/lenses.md](../lenses.md) for the live system. Lens specs are
+[docs/reference/lenses.md](../reference/lenses.md) for the live system. Lens specs are
 markdown files in `<vault>/OpenAugi/AGENT/lenses/` (spec shape below,
 lightly adapted); the "engine" is the generic apply-lens section in
 `augi-agent.md`; the lens list rides the context pack so mobile can render

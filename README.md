@@ -28,7 +28,7 @@ openaugi init    # one-time: vault path, embedding model, API key
 openaugi up      # sync vault + start MCP server + watch for changes
 ```
 
-Then [register with Claude](docs/GETTING_STARTED.md#register-with-claude) and start asking questions about your notes.
+Then [register with Claude](docs/reference/GETTING_STARTED.md#register-with-claude) and start asking questions about your notes.
 
 ---
 
@@ -50,9 +50,9 @@ Obsidian Vault --> split --> extract --> embed --> SQLite --> MCP Server --> Cla
 openaugi up     ← ingest + file watcher + zzz dispatch + task agent + MCP server
 ```
 
-**ZZZ dispatch:** Write `zzz: <instruction>` anywhere in your notes — any capitalization works (`zzz`, `ZZZ`, `Zzz`). The file watcher detects changes, ingests the block, and writes a task file to `OpenAugi/Tasks/`. The task watcher picks it up and launches a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>`. The agent's behavior is governed by a skill file you edit in Obsidian. See [Getting Started](docs/GETTING_STARTED.md).
+**ZZZ dispatch:** Write `zzz: <instruction>` anywhere in your notes — any capitalization works (`zzz`, `ZZZ`, `Zzz`). The file watcher detects changes, ingests the block, and writes a task file to `OpenAugi/Tasks/`. The task watcher picks it up and launches a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>`. The agent's behavior is governed by a skill file you edit in Obsidian. See [Getting Started](docs/reference/GETTING_STARTED.md).
 
-**Review pass (write-back):** The loop that keeps the knowledge base maintained. On trigger ("run the review pass"), an agent routes new blocks to your area/project notes as graph links, regenerates derived view notes under `OpenAugi/Views/` — a where-did-I-leave-off head per area/project plus a Dashboard — and nominates structure changes (new tags, new notes) for your approval. Agents never edit your notes; views are regenerable caches. See [Review Pass](docs/review-pass.md).
+**Review pass (write-back):** The loop that keeps the knowledge base maintained. On trigger ("run the review pass"), an agent routes new blocks to your area/project notes as graph links, regenerates derived view notes under `OpenAugi/Views/` — a where-did-I-leave-off head per area/project plus a Dashboard — and nominates structure changes (new tags, new notes) for your approval. Agents never edit your notes; views are regenerable caches. See [Review Pass](docs/reference/review-pass.md).
 
 **Capture grammar** — three tokens: `qqq` on its own line splits blocks · `zzz:` dispatches a task *immediately* (file watcher acts at ingest) · `aaa:` is a filing instruction that stays inert in the block until the next review pass reads it. Nothing else to learn.
 
@@ -95,7 +95,7 @@ OpenAugi's data model is two tables — `blocks` and `links`:
 
 Five retrieval modes — semantic, keyword, graph traversal, time-based, direct lookup — all operating on the same graph.
 
-**[Read the full data model](docs/data-model.md)** | Based on [Context Engineering is Index Design](https://bitsofchris.com/p/context-engineering-is-index-design)
+**[Read the full data model](docs/reference/data-model.md)** | Based on [Context Engineering is Index Design](https://bitsofchris.com/p/context-engineering-is-index-design)
 
 **[Read the guide to agentic knowledge bases](https://bitsofchris.com/p/how-to-build-your-agentic-knowledge)**
 
@@ -115,19 +115,19 @@ Configured as named passes in `~/.openaugi/config.toml`. Both shipped passes are
 
 Every committed run also records a **snapshot** (cluster membership per pass), and `openaugi cluster-weather` diffs the latest snapshot against one a window ago — which clusters grew, shrank, were born, or died, plus recent writing activity per cluster. This feeds the **cluster-weather lens**: say "apply lens cluster-weather" and the agent turns the report into Dashboard nominations ("*AI distillation service* grew +8 notes in 14d — distill it into a note?").
 
-Cluster assignments land in each data_block's metadata (`cluster_assignments.{pass_id}`), making them queryable and renderable without joins. See **[Clustering](docs/clustering.md)** for config, the weather data model, SQL queries, and param tuning.
+Cluster assignments land in each data_block's metadata (`cluster_assignments.{pass_id}`), making them queryable and renderable without joins. See **[Clustering](docs/reference/clustering.md)** for config, the weather data model, SQL queries, and param tuning.
 
 ---
 
 ## Documentation
 
-- **[Getting Started](docs/GETTING_STARTED.md)** — full install guide, CLI reference, MCP tools, Claude registration
+- **[Getting Started](docs/reference/GETTING_STARTED.md)** — full install guide, CLI reference, MCP tools, Claude registration
 - **[Architecture](ARCHITECTURE.md)** — data model, processing layers, module map, design decisions
-- **[Data Model](docs/data-model.md)** — philosophy, block kinds, navigation pattern, four-layer architecture
-- **[Clustering](docs/clustering.md)** — clustering + cluster weather: config format, data model, snapshots & diffs, SQL queries, param tuning
-- **[MCP Server](docs/MCP_SERVER.md)** — tool reference and tuning
-- **[Review Pass](docs/review-pass.md)** — the write-back loop: routing, capture grammar (`qqq`/`zzz:`/`aaa:`), derived views, Dashboard nominations
-- **[Task Dispatch](docs/task-dispatch.md)** — optional Obsidian → tmux dispatch: write a task, watcher launches a Claude Code agent in a named session
+- **[Data Model](docs/reference/data-model.md)** — philosophy, block kinds, navigation pattern, four-layer architecture
+- **[Clustering](docs/reference/clustering.md)** — clustering + cluster weather: config format, data model, snapshots & diffs, SQL queries, param tuning
+- **[MCP Server](docs/reference/MCP_SERVER.md)** — tool reference and tuning
+- **[Review Pass](docs/reference/review-pass.md)** — the write-back loop: routing, capture grammar (`qqq`/`zzz:`/`aaa:`), derived views, Dashboard nominations
+- **[Task Dispatch](docs/reference/task-dispatch.md)** — optional Obsidian → tmux dispatch: write a task, watcher launches a Claude Code agent in a named session
 - **[Remote Access](docs/local.docs/REMOTE_ACCESS.md)** — Cloudflare Tunnel setup for Claude mobile
 
 ---

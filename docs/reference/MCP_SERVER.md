@@ -222,7 +222,7 @@ After writing, run `openaugi ingest` to pick up new notes into the knowledge gra
 > **Removed 2026-07-06:** the Streams subsystem (`make_stream`, `update_stream`,
 > `get_stream_context`, `list_streams`) and the chat-capture tools (`write_snip`,
 > `write_thread`) were superseded by the review-pass derived views
-> (see [docs/plans/review-pass-v1.md](plans/review-pass-v1.md)). Use `write_document`
+> (see [docs/plans/review-pass-v1.md](../plans/review-pass-v1.md)). Use `write_document`
 > for all vault writes.
 
 ## Resources

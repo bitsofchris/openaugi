@@ -99,6 +99,6 @@ If you need the full Block+Link shape (document blocks, tag blocks, `links_to` e
 
 ## Related
 
-- [zzz-instructions plan](plans/zzz-instructions.md) — the `zzz:` convention
-- [vault adapter](../src/openaugi/adapters/vault.py) — splitter + wikilink index + Block/Link assembly
-- [splitter source](../src/openaugi/adapters/splitter.py) — the implementation
+- [zzz-instructions plan](../plans/zzz-instructions.md) — the `zzz:` convention
+- [vault adapter](../../src/openaugi/adapters/vault.py) — splitter + wikilink index + Block/Link assembly
+- [splitter source](../../src/openaugi/adapters/splitter.py) — the implementation

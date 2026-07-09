@@ -115,7 +115,7 @@ Process the user instruction(s) above in the context of the source block.
 - `source_block_id`, `source_note` — provenance back to the block that triggered the task
 - `task_id`, `created`, `tmux_session` — added by the watcher during hydration (don't set these yourself)
 
-See [src/openaugi/templates/task-template.md](../src/openaugi/templates/task-template.md) for the annotated authoritative version.
+See [src/openaugi/templates/task-template.md](../../src/openaugi/templates/task-template.md) for the annotated authoritative version.
 
 ## The Repos.md map
 
@@ -230,8 +230,8 @@ Save it, wait ~30s (the settle window), and it dispatches. Useful for mobile cap
 ## Related
 
 - [docs/taxonomy.md](taxonomy.md) — the taxonomy that defines `workstream` values and disambiguates the `status:` frontmatter field from the `status/*` tag facet on blocks
-- [src/openaugi/agents/task_watcher.py](../src/openaugi/agents/task_watcher.py) — the watcher implementation
-- [src/openaugi/pipeline/dispatch.py](../src/openaugi/pipeline/dispatch.py) — the zzz dispatch hook (writer side)
-- [src/openaugi/templates/task-template.md](../src/openaugi/templates/task-template.md) — the authoritative task file format
-- [src/openaugi/templates/augi-agent.md](../src/openaugi/templates/augi-agent.md) — the agent skill file template (factory default, copied to vault on init)
+- [src/openaugi/agents/task_watcher.py](../../src/openaugi/agents/task_watcher.py) — the watcher implementation
+- [src/openaugi/pipeline/dispatch.py](../../src/openaugi/pipeline/dispatch.py) — the zzz dispatch hook (writer side)
+- [src/openaugi/templates/task-template.md](../../src/openaugi/templates/task-template.md) — the authoritative task file format
+- [src/openaugi/templates/augi-agent.md](../../src/openaugi/templates/augi-agent.md) — the agent skill file template (factory default, copied to vault on init)
 - [tests/test_task_watcher.py](../tests/test_task_watcher.py) — unit + contract tests

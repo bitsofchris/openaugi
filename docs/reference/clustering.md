@@ -375,4 +375,4 @@ Key functions:
 
 Passes with `parent_pass` always execute after their parent (topological sort). Multiple passes with `scope=all` and no parent can run in any order.
 
-See [docs/plans/hierarchical-embeddings.md](plans/hierarchical-embeddings.md) for the full design rationale.
+See [docs/plans/hierarchical-embeddings.md](../plans/hierarchical-embeddings.md) for the full design rationale.
