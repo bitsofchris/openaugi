@@ -35,6 +35,13 @@ python3 -m venv .venv
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how the system is structured.
 
+## Docs
+
+Docs live in `docs/`; `docs/scratch/` is gitignored personal scratch space
+and should never be committed to. Keep example content in docs generic
+(category/tag names are fine) — don't include real personal notes, journal
+content, or other output from anyone's actual "second brain" data.
+
 ## Code Style
 
 - Python 3.12+
