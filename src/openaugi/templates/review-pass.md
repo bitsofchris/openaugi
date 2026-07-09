@@ -93,6 +93,13 @@ reachable by time and semantic search. Tag only what you'd query; route only
 what a view should distill. Both live in the DB only — never write into the
 user's notes.
 
+**Edited blocks re-arrive as new — expected, not a bug (the re-derive
+contract, 2026-07-09).** Block identity is a content hash, so when the user
+edits a routed block, its routes drop and the edited version shows up in
+your new-blocks queue. Just route it again like any new block — an `aaa:`
+line in the text is the durable instruction and always wins. Do NOT treat a
+familiar-looking "new" block as an error, and do NOT hand-restore old links.
+
 ## Views
 
 One file per touched container in `OpenAugi/Views/`, named

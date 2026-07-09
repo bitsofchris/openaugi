@@ -83,6 +83,22 @@ closed taxonomy) say *what kind of thing* a block is. `routed_to` links say
 *which container threads* it belongs to — a block can belong to many, or
 none. See [review-pass.md](review-pass.md).
 
+**What `routed_to` really is: auto-filing.** The name records how the edge
+got there (a routing decision) rather than what it means (membership). The
+review pass — not ingest — creates these links, from three inputs in
+priority order: the user's inline `aaa:` instructions, the agent's judgment
+against the registry/taxonomy, and answered Dashboard nominations. Views
+and graph traversal consume them; search does not need them.
+
+**The re-derive contract (decided 2026-07-09).** Routing is projection
+state, never truth. Block identity is a content hash, so editing a routed
+block deletes the old row — and its routes — *by design*: the edited block
+re-enters the review queue as a new block and the next pass re-decides.
+Durable human intent belongs in the text as an `aaa:` line, which rides the
+block through every edit. There is deliberately NO fuzzy identity matching
+at ingest: a wrong silent match is worse than a loud re-decision, and Layer
+0 stays deterministic.
+
 ## Context Blocks
 
 Context blocks are the map. They're generated metadata about data blocks — enough for an agent to make a routing decision without reading the underlying content.

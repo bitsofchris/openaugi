@@ -7,6 +7,41 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-09 (later): route durability re-decided — similarity matcher
+RIPPED OUT, re-derive contract in (Chris's call).** The CQRS discussion
+landed the right model: the vault is the current-state store for content,
+the DB is a projection, and routing is decision-state that gets
+RE-DECIDED, not fuzzily preserved — an edited block drops its routes by
+design and re-enters the next pass's queue (`aaa:` in text = the durable
+form of human intent; the vault-side decision-log idea was dropped as
+redundant). Contract pinned in docs/reference/data-model.md ("what
+routed_to really is: auto-filing" + re-derive contract), vault
+review-pass.md (edited blocks re-arrive as new — route them again, don't
+hand-restore) and augi-agent.md lens engine (lenses reading routed
+context check `get_review_state` and disclose staleness); both mirrored
+to templates. Tests: test_route_rederive.py replaces the migration
+tests. 457 green.
+
+**2026-07-09 (gdrive thread): M8 gdrive import opened (History RAG).**
+Decided with Chris: Google Drive docs enter via a **converter** (script →
+vault markdown → exit; the Readwise "files are the API" pattern, NOT an
+adapter), selective by manifest, provenance in frontmatter only, **no
+tags written by tooling ever** (Chris's hard rule: taxonomy changes only
+with his approval — converter emits zero tags; `source/gdrive` comes from
+his own source_rules config line). Shipped the
+one core change: **`created:` frontmatter now feeds `block_time`**
+(priority: heading date > filename date > frontmatter created > file
+mtime > now; `_extract_frontmatter_created` in splitter.py, resolver in
+vault.py, 11 tests, check.sh green) — the generic hook every converter
+(gdrive, ChatGPT-history) uses to stamp real historical dates; makes old
+docs date-filterable via MCP `search(after=/before=)` + visible to
+lineage eras. Plan + file contract: [gdrive-import.md](gdrive-import.md).
+rclone OAuth done; scope decided: **Google Docs only** (by MIME type).
+Agent runbook written: [gdrive-explore-runbook.md](gdrive-explore-runbook.md)
+(Phase 1 inventory → keep/skip report → GATE 1 Chris; Phase 2 converter +
+sample GATE 2 + ingest + lineage verification). **Next:** run Phase 1.
+Not committed yet.
+
 **2026-07-09: both found-in-the-wild defects FIXED; idea-lineage lens
 proven on a real topic.** (1) Agent state now survives block edits —
 `run_layer0` matches removed→added blocks by content similarity and

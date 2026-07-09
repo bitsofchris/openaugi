@@ -143,13 +143,15 @@ Each has an explicit revive condition — build NONE of them before it fires.
 
 ## Found in the wild (2026-07-08, first agent-run review pass) — BOTH FIXED 2026-07-09
 
-- **`routed_to` links don't survive block edits.** ~~Editing a routed block
-  re-ingests it under a new ID and CASCADE drops its links (trading MOC
-  lost all 3 routed blocks in 48h).~~ **Fixed:** `run_layer0` now matches
-  removed→added blocks within a document by content similarity (difflib
-  ratio ≥ 0.5) and migrates `routed_to` links + `augi_tags` to the edited
-  successor before deleting the old row. Real deletions/rewrites still
-  drop state, as they should. Tests: `tests/test_identity_migration.py`.
+- **`routed_to` links don't survive block edits.** Resolved 2026-07-09 as a
+  **design decision, not a bug** (Chris's call — the re-derive contract):
+  routing is projection state; an edited block deliberately drops its
+  routes and re-enters the review queue as a new block for the next pass to
+  re-decide; `aaa:` lines in text carry durable human intent. A
+  content-similarity migration shipped briefly and was ripped out same day
+  (fuzzy matching in the deterministic layer = silent-wrong-route risk).
+  Contract pinned in docs/reference/data-model.md + vault review-pass.md;
+  tests: `tests/test_route_rederive.py`.
 - **Cluster-weather cross-run matching is churn-heavy in practice.**
   ~~Label drift produced born/died noise beyond the membership
   thresholds.~~ **Fixed:** snapshots now store a truncated (256-dim)

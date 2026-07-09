@@ -64,7 +64,11 @@ any new lens; don't freestyle the frontmatter.
    `query: <terms>` · pasted/selected context (then that IS the scope —
    never expand it uninvited).
 3. Run the intent over the scope. The lens body is your instruction;
-   augi-agent hard rules still apply on top.
+   augi-agent hard rules still apply on top. If the lens reads ROUTED
+   context (views, `container:` scopes), check `get_review_state`
+   first: edited blocks lose their routes until the next pass
+   re-decides (the re-derive contract), so when unprocessed blocks are
+   pending, say so in the output ("routing current as of <last pass>").
 4. Write to the target: `dashboard` → a section on `View - Dashboard.md`
    using the standard nomination grammar (checkbox + `^nom-*` anchor +
    answer slot) · `note` → ONE note via `write_document` with
