@@ -141,23 +141,22 @@ Each has an explicit revive condition — build NONE of them before it fires.
   build. Revive: when a real "trace the chain from X" question comes up
   in usage and the existing lineage + echoes lenses can't answer it.
 
-## Found in the wild (2026-07-08, first agent-run review pass)
+## Found in the wild (2026-07-08, first agent-run review pass) — BOTH FIXED 2026-07-09
 
-- **`routed_to` links don't survive block edits.** Block identity is a
-  content hash, so editing a routed block re-ingests it under a new ID and
-  CASCADE silently drops its `routed_to`/tag links — the trading MOC lost
-  all 3 of its routed blocks within 48h of routing (restored by hand
-  during pass #2). Options: re-attach links by (source_path, position)
-  heuristic at ingest, or persist routing in a separate table keyed on
-  something more stable than the content hash. This will bleed routing
-  quality during M4 until fixed — every edited daily note sheds its routes.
-- **Cluster-weather cross-run matching is churn-heavy in practice.** The
-  7/7→7/8 diff reported many large born/died pairs that are clearly the
-  same cluster reshuffled (k-means label drift beyond the Jaccard .5 /
-  containment .7 thresholds), with only a handful of clean grew/shrank
-  matches. Consider matching on centroid cosine similarity instead of (or
-  in addition to) member overlap, and suppressing born/died pairs whose
-  sizes mirror each other within a parent.
+- **`routed_to` links don't survive block edits.** ~~Editing a routed block
+  re-ingests it under a new ID and CASCADE drops its links (trading MOC
+  lost all 3 routed blocks in 48h).~~ **Fixed:** `run_layer0` now matches
+  removed→added blocks within a document by content similarity (difflib
+  ratio ≥ 0.5) and migrates `routed_to` links + `augi_tags` to the edited
+  successor before deleting the old row. Real deletions/rewrites still
+  drop state, as they should. Tests: `tests/test_identity_migration.py`.
+- **Cluster-weather cross-run matching is churn-heavy in practice.**
+  ~~Label drift produced born/died noise beyond the membership
+  thresholds.~~ **Fixed:** snapshots now store a truncated (256-dim)
+  centroid per cluster; matching accepts centroid cosine ≥ 0.9 alongside
+  member overlap. Old centroid-less snapshots fall back to membership.
+  First centroid-bearing snapshot recorded 2026-07-09; deltas are clean
+  from the next run onward.
 
 ## Other Deferred Items
 

@@ -100,6 +100,86 @@ def test_match_clusters_label_drift_still_matches():
     assert ("p_1", "p_0") in matched
 
 
+def test_match_clusters_by_centroid_when_membership_churned():
+    """K-means reshuffles can drop Jaccard below threshold for the same cluster
+    (found in the wild 2026-07-08) — a near-identical centroid still matches."""
+    from openaugi.pipeline.cluster_weather import _encode_centroid
+
+    c1 = _encode_centroid(np.array([1.0, 0.05, 0.0, 0.0], dtype=np.float32))
+    c2 = _encode_centroid(np.array([1.0, 0.0, 0.05, 0.0], dtype=np.float32))
+    # Only 1 of 4 members overlap → jaccard 1/7 ≈ 0.14, containment 0.25
+    cur = [
+        {
+            "label": "0",
+            "title": "p_0",
+            "member_count": 4,
+            "members": ["a", "x", "y", "z"],
+            "centroid": c1,
+        }
+    ]
+    base = [
+        {
+            "label": "3",
+            "title": "p_3",
+            "member_count": 4,
+            "members": ["a", "b", "c", "d"],
+            "centroid": c2,
+        }
+    ]
+    matches = _match_clusters(cur, base)
+    assert (cur[0], base[0]) in matches
+
+
+def test_match_clusters_centroid_below_threshold_stays_born_died():
+    from openaugi.pipeline.cluster_weather import _encode_centroid
+
+    c1 = _encode_centroid(np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32))
+    c2 = _encode_centroid(np.array([0.0, 1.0, 0.0, 0.0], dtype=np.float32))
+    cur = [
+        {"label": "0", "title": "p_0", "member_count": 2, "members": ["x", "y"], "centroid": c1}
+    ]
+    base = [
+        {"label": "0", "title": "p_0", "member_count": 2, "members": ["a", "b"], "centroid": c2}
+    ]
+    matched = [(c, b) for c, b in _match_clusters(cur, base) if c and b]
+    assert matched == []
+
+
+def test_match_clusters_missing_centroid_falls_back_to_members():
+    """Snapshots written before centroids were stored still diff correctly."""
+    cur = [{"label": "0", "title": "p_0", "member_count": 3, "members": ["a", "b", "c"]}]
+    base = [{"label": "1", "title": "p_1", "member_count": 3, "members": ["a", "b", "c"]}]
+    matched = [(c, b) for c, b in _match_clusters(cur, base) if c and b]
+    assert len(matched) == 1
+
+
+def test_snapshot_stores_centroid(tmp_store: SQLiteStore):
+    from openaugi.pipeline.cluster import ClusterResult
+    from openaugi.pipeline.cluster_weather import _centroid_cosine
+
+    cfg = ClusterPassConfig(id="p", dims=8, scope="all", type="kmeans", n_clusters=1)
+    centroid = np.array([1.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+    pr = PassResult(
+        pass_cfg=cfg,
+        results=[
+            ClusterResult(
+                pass_id="p",
+                parent_cluster_label=None,
+                block_ids=["a", "b"],
+                labels=np.array([0, 0], dtype=np.int64),
+                centroids={0: centroid},
+            )
+        ],
+        cluster_block_ids={},
+    )
+    snapshot_cluster_run(tmp_store, {"p": pr})
+    snap = load_snapshots(tmp_store)[0]
+    stored = snap["passes"]["p"][0]["centroid"]
+    assert stored
+    # Round-trips as a unit vector identical to itself
+    assert _centroid_cosine(stored, stored) == pytest.approx(1.0)
+
+
 def test_match_clusters_born_and_died():
     cur = [{"label": "0", "title": "p_0", "member_count": 2, "members": ["n1", "n2"]}]
     base = [{"label": "0", "title": "p_0", "member_count": 2, "members": ["o1", "o2"]}]

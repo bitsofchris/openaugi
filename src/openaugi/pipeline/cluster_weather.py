@@ -18,7 +18,7 @@ The output is deterministic data (counts, deltas, titles). Interpretation —
 which movements are worth a Dashboard nomination — belongs to the
 cluster-weather lens (an agent), not this module.
 
-See docs/clustering.md ("Cluster weather") and the lens spec at
+See docs/reference/clustering.md ("Cluster weather") and the lens spec at
 <vault>/OpenAugi/AGENT/lenses/cluster-weather.md.
 """
 
@@ -41,9 +41,14 @@ logger = logging.getLogger(__name__)
 # Two clusters from different runs are "the same cluster" when membership
 # overlaps enough: Jaccard for the general case, containment for clusters that
 # grew or shrank a lot (a small old cluster fully inside a bigger new one is
-# growth, not death + birth). Below both thresholds → died + born.
+# growth, not death + birth). Membership alone proved churn-heavy in the wild
+# (2026-07-08: k-means label drift cascades through within-pass label prefixes
+# and reshuffles membership) — so snapshots also carry a truncated centroid,
+# and high centroid cosine matches clusters whose membership churned.
 JACCARD_THRESHOLD = 0.5
 CONTAINMENT_THRESHOLD = 0.7
+CENTROID_MATCH_THRESHOLD = 0.9
+SNAPSHOT_CENTROID_DIMS = 256
 
 
 # ── Snapshot (write side) ──────────────────────────────────────────
@@ -85,14 +90,15 @@ def snapshot_cluster_run(
                     if result.parent_cluster_label is not None
                     else str(label)
                 )
-                clusters.append(
-                    {
-                        "label": label_str,
-                        "title": f"{pass_id}_{label_str}",
-                        "member_count": len(members),
-                        "members": members,
-                    }
-                )
+                entry: dict[str, Any] = {
+                    "label": label_str,
+                    "title": f"{pass_id}_{label_str}",
+                    "member_count": len(members),
+                    "members": members,
+                }
+                if (centroid := result.centroids.get(label)) is not None:
+                    entry["centroid"] = _encode_centroid(centroid)
+                clusters.append(entry)
         passes_snapshot[pass_id] = clusters
 
     block_id = hashlib.sha256(f"cluster_run:{run_at}".encode()).hexdigest()[:16]
@@ -135,13 +141,44 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
+def _encode_centroid(centroid) -> str:
+    """Truncate to SNAPSHOT_CENTROID_DIMS, L2-normalize, b64-encode float32."""
+    import base64
+
+    import numpy as np
+
+    v = np.asarray(centroid, dtype=np.float32)[:SNAPSHOT_CENTROID_DIMS].copy()
+    norm = np.linalg.norm(v)
+    if norm > 0:
+        v /= norm
+    return base64.b64encode(v.tobytes()).decode()
+
+
+def _centroid_cosine(a_b64: str | None, b_b64: str | None) -> float:
+    """Cosine of two snapshot centroids; 0.0 when either is missing/mismatched."""
+    if not a_b64 or not b_b64:
+        return 0.0
+    import base64
+
+    import numpy as np
+
+    a = np.frombuffer(base64.b64decode(a_b64), dtype=np.float32)
+    b = np.frombuffer(base64.b64decode(b_b64), dtype=np.float32)
+    if a.shape != b.shape or not a.size:
+        return 0.0  # pass dims changed between runs — not comparable
+    return float(a @ b)
+
+
 def _match_clusters(
     current: list[dict[str, Any]],
     baseline: list[dict[str, Any]],
 ) -> list[tuple[dict[str, Any] | None, dict[str, Any] | None]]:
-    """Greedy best-first matching by member Jaccard.
+    """Greedy best-first matching by member overlap OR centroid cosine.
 
     Returns (current, baseline) pairs; (cur, None) = born, (None, base) = died.
+    Centroid cosine catches the same cluster after k-means label drift has
+    reshuffled its membership; falls back to membership-only for snapshots
+    written before centroids were stored.
     """
     pairs: list[tuple[float, int, int]] = []
     for i, cur in enumerate(current):
@@ -151,8 +188,13 @@ def _match_clusters(
             jac = _jaccard(cur_members, base_members)
             overlap = len(cur_members & base_members)
             containment = overlap / min(len(cur_members), len(base_members) or 1) if overlap else 0
-            if jac >= JACCARD_THRESHOLD or containment >= CONTAINMENT_THRESHOLD:
-                pairs.append((jac, i, j))
+            cos = _centroid_cosine(cur.get("centroid"), base.get("centroid"))
+            if (
+                jac >= JACCARD_THRESHOLD
+                or containment >= CONTAINMENT_THRESHOLD
+                or cos >= CENTROID_MATCH_THRESHOLD
+            ):
+                pairs.append((max(jac, cos), i, j))
     pairs.sort(reverse=True)
 
     matched_cur: set[int] = set()
