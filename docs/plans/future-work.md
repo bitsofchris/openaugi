@@ -122,6 +122,25 @@ ChatGPT, Readwise, Research output, and a LlamaIndex bridge are planned for Phas
   API adapter (supersedes the phase3-adapters API-adapter approach; the
   vault filesystem is the API, per M3).
 
+## Parked: lineage enhancements (2026-07-09, Chris's call — value unproven)
+
+Three designs sketched after idea-lineage shipped, parked before building:
+none has usage evidence, and the lens artifact hasn't been lived with yet.
+Each has an explicit revive condition — build NONE of them before it fires.
+
+- **Era drift (delta vectors)** — per-era match centroid + cosine drift
+  between eras → mechanically answers "advancing vs looping." Revive:
+  after Chris has read 2–3 lineage artifacts AND the agent's prose
+  judgment of loop-vs-advance has actually been wrong or unconvincing.
+- **Branches (sub-clustering the match set)** — split a topic's matches
+  into named sub-threads for a branching timeline. Revive: when mobile
+  actually builds the lineage timeline render and a linear era list
+  visibly isn't enough (the sidecar contract already carries eras).
+- **Link genealogy ("dalio → ice baths" chains)** — chronological
+  wikilink-walk showing one idea becoming another. Biggest wish, biggest
+  build. Revive: when a real "trace the chain from X" question comes up
+  in usage and the existing lineage + echoes lenses can't answer it.
+
 ## Found in the wild (2026-07-08, first agent-run review pass)
 
 - **`routed_to` links don't survive block edits.** Block identity is a
