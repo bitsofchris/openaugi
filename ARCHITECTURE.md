@@ -238,6 +238,7 @@ records and active plans (→ `docs/plans/done/` when shipped);
 **`docs/scratch/`** — gitignored throwaway. Reference docs use the skill
 format (`name:`/`description:` frontmatter) so they're scannable.
 
+- [docs/reference/user-guide.md](docs/reference/user-guide.md) — Day-to-day manual: entry points, the loop, trust rules, triggering a pass, lens system in brief. Chronological build history stays in this file's STATUS header, not there.
 - [docs/reference/review-pass.md](docs/reference/review-pass.md) — **The write-back loop (active):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass, derived views in OpenAugi/Views/. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
 - [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)

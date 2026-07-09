@@ -121,6 +121,7 @@ Cluster assignments land in each data_block's metadata (`cluster_assignments.{pa
 
 ## Documentation
 
+- **[User Guide](docs/reference/user-guide.md)** — day-to-day manual: entry points, the capture-to-view loop, trust rules, triggering a pass, the lens system in brief
 - **[Getting Started](docs/reference/GETTING_STARTED.md)** — full install guide, CLI reference, MCP tools, Claude registration
 - **[Architecture](ARCHITECTURE.md)** — data model, processing layers, module map, design decisions
 - **[Data Model](docs/reference/data-model.md)** — philosophy, block kinds, navigation pattern, four-layer architecture
