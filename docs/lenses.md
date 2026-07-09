@@ -147,6 +147,40 @@ a warning lands in the log. Validate any time with **`openaugi lenses`**
 exit on broken specs — CI-able). The safe authoring style is folded
 scalars: `description: >-` with the text indented on the next line.
 
+## The lens-output index (`View - Lenses.md`)
+
+Because the three output modes scatter their artifacts (view caches in
+`Views/`, dated notes in `Notes/`, nominations merged into the
+Dashboard), there is one place that answers **"what has each lens
+produced, and how do I run it?"** — `OpenAugi/Views/View - Lenses.md`,
+one row per lens. Columns: **lens · mode · last run · latest output ·
+waiting on you · run it**. The last column is a launcher — the exact
+copy-paste phrase, with a `<topic>` placeholder on targeted lenses so
+the index doubles as the menu.
+
+**Why a view, not a tag.** "Is there new lens output?" is already
+answered by `#human-review` (every note/dashboard output carries it);
+a second tag would just duplicate that workflow state. The unmet need is
+*latest-run-per-lens, grouped, in order* — which is a cache of current
+state, i.e. the view primitive. So the index is a `view` target
+(`overwrite=True`, regenerated freely).
+
+**Two mechanisms keep it current, and they reinforce each other:**
+
+1. **Row upsert on apply.** The apply-lens engine (augi-agent.md, step 5)
+   updates the running lens's row after writing its artifact — date,
+   output link, waiting-on-you note. Works for all three modes, including
+   dashboard lenses that have no file of their own.
+2. **Full regen from provenance stamps.** Every note/view a lens writes
+   carries `lens: <name>` in frontmatter (via `write_document`'s
+   `extra_frontmatter`). The review pass can rebuild the whole table from
+   those stamps across `Notes/` + `Views/` — a self-heal if upserts drift,
+   and the reason the index is reconstructible from disk alone.
+
+Invariant: the index lists exactly the lenses in
+`OpenAugi/AGENT/lenses/` — adding/removing a lens file adds/removes its
+row on the next regeneration.
+
 ## Scheduling (dormant)
 
 Specs declare `trigger: on-pass` / `every <period>` now, but the review

@@ -686,6 +686,7 @@ def write_document(
     content: str,
     subfolder: str = "Notes",
     overwrite: bool = False,
+    extra_frontmatter: dict[str, str] | None = None,
 ) -> str:
     """Save something to the user's vault under OpenAugi/{subfolder}/.
 
@@ -704,6 +705,10 @@ def write_document(
       Cannot escape the OpenAugi/ root.
     - overwrite: Replace an existing file. Use ONLY for regenerable derived
       views (subfolder='Views'); never overwrite notes.
+    - extra_frontmatter: Optional machine-readable frontmatter keys, e.g.
+      {"lens": "echoes"} when a lens writes its output — this is what keeps
+      the lens-output index (View - Lenses.md) reconstructible from disk.
+      Reserved keys (type/description/created) are ignored.
 
     Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""
     from openaugi.mcp.doc_writer import VaultWriter
@@ -724,7 +729,12 @@ def write_document(
     writer = VaultWriter(vault_path)
     return _json(
         writer.write_document(
-            title, description, content, subfolder=subfolder, overwrite=overwrite
+            title,
+            description,
+            content,
+            subfolder=subfolder,
+            overwrite=overwrite,
+            extra_frontmatter=extra_frontmatter,
         )
     )
 
