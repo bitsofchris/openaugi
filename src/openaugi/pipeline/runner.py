@@ -13,14 +13,22 @@ See docs/plans/m0.md § Incremental Ingestion Strategy.
 
 from __future__ import annotations
 
+import difflib
+import json
 import logging
 from pathlib import Path
 
 from openaugi.adapters.vault import parse_vault_incremental
 from openaugi.model.block import Block
+from openaugi.model.link import Link
 from openaugi.store.sqlite import SQLiteStore
 
 logger = logging.getLogger(__name__)
+
+# Minimum content similarity (difflib ratio) for an edited block to inherit
+# the old block's routing and agent classification. Below this, the edit is
+# treated as a genuinely new block and agent state dies with the old one.
+IDENTITY_MATCH_RATIO = 0.5
 
 
 def run_layer0(
@@ -78,6 +86,7 @@ def run_layer0(
 
     # Block-level incremental: diff entries within each changed file
     blocks_to_insert: list[Block] = []
+    migrations: list[dict] = []  # agent state carried across block edits
     blocks_kept = 0
     blocks_removed = 0
     blocks_added = 0
@@ -100,16 +109,22 @@ def run_layer0(
 
             # Entries to remove (hash in old but not new)
             removed_hashes = old_hashes - new_hashes
-            for old_entry in old_entries:
-                if old_entry.content_hash in removed_hashes:
-                    store.delete_block(old_entry.id)
-                    blocks_removed += 1
+            removed_entries = [e for e in old_entries if e.content_hash in removed_hashes]
+            added_entries = [e for e in new_entries if e.content_hash not in kept_hashes]
+
+            # Block identity is a content hash, so an edit = delete old +
+            # insert new — which would CASCADE away agent state (routed_to
+            # links, augi_tags). Match removed→added by content similarity
+            # and carry that state over BEFORE deleting.
+            migrations.extend(_collect_identity_migrations(store, removed_entries, added_entries))
+
+            for old_entry in removed_entries:
+                store.delete_block(old_entry.id)
+                blocks_removed += 1
 
             # Entries to add (hash in new but not old)
-            for new_entry in new_entries:
-                if new_entry.content_hash not in kept_hashes:
-                    blocks_to_insert.append(new_entry)
-                    blocks_added += 1
+            blocks_to_insert.extend(added_entries)
+            blocks_added += len(added_entries)
 
             # Update document block's file hash
             if doc_block.content_hash:
@@ -127,6 +142,10 @@ def run_layer0(
     if blocks_to_insert:
         count = store.insert_blocks(blocks_to_insert)
         logger.info(f"Inserted {count} blocks")
+
+    # Re-attach migrated agent state now that the new block rows exist
+    if migrations:
+        _apply_identity_migrations(store, migrations)
 
     if blocks_kept or blocks_removed:
         logger.info(
@@ -170,6 +189,93 @@ def run_layer0(
         "stats": stats,
         "new_data_blocks": new_data_blocks,
     }
+
+
+def _collect_identity_migrations(
+    store: SQLiteStore,
+    removed_entries: list[Block],
+    added_entries: list[Block],
+) -> list[dict]:
+    """Match removed blocks to their edited successors and collect agent state.
+
+    Only removed blocks that HAVE agent state (routed_to links or augi_tags)
+    are considered — everything else re-derives from text. Matching is greedy
+    best-first on difflib content ratio ≥ IDENTITY_MATCH_RATIO; a removed
+    block with no similar successor is a real deletion and its state dies.
+
+    Returns migration dicts: {new_id, routed_to: [container_ids], augi_tags}.
+    Collected BEFORE the old rows are deleted (CASCADE drops their links).
+    """
+    if not removed_entries or not added_entries:
+        return []
+
+    # Agent state per removed block
+    stateful: list[tuple[Block, list[str], list]] = []
+    for old in removed_entries:
+        routes = [
+            r[0]
+            for r in store.conn.execute(
+                "SELECT to_id FROM links WHERE from_id = ? AND kind = 'routed_to'",
+                (old.id,),
+            ).fetchall()
+        ]
+        augi_tags = old.metadata.get("augi_tags") or []
+        if routes or augi_tags:
+            stateful.append((old, routes, augi_tags))
+
+    if not stateful:
+        return []
+
+    # Greedy best-first content matching, one-to-one
+    pairs: list[tuple[float, int, int]] = []
+    for i, (old, _r, _t) in enumerate(stateful):
+        for j, new in enumerate(added_entries):
+            ratio = difflib.SequenceMatcher(None, old.content or "", new.content or "").ratio()
+            if ratio >= IDENTITY_MATCH_RATIO:
+                pairs.append((ratio, i, j))
+    pairs.sort(reverse=True)
+
+    migrations: list[dict] = []
+    used_old: set[int] = set()
+    used_new: set[int] = set()
+    for _ratio, i, j in pairs:
+        if i in used_old or j in used_new:
+            continue
+        used_old.add(i)
+        used_new.add(j)
+        old, routes, augi_tags = stateful[i]
+        migrations.append(
+            {"new_id": added_entries[j].id, "routed_to": routes, "augi_tags": augi_tags}
+        )
+        logger.info(
+            "Block edit detected: migrating agent state %s → %s (%d routes, %d augi_tags)",
+            old.id,
+            added_entries[j].id,
+            len(routes),
+            len(augi_tags),
+        )
+    return migrations
+
+
+def _apply_identity_migrations(store: SQLiteStore, migrations: list[dict]) -> None:
+    """Re-attach migrated routed_to links and augi_tags to the new block rows."""
+    links = [
+        Link(from_id=m["new_id"], to_id=container_id, kind="routed_to")
+        for m in migrations
+        for container_id in m["routed_to"]
+    ]
+    if links:
+        store.insert_links(links)
+    for m in migrations:
+        if m["augi_tags"]:
+            store.conn.execute(
+                """UPDATE blocks
+                   SET metadata = json_set(COALESCE(metadata, '{}'), '$.augi_tags', json(?))
+                   WHERE id = ?""",
+                (json.dumps(m["augi_tags"]), m["new_id"]),
+            )
+    store.conn.commit()
+    logger.info("Applied %d identity migrations", len(migrations))
 
 
 def _get_known_doc_hashes(store: SQLiteStore) -> dict[str, str]:
