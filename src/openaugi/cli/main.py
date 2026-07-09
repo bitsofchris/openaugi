@@ -631,11 +631,12 @@ def lineage(
             print(render_lineage_markdown(report))
         if write:
             vault_path = config.get("vault", {}).get("default_path")
+            err = Console(stderr=True)  # keep stdout clean for --json consumers
             if not vault_path:
-                console.print("[red]--write needs [vault] default_path in config.toml[/red]")
+                err.print("[red]--write needs [vault] default_path in config.toml[/red]")
                 raise typer.Exit(1)
             out = write_lineage_sidecar(report, vault_path)
-            console.print(f"[green]Sidecar written:[/green] {out}")
+            err.print(f"[green]Sidecar written:[/green] {out}")
     finally:
         store.close()
 
