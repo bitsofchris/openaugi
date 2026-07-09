@@ -94,7 +94,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ### Remote access (advanced)
 
-The MCP server supports HTTP transport with OAuth authentication for remote access from Claude mobile. Requires a Cloudflare account, domain, and tunnel setup. See [Remote Access](local.docs/REMOTE_ACCESS.md).
+The MCP server supports HTTP transport with OAuth authentication for remote access from Claude mobile. Requires a Cloudflare account, domain, and tunnel setup. See [Remote Access](../local.docs/REMOTE_ACCESS.md).
 
 ## CLI Reference
 
@@ -223,7 +223,7 @@ See [MCP Server docs](MCP_SERVER.md) for tool parameters and tuning.
 - **Layer 1** (~$0) — embed with OpenAI or local sentence-transformers, hub scoring via link aggregation
 - **Layer 2** (coming) — entity extraction, summaries. LLM required.
 
-See [ARCHITECTURE.md](../ARCHITECTURE.md) for the full system design, module map, and design decisions.
+See [ARCHITECTURE.md](../../ARCHITECTURE.md) for the full system design, module map, and design decisions.
 
 ## Logs & Debugging
 

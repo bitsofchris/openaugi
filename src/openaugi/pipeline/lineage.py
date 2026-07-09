@@ -10,7 +10,7 @@ The JSON report is also the mobile timeline payload: `--write` drops it at
 `<vault>/OpenAugi/lineage/<slug>.json`, next to context-pack.json in the
 read contract, so the app can render an idea's timeline without new APIs.
 
-See <vault>/OpenAugi/AGENT/lenses/idea-lineage.md and docs/lenses.md.
+See <vault>/OpenAugi/AGENT/lenses/idea-lineage.md and docs/reference/lenses.md.
 """
 
 from __future__ import annotations

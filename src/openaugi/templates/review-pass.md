@@ -182,7 +182,7 @@ Always regenerate `View - Dashboard.md` (same folder):
   instruction and takes precedence. **Unchecked + empty = still pending:**
   carry the nomination forward verbatim, anchor and checkbox included.
 - Anything unroutable or confusing, listed honestly.
-- Permanent footer: `*How this works: docs/review-pass.md in the openaugi
+- Permanent footer: `*How this works: docs/reference/review-pass.md in the openaugi
   repo · design record: docs/plans/review-pass-v1.md · agent instructions:
   OpenAugi/AGENT/review-pass.md*` — the Dashboard is the discovery surface;
   this line keeps the docs findable without remembering them.

@@ -89,7 +89,7 @@ Context blocks are the map. They're generated metadata about data blocks — eno
 
 A context block answers one question: **"Should the agent look here?"**
 
-OpenAugi generates context blocks through the [compile step](../ARCHITECTURE.md#compile):
+OpenAugi generates context blocks through the [compile step](../../ARCHITECTURE.md#compile):
 
 | Context block | What it provides | How it's built |
 |---------------|-----------------|----------------|
@@ -154,6 +154,6 @@ Hub scores surface the tags and topics that are most central to the knowledge gr
 ## Further Reading
 
 - [Context Engineering is Index Design](https://bitsofchris.com/p/context-engineering-is-index-design) — the philosophy behind this architecture
-- [ARCHITECTURE.md](../ARCHITECTURE.md) — system architecture, module map, key flows
+- [ARCHITECTURE.md](../../ARCHITECTURE.md) — system architecture, module map, key flows
 - [MCP_SERVER.md](MCP_SERVER.md) — tool reference and query tuning
 - [enrichment.md](enrichment.md) — tag taxonomy and document classification

@@ -10,7 +10,7 @@ You the agent are constantly improving your ability to work in this codebase - d
    long-running sequence (M1…M8) with a STATUS/LEFT OFF header that MUST be
    updated every session. Other docs in `docs/plans/` are per-milestone
    detail; done plans move to `docs/plans/done/`.
-2. **System manual for the write-back loop:** [docs/review-pass.md](docs/review-pass.md)
+2. **System manual for the write-back loop:** [docs/reference/review-pass.md](docs/reference/review-pass.md)
    (augi_tags, routing, capture grammar, views).
 3. **Vault-side entry** (Chris's daily driver): `View - Dashboard.md` under
    `<vault>/OpenAugi/Views/` — regenerated every review pass, links everything.
@@ -40,11 +40,19 @@ real data, it belongs in `docs/scratch/` (gitignored), not tracked.
 | Active plans | `docs/plans/*.md` | Per-milestone detail |
 | **Left-off state** | [docs/plans/master-plan.md](docs/plans/master-plan.md) STATUS/LEFT OFF header | Update every session — this is the resume point |
 | Completed plans | `docs/plans/done/` | Move here when shipped |
-| Feature/system docs | `docs/*.md` (e.g. `review-pass.md`, `clustering.md`) | Skill format: `name:`/`description:` frontmatter |
+| Feature/system reference docs | `docs/reference/*.md` (e.g. `review-pass.md`, `clustering.md`, `lenses.md`) | Durable "how it works" manuals. **New reference docs go here, never `docs/` root.** Skill format: `name:`/`description:` frontmatter |
 | Agent skill files (runtime) | `<vault>/OpenAugi/AGENT/` | Vault copy is the source of truth, see below |
 | Agent skill templates (seed) | `src/openaugi/templates/` | Copied on `openaugi init`; not read at runtime |
 | **Scratch / drafts / session dumps** | `docs/scratch/` | **Gitignored — never commit.** Blog drafts, session handoffs, anything vault-derived |
 | Debug logs | `~/.openaugi/logs/openaugi.log` | Rotated, DEBUG level |
+
+**Docs layout (convention — keep it this way).** Everything under `docs/`
+is one of three tiers: **`reference/`** = durable manuals for how a
+subsystem works (the tier ARCHITECTURE.md links); **`plans/`** = design
+records and active plans, moved to `plans/done/` when shipped;
+**`scratch/`** = gitignored throwaway. When you add a doc, pick the tier
+first — a "how X works" manual is `reference/`, a "here's what we'll
+build" is `plans/`. Never drop a reference doc at `docs/` root.
 
 # Related repos
 

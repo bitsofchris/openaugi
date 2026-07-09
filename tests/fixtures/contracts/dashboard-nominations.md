@@ -38,4 +38,4 @@ created: 2026-07-06T19:15:00
 - [ ] Weekly reflection in [[WK - 26-07-06]]
 - [ ] Cut the plugin release
 
-*How this works: docs/review-pass.md in the openaugi repo · design record: docs/plans/review-pass-v1.md · agent instructions: OpenAugi/AGENT/review-pass.md*
+*How this works: docs/reference/review-pass.md in the openaugi repo · design record: docs/plans/review-pass-v1.md · agent instructions: OpenAugi/AGENT/review-pass.md*

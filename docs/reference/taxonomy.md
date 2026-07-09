@@ -118,7 +118,7 @@ A single task can exist in both places at once — a block in your journal tagge
 
 ## `workstream:` in task frontmatter
 
-The `workstream:` field in [task-template.md](../src/openaugi/templates/task-template.md) holds the **area slug without the `area/` prefix** — e.g., `openaugi`, not `area/openaugi`.
+The `workstream:` field in [task-template.md](../../src/openaugi/templates/task-template.md) holds the **area slug without the `area/` prefix** — e.g., `openaugi`, not `area/openaugi`.
 
 When the zzz dispatch hook writes a task file, you can fill `workstream:` from the block's area. If you write a task file by hand, put your area slug there.
 

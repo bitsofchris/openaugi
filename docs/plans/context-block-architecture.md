@@ -35,7 +35,7 @@ Current impl already has the right structure. This phase makes the code and docs
 
 ### Docs + MCP tool descriptions
 
-- Update `docs/data-model.md` to use data block / context block / context graph vocabulary
+- Update `docs/reference/data-model.md` to use data block / context block / context graph vocabulary
 - Update MCP tool docstrings in `server.py` to name the block kinds correctly
 - Update `ARCHITECTURE.md` intro paragraph to reference the four-layer framing
 

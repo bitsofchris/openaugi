@@ -11,7 +11,7 @@ description: The write-back loop — routes new blocks into containers via augi_
 - You're about to run (or debug) a review pass
 - You forgot the capture grammar or what the Dashboard nominations mean
 
-Design record with full rationale: [docs/plans/review-pass-v1.md](plans/review-pass-v1.md).
+Design record with full rationale: [docs/plans/review-pass-v1.md](../plans/review-pass-v1.md).
 Agent instructions (the live prompt): `<vault>/OpenAugi/AGENT/review-pass.md`.
 
 ## The frame in one paragraph

@@ -11,7 +11,7 @@ description: The lens system — saved questions applied to your data. One markd
 - You're wiring a new surface (mobile, plugin) to lenses
 - You forgot the spec format or scope grammar
 
-Design record: [docs/plans/lens-framework.md](plans/lens-framework.md).
+Design record: [docs/plans/lens-framework.md](../plans/lens-framework.md).
 Live mechanics (the prompt the agent follows): the **Lenses** section of
 `<vault>/OpenAugi/AGENT/augi-agent.md`.
 
