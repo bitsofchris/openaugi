@@ -200,5 +200,6 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# Generated render surfaces contain personal vault content — never commit
-docs/scratch/**/lifestream.html
+# Personal scratch space — session dumps, drafts, vault-derived content.
+# Never commit anything here; see AGENTS.md "Where things live".
+docs/scratch/
