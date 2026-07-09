@@ -7,6 +7,24 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-09: both found-in-the-wild defects FIXED; idea-lineage lens
+proven on a real topic.** (1) Agent state now survives block edits —
+`run_layer0` matches removed→added blocks by content similarity and
+migrates `routed_to` + `augi_tags` before deleting (the trading-MOC
+route loss can't recur; real deletions still drop state). (2)
+Cluster-weather snapshots carry 256-dim centroids; cross-run matching
+accepts centroid cosine ≥ .9, killing the label-drift born/died churn —
+first centroid-bearing snapshot recorded, deltas clean from next run.
+Lineage enhancements (drift/branches/genealogy) PARKED with revive
+conditions (Chris's call — value unproven; see future-work.md). Lens
+shakedown: "apply lens idea-lineage to advice on finding your niche" ran
+end-to-end → artifact at `OpenAugi/Notes/2026-07-09 - Lineage - advice
+on finding your niche.md` (146 blocks, 2023-11→2026-07, the idea
+inverts: "pick a category" → "don't niche first"); one CLI bug found +
+fixed (--json stdout contamination). Also: `source/podcast` added
+(Chris's call) — 2,480 Snipd/podcast blocks attributed; total source
+firewall coverage now ~3.2k blocks.
+
 **2026-07-08: salience gating centralized here (cross-repo with mobile).**
 `get_context` gained an additive optional `purpose` parameter (other MCP
 clients unaffected) that applies a min-score gate from config `[salience]`
@@ -20,7 +38,7 @@ cleaning" → all 0.0, silent). Mobile's bridge passes
 `RESURFACE_MIN_SCORE` env survives one release as a deprecated local
 override (effective gate = max of the two). See mobile's
 `docs/plans/task-salience-gating.md` (moved to archive there when done)
-+ its ROADMAP STATUS. Docs: MCP_SERVER.md §salience.
++ its ROADMAP STATUS. Docs: docs/reference/MCP_SERVER.md §salience.
 
 **2026-07-08: full-system shakedown on the prod vault — pass #2 ran
 agent-run end-to-end.** Everything built this week was exercised for real:
@@ -130,7 +148,7 @@ first run works activity-only), and a temporal fix so doc-level clusters
 carry real block_timestamps. Lens spec: vault `lenses/cluster-weather.md`
 (mirrored to repo templates), nominations in gravity grammar. Live DB now
 has 10 life areas + 80 concept clusters + snapshot #1; Dashboard has a
-try-it line. Next weather run gets real deltas. See docs/clustering.md
+try-it line. Next weather run gets real deltas. See docs/reference/clustering.md
 ("Cluster weather"). Remaining M5: habit/tornado lens (needs accumulated
 passes).
 
@@ -140,7 +158,7 @@ and the MVP had to be end-to-end before refining individual lenses. Built:
 lens registry (`OpenAugi/AGENT/lenses/`, distill + nuggets migrated),
 prose engine in `augi-agent.md` (apply/create from any surface), `lenses`
 field in the context pack for mobile chips, dormant scheduler note in
-review-pass. See M5 below + [docs/lenses.md](../lenses.md). Lifestream
+review-pass. See M5 below + [docs/reference/lenses.md](../reference/lenses.md). Lifestream
 (M6 first screen) got Chris's verdict — no value add — and is parked.
 Nomination format meanwhile evolved to checkboxes (other thread).
 
@@ -186,7 +204,7 @@ Chris's corrections; `description` frontmatter on all registry notes;
 rename handling exercised. **Gate:** two weeks of passes with <handful of
 manual corrections each.
 
-### M5 — Lens system (MVP SHIPPED 2026-07-07 — [docs/lenses.md](../lenses.md))
+### M5 — Lens system (MVP SHIPPED 2026-07-07 — [docs/reference/lenses.md](../reference/lenses.md))
 **Reframed 2026-07-07 (Chris): the lens is the product primitive** —
 saved questions applied to your life data; blocks/routing/surfaces are
 substrate and delivery. MVP shipped end-to-end as files + prose:
@@ -210,7 +228,7 @@ rationale: user guide §3b; vision + release-video treatment:
 (demo video target: end of week 2026-07-11).
 **cluster-weather** shipped 2026-07-07 (night) — the first lens with
 deterministic machinery behind it: cluster snapshots + growth/death diffs
-(`openaugi cluster-weather`; see docs/clustering.md "Cluster weather").
+(`openaugi cluster-weather`; see docs/reference/clustering.md "Cluster weather").
 Remaining M5 work: habit/tornado (needs accumulated passes), spec engine
 only if prose visibly fails.
 
