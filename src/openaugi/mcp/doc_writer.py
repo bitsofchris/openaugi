@@ -32,6 +32,7 @@ class VaultWriter:
         content: str,
         subfolder: str = "Notes",
         overwrite: bool = False,
+        extra_frontmatter: dict[str, str] | None = None,
     ) -> dict:
         """Create a markdown note in OpenAugi/{subfolder}/.
 
@@ -43,6 +44,11 @@ class VaultWriter:
                        Defaults to "Notes". Cannot escape OpenAugi/ root.
             overwrite: Replace the file if it exists. For regenerable derived
                        views (e.g. Views/) — default False protects notes.
+            extra_frontmatter: Optional machine-readable frontmatter keys emitted
+                       after the standard ones (e.g. {"lens": "echoes"} so the
+                       lens-output index is reconstructible from disk). Keys and
+                       values are coerced to single-line strings; the reserved
+                       keys type/description/created cannot be overridden.
 
         Returns:
             {"status": "created"|"updated", "path": str, "vault_relative": str, "title": str}
@@ -76,11 +82,22 @@ class VaultWriter:
         folder.mkdir(parents=True, exist_ok=True)
 
         created = datetime.now().isoformat(timespec="seconds")
+        extra_lines = ""
+        if extra_frontmatter:
+            reserved = {"type", "description", "created"}
+            for key, value in extra_frontmatter.items():
+                key = str(key).strip()
+                if not key or key in reserved:
+                    continue
+                # Collapse to a single line — frontmatter values are scalars.
+                flat = " ".join(str(value).split())
+                extra_lines += f"{key}: {flat}\n"
         note = (
             f"---\n"
             f"type: document\n"
             f"description: {description}\n"
             f"created: {created}\n"
+            f"{extra_lines}"
             f"---\n\n"
             f"# {title}\n\n"
             f"{content.strip()}\n"
