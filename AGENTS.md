@@ -19,11 +19,20 @@ You the agent are constantly improving your ability to work in this codebase - d
 
 # Where things live
 
-This repo is public. Chris's vault is not — never commit anything that is
-literally output *from* his second brain (real routing decisions, real note
-titles/content, personal reflections, life-area breakdowns). Generic
-examples referencing categories like "career" or "health" in a design doc
-are fine; a doc that reports what actually got routed there is not.
+This repo is public. Chris's vault is not. Before committing any doc, ask:
+does this contain actual content from the vault, or just describe the
+system that operates on it?
+
+**Fine to commit:** category/taxonomy names, tag names, schema fields,
+config shapes — the system-level vocabulary (e.g. "an `area/health`
+container exists," "clustering produces life-area buckets").
+
+**Never commit:** real note titles or content, real routing/nomination
+decisions, actual cluster contents or counts, personal reflections, post
+drafts, session handoffs that quote real vault data — i.e. anything that
+is *output from* the second brain rather than a description *of* it. If a
+doc is reporting what specifically got routed/clustered/decided on Chris's
+real data, it belongs in `docs/scratch/` (gitignored), not tracked.
 
 | What | Lives in | Notes |
 |---|---|---|
