@@ -10,13 +10,23 @@ scope: >-
   REQUIRED. The default retrieval recipe, plain prose: what data this
   lens reads (whose writing, which tags/containers, what time window,
   what to exclude). Overridable at apply time — an explicit scope in the
-  instruction wins.
+  instruction wins. INPUT AXIS: if the lens is meaningless without a
+  subject (distill, echoes, idea-lineage), scope MUST say "topic given
+  at apply time" — surfaces use this to know a bare "apply lens NAME"
+  isn't a complete instruction.
 trigger: on-demand
 target: >-
-  REQUIRED. Where the artifact lands, one of three families —
-  "dashboard" (nominations in checkbox+anchor grammar) · "note — <path
-  pattern>" (one #human-review note) · "view — overwrite <View - X.md>"
-  (regenerable cache). Prose after the keyword is welcome.
+  REQUIRED. Where the artifact lands AND what happens to it on re-run —
+  one of three families, three persistence behaviors:
+  "dashboard" (MERGE — nominations upserted into View - Dashboard.md by
+  ^nom-* anchor; no standalone file; same-anchor rule makes re-runs
+  idempotent) · "note — <path pattern>" (ARTIFACT — a NEW dated
+  #human-review note per run; accumulates, never overwrites) · "view —
+  overwrite <View - X.md>" (CACHE — same file overwritten every run;
+  only the latest run exists; the only legal overwrite=True). Prose
+  after the keyword is welcome. Pick by the question's shape: recurring
+  status → view · durable one-off answer → note · structure change →
+  dashboard.
 ---
 
 # <Lens Name>
