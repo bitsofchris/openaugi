@@ -122,6 +122,24 @@ ChatGPT, Readwise, Research output, and a LlamaIndex bridge are planned for Phas
   API adapter (supersedes the phase3-adapters API-adapter approach; the
   vault filesystem is the API, per M3).
 
+## Found in the wild (2026-07-08, first agent-run review pass)
+
+- **`routed_to` links don't survive block edits.** Block identity is a
+  content hash, so editing a routed block re-ingests it under a new ID and
+  CASCADE silently drops its `routed_to`/tag links — the trading MOC lost
+  all 3 of its routed blocks within 48h of routing (restored by hand
+  during pass #2). Options: re-attach links by (source_path, position)
+  heuristic at ingest, or persist routing in a separate table keyed on
+  something more stable than the content hash. This will bleed routing
+  quality during M4 until fixed — every edited daily note sheds its routes.
+- **Cluster-weather cross-run matching is churn-heavy in practice.** The
+  7/7→7/8 diff reported many large born/died pairs that are clearly the
+  same cluster reshuffled (k-means label drift beyond the Jaccard .5 /
+  containment .7 thresholds), with only a handful of clean grew/shrank
+  matches. Consider matching on centroid cosine similarity instead of (or
+  in addition to) member overlap, and suppressing born/died pairs whose
+  sizes mirror each other within a parent.
+
 ## Other Deferred Items
 
 - **Adapter protocol / registry / entry points** — to be defined in Phase 3 alongside the first non-vault adapters

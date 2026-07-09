@@ -7,6 +7,25 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-08: full-system shakedown on the prod vault — pass #2 ran
+agent-run end-to-end.** Everything built this week was exercised for real:
+review pass #2 (17 blocks routed, first pass with nomination anchors +
+`write_context_pack`; 5 anchored nominations pending on the Dashboard),
+first views for AMOC Health + Fiction, morning-briefing + open-loops lens
+views created, cluster snapshot #2 + first real cluster-weather deltas,
+two new lineage sidecars (trading, die-before-you-die), context pack
+regenerated (10 lenses listed). **Two bugs found in the wild (filed in
+future-work.md "Found in the wild"):** (1) `routed_to` links silently die
+when a routed block is edited (content-hash identity + CASCADE) — the
+trading MOC had lost all 3 routes in 48h, restored by hand; this bleeds
+M4 routing quality until fixed. (2) cluster-weather cross-run matching is
+churn-heavy (born/died label-drift pairs dominate the real grew/shrank
+signal) — consider centroid-similarity matching. **Next:** Chris reads
+the Dashboard/briefing/loops and answers nominations ("process the
+dashboard" executes them); Sunday 7/12 pass is the M2-style DoD test for
+the anchored flow; fix the route-durability bug before M4 accumulates
+corrections.**
+
 **2026-07-08: cross-repo contract fixtures landed (tests+fixtures only, no
 behavior change).** The three text/file contracts that couple this repo to
 OpenAugi Mobile — Dashboard **nomination grammar**, **context-pack.json**
