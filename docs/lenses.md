@@ -67,6 +67,43 @@ payload), plus the vault-side JARVIS starter set (morning-briefing,
 open-loops, echoes, …). The old `distill-lens.md` / `nugget-lens.md`
 paths are pointer stubs.
 
+## The two axes every lens sits on (formalized 2026-07-08)
+
+Beyond trigger/scope, every lens has two properties that determine how
+you run it and what happens to its output. Both are declared in the
+existing frontmatter — no new keys — but writers must be deliberate
+about them:
+
+**Axis 1 — input: does the lens need a topic?** Stated in `scope`.
+
+- **Batch** — runs over its default scope with no argument; "apply lens
+  NAME" is a complete instruction. morning-briefing · open-loops ·
+  nuggets · content-pipeline · emerging · cluster-weather ·
+  decision-audit (picks its own decision from the stream).
+- **Targeted** — meaningless without a subject; the apply instruction
+  must carry one ("distill X", "lineage of X"). distill · echoes ·
+  idea-lineage. A targeted lens's `scope` MUST say so explicitly
+  ("topic given at apply time") so surfaces know a bare chip-tap isn't
+  enough (mobile will need a text prompt for these, not just a chip).
+
+**Axis 2 — output mode: what happens to the artifact?** Determined by
+the `target` family. Three modes, three persistence behaviors:
+
+| target      | persistence | you see | history |
+|-------------|-------------|---------|---------|
+| `view — overwrite <View - X.md>` | **cache** — same file overwritten every run | the most recent run only | none, by design (a briefing is a cache, never an archive) |
+| `note — <path pattern>` | **artifact** — new dated file per run | every run, dated | accumulates in `OpenAugi/Notes/`; durable (lineage) or disposable (echoes) per lens |
+| `dashboard` | **merge** — nominations upserted into `View - Dashboard.md` by `^nom-*` anchor | pending nominations on the shared Dashboard | answered nominations recorded in the next pass's "processed" section; no standalone artifact |
+
+Consequences writers must respect: view-target lenses may use
+`overwrite=True` (the only place it's legal); note-target lenses never
+overwrite — a re-run on the same topic makes a new dated note;
+dashboard-target lenses produce NO file of their own, so their only
+trace is the nomination block (same-anchor rule keeps re-runs
+idempotent). When creating a lens, pick the mode from the question's
+shape: recurring status question → view; durable answer to a one-off
+question → note; "should we change structure?" → dashboard.
+
 ## Applying a lens — from any surface
 
 Every surface converges on the trigger contract (a task file), so this is
