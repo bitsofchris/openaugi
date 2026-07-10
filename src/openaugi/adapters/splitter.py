@@ -9,7 +9,7 @@ the way OpenAugi does" should import from here instead of re-implementing
 heading/qqq/zzz parsing. The `openaugi split` CLI is a thin wrapper over
 `split_file`.
 
-See [docs/splitter.md](../../../docs/splitter.md) for usage from agents and
+See [docs/reference/splitter.md](../../../docs/reference/splitter.md) for usage from agents and
 [docs/plans/zzz-instructions.md](../../../docs/plans/zzz-instructions.md) for
 the `zzz:` convention.
 
@@ -95,6 +95,7 @@ class SplitResult(BaseModel):
     doc_hash: str  # sha256 of full file content [:16]
     filename_date: str | None = None  # YYYY-MM-DD extracted from stem, if any
     frontmatter_tags: list[str] = Field(default_factory=list)
+    frontmatter_created: str | None = None  # ISO date from `created:` frontmatter, if any
     segments: list[Segment]
 
 
@@ -145,6 +146,7 @@ def split_file(path: str | Path) -> SplitResult:
         doc_hash=_hash(raw),
         filename_date=effective_title_date,
         frontmatter_tags=fm_tags,
+        frontmatter_created=_extract_frontmatter_created(raw),
         segments=segments,
     )
 
@@ -326,6 +328,36 @@ def _strip_frontmatter(content: str) -> tuple[str, list[str]]:
                 in_tags = False
 
     return body, tags
+
+
+def _extract_frontmatter_created(content: str) -> str | None:
+    """Extract a `created:` date from YAML frontmatter, if present.
+
+    Accepts `YYYY-MM-DD` optionally followed by a time (`T` or space
+    separated), quoted or bare. Returns an ISO-8601 string (date-only or
+    `YYYY-MM-DDTHH:MM:SS`), or None if absent/unparseable.
+    """
+    match = FRONTMATTER_PATTERN.match(content)
+    if not match:
+        return None
+
+    for line in match.group(1).split("\n"):
+        stripped = line.strip()
+        if not stripped.startswith("created:"):
+            continue
+        value = stripped[len("created:") :].strip().strip("'\"")
+        date_match = re.match(r"(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2})?))?", value)
+        if not date_match:
+            return None
+        if _parse_date(date_match.group(1)) is None:
+            return None
+        if date_match.group(2):
+            time_part = date_match.group(2)
+            if len(time_part) == 5:  # HH:MM → HH:MM:SS
+                time_part += ":00"
+            return f"{date_match.group(1)}T{time_part}"
+        return date_match.group(1)
+    return None
 
 
 def _extract_tags(text: str) -> list[str]:
