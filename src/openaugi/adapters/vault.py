@@ -20,10 +20,11 @@ from openaugi.adapters import splitter as _splitter
 
 # Re-export the shared splitter helpers so existing importers (including tests)
 # keep working. All splitting logic lives in splitter.py — see its module
-# docstring and [docs/splitter.md](../../../docs/splitter.md).
+# docstring and [docs/reference/splitter.md](../../../docs/reference/splitter.md).
 from openaugi.adapters.splitter import (
     _code_fence_ranges,  # noqa: F401
     _extract_filename_date,
+    _extract_frontmatter_created,
     _extract_links,  # noqa: F401
     _extract_tags,  # noqa: F401
     _extract_wk_date,
@@ -275,6 +276,7 @@ def _parse_file(
     title_date = _extract_filename_date(file_path)
     wk_date = _extract_wk_date(file_path)
     effective_title_date = title_date or wk_date
+    fm_created = _extract_frontmatter_created(content)
     file_created = _get_file_created_time(file_path)
 
     segments = (
@@ -288,7 +290,9 @@ def _parse_file(
         entry_id = Block.make_id(rel_path, entry_hash)
 
         section_date = _parse_date(seg.section_date) if seg.section_date else None
-        resolved_ts = _resolve_timestamp(section_date, effective_title_date, file_created)
+        resolved_ts = _resolve_timestamp(
+            section_date, effective_title_date, fm_created, file_created
+        )
 
         all_tags = _apply_source_rules(rel_path, _unique_ordered(fm_tags + seg.tags), source_rules)
 
@@ -300,6 +304,8 @@ def _parse_file(
             "file_created_at": file_created,
             "granularity": seg.granularity,
         }
+        if fm_created:
+            entry_metadata["frontmatter_created"] = fm_created
         if seg.zzz_instructions:
             entry_metadata["zzz_instructions"] = seg.zzz_instructions
 
@@ -360,13 +366,22 @@ def _get_file_created_time(file_path: Path) -> str | None:
 def _resolve_timestamp(
     h3_date: str | None,
     title_date: str | None,
+    fm_created: str | None,
     file_created: str | None,
 ) -> str:
-    """Apply timestamp priority: h3 > filename > file_created > now."""
+    """Apply timestamp priority: h3 > filename > frontmatter created > file_created > now.
+
+    `created:` frontmatter sits below filename dates (daily notes stay
+    authoritative) but above filesystem time, which is wrong for anything
+    synced or imported — this is how converters (gdrive, chatgpt) stamp
+    real historical dates onto imported docs.
+    """
     if h3_date:
         return h3_date
     if title_date:
         return title_date
+    if fm_created:
+        return fm_created
     if file_created:
         return file_created
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
