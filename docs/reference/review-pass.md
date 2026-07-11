@@ -111,8 +111,9 @@ mark. The full pass:
 2. `search(after=last_run, exclude_path_prefix="OpenAugi/")` → new blocks,
    derived artifacts excluded server-side; reference-source blocks are
    grouped by document and routed once
-3. Routes each block → `route_block(id, container_title)` for membership;
-   `tag_block(id, augi_tags)` only where classification has signal
+3. Routes the whole batch → `apply_routing(decisions=[...])` (membership +
+   `augi_tags` per decision in one call; `route_block`/`tag_block` remain
+   for one-offs)
 4. Regenerates `View - <container>.md` for touched containers via
    `write_document(..., subfolder="Views", overwrite=True)`
    (`overwrite=True` is only legal for Views). Regeneration is a **merge**:

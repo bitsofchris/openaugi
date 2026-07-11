@@ -247,8 +247,9 @@ Always regenerate `View - Dashboard.md` (same folder):
    artifacts out of the queue server-side. Group reference-source blocks by
    their `source_path` and handle each reference document as one item. Use
    `recent`/`get_context`/`get_related` for extra context.
-3. Route each block per the precedence above; persist membership with
-   `route_block`, classification (when there's signal) with `tag_block`.
+3. Decide routes for every block per the precedence above, then persist the
+   whole batch with `apply_routing(decisions=[{block_id, containers,
+   augi_tags}, ...])` — one call, not a route_block/tag_block loop.
 4. Regenerate views for containers that received blocks (`overwrite=True`).
    Untouched containers keep their old view. **Two refresh tiers — don't
    re-derive what didn't change:**
