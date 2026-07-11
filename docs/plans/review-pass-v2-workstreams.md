@@ -151,16 +151,16 @@ Order matters; each is a small, separately committed change with tests.
 - [x] **3.1 `source_path` in `_block_summary`** + `exclude_path_prefix`
       filter — SQL-level in browse mode (LIKE-escaped), Python-filtered in
       title/keyword/semantic modes. Shipped + tested 2026-07-11.
-- [ ] **3.2 Reference grouping (DECIDED 2026-07-11).** Browse mode groups
-      reference-source blocks (Snipd, Readwise, etc.) under their parent
-      document (count + title); the pass routes the *document* once, blocks
-      inherit. Routing granularity matches capture granularity — a
-      182-block transcript is one artifact, one decision. Reference
-      documents are never moved or edited (synced from source); routing is
-      a link only.
-- [ ] **3.3 `apply_routing(decisions=[{block_id, container, augi_tags}])`**
-      — one batched write tool matching how the pass thinks; replaces ~35
-      route_block + tag_block round-trips with 1–3 calls.
+- [x] **3.2 Reference grouping.** Browse mode collapses blocks carrying a
+      `source/*` tag into `reference_documents` (one entry per source doc:
+      document_id, block_count, time range, source_tags); the pass routes
+      the *document* once via its document_id. Reference documents are
+      never moved or edited (synced from source); routing is a link only.
+      Shipped + tested 2026-07-11.
+- [x] **3.3 `apply_routing(decisions=[{block_id, containers, augi_tags}])`**
+      — batched write tool; per-decision errors don't block the rest.
+      Prompts updated to prefer it over route_block/tag_block loops.
+      Shipped + tested 2026-07-11.
 - [ ] **3.4 (maybe) compact browse summaries** — trim content snippet
       500→200 chars in browse mode. Likely subsumed by 3.2; do only if the
       budget still hurts after reference grouping.
