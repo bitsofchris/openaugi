@@ -338,7 +338,9 @@ noted).
 | Prereq: `apply_routing` = single route CRUD tool (add/remove per decision, `route_block` deleted) | **shipped 2026-07-11** | `807da60` |
 | Prereq: lens index folded into Dashboard (`View - Lenses.md` deleted) | **shipped 2026-07-11** | `5f93229` |
 | §1 membership = containment ∪ routing: `already_home` no-op, containment-remove is an error, `get_members` unified query tool | **shipped 2026-07-11** | `f29a5b6` |
-| §2 recap cache: `recaps` table + `write_recap`/`get_view` MCP tools, pass dual-writes recap rows | — | — |
-| Step 3: mobile bridge serves views/Dashboard from the DB (repo: `private-augi-mobile`) | — | — |
+| §2 recap cache: `recaps` table + `write_recap`/`get_view` MCP tools, pass dual-writes recap rows | **shipped 2026-07-11** | `638d637` |
+| §2b `list_views` (recap row = the render list / per-container view bit) | **shipped 2026-07-11** | `40cffa0` |
+| Step 3 phase 1: mobile bridge `/views` renders from daemon queries (Dashboard stays the file; fallback to file parser) | **shipped 2026-07-11** | `private-augi-mobile` `5bfe323` |
+| Step 3 phase 2: Dashboard-on-phone staleness UI, `/context-pack` absorption (Q4 cutover) | pending — needs phone verification of phase 1 first | — |
 | Step 4: cut view-file generation per container as Chris confirms rendered-surface usage; Dashboard stays a file until answer-UI | blocked on step 3 + usage | — |
 | Step 5: converge lenses onto saved queries; view-target lenses stop writing files | blocked on step 3 | — |
