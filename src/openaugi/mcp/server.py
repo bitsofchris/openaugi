@@ -15,8 +15,8 @@ Write tools:
 - tag_block: stamp AI-classified augi_tags onto a block
 
 Review pass tools:
-- route_block: route a block into a container note (routed_to link)
-- apply_routing: batch route/tag — one call for a whole pass's decisions
+- apply_routing: the route CRUD tool — batch add/remove routed_to links + tag,
+  one call for a whole pass's decisions or a single correction
 - get_review_state: read the review-pass high-water mark
 - mark_review_complete: advance the high-water mark after a pass
 
@@ -146,7 +146,7 @@ def search(
     Browse mode groups reference material: blocks carrying a source/* tag
     (Readwise, Snipd, and other synced imports) are collapsed into
     'reference_documents' — one entry per source document with document_id,
-    block_count, and time range. Route the DOCUMENT (route_block on
+    block_count, and time range. Route the DOCUMENT (apply_routing with
     document_id), never its individual blocks."""
     if not query and not keyword and not title and not any([tags, after, before, kind, source]):
         return _json(
@@ -289,7 +289,8 @@ def get_block(block_id: str) -> str:
                 "search(title=...) to find valid block IDs.",
             }
         )
-    return _json(_block_full(block))
+    routes = store.get_routed_container_titles([block_id]).get(block_id, [])
+    return _json(_block_full(block, routes))
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -310,9 +311,12 @@ def get_blocks(block_ids: list[str]) -> str:
     store = _get_store()
     found = store.get_blocks_by_ids(block_ids)
     missing = [bid for bid in block_ids if bid not in found]
+    routes = store.get_routed_container_titles(list(found))
     return _json(
         {
-            "blocks": [_block_full(found[bid]) for bid in block_ids if bid in found],
+            "blocks": [
+                _block_full(found[bid], routes.get(bid, [])) for bid in block_ids if bid in found
+            ],
             "count": len(found),
             "missing": missing,
         }
@@ -628,62 +632,27 @@ def tag_block(block_id: str, augi_tags: list[str]) -> str:
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
 @_release_conn
-def route_block(block_id: str, container_title: str) -> str:
-    """Route a block into a container note (AMOC/PMOC/MOC) with a routed_to link.
-
-    Membership is a LINK, not a tag — tags are reserved for the closed
-    taxonomy vocabulary. A block may be routed to multiple containers.
-    Re-calling with the same pair is a no-op (duplicate links are ignored).
-
-    - block_id: the data block to route
-    - container_title: exact title of the container note
-      (e.g. "AMOC - OpenAugi Main")
-    """
-    from openaugi.model.link import Link
-
-    store = _get_store()
-    if store.get_block(block_id) is None:
-        return _json({"status": "error", "reason": f"Block {block_id} not found."})
-    row = store.conn.execute(
-        "SELECT id FROM blocks WHERE kind = 'context_block:document' AND title = ? LIMIT 1",
-        (container_title,),
-    ).fetchone()
-    if not row:
-        return _json(
-            {
-                "status": "error",
-                "reason": f"Container note not found: {container_title}",
-                "hint": "Use search(title=...) to find the exact note title.",
-            }
-        )
-    # insert_links (not insert_link) — it commits, and _release_conn closes
-    # the connection right after this call.
-    store.insert_links([Link(from_id=block_id, to_id=row[0], kind="routed_to")])
-    return _json(
-        {
-            "status": "ok",
-            "block_id": block_id,
-            "container": container_title,
-            "container_id": row[0],
-            "kind": "routed_to",
-        }
-    )
-
-
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
-@_release_conn
 def apply_routing(decisions: list[dict]) -> str:
-    """Batch route/tag blocks in one call — the review pass's write step.
+    """Modify block→container routing — THE route write tool (add, remove, tag).
 
-    Each decision: {"block_id": str, "containers": [container titles],
-    "augi_tags": [taxonomy tags]}. Either key may be omitted per decision
-    (route without tagging, tag without routing). Prefer this over looping
-    route_block/tag_block — one call replaces dozens.
+    Membership is a routed_to LINK from a block to a container note
+    (AMOC/PMOC/MOC); a block may belong to several containers. Each decision:
 
-    Container titles are resolved once; unknown containers or block_ids fail
-    that decision only (reported in 'errors'), the rest still apply.
-    Duplicate routed_to links are no-ops. augi_tags overwrites the block's
-    prior classification, same as tag_block."""
+      {"block_id": str,
+       "add": [container titles],      # route into ("containers" is an alias)
+       "remove": [container titles],   # un-route from (correct a bad route)
+       "augi_tags": [taxonomy tags]}   # overwrite classification (like tag_block)
+
+    Any subset of add/remove/augi_tags per decision. "Move out of A into B"
+    is one decision with both add and remove. Works for a whole pass's batch
+    or a single correction. Both add and remove are idempotent: duplicate
+    adds and removes of absent routes are no-ops (no-op removes are counted
+    in 'routes_not_found', not errors).
+
+    Container titles must match exactly; unknown containers or block_ids fail
+    that decision only (reported in 'errors'), the rest still apply. Current
+    membership is visible via get_block/get_blocks ('routed_to') or
+    get_related(kind="routed_to")."""
     from openaugi.model.link import Link
 
     store = _get_store()
@@ -691,7 +660,7 @@ def apply_routing(decisions: list[dict]) -> str:
     block_ids: list[str] = [d["block_id"] for d in decisions if isinstance(d.get("block_id"), str)]
     known_blocks = store.get_blocks_by_ids(block_ids)
 
-    container_titles = {t for d in decisions for t in d.get("containers", [])}
+    container_titles = {t for d in decisions for t in [*_decision_adds(d), *d.get("remove", [])]}
     container_ids: dict[str, str] = {}
     for title in container_titles:
         row = store.conn.execute(
@@ -703,6 +672,8 @@ def apply_routing(decisions: list[dict]) -> str:
 
     links: list[Link] = []
     routed = 0
+    removed = 0
+    removes_not_found = 0
     tagged = 0
     errors: list[dict] = []
     for d in decisions:
@@ -710,12 +681,17 @@ def apply_routing(decisions: list[dict]) -> str:
         if not block_id or block_id not in known_blocks:
             errors.append({"block_id": block_id, "reason": "Block not found."})
             continue
-        if not d.get("containers") and not d.get("augi_tags"):
+        adds = _decision_adds(d)
+        removes = d.get("remove", [])
+        if not adds and not removes and not d.get("augi_tags"):
             errors.append(
-                {"block_id": block_id, "reason": "Decision has neither containers nor augi_tags."}
+                {
+                    "block_id": block_id,
+                    "reason": "Decision has none of add/remove/augi_tags.",
+                }
             )
             continue
-        for title in d.get("containers", []):
+        for title in adds:
             container_id = container_ids.get(title)
             if container_id is None:
                 errors.append(
@@ -728,6 +704,21 @@ def apply_routing(decisions: list[dict]) -> str:
                 continue
             links.append(Link(from_id=block_id, to_id=container_id, kind="routed_to"))
             routed += 1
+        for title in removes:
+            container_id = container_ids.get(title)
+            if container_id is None:
+                errors.append(
+                    {
+                        "block_id": block_id,
+                        "reason": f"Container note not found: {title}",
+                        "hint": "Use search(title=...) to find the exact note title.",
+                    }
+                )
+                continue
+            if store.delete_link(block_id, container_id, "routed_to"):
+                removed += 1
+            else:
+                removes_not_found += 1
         if d.get("augi_tags"):
             store.update_block_metadata(block_id, {"augi_tags": d["augi_tags"]})
             tagged += 1
@@ -740,6 +731,8 @@ def apply_routing(decisions: list[dict]) -> str:
             "status": "ok" if not errors else "partial",
             "decisions": len(decisions),
             "routes_applied": routed,
+            "routes_removed": removed,
+            "routes_not_found": removes_not_found,
             "blocks_tagged": tagged,
             "errors": errors,
         }
@@ -906,12 +899,13 @@ def get_note_resource(title: str) -> str:
     entries = store.get_entries_for_document(doc_id)
     hub_links_in = store.get_links_to(doc_id)
     hub_links_out = store.get_links_from(doc_id)
+    entry_routes = store.get_routed_container_titles([e.id for e in entries])
 
     return _json(
         {
             "note_title": title,
             "doc_id": doc_id,
-            "entries": [_block_full(e) for e in entries],
+            "entries": [_block_full(e, entry_routes.get(e.id, [])) for e in entries],
             "entry_count": len(entries),
             "inbound_links": len(hub_links_in),
             "outbound_links": len(hub_links_out),
@@ -938,7 +932,7 @@ def _group_reference_documents(blocks) -> list[dict]:
     """Collapse reference-source blocks into one entry per source document.
 
     Reference material is one artifact: the review pass routes the document
-    once (route_block on document_id), never its individual blocks.
+    once (apply_routing with document_id), never its individual blocks.
     """
     from openaugi.model.block import Block as BlockModel
 
@@ -969,6 +963,11 @@ def _group_reference_documents(blocks) -> list[dict]:
     return list(groups.values())
 
 
+def _decision_adds(d: dict) -> list[str]:
+    """Containers to route into — "add" plus its legacy alias "containers"."""
+    return [*d.get("add", []), *d.get("containers", [])]
+
+
 def _block_summary(block) -> dict:
     return {
         "id": block.id,
@@ -983,7 +982,7 @@ def _block_summary(block) -> dict:
     }
 
 
-def _block_full(block) -> dict:
+def _block_full(block, routed_to: list[str] | None = None) -> dict:
     return {
         "id": block.id,
         "kind": block.kind,
@@ -992,6 +991,7 @@ def _block_full(block) -> dict:
         "summary": block.summary,
         "tags": block.tags,
         "augi_tags": block.metadata.get("augi_tags", []),
+        "routed_to": routed_to or [],
         "block_time": block.block_time,
         "occurred_at": block.occurred_at,
         "source": block.source,

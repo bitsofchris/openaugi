@@ -202,7 +202,7 @@ These are the tools Claude gets when connected to OpenAugi:
 
 | Tool | What |
 |------|------|
-| `route_block` | Route a block into a container note (AMOC/PMOC/MOC) as a `routed_to` link — membership is links, tags stay taxonomy-only |
+| `apply_routing` | Route blocks into (or out of) container notes (AMOC/PMOC/MOC) as `routed_to` links — batch `add`/`remove` per decision; membership is links, tags stay taxonomy-only |
 | `get_review_state` | Read the review-pass high-water mark |
 | `mark_review_complete` | Advance the high-water mark after a completed pass |
 
