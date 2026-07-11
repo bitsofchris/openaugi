@@ -7,11 +7,17 @@ description: Post-run-2 fixes merged into four workstreams — unified registry 
 
 ## STATUS / LEFT OFF (update this section every session)
 
-**As of 2026-07-11:** Plan drafted from run #2 feedback (Opus review of the
-pass + Chris's bronze/silver/gold framing, merged across two chats). Nothing
-implemented yet. WS3.2 decided: reference material (Snipd, Readwise) routes
-at document level and is never modified (synced from source). All decisions
-made; ready to implement in the sequenced order below.
+**As of 2026-07-11 (later):** WS3.1 SHIPPED (`source_path` in summaries +
+`exclude_path_prefix` filter, all modes, tested). WS1 + WS2 prompt/doc
+changes SHIPPED: unified registry rule + adopt-before-create + reference
+handling reconciled across template, reference doc, and the live vault
+prompt (v1 plan's registry section marked superseded). Silver semantics
+clarified with Chris: view-on-touch, not on-demand — silver notes are
+permanent visible sources of truth via the same transclusion pattern as
+AMOCs. **NEXT:** run pass #3 — it drafts the 9 registry descriptions as
+paste-lines and registers Dream Journal + mindfulness. Then WS3.2
+(reference grouping in browse), WS3.3 (`apply_routing`), WS4
+(weekly-reflection nomination triage).
 
 **Inputs:** [review-pass-v1.md](review-pass-v1.md) (the frame — still
 authoritative for CQRS/views/grammar), run #2 Opus feedback,
@@ -102,17 +108,16 @@ gravity signal.
 
 ## WS1 — Registry unification (prompt/doc changes, no code)
 
-- [ ] Reconcile the registry rule in all three places: live vault prompt
+- [x] Reconcile the registry rule in all three places: live vault prompt
       (`OpenAugi/AGENT/review-pass.md` + repo template mirror),
-      `docs/reference/` doc, and review-pass-v1 plan (mark superseded
-      section). Remove the hard-coded list of 7.
-- [ ] View cadence: on touch for all tiers (template's existing rule,
+      `docs/reference/` doc, and review-pass-v1 plan (marked superseded).
+      Hard-coded list demoted to seed context under the rule. (2026-07-11)
+- [x] View cadence: on touch for all tiers (template's existing rule,
       extended to silver); Dashboard every pass. Silver notes embed their
       view by transclusion exactly like AMOCs; agent writes stay confined
       to `OpenAugi/Views/` (adopted human notes are never edited).
-- [ ] Silver view regeneration must re-pull related blocks (semantic +
-      links), not just this pass's routed blocks — resurfacing is repeated,
-      not one-shot at promotion.
+- [x] Silver view regeneration re-pulls related blocks (semantic + links),
+      not just this pass's routed blocks — in the MOC recap spec.
 - [ ] Dashboard: per-silver-note block-count lines; add **age** to every
       pending nomination.
 - [ ] Next pass: draft all 9 registry descriptions as paste-lines for Chris
@@ -136,14 +141,16 @@ Hard rule in the promotion step, generalizing Chris's positioning answer
 
 Trigger forms: approved promote-nomination, or `aaa: make X canonical`.
 Uses existing tools only (`search`, `route_block`, `write_document`).
+**Shipped 2026-07-11** in the template, reference doc, and live prompt
+(Gravity-section promotion steps).
 
 ## WS3 — MCP tooling fixes (code, openaugi repo)
 
 Order matters; each is a small, separately committed change with tests.
 
-- [ ] **3.1 `source_path` in `_block_summary`** (+ `exclude_path_prefix`
-      filter in browse mode so derived OpenAugi/ notes never enter the
-      queue server-side; precedent: `lineage.py` does this filter already).
+- [x] **3.1 `source_path` in `_block_summary`** + `exclude_path_prefix`
+      filter — SQL-level in browse mode (LIKE-escaped), Python-filtered in
+      title/keyword/semantic modes. Shipped + tested 2026-07-11.
 - [ ] **3.2 Reference grouping (DECIDED 2026-07-11).** Browse mode groups
       reference-source blocks (Snipd, Readwise, etc.) under their parent
       document (count + title); the pass routes the *document* once, blocks
