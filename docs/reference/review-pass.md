@@ -11,7 +11,9 @@ description: The write-back loop — routes new blocks into containers via augi_
 - You're about to run (or debug) a review pass
 - You forgot the capture grammar or what the Dashboard nominations mean
 
-Design record with full rationale: [docs/plans/review-pass-v1.md](../plans/review-pass-v1.md).
+Design record with full rationale: [docs/plans/review-pass-v1.md](../plans/review-pass-v1.md);
+v2 refinements (unified registry rule, tiers, reference handling):
+[docs/plans/review-pass-v2-workstreams.md](../plans/review-pass-v2-workstreams.md).
 Agent instructions (the live prompt): `<vault>/OpenAugi/AGENT/review-pass.md`.
 
 ## The frame in one paragraph
@@ -53,12 +55,29 @@ correctable: the user's files never change.
 
 ## The registry is the routing map
 
-Routing targets are the notes tagged `#note-type/amoc` / `#note-type/pmoc` /
-`#note-type/moc` (active ones). Each should carry a `description` frontmatter
-that says *when to route here* — skill-file style. Human-owned frontmatter on
-gold notes = the map the router reads; generated frontmatter under
-`OpenAugi/Views/` = agent output. If a registry note lacks a description, the
-pass nominates one on the Dashboard instead of guessing.
+**One rule: a note is a registered routing target iff it has a container
+tag AND a filled `description` frontmatter.** Container tags:
+`#note-type/amoc` (areas), `#note-type/pmoc` + `#status/active` (projects),
+`#note-type/moc` (concept notes — a facet of an area/project, an evolving
+idea; the permanent home for "I've said this before" captures). The registry
+is discovered per pass by tag search — no hand-maintained list anywhere.
+
+The `description` says *when to route here* — skill-file style. Human-owned
+frontmatter on container notes = the map the router reads; generated
+frontmatter under `OpenAugi/Views/` = agent output. A tagged note without a
+description is not an inference target (explicit `aaa:`/link routing still
+works); the pass nominates a **drafted description as a paste-line** —
+pasting it is what registers the note.
+
+**Adopt before create:** when a block cluster earns promotion, the pass
+first searches for an existing note that already is the canonical home and
+upgrades it (tag + description paste-line) rather than minting a duplicate;
+only if nothing exists does it create a concept note fresh. Either way it
+sweeps in older related blocks — resurfacing is repeated, not one-shot.
+
+**Reference material** (Snipd, Readwise, and other synced imports) routes at
+document granularity — one artifact, one `routed_to` link; never per-block
+decisions over a transcript, and reference files are never moved or edited.
 
 ## Capture grammar
 
@@ -89,7 +108,9 @@ mark. The full pass:
    overwrites them
 1. `get_review_state()` → the high-water mark (`meta` table keys
    `review_pass_last_run` / `review_pass_last_summary`)
-2. `search(after=last_run)` → new blocks (excludes `OpenAugi/`-sourced blocks)
+2. `search(after=last_run, exclude_path_prefix="OpenAugi/")` → new blocks,
+   derived artifacts excluded server-side; reference-source blocks are
+   grouped by document and routed once
 3. Routes each block → `route_block(id, container_title)` for membership;
    `tag_block(id, augi_tags)` only where classification has signal
 4. Regenerates `View - <container>.md` for touched containers via
