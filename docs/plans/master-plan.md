@@ -22,25 +22,17 @@ context check `get_review_state` and disclose staleness); both mirrored
 to templates. Tests: test_route_rederive.py replaces the migration
 tests. 457 green.
 
-**2026-07-09 (gdrive thread): M8 gdrive import opened (History RAG).**
-Decided with Chris: Google Drive docs enter via a **converter** (script →
-vault markdown → exit; the Readwise "files are the API" pattern, NOT an
-adapter), selective by manifest, provenance in frontmatter only, **no
-tags written by tooling ever** (Chris's hard rule: taxonomy changes only
-with his approval — converter emits zero tags; `source/gdrive` comes from
-his own source_rules config line). Shipped the
-one core change: **`created:` frontmatter now feeds `block_time`**
-(priority: heading date > filename date > frontmatter created > file
+**2026-07-09/10/11 (M8 gdrive converter — the one generic piece shipped).**
+Merged from branch `gdrive-import`: **`created:` frontmatter now feeds
+`block_time`** (priority: heading > filename > frontmatter created > file
 mtime > now; `_extract_frontmatter_created` in splitter.py, resolver in
-vault.py, 11 tests, check.sh green) — the generic hook every converter
-(gdrive, ChatGPT-history) uses to stamp real historical dates; makes old
-docs date-filterable via MCP `search(after=/before=)` + visible to
-lineage eras. Plan + file contract: [gdrive-import.md](gdrive-import.md).
-rclone OAuth done; scope decided: **Google Docs only** (by MIME type).
-Agent runbook written: [gdrive-explore-runbook.md](gdrive-explore-runbook.md)
-(Phase 1 inventory → keep/skip report → GATE 1 Chris; Phase 2 converter +
-sample GATE 2 + ingest + lineage verification). **Next:** run Phase 1.
-Not committed yet.
+vault.py) — the generic hook any source converter uses to stamp real
+historical dates on imported files. 490 tests green. `gdrive_import.py`
+itself (the rclone/pandoc/textutil → vault markdown converter) hardcodes
+Chris's own Drive folder taxonomy, so it moved to gitignored
+`docs/scratch/` alongside the bespoke import artifacts (inventory,
+runbook, file-contract plan) and the personal history-RAG exploration —
+none of that is in the repo.
 
 **2026-07-09: both found-in-the-wild defects FIXED; idea-lineage lens
 proven on a real topic.** (1) Agent state now survives block edits —
