@@ -11,10 +11,19 @@ description: The write-back loop — routes new blocks into containers via augi_
 - You're about to run (or debug) a review pass
 - You forgot the capture grammar or what the Dashboard nominations mean
 
+**Source-of-truth hierarchy (don't duplicate procedure across these):**
+
+1. [src/openaugi/templates/review-pass.md](../../src/openaugi/templates/review-pass.md)
+   — authoritative for pass *behavior* (the step-by-step, view shape,
+   nomination format). Copied to the vault by `openaugi init`.
+2. `<vault>/OpenAugi/AGENT/review-pass.md` — the live prompt the agent
+   actually reads: the template plus the user's own registry seeds.
+3. This doc — *concepts only*: why the pass works the way it does. If you
+   find procedure here that's also in the template, delete it here.
+
 Design record with full rationale: [docs/plans/review-pass-v1.md](../plans/review-pass-v1.md);
 v2 refinements (unified registry rule, tiers, reference handling):
 [docs/plans/review-pass-v2-workstreams.md](../plans/review-pass-v2-workstreams.md).
-Agent instructions (the live prompt): `<vault>/OpenAugi/AGENT/review-pass.md`.
 
 ## The frame in one paragraph
 
@@ -100,64 +109,21 @@ routes, views surface only what's salient.
 
 The pass is an agent skill, not a pipeline. In any Claude session with the
 openaugi MCP server: say **"run the review pass"** (or dispatch
-`zzz: run the review pass`). Saying **"process the dashboard"** runs step 0
-alone — executes your nomination answers without advancing the high-water
-mark. The full pass:
+`zzz: run the review pass`). Saying **"process the dashboard"** executes
+your nomination answers without advancing the high-water mark.
 
-0. Reads the current Dashboard for the user's inline answers to prior
-   nominations and executes approved ones — before any regeneration
-   overwrites them
-1. `get_review_state()` → the high-water mark (`meta` table keys
-   `review_pass_last_run` / `review_pass_last_summary`)
-2. `search(after=last_run, exclude_path_prefix="OpenAugi/")` → new blocks,
-   derived artifacts excluded server-side; reference-source blocks are
-   grouped by document and routed once
-3. Routes the whole batch → `apply_routing(decisions=[...])` (each decision:
-   `add`/`remove` containers + `augi_tags`, one call for the batch; it is
-   also the correction tool — "move out of A into B" is one decision;
-   `tag_block` remains for one-off tagging)
-4. Regenerates `View - <container>.md` for touched containers via
-   `write_document(..., subfolder="Views", overwrite=True)`
-   (`overwrite=True` is only legal for Views). Regeneration is a **merge**:
-   the prior view is read first as the head state; new blocks are the delta;
-   stale items fall out. Untouched containers keep their old view.
-   Every view ends with a `## Log` section — the container's routed blocks,
-   newest first, linked to source notes — so membership is visible in
-   Obsidian (DB links otherwise aren't). Every view = **recap + remote log**:
-   the recap is synthesized from ALL member blocks *including the user's own
-   writing in the container note* (their words are upstream input — never
-   contradicted; drift gets flagged in one line), and the log lists ONLY
-   blocks living in other files, so transclusion never duplicates what's
-   already on the page. The container note is the single reading surface:
-   user's head/pins → their in-place journal → the transcluded view. Views
-   are for embedding, not visiting — add `OpenAugi/Views/` to Obsidian's
-   Excluded Files. Agent-created container notes include the transclusion
-   at birth.
-5. Regenerates `View - Dashboard.md` — rollup, task union, gravity
-   nominations. **Nomination format:** one markdown checkbox bullet per
-   nomination ending in a stable block anchor, with a nested answer slot:
+The loop in one line: process Dashboard answers → pull new blocks since the
+high-water mark → route the batch (`apply_routing`) → regenerate touched
+views + Dashboard → refresh the context pack → advance the mark.
 
-   ```
-   - [ ] **Promote:** 5 blocks orbit *capture UX* — make it a note? ^nom-promote-capture-ux
-       - answer:
-   ```
+**The step-by-step procedure, view shape, and nomination format live in the
+[template](../../src/openaugi/templates/review-pass.md)** — that file is the
+behavior spec; this doc doesn't restate it.
 
-   `^nom-<verb>-<subject-slug>` is deterministic — the same nomination keeps
-   the same anchor across passes, so unanswered nominations (and answers
-   written by other tools, e.g. the mobile review UI upserting by
-   anchor) survive regeneration. **Decided = box checked OR answer filled**
-   — two input surfaces, one signal: the checkbox is the Obsidian
-   quick-tap, the answer slot is typed/mobile free text. Checked + empty
-   answer = plain "yes, as proposed." A filled answer (checked or not) is a
-   specific instruction and takes precedence. Unchecked + empty = still
-   pending: carried forward verbatim. Free-form inline notes still work.
-6. `write_context_pack()` → regenerates `OpenAugi/context-pack.json` — the
-   machine-readable sidecar (taxonomy, recent containers, note titles) the
-   mobile bridge serves to the phone for tag/wikilink suggestions. Also
-   available as `openaugi context-pack` on the CLI. Shape is pinned by the
-   mobile repo's `shared/contract.ts` (`ContextPack`); builder:
-   `src/openaugi/pipeline/context_pack.py`.
-7. `mark_review_complete(summary)` → advances the mark
+Repo-side pointers the template doesn't carry: the high-water mark is the
+`meta` table keys `review_pass_last_run` / `review_pass_last_summary`; the
+context pack's shape is pinned by the mobile repo's `shared/contract.ts`
+(`ContextPack`), builder in `src/openaugi/pipeline/context_pack.py`.
 
 Cadence: manual, attached to the Sunday weekly plan. Schedule only after it's
 boringly reliable.
