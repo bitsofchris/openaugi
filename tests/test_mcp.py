@@ -670,6 +670,18 @@ class TestRenderedViews:
         assert json.loads(get_view("No Such Container"))["status"] == "error"
         assert json.loads(write_recap("No Such Container", "x"))["status"] == "error"
 
+    def test_list_views_is_the_render_list(self):
+        from openaugi.mcp.server import list_views, write_recap
+
+        assert json.loads(list_views())["count"] == 0  # no recap rows yet
+
+        title = self._container()
+        write_recap(title, "recap")
+        result = json.loads(list_views())
+        assert result["count"] == 1
+        assert result["views"][0]["container"] == title
+        assert result["views"][0]["stale"] is False
+
 
 class TestWriteContextPack:
     def test_requires_vault_path(self, monkeypatch: pytest.MonkeyPatch):

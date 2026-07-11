@@ -132,6 +132,7 @@ ALLOWED_TOOLS = [
     "mcp__openaugi__recent",
     "mcp__openaugi__get_members",
     "mcp__openaugi__get_view",
+    "mcp__openaugi__list_views",
     "mcp__openaugi__write_recap",
     "mcp__openaugi__tag_block",
     "mcp__openaugi__apply_routing",

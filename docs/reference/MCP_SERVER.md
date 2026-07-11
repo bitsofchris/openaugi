@@ -90,6 +90,7 @@ Both are optional if you've run `openaugi init` — the config file is the defau
 | `get_related` | Follow links from/to a block (tags, wikilinks, derivations) |
 | `get_members` | A container's members under the unified membership rule (containment ∪ routing) — each member marked `contained`/`routed`/`both`, newest first. The query views render. |
 | `get_view` | Render a container's view from the DB: live membership log + cached recap with visible staleness (`stale: true` when membership changed since the recap was written). What rendered surfaces consume instead of `View - *.md` files. |
+| `list_views` | The render list: every container with a cached recap row, newest first, with per-view staleness. A recap row IS the "this container has a view" bit — hand-curated containers (recap off) never appear. |
 | `traverse` | Multi-hop graph walk from a starting block |
 | `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links; optional `purpose` applies a `[salience]` min-score gate for proactive surfaces |
 | `recent` | Recently ingested blocks, filtered by kind/source/tags |
