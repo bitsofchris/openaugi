@@ -453,6 +453,35 @@ class SQLiteStore:
         self.conn.commit()
         return len(links)
 
+    def delete_link(self, from_id: str, to_id: str, kind: str) -> bool:
+        """Delete one link by its (from, to, kind) triple. Returns True if it existed."""
+        cursor = self.conn.execute(
+            "DELETE FROM links WHERE from_id = ? AND to_id = ? AND kind = ?",
+            (from_id, to_id, kind),
+        )
+        self.conn.commit()
+        return cursor.rowcount > 0
+
+    def get_routed_container_titles(self, block_ids: list[str]) -> dict[str, list[str]]:
+        """Titles of containers each block is routed to, keyed by block id.
+
+        Blocks with no routed_to links are absent from the result.
+        """
+        if not block_ids:
+            return {}
+        placeholders = ",".join("?" * len(block_ids))
+        rows = self.conn.execute(
+            f"""SELECT l.from_id, b.title
+                FROM links l JOIN blocks b ON b.id = l.to_id
+                WHERE l.kind = 'routed_to' AND l.from_id IN ({placeholders})
+                ORDER BY b.title""",
+            block_ids,
+        ).fetchall()
+        result: dict[str, list[str]] = {}
+        for from_id, title in rows:
+            result.setdefault(from_id, []).append(title)
+        return result
+
     def get_links_from(self, block_id: str, kind: str | None = None) -> list[Link]:
         """Get outgoing links from a block, optionally filtered by kind."""
         if kind:

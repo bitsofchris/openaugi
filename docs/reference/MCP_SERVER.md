@@ -222,8 +222,7 @@ After writing, run `openaugi ingest` to pick up new notes into the knowledge gra
 
 | Tool | Purpose |
 |------|---------|
-| `route_block` | Route one block into a container note (`routed_to` link). A block may route to multiple containers; duplicates are no-ops. |
-| `apply_routing` | Batch route/tag: a list of `{block_id, containers, augi_tags}` decisions in one call. Per-decision errors don't block the rest. The review pass's write step. |
+| `apply_routing` | THE route write tool: a list of `{block_id, add, remove, augi_tags}` decisions in one call (`containers` is a legacy alias for `add`). Adds and removes `routed_to` links — a wrong route is corrected with one decision carrying both `add` and `remove`. Idempotent both ways; per-decision errors don't block the rest. Current membership is readable via `get_block`/`get_blocks` (`routed_to` field) or `get_related(kind="routed_to")`. |
 | `get_review_state` | Read the review-pass high-water mark (`last_run` timestamp + `last_summary`). Called at the start of a pass to scope new blocks. |
 | `mark_review_complete` | Advance the high-water mark to now with a one-line run summary. Called once at the end of a successful pass. |
 

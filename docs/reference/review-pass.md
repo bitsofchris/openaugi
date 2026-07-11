@@ -44,10 +44,11 @@ never re-tags a block the user already tagged; it only fills gaps.
 life-log blocks (daily memories) usually carry no tags at all; tag only what
 you'd query.
 
-**Routing — `routed_to` links.** The `route_block(block_id, container_title)`
-MCP tool records "this block belongs to that container" as a link in the DB
-(a block can route to many containers). Views distill a container's routed
-blocks. Unrouted is also a valid state — route only what a view should
+**Routing — `routed_to` links.** The `apply_routing` MCP tool records "this
+block belongs to that container" as a link in the DB — and removes the link
+when a route was wrong (a block can route to many containers; each decision
+carries `add` and/or `remove` container lists). Views distill a container's
+routed blocks. Unrouted is also a valid state — route only what a view should
 distill.
 
 Both live in the DB only, which is why routing costs nothing and is always
@@ -111,9 +112,10 @@ mark. The full pass:
 2. `search(after=last_run, exclude_path_prefix="OpenAugi/")` → new blocks,
    derived artifacts excluded server-side; reference-source blocks are
    grouped by document and routed once
-3. Routes the whole batch → `apply_routing(decisions=[...])` (membership +
-   `augi_tags` per decision in one call; `route_block`/`tag_block` remain
-   for one-offs)
+3. Routes the whole batch → `apply_routing(decisions=[...])` (each decision:
+   `add`/`remove` containers + `augi_tags`, one call for the batch; it is
+   also the correction tool — "move out of A into B" is one decision;
+   `tag_block` remains for one-off tagging)
 4. Regenerates `View - <container>.md` for touched containers via
    `write_document(..., subfolder="Views", overwrite=True)`
    (`overwrite=True` is only legal for Views). Regeneration is a **merge**:
@@ -214,5 +216,7 @@ Any of these fire a pass; they all converge on the same mechanism:
 - **One-time:** the Obsidian setup above.
 - **Weekly:** read `View - Dashboard.md`; answer the gravity nominations
   (inline note or zzz) — that's the entire review burden.
-- **Anytime:** correct a bad route by telling the agent, or with an `aaa:`
-  on future captures. Wrong routes are tuning signal.
+- **Anytime:** correct a bad route by telling the agent ("that block doesn't
+  belong in Meta — it's Content"); the agent fixes it with one `apply_routing`
+  decision (`remove` the wrong container, `add` the right one). Use `aaa:` on
+  future captures to pre-empt. Wrong routes are tuning signal.

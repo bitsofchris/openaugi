@@ -454,40 +454,94 @@ class TestWriteDocumentOverwrite:
         assert "already exists" in result["reason"]
 
 
-class TestRouteBlock:
-    def test_route_block_creates_link(self):
-        from openaugi.mcp.server import get_related, route_block, search
+class TestRoutingCrud:
+    """apply_routing is the single route write tool: add, remove, move."""
+
+    def _block_and_container(self):
+        from openaugi.mcp.server import search
 
         blocks = json.loads(search(keyword="career"))["results"]
         block_id = next(b["id"] for b in blocks if b["kind"] == "data_block")
         docs = json.loads(search(kind="context_block:document", k=5))["results"]
-        title = docs[0]["title"]
+        return block_id, docs[0]["title"], docs[1]["title"]
 
-        result = json.loads(route_block(block_id, title))
+    def test_add_creates_link_and_is_readable(self):
+        from openaugi.mcp.server import apply_routing, get_block, get_related
+
+        block_id, title, _ = self._block_and_container()
+        result = json.loads(apply_routing([{"block_id": block_id, "add": [title]}]))
         assert result["status"] == "ok"
-        assert result["kind"] == "routed_to"
+        assert result["routes_applied"] == 1
 
         related = json.loads(get_related(block_id, direction="out", kind="routed_to"))
-        assert any(r["block"]["id"] == result["container_id"] for r in related["related"])
+        assert any(r["block"]["title"] == title for r in related["related"])
+        block = json.loads(get_block(block_id))
+        assert title in block["routed_to"]
 
-    def test_route_block_bad_container(self):
-        from openaugi.mcp.server import route_block, search
+    def test_containers_alias_still_works(self):
+        from openaugi.mcp.server import apply_routing
 
-        blocks = json.loads(search(keyword="career"))["results"]
-        block_id = blocks[0]["id"]
-        result = json.loads(route_block(block_id, "No Such Note Title"))
-        assert result["status"] == "error"
-
-    def test_route_block_idempotent(self):
-        from openaugi.mcp.server import route_block, search
-
-        blocks = json.loads(search(keyword="career"))["results"]
-        block_id = next(b["id"] for b in blocks if b["kind"] == "data_block")
-        docs = json.loads(search(kind="context_block:document", k=5))["results"]
-        title = docs[0]["title"]
-        route_block(block_id, title)
-        result = json.loads(route_block(block_id, title))
+        block_id, title, _ = self._block_and_container()
+        result = json.loads(apply_routing([{"block_id": block_id, "containers": [title]}]))
         assert result["status"] == "ok"
+        assert result["routes_applied"] == 1
+
+    def test_remove_deletes_link(self):
+        from openaugi.mcp.server import apply_routing, get_block
+
+        block_id, title, _ = self._block_and_container()
+        apply_routing([{"block_id": block_id, "add": [title]}])
+        result = json.loads(apply_routing([{"block_id": block_id, "remove": [title]}]))
+        assert result["status"] == "ok"
+        assert result["routes_removed"] == 1
+        assert json.loads(get_block(block_id))["routed_to"] == []
+
+    def test_move_between_containers_in_one_decision(self):
+        from openaugi.mcp.server import apply_routing, get_block
+
+        block_id, wrong, right = self._block_and_container()
+        apply_routing([{"block_id": block_id, "add": [wrong]}])
+        result = json.loads(
+            apply_routing([{"block_id": block_id, "add": [right], "remove": [wrong]}])
+        )
+        assert result["status"] == "ok"
+        assert result["routes_applied"] == 1
+        assert result["routes_removed"] == 1
+        assert json.loads(get_block(block_id))["routed_to"] == [right]
+
+    def test_remove_absent_route_is_noop_not_error(self):
+        from openaugi.mcp.server import apply_routing
+
+        block_id, title, _ = self._block_and_container()
+        result = json.loads(apply_routing([{"block_id": block_id, "remove": [title]}]))
+        assert result["status"] == "ok"
+        assert result["routes_removed"] == 0
+        assert result["routes_not_found"] == 1
+
+    def test_unknown_container_fails_that_decision_only(self):
+        from openaugi.mcp.server import apply_routing
+
+        block_id, title, _ = self._block_and_container()
+        result = json.loads(
+            apply_routing(
+                [
+                    {"block_id": block_id, "add": [title]},
+                    {"block_id": block_id, "remove": ["No Such Note Title"]},
+                ]
+            )
+        )
+        assert result["status"] == "partial"
+        assert result["routes_applied"] == 1
+        assert len(result["errors"]) == 1
+
+    def test_add_idempotent(self):
+        from openaugi.mcp.server import apply_routing, get_block
+
+        block_id, title, _ = self._block_and_container()
+        apply_routing([{"block_id": block_id, "add": [title]}])
+        result = json.loads(apply_routing([{"block_id": block_id, "add": [title]}]))
+        assert result["status"] == "ok"
+        assert json.loads(get_block(block_id))["routed_to"] == [title]
 
 
 class TestWriteContextPack:

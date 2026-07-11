@@ -90,8 +90,9 @@ Precedence (highest wins; a block may route to multiple containers):
 
 **Persistence — two separate mechanisms, never conflate them:**
 
-- **Membership = links.** `route_block(block_id, container_title)` creates a
-  `routed_to` edge in the DB. A block can route to multiple containers.
+- **Membership = links.** `apply_routing` creates (and removes) `routed_to`
+  edges in the DB. A block can route to multiple containers. A block's
+  current containers are visible in `get_block`/`get_blocks` (`routed_to`).
 - **Classification = tags.** `tag_block(block_id, augi_tags)` with facets drawn
   ONLY from the user's taxonomy — it is a closed vocabulary; never invent a
   tag or a facet. If the user already tagged the block, do not re-tag; only
@@ -99,7 +100,7 @@ Precedence (highest wins; a block may route to multiple containers):
 
 **Reference material routes as one document.** Blocks from synced external
 sources (Snipd, Readwise, and similar reference imports) are one artifact:
-route the parent document once (`route_block` on the document block) and let
+route the parent document once (`apply_routing` on the document block) and let
 the pieces ride along — never make per-block routing decisions over a
 transcript. Reference files are synced from their source: never move, edit,
 or restructure them; routing is a link only. Count reference documents
@@ -252,8 +253,10 @@ Always regenerate `View - Dashboard.md` (same folder):
    their `source_path` and handle each reference document as one item. Use
    `recent`/`get_context`/`get_related` for extra context.
 3. Decide routes for every block per the precedence above, then persist the
-   whole batch with `apply_routing(decisions=[{block_id, containers,
-   augi_tags}, ...])` — one call, not a route_block/tag_block loop.
+   whole batch with `apply_routing(decisions=[{block_id, add, remove,
+   augi_tags}, ...])` — one call, not a per-block loop. `remove` un-routes:
+   when the user says a block was routed wrong, fix it with one decision
+   carrying both `add` (right container) and `remove` (wrong one).
 4. Regenerate views for containers that received blocks (`overwrite=True`).
    Untouched containers keep their old view. **Two refresh tiers — don't
    re-derive what didn't change:**
