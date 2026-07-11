@@ -113,6 +113,7 @@ Claude → MCP tool call → server.py
                  → MMR re-rank
                  → expand via links
   → recent: recently created blocks
+  → get_members: container members under the unified rule (contained ∪ routed)
   → write_document: save a note to the vault (OpenAugi/{subfolder}/)
   → tag_block: stamp AI-classified augi_tags onto a block (taxonomy-only)
   → apply_routing: block → container membership (add/remove routed_to links, batch)
@@ -238,6 +239,7 @@ records and active plans (→ `docs/plans/done/` when shipped);
 **`docs/scratch/`** — gitignored throwaway. Reference docs use the skill
 format (`name:`/`description:` frontmatter) so they're scannable.
 
+- [docs/reference/core-principles.md](docs/reference/core-principles.md) — **The skeleton (read first when designing):** capture grammar, truth/index/cache/render layer model, trust model, promotion — the four invariants everything else hangs on. Affirmed with Chris 2026-07-11.
 - [docs/reference/user-guide.md](docs/reference/user-guide.md) — Day-to-day manual: entry points, the loop, trust rules, triggering a pass, lens system in brief. Chronological build history stays in this file's STATUS header, not there.
 - [docs/reference/review-pass.md](docs/reference/review-pass.md) — **The write-back loop (active):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass, derived views in OpenAugi/Views/. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)

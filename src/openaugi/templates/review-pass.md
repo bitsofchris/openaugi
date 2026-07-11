@@ -79,7 +79,9 @@ Precedence (highest wins; a block may route to multiple containers):
 1. **`aaa:` instruction** in the block — obey it.
 2. **Explicit signals**: a `[[AMOC/PMOC/MOC link]]` or `#area/*` tag in the block.
 3. **Location**: a block written inside a MOC's own journal is home by
-   construction (route to that container; cross-links still allowed).
+   construction — membership is automatic, DO NOT route it there
+   (`apply_routing` returns it in `already_home` if you try); cross-links
+   to *other* containers are still allowed.
 4. **Inference**: classify `area/*` + `type/*` + `status/*` per taxonomy;
    route to the most *specific* matching container (a matching concept MOC
    beats an active PMOC beats its parent AMOC). Inference candidates are
@@ -90,9 +92,13 @@ Precedence (highest wins; a block may route to multiple containers):
 
 **Persistence — two separate mechanisms, never conflate them:**
 
-- **Membership = links.** `apply_routing` creates (and removes) `routed_to`
-  edges in the DB. A block can route to multiple containers. A block's
-  current containers are visible in `get_block`/`get_blocks` (`routed_to`).
+- **Membership = containment ∪ routing.** A block is a member of a container
+  if it physically lives there (the user pasted/wrote it) OR has a
+  `routed_to` edge — the same fact seen from two sides. `apply_routing`
+  creates (and removes) the edges; `get_members(container_title)` returns
+  the unified member list (each member marked contained/routed) — use it to
+  render a view's log instead of assembling links by hand. A block's
+  explicit routes are visible in `get_block`/`get_blocks` (`routed_to`).
 - **Classification = tags.** `tag_block(block_id, augi_tags)` with facets drawn
   ONLY from the user's taxonomy — it is a closed vocabulary; never invent a
   tag or a facet. If the user already tagged the block, do not re-tag; only

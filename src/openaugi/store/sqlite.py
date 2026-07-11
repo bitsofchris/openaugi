@@ -482,6 +482,45 @@ class SQLiteStore:
             result.setdefault(from_id, []).append(title)
         return result
 
+    def get_contains_parent_id(self, block_id: str) -> str | None:
+        """The document a block physically lives in (data_block --contains--> doc)."""
+        row = self.conn.execute(
+            "SELECT to_id FROM links WHERE from_id = ? AND kind = 'contains' LIMIT 1",
+            (block_id,),
+        ).fetchone()
+        return row[0] if row else None
+
+    def get_container_members(self, container_id: str) -> list[tuple[Block, str]]:
+        """Members of a container under the unified rule: routed_to ∪ contains.
+
+        A block is a member iff it is routed to the container OR physically
+        lives in it (its contains edge points there) — the user pasting a
+        block and the agent routing it are the same fact. Returns
+        (block, membership) pairs, membership in {'contained', 'routed',
+        'both'}, newest first.
+        """
+        rows = self.conn.execute(
+            """SELECT b.id, b.kind, b.content, b.summary, b.embedding, b.source,
+                      b.title, b.tags, b.block_time, b.occurred_at, b.metadata,
+                      b.content_hash, b.ingested_at,
+                      MAX(CASE WHEN l.kind = 'routed_to' THEN 1 ELSE 0 END) AS routed,
+                      MAX(CASE WHEN l.kind = 'contains' THEN 1 ELSE 0 END) AS contained
+               FROM blocks b
+               JOIN links l ON l.from_id = b.id
+               WHERE l.to_id = ? AND l.kind IN ('routed_to', 'contains')
+               GROUP BY b.id
+               ORDER BY COALESCE(b.block_time, b.ingested_at) DESC""",
+            (container_id,),
+        ).fetchall()
+        result: list[tuple[Block, str]] = []
+        for r in rows:
+            routed, contained = r[13], r[14]
+            membership = (
+                "both" if (routed and contained) else ("routed" if routed else "contained")
+            )
+            result.append((_row_to_block(r[:13]), membership))
+        return result
+
     def get_links_from(self, block_id: str, kind: str | None = None) -> list[Link]:
         """Get outgoing links from a block, optionally filtered by kind."""
         if kind:
