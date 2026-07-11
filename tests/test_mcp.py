@@ -110,6 +110,102 @@ class TestMCPTools:
         filtered = json.loads(search(keyword="career", exclude_path_prefix=target))
         assert all(b["source_path"] != target for b in filtered["results"])
 
+    def test_browse_groups_reference_documents(self, populated_db: Path):
+        from openaugi.mcp.server import search
+        from openaugi.model.block import Block
+
+        store = SQLiteStore(populated_db)
+        store.insert_blocks(
+            [
+                Block(
+                    id="ref1",
+                    kind="data_block",
+                    content="podcast chunk one",
+                    block_time="2031-01-01",
+                    tags=["source/snipd"],
+                    metadata={"source_path": "Reference/Snipd/Episode.md"},
+                ),
+                Block(
+                    id="ref2",
+                    kind="data_block",
+                    content="podcast chunk two",
+                    block_time="2031-01-02",
+                    tags=["source/snipd"],
+                    metadata={"source_path": "Reference/Snipd/Episode.md"},
+                ),
+                Block(
+                    id="cap1",
+                    kind="data_block",
+                    content="my own thought",
+                    block_time="2031-01-03",
+                    metadata={"source_path": "Journal/2031-01-03.md"},
+                ),
+            ]
+        )
+        store.close()
+
+        result = json.loads(search(after="2030-12-31"))
+        # The user's capture stays a normal result; reference blocks collapse
+        assert [b["id"] for b in result["results"]] == ["cap1"]
+        assert result["reference_block_count"] == 2
+        assert len(result["reference_documents"]) == 1
+        doc = result["reference_documents"][0]
+        assert doc["source_path"] == "Reference/Snipd/Episode.md"
+        assert doc["title"] == "Episode"
+        assert doc["block_count"] == 2
+        assert doc["source_tags"] == ["source/snipd"]
+        assert doc["first_block_time"] == "2031-01-01"
+        assert doc["last_block_time"] == "2031-01-02"
+        assert doc["document_id"] == Block.make_document_id("Reference/Snipd/Episode.md")
+
+    def test_apply_routing_batch(self, populated_db: Path):
+        from openaugi.mcp.server import apply_routing, search
+        from openaugi.model.block import Block
+
+        store = SQLiteStore(populated_db)
+        store.insert_blocks(
+            [
+                Block(
+                    id="doc-container",
+                    kind="context_block:document",
+                    content="",
+                    title="AMOC - Test Area",
+                ),
+            ]
+        )
+        store.close()
+
+        found = json.loads(search(keyword="career"))
+        b1, b2 = found["results"][0]["id"], found["results"][1]["id"]
+
+        result = json.loads(
+            apply_routing(
+                [
+                    {"block_id": b1, "containers": ["AMOC - Test Area"]},
+                    {
+                        "block_id": b2,
+                        "containers": ["AMOC - Test Area"],
+                        "augi_tags": ["area/work"],
+                    },
+                    {"block_id": "nonexistent", "containers": ["AMOC - Test Area"]},
+                    {"block_id": b1, "containers": ["No Such Container"]},
+                ]
+            )
+        )
+        assert result["status"] == "partial"
+        assert result["routes_applied"] == 2
+        assert result["blocks_tagged"] == 1
+        assert len(result["errors"]) == 2
+
+        store = SQLiteStore(populated_db)
+        rows = store.conn.execute(
+            "SELECT from_id FROM links WHERE to_id = 'doc-container' AND kind = 'routed_to'"
+        ).fetchall()
+        tagged = store.get_block(b2)
+        store.close()
+        assert {r[0] for r in rows} == {b1, b2}
+        assert tagged.metadata["augi_tags"] == ["area/work"]
+
     def test_get_block(self):
         from openaugi.mcp.server import get_block, search
 
