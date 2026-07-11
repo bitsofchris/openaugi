@@ -48,16 +48,24 @@ facets and the container registry.
 
 ## Container registry
 
-The registry is defined in the user's taxonomy (OpenAugi/AGENT/My Taxonomy.md):
-the area notes (`#note-type/amoc`, one per `area/*` facet) plus active
-projects (`#note-type/pmoc` AND `#status/active`). List each area note with
-its `area/*` tag here after `openaugi init` — the AMOCs are the stable
-routing targets; active PMOCs are discovered per run.
+**One rule: a note is a registered routing target iff it has a container
+tag AND a filled `description` frontmatter.** Container tags:
 
-**The registry notes' `description` frontmatter is the routing map** — it
-tells you *when to route here* (skill-file style: name + description). If a
-registry note has no description, nominate one on the Dashboard rather than
-guessing broadly.
+- `#note-type/amoc` — areas (gold: current state of a never-ending area).
+- `#note-type/pmoc` + `#status/active` — projects (gold).
+- `#note-type/moc` — concept notes (silver: a facet of an area/project, an
+  evolving idea; the permanent home for "I've said this before" captures).
+
+Discover the registry per run by tag search — there is no hand-maintained
+list. `OpenAugi/AGENT/My Taxonomy.md` defines the facet vocabulary the
+containers map to.
+
+**The `description` frontmatter is the routing map** — it tells you *when
+to route here* (skill-file style: name + description). A note with the tag
+but no description is NOT registered: don't route to it by inference
+(explicit signals still work); instead nominate on the Dashboard with a
+**drafted description as a paste-line** — filling the description IS
+registration, so make saying yes cost one paste.
 
 ## Routing
 
@@ -73,8 +81,10 @@ Precedence (highest wins; a block may route to multiple containers):
 3. **Location**: a block written inside a MOC's own journal is home by
    construction (route to that container; cross-links still allowed).
 4. **Inference**: classify `area/*` + `type/*` + `status/*` per taxonomy;
-   route to the most *specific* matching container (active PMOC beats its
-   parent AMOC).
+   route to the most *specific* matching container (a matching concept MOC
+   beats an active PMOC beats its parent AMOC). Inference candidates are
+   registered containers ONLY (tag + description); rules 1–3 may route to
+   any note.
 5. **Low confidence** → leave unrouted; it goes to the Dashboard's
    Unrouted/Gravity section. Never force-fit.
 
@@ -86,6 +96,14 @@ Precedence (highest wins; a block may route to multiple containers):
   ONLY from the user's taxonomy — it is a closed vocabulary; never invent a
   tag or a facet. If the user already tagged the block, do not re-tag; only
   fill gaps.
+
+**Reference material routes as one document.** Blocks from synced external
+sources (Snipd, Readwise, and similar reference imports) are one artifact:
+route the parent document once (`route_block` on the document block) and let
+the pieces ride along — never make per-block routing decisions over a
+transcript. Reference files are synced from their source: never move, edit,
+or restructure them; routing is a link only. Count reference documents
+separately in the pass summary so they don't inflate the queue numbers.
 
 **Untagged and unrouted is the default, not a failure.** Life-log blocks
 (daily entries, memories) usually need no tag and no route — they stay
@@ -145,7 +163,11 @@ bullets, every claim linked to its source note):
   (linked) · task/idea rollup · links to active child PMOCs. No LEFT OFF.
 - **Project (PMOC)** — TLDR · **LEFT OFF + next physical action** · open
   task list · new-this-period blocks.
-- **Concept (MOC)** — "current understanding" summary, updated on revisit.
+- **Concept (MOC, silver)** — "current understanding" of the idea. The
+  concept note is the permanent source of truth for that idea: on every
+  regeneration, re-pull related blocks (semantic + links, not just this
+  pass's arrivals) so old mentions keep merging in — resurfacing is
+  repeated, never one-shot.
 
 **Every view ends with a `## Log` section** — the container's routed blocks
 (membership via `routed_to` links), newest first, one line per block:
@@ -163,9 +185,19 @@ Always regenerate `View - Dashboard.md` (same folder):
 - Cross-area task rollup (union of the views' task lists).
 - **Gravity section**: unrouted blocks that cluster together — nominate,
   one line each: "5 blocks over 3 weeks orbit *capture UX* — make it a note?"
-  Take NO action on nominations. The user answers inline or via zzz;
-  only then assemble the new note (gathering related older blocks too —
-  that is the resurfacing feature).
+  Take NO action on nominations. The user answers inline or via zzz.
+  **When a promotion is approved (or the user says "make X canonical" via
+  `aaa:`), adopt before create:**
+  1. Search first — title, semantic, and tag search for an existing note
+     that already is (or wants to be) the canonical home.
+  2. If found: upgrade it — draft the container tag + description as a
+     paste-line (that is registration; you never edit the user's note),
+     then route the accumulated blocks to it.
+  3. Only if nothing exists: create the concept note fresh (with the
+     `![[View - ...]]` transclusion line at birth).
+  4. Either way, sweep OLD blocks beyond the current window — "I've said
+     this a few times" means the earlier sayings predate this pass;
+     gathering them is the point (the resurfacing feature).
 - **Nomination format (machine-readable — mobile review will read/write
   it):** every nomination, in the Gravity section or anywhere else on the
   Dashboard, is ONE markdown checkbox bullet ending in a stable Obsidian
@@ -210,9 +242,11 @@ Always regenerate `View - Dashboard.md` (same folder):
 1. `get_review_state()` → `since` = last_run. If null, this is the first
    run: backfill from a sensible recent date (e.g. two weeks back, or the
    date the user gives).
-2. Pull new blocks: `search(after=since)` (browse mode, paginate via offset).
-   Exclude blocks whose source path is under `OpenAugi/` — those are derived,
-   not input. Use `recent`/`get_context`/`get_related` for extra context.
+2. Pull new blocks: `search(after=since, exclude_path_prefix="OpenAugi/")`
+   (browse mode, paginate via offset) — the prefix filter keeps derived
+   artifacts out of the queue server-side. Group reference-source blocks by
+   their `source_path` and handle each reference document as one item. Use
+   `recent`/`get_context`/`get_related` for extra context.
 3. Route each block per the precedence above; persist membership with
    `route_block`, classification (when there's signal) with `tag_block`.
 4. Regenerate views for containers that received blocks (`overwrite=True`).
