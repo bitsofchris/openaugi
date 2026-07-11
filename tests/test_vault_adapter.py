@@ -17,6 +17,7 @@ import pytest
 
 from openaugi.adapters.vault import (
     _code_fence_ranges,
+    _extract_frontmatter_created,
     _extract_links,
     _extract_tags,
     _extract_wk_date,
@@ -204,6 +205,80 @@ class TestFrontmatter:
         body, tags = _strip_frontmatter(content)
         assert "career" in tags
         assert "project" in tags
+
+
+class TestFrontmatterCreated:
+    def test_date_only(self):
+        content = "---\ncreated: 2015-03-12\n---\n\nBody"
+        assert _extract_frontmatter_created(content) == "2015-03-12"
+
+    def test_datetime_space_separated(self):
+        content = "---\ncreated: 2015-03-12 08:30\n---\n\nBody"
+        assert _extract_frontmatter_created(content) == "2015-03-12T08:30:00"
+
+    def test_datetime_iso(self):
+        content = "---\ncreated: 2015-03-12T08:30:45\n---\n\nBody"
+        assert _extract_frontmatter_created(content) == "2015-03-12T08:30:45"
+
+    def test_quoted_value(self):
+        content = '---\ncreated: "2015-03-12"\n---\n\nBody'
+        assert _extract_frontmatter_created(content) == "2015-03-12"
+
+    def test_missing_key(self):
+        content = "---\ntags: [a]\n---\n\nBody"
+        assert _extract_frontmatter_created(content) is None
+
+    def test_no_frontmatter(self):
+        assert _extract_frontmatter_created("# Just content") is None
+
+    def test_unparseable_value(self):
+        content = "---\ncreated: last tuesday\n---\n\nBody"
+        assert _extract_frontmatter_created(content) is None
+
+    def test_invalid_calendar_date(self):
+        content = "---\ncreated: 2015-13-45\n---\n\nBody"
+        assert _extract_frontmatter_created(content) is None
+
+
+class TestFrontmatterCreatedTimestamp:
+    """`created:` frontmatter in the block_time priority chain (imported docs)."""
+
+    def test_created_beats_file_time(self, tmp_path: Path):
+        """No filename date, no heading date → created: wins over file mtime."""
+        note = tmp_path / "My 2015 Journal.md"
+        note.write_text(
+            "---\ncreated: 2015-03-12\ngdrive_path: Journals/2015\n---\n\nOld reflections.\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        assert len(entries) == 1
+        assert entries[0].block_time == "2015-03-12"
+        assert entries[0].metadata.get("frontmatter_created") == "2015-03-12"
+
+    def test_filename_date_beats_created(self, tmp_path: Path):
+        """Daily notes stay authoritative even with created: frontmatter."""
+        note = tmp_path / "2024-01-15 Book Notes.md"
+        note.write_text(
+            "---\ncreated: 2023-06-01\n---\n\nNotes content.\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        assert len(entries) == 1
+        assert entries[0].block_time == "2024-01-15"
+
+    def test_heading_date_beats_created(self, tmp_path: Path):
+        """A dated section heading wins over created: frontmatter."""
+        note = tmp_path / "Long Running Doc.md"
+        note.write_text(
+            "---\ncreated: 2015-03-12\n---\n\n### 2016-08-01\nLater entry.\n",
+            encoding="utf-8",
+        )
+        blocks, _ = parse_vault(tmp_path)
+        entries = [b for b in blocks if b.kind == "data_block"]
+        assert len(entries) == 1
+        assert entries[0].block_time == "2016-08-01"
 
 
 class TestSplitByHeadings:
