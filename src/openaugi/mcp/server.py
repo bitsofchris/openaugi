@@ -16,6 +16,7 @@ Write tools:
 
 Review pass tools:
 - route_block: route a block into a container note (routed_to link)
+- apply_routing: batch route/tag — one call for a whole pass's decisions
 - get_review_state: read the review-pass high-water mark
 - mark_review_complete: advance the high-water mark after a pass
 
@@ -140,7 +141,13 @@ def search(
 
     exclude_path_prefix drops blocks whose source_path starts with the given
     prefix (e.g. exclude_path_prefix="OpenAugi/" keeps derived artifacts out
-    of a review queue). Works in every mode."""
+    of a review queue). Works in every mode.
+
+    Browse mode groups reference material: blocks carrying a source/* tag
+    (Readwise, Snipd, and other synced imports) are collapsed into
+    'reference_documents' — one entry per source document with document_id,
+    block_count, and time range. Route the DOCUMENT (route_block on
+    document_id), never its individual blocks."""
     if not query and not keyword and not title and not any([tags, after, before, kind, source]):
         return _json(
             {
@@ -236,18 +243,26 @@ def search(
         exclude_path_prefix=exclude_path_prefix,
     )
     # Tags filtering happens in Python (not pushed to SQL)
-    results = []
+    kept = []
+    reference_blocks = []
     for b in blocks:
         if tags and not set(tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
             continue
-        results.append(_block_summary(b))
+        if _reference_source_tags(b):
+            reference_blocks.append(b)
+        else:
+            kept.append(b)
 
-    has_more = len(results) > k
+    reference_documents = _group_reference_documents(reference_blocks)
+    results = [_block_summary(b) for b in kept]
+    has_more = len(blocks) > k
     results = results[:k]
     return _json(
         {
             "results": results,
             "count": len(results),
+            "reference_documents": reference_documents,
+            "reference_block_count": len(reference_blocks),
             "total": total,
             "has_more": has_more,
             "next_offset": offset + k if has_more else None,
@@ -655,6 +670,82 @@ def route_block(block_id: str, container_title: str) -> str:
     )
 
 
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@_release_conn
+def apply_routing(decisions: list[dict]) -> str:
+    """Batch route/tag blocks in one call — the review pass's write step.
+
+    Each decision: {"block_id": str, "containers": [container titles],
+    "augi_tags": [taxonomy tags]}. Either key may be omitted per decision
+    (route without tagging, tag without routing). Prefer this over looping
+    route_block/tag_block — one call replaces dozens.
+
+    Container titles are resolved once; unknown containers or block_ids fail
+    that decision only (reported in 'errors'), the rest still apply.
+    Duplicate routed_to links are no-ops. augi_tags overwrites the block's
+    prior classification, same as tag_block."""
+    from openaugi.model.link import Link
+
+    store = _get_store()
+
+    block_ids: list[str] = [d["block_id"] for d in decisions if isinstance(d.get("block_id"), str)]
+    known_blocks = store.get_blocks_by_ids(block_ids)
+
+    container_titles = {t for d in decisions for t in d.get("containers", [])}
+    container_ids: dict[str, str] = {}
+    for title in container_titles:
+        row = store.conn.execute(
+            "SELECT id FROM blocks WHERE kind = 'context_block:document' AND title = ? LIMIT 1",
+            (title,),
+        ).fetchone()
+        if row:
+            container_ids[title] = row[0]
+
+    links: list[Link] = []
+    routed = 0
+    tagged = 0
+    errors: list[dict] = []
+    for d in decisions:
+        block_id = d.get("block_id")
+        if not block_id or block_id not in known_blocks:
+            errors.append({"block_id": block_id, "reason": "Block not found."})
+            continue
+        if not d.get("containers") and not d.get("augi_tags"):
+            errors.append(
+                {"block_id": block_id, "reason": "Decision has neither containers nor augi_tags."}
+            )
+            continue
+        for title in d.get("containers", []):
+            container_id = container_ids.get(title)
+            if container_id is None:
+                errors.append(
+                    {
+                        "block_id": block_id,
+                        "reason": f"Container note not found: {title}",
+                        "hint": "Use search(title=...) to find the exact note title.",
+                    }
+                )
+                continue
+            links.append(Link(from_id=block_id, to_id=container_id, kind="routed_to"))
+            routed += 1
+        if d.get("augi_tags"):
+            store.update_block_metadata(block_id, {"augi_tags": d["augi_tags"]})
+            tagged += 1
+
+    if links:
+        store.insert_links(links)
+
+    return _json(
+        {
+            "status": "ok" if not errors else "partial",
+            "decisions": len(decisions),
+            "routes_applied": routed,
+            "blocks_tagged": tagged,
+            "errors": errors,
+        }
+    )
+
+
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 @_release_conn
 def get_review_state() -> str:
@@ -834,6 +925,48 @@ def get_note_resource(title: str) -> str:
 def _path_excluded(block, prefix: str | None) -> bool:
     """True if the block's source_path falls under an excluded prefix."""
     return bool(prefix) and block.metadata.get("source_path", "").startswith(prefix)
+
+
+def _reference_source_tags(block) -> list[str]:
+    """The block's source/* tags (set by [vault.source_rules] for synced
+    reference material like Readwise or Snipd). Empty list = user capture."""
+    all_tags = block.tags + block.metadata.get("augi_tags", [])
+    return [t for t in all_tags if t.startswith("source/")]
+
+
+def _group_reference_documents(blocks) -> list[dict]:
+    """Collapse reference-source blocks into one entry per source document.
+
+    Reference material is one artifact: the review pass routes the document
+    once (route_block on document_id), never its individual blocks.
+    """
+    from openaugi.model.block import Block as BlockModel
+
+    groups: dict[str, dict] = {}
+    for b in blocks:
+        source_path = b.metadata.get("source_path", "")
+        g = groups.get(source_path)
+        if g is None:
+            g = groups[source_path] = {
+                "source_path": source_path,
+                "document_id": BlockModel.make_document_id(source_path),
+                "title": Path(source_path).stem if source_path else b.title,
+                "source_tags": [],
+                "block_count": 0,
+                "first_block_time": b.block_time,
+                "last_block_time": b.block_time,
+                "snippet": (b.content or "")[:200],
+            }
+        g["block_count"] += 1
+        for t in _reference_source_tags(b):
+            if t not in g["source_tags"]:
+                g["source_tags"].append(t)
+        if b.block_time:
+            if not g["first_block_time"] or b.block_time < g["first_block_time"]:
+                g["first_block_time"] = b.block_time
+            if not g["last_block_time"] or b.block_time > g["last_block_time"]:
+                g["last_block_time"] = b.block_time
+    return list(groups.values())
 
 
 def _block_summary(block) -> dict:

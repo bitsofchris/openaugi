@@ -107,6 +107,12 @@ search(after="2026-04-05", before="2026-04-12")
 - `has_more` + `next_offset` — call again with `offset=next_offset` to get the next page
 - Default `k` is 100; for a typical week (~200 blocks) you'll need at most 2 calls
 - Tags filtering still happens in Python — `total` reflects pre-tag counts
+- `exclude_path_prefix="OpenAugi/"` — drop blocks by `source_path` prefix at the SQL
+  level (keeps derived artifacts out of a review queue); works in every mode
+- Block summaries include `source_path`, so derived-vs-capture is explicit
+- **Reference grouping**: blocks carrying a `source/*` tag (Readwise, Snipd — set via
+  `[vault.source_rules]`) are collapsed into `reference_documents`, one entry per source
+  document (`document_id`, `block_count`, time range). Route the document, not its blocks.
 
 Use this for workflows like weekly reflection where you want **every block in a time window**,
 not just top-k by relevance.
@@ -216,6 +222,8 @@ After writing, run `openaugi ingest` to pick up new notes into the knowledge gra
 
 | Tool | Purpose |
 |------|---------|
+| `route_block` | Route one block into a container note (`routed_to` link). A block may route to multiple containers; duplicates are no-ops. |
+| `apply_routing` | Batch route/tag: a list of `{block_id, containers, augi_tags}` decisions in one call. Per-decision errors don't block the rest. The review pass's write step. |
 | `get_review_state` | Read the review-pass high-water mark (`last_run` timestamp + `last_summary`). Called at the start of a pass to scope new blocks. |
 | `mark_review_complete` | Advance the high-water mark to now with a one-line run summary. Called once at the end of a successful pass. |
 
