@@ -14,10 +14,12 @@ handling reconciled across template, reference doc, and the live vault
 prompt (v1 plan's registry section marked superseded). Silver semantics
 clarified with Chris: view-on-touch, not on-demand — silver notes are
 permanent visible sources of truth via the same transclusion pattern as
-AMOCs. **NEXT:** run pass #3 — it drafts the 9 registry descriptions as
-paste-lines and registers Dream Journal + mindfulness. Then WS3.2
-(reference grouping in browse), WS3.3 (`apply_routing`), WS4
-(weekly-reflection nomination triage).
+AMOCs. WS3.2 (reference grouping), WS3.3 (`apply_routing`), and WS4
+(weekly-reflection nomination triage, in the skills repo) ALSO SHIPPED same
+day. Everything is done except: **run pass #3** (drafts the 9 registry
+descriptions as paste-lines, registers Dream Journal + mindfulness — needs
+an MCP server restart to pick up the new tools) and 3.4 (compact browse
+snippets — only if the budget still hurts after reference grouping).
 
 **Inputs:** [review-pass-v1.md](review-pass-v1.md) (the frame — still
 authoritative for CQRS/views/grammar), run #2 Opus feedback,
@@ -118,8 +120,8 @@ gravity signal.
       to `OpenAugi/Views/` (adopted human notes are never edited).
 - [x] Silver view regeneration re-pulls related blocks (semantic + links),
       not just this pass's routed blocks — in the MOC recap spec.
-- [ ] Dashboard: per-silver-note block-count lines; add **age** to every
-      pending nomination.
+- [x] Dashboard: per-silver-note activity lines; **age** on every pending
+      nomination (template + live prompt). 2026-07-11.
 - [ ] Next pass: draft all 9 registry descriptions as paste-lines for Chris
       (answers `^nom-describe-registry-notes`, riding since 7/6).
 - [ ] Register Dream Journal + mindfulness by tag + description (kills both
@@ -167,9 +169,10 @@ Order matters; each is a small, separately committed change with tests.
 
 ## WS4 — Process / nomination hygiene (skill changes)
 
-- [ ] Weekly-reflection skill: add "nomination triage — drive queue to zero"
-      step (accept, reject, or explicitly park each; parked ≠ pending).
-- [ ] Note: WS1 deletes the two heaviest nomination types at the source.
+- [x] Weekly-reflection skill: "nomination triage — drive queue to zero"
+      step added (accept, reject, or explicitly park each; parked ≠
+      pending; decisions written to Dashboard answer slots). 2026-07-11.
+- Note: WS1 deletes the two heaviest nomination types at the source.
 
 ## Sequencing
 

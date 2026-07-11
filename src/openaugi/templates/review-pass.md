@@ -182,6 +182,8 @@ Footer line on every view:
 Always regenerate `View - Dashboard.md` (same folder):
 
 - One line per area: what moved, what's next.
+- One line per concept note (silver) that saw activity: "Positioning: +3
+  this pass" — the gravity signal for where ideas are accumulating.
 - Cross-area task rollup (union of the views' task lists).
 - **Gravity section**: unrouted blocks that cluster together — nominate,
   one line each: "5 blocks over 3 weeks orbit *capture UX* — make it a note?"
@@ -212,7 +214,9 @@ Always regenerate `View - Dashboard.md` (same folder):
   (promote / describe / tag / merge / route), slug is kebab-case of the
   subject. Deterministic: the SAME nomination gets the SAME anchor on every
   pass, so unanswered nominations — and answers upserted by anchor from the
-  phone — survive Dashboard regeneration.
+  phone — survive Dashboard regeneration. **Every carried-forward
+  nomination shows its age** ("since YYYY-MM-DD") — a queue that only grows
+  is a graveyard, and age makes that visible.
 
   **Decided = box checked OR answer filled** — two input surfaces, one
   signal: the checkbox is the Obsidian quick-tap, the answer slot is
