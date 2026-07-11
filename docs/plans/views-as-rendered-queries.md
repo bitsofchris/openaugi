@@ -1,16 +1,16 @@
 ---
 name: views-as-rendered-queries
-description: Design record — replace materialized view files with live-rendered queries over the DB, and unify containment with membership. Dissolves the view-cache problem, the per-container surface question, and the "my paste vs. your route" equivalence confusion. Discussion draft, not yet approved.
+description: Design record — replace materialized view files with live-rendered queries over the DB, and unify containment with membership. Dissolves the view-cache problem, the per-container surface question, and the "my paste vs. your route" equivalence confusion. ADOPTED 2026-07-11; implementation ledger at the bottom.
 ---
 
 # Views as Rendered Queries
 
-**Status: design draft for discussion (2026-07-11). Nothing here is built.
-Chris reacted to the direction positively in conversation; this doc is the
-record to argue with. — Update, later 2026-07-11: several open questions
-resolved with Chris in the mobile-side design session; see
+**Status: ADOPTED, in implementation (2026-07-11 — Chris: "get to work on
+this entire plan"). Open questions all resolved: 1/3/5 in the
 [Resolutions](#resolutions-2026-07-11-with-chris-from-the-mobile-side-design-session)
-at the bottom.**
+below, 2/4 in [Decisions on the remaining open questions](#decisions-on-the-remaining-open-questions-2026-07-11-implementation-session).
+Shipped state lives in the [Implementation ledger](#implementation-ledger)
+at the bottom — update it as steps land.**
 
 **Supersedes (if adopted):** the Views section of
 [review-pass-v1.md](review-pass-v1.md) (materialized `View - *.md` files,
@@ -285,3 +285,60 @@ inherit the mobile outbox/offline/retry machinery for free and stay in
 the truth log. Revisit DB-write answers only when the rendered Dashboard
 with answer-UI actually exists. Until then the Dashboard remains the one
 materialized file, as §3.3 / question 3 already suggested.
+
+---
+
+## Addenda from the vault-side session (2026-07-11, evening)
+
+- **The layer model's canonical home is now
+  [../reference/core-principles.md](../reference/core-principles.md)**
+  (capture grammar · truth/index/cache/render · trust model · promotion —
+  affirmed with Chris as "the skeleton, lean and correct"). This doc's
+  inline copy is the design-time snapshot; if they ever disagree, the
+  reference doc wins. Also captured there: the governing metric
+  (minutes-of-Chris/week) and lens discipline (usage before spec).
+- **Gap found processing pass #3 answers — nominations have no
+  deferred state.** Chris answered two cluster-weather nominations
+  "no not now" / "leave it alone for now." Under the current contract a
+  filled answer = decided = closed, but the cluster-weather lens will
+  happily re-nominate the same clusters on its next run. There is no
+  "declined — don't re-ask until X / until the cluster changes
+  materially" state. Small fix, probably a `declined_at` +
+  re-nominate-only-on-material-change rule wherever nomination state
+  lands (DB row once the Dashboard renders; until then the pass prompt
+  must carry declined anchors forward as suppressions). Filed here
+  because nomination state is this design's question 3.
+
+---
+
+## Decisions on the remaining open questions (2026-07-11, implementation session)
+
+Chris delegated questions 2 and 4 ("you decide"); decided as follows:
+
+- **Q2 — recap cache policy: refresh on pass only.** The pass is the only
+  LLM-writing cadence today; staleness is displayed (`recap as of <date>`
+  + membership-hash mismatch), so a stale recap is visible, not a lie.
+  On-open-if-stale needs a daemon-side LLM trigger that doesn't exist and
+  makes cost bursty. An explicit "refresh the recap for X" in any session
+  remains available. Revisit only if displayed staleness annoys in
+  practice.
+- **Q4 — `write_context_pack`: absorbed, with a transition.** The context
+  pack becomes a rendered query the mobile bridge serves from the DB
+  (same shape the app already reads). The file export stays during the
+  transition — same pattern as the Dashboard file — and is deleted when
+  the bridge cutover (step 3) is verified on the phone.
+
+## Implementation ledger
+
+Update this table as steps land (commit hashes are in this repo unless
+noted).
+
+| Step | State | Shipped as |
+|---|---|---|
+| Prereq: `apply_routing` = single route CRUD tool (add/remove per decision, `route_block` deleted) | **shipped 2026-07-11** | `807da60` |
+| Prereq: lens index folded into Dashboard (`View - Lenses.md` deleted) | **shipped 2026-07-11** | `5f93229` |
+| §1 membership = containment ∪ routing: `already_home` no-op, containment-remove is an error, `get_members` unified query tool | **shipped 2026-07-11** | `f29a5b6` |
+| §2 recap cache: `recaps` table + `write_recap`/`get_view` MCP tools, pass dual-writes recap rows | — | — |
+| Step 3: mobile bridge serves views/Dashboard from the DB (repo: `private-augi-mobile`) | — | — |
+| Step 4: cut view-file generation per container as Chris confirms rendered-surface usage; Dashboard stays a file until answer-UI | blocked on step 3 + usage | — |
+| Step 5: converge lenses onto saved queries; view-target lenses stop writing files | blocked on step 3 | — |
