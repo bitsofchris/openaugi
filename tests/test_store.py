@@ -472,6 +472,79 @@ class TestStats:
         assert stats["embedded_blocks"] == 1
 
 
+class TestGetBlocksFiltered:
+    def _seed(self, store: SQLiteStore):
+        store.insert_blocks(
+            [
+                Block(
+                    id="capture1",
+                    kind="data_block",
+                    content="a thought",
+                    block_time="2026-07-01",
+                    metadata={"source_path": "Journal/2026-07-01.md"},
+                ),
+                Block(
+                    id="capture2",
+                    kind="data_block",
+                    content="another thought",
+                    block_time="2026-07-02",
+                    metadata={"source_path": "Journal/2026-07-02.md"},
+                ),
+                Block(
+                    id="derived1",
+                    kind="data_block",
+                    content="a derived view",
+                    block_time="2026-07-03",
+                    metadata={"source_path": "OpenAugi/Views/Dashboard.md"},
+                ),
+                Block(
+                    id="nopath",
+                    kind="data_block",
+                    content="no source path",
+                    block_time="2026-07-04",
+                    metadata={},
+                ),
+            ]
+        )
+
+    def test_exclude_path_prefix(self, store: SQLiteStore):
+        self._seed(store)
+        blocks, total = store.get_blocks_filtered(
+            kind="data_block", exclude_path_prefix="OpenAugi/"
+        )
+        ids = {b.id for b in blocks}
+        assert ids == {"capture1", "capture2", "nopath"}
+        assert total == 3
+
+    def test_no_prefix_returns_all(self, store: SQLiteStore):
+        self._seed(store)
+        blocks, total = store.get_blocks_filtered(kind="data_block")
+        assert total == 4
+
+    def test_prefix_wildcards_match_literally(self, store: SQLiteStore):
+        # An underscore in the prefix must not act as a LIKE wildcard
+        store.insert_blocks(
+            [
+                Block(
+                    id="under",
+                    kind="data_block",
+                    content="x",
+                    metadata={"source_path": "My_Dir/note.md"},
+                ),
+                Block(
+                    id="notunder",
+                    kind="data_block",
+                    content="y",
+                    metadata={"source_path": "MyXDir/note.md"},
+                ),
+            ]
+        )
+        blocks, total = store.get_blocks_filtered(kind="data_block", exclude_path_prefix="My_Dir/")
+        ids = {b.id for b in blocks}
+        assert ids == {"notunder"}
+        assert total == 1
+
+
 class TestReviewState:
     def test_default_state_is_empty(self, store: SQLiteStore):
         state = store.get_review_state()

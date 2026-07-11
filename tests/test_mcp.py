@@ -81,6 +81,35 @@ class TestMCPTools:
         assert "error" in result
         assert "hint" in result
 
+    def test_summaries_include_source_path(self):
+        from openaugi.mcp.server import search
+
+        result = json.loads(search(keyword="career"))
+        assert result["count"] > 0
+        for block in result["results"]:
+            assert "source_path" in block
+        # Fixture-vault ingestion sets real paths — at least one non-empty
+        assert any(b["source_path"] for b in result["results"])
+
+    def test_search_exclude_path_prefix_browse(self):
+        from openaugi.mcp.server import search
+
+        everything = json.loads(search(after="2000-01-01"))
+        assert everything["count"] > 0
+        target = next(b["source_path"] for b in everything["results"] if b["source_path"])
+        filtered = json.loads(search(after="2000-01-01", exclude_path_prefix=target))
+        assert all(not b["source_path"].startswith(target) for b in filtered["results"])
+        assert filtered["count"] < everything["count"]
+
+    def test_search_exclude_path_prefix_keyword(self):
+        from openaugi.mcp.server import search
+
+        unfiltered = json.loads(search(keyword="career"))
+        target = next((b["source_path"] for b in unfiltered["results"] if b["source_path"]), None)
+        assert target is not None
+        filtered = json.loads(search(keyword="career", exclude_path_prefix=target))
+        assert all(b["source_path"] != target for b in filtered["results"])
+
     def test_get_block(self):
         from openaugi.mcp.server import get_block, search
 
