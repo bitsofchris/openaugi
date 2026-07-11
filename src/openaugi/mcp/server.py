@@ -10,10 +10,12 @@ Read tools (readOnlyHint):
 - get_context: compound search → expand → structured result
 - recent: recently created blocks
 - get_members: a container's members under the unified rule (contained ∪ routed)
+- get_view: render a container's view from the DB (membership log + cached recap)
 
 Write tools:
 - write_document: create a markdown note in OpenAugi/{subfolder}/
 - tag_block: stamp AI-classified augi_tags onto a block
+- write_recap: cache a container's recap (the synthesis half of its view)
 
 Review pass tools:
 - apply_routing: the route CRUD tool — batch add/remove routed_to links + tag,
@@ -796,6 +798,90 @@ def get_members(container_title: str, limit: int = 100, offset: int = 0) -> str:
             "count": len(page),
             "total": len(members),
             "has_more": offset + limit < len(members),
+        }
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@_release_conn
+def get_view(container_title: str, member_limit: int = 50) -> str:
+    """Render a container's view from the DB — the saved query, not a file.
+
+    A view = membership log (computed live via the unified rule, always
+    fresh) + the cached recap (LLM synthesis written by write_recap, with
+    staleness visible: 'stale' is true when membership changed since the
+    recap was generated). This is what rendered surfaces (plugin pane,
+    mobile bridge, markdown export) consume; prefer it over reading
+    View - *.md files."""
+    store = _get_store()
+    row = store.conn.execute(
+        "SELECT id FROM blocks WHERE kind = 'context_block:document' AND title = ? LIMIT 1",
+        (container_title,),
+    ).fetchone()
+    if not row:
+        return _json(
+            {
+                "status": "error",
+                "reason": f"Container note not found: {container_title}",
+                "hint": "Use search(title=...) to find the exact note title.",
+            }
+        )
+    container_id = row[0]
+    members = store.get_container_members(container_id)
+    recap_row = store.get_recap(container_id)
+    recap = None
+    if recap_row is not None:
+        recap = {
+            "recap_md": recap_row["recap_md"],
+            "generated_at": recap_row["generated_at"],
+            "stale": recap_row["membership_hash"] != store.membership_hash(container_id),
+        }
+    return _json(
+        {
+            "container": container_title,
+            "container_id": container_id,
+            "recap": recap,
+            "members": [
+                {**_block_summary(b), "membership": membership}
+                for b, membership in members[:member_limit]
+            ],
+            "member_count": len(members),
+        }
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@_release_conn
+def write_recap(container_title: str, recap_md: str) -> str:
+    """Cache a container's recap (the LLM synthesis half of its view).
+
+    Write this at the end of a review pass for every container whose
+    membership changed materially (Q2 decision: recaps refresh on pass
+    only). The current membership hash is stored alongside, so get_view
+    can show staleness instead of hiding it. Overwrites any prior recap —
+    a recap is a cache row, never an archive."""
+    from datetime import datetime
+
+    store = _get_store()
+    row = store.conn.execute(
+        "SELECT id FROM blocks WHERE kind = 'context_block:document' AND title = ? LIMIT 1",
+        (container_title,),
+    ).fetchone()
+    if not row:
+        return _json(
+            {
+                "status": "error",
+                "reason": f"Container note not found: {container_title}",
+                "hint": "Use search(title=...) to find the exact note title.",
+            }
+        )
+    now = datetime.now(UTC).isoformat()
+    store.upsert_recap(row[0], recap_md, now, store.membership_hash(row[0]))
+    return _json(
+        {
+            "status": "ok",
+            "container": container_title,
+            "generated_at": now,
         }
     )
 

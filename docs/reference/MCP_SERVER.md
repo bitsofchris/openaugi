@@ -89,6 +89,7 @@ Both are optional if you've run `openaugi init` — the config file is the defau
 | `get_blocks` | Batch fetch up to 50 blocks by ID — prefer over calling `get_block` in a loop |
 | `get_related` | Follow links from/to a block (tags, wikilinks, derivations) |
 | `get_members` | A container's members under the unified membership rule (containment ∪ routing) — each member marked `contained`/`routed`/`both`, newest first. The query views render. |
+| `get_view` | Render a container's view from the DB: live membership log + cached recap with visible staleness (`stale: true` when membership changed since the recap was written). What rendered surfaces consume instead of `View - *.md` files. |
 | `traverse` | Multi-hop graph walk from a starting block |
 | `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links; optional `purpose` applies a `[salience]` min-score gate for proactive surfaces |
 | `recent` | Recently ingested blocks, filtered by kind/source/tags |
@@ -210,6 +211,7 @@ push = 0.15       # reserved — push notifications need a stricter gate (no con
 |------|---------|
 | `write_document` | Save anything to `OpenAugi/{subfolder}/` — triggered by "save this", "write this to augi", or explicit save requests. Agent infers subfolder from content (`Notes`, `Docs`, `Research`, `Views`). Supports `overwrite=true` for regenerable derived views. |
 | `tag_block` | Stamp AI-classified `augi_tags` onto a block's metadata. Used by the augi-agent for area/type/status classification. |
+| `write_recap` | Cache a container's recap (the LLM synthesis half of its rendered view) as a DB row, stamped with the membership hash it was generated against. Written by the review pass (recaps refresh on pass only); read back through `get_view`. |
 
 `write_document` takes a `description` field — a one-liner that goes in frontmatter for scanning.
 

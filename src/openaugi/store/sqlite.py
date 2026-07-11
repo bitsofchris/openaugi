@@ -8,6 +8,7 @@ See docs/plans/m0.md § Data Model for the canonical schema.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -91,6 +92,20 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 """
 
+# Recap cache — the LLM synthesis half of a rendered view. The membership
+# log is computed at render time (get_container_members); the recap is the
+# expensive part, cached per container with the membership hash it was
+# generated against so staleness is visible. See
+# docs/plans/views-as-rendered-queries.md §2.
+_RECAPS_DDL = """
+CREATE TABLE IF NOT EXISTS recaps (
+    container_id TEXT PRIMARY KEY REFERENCES blocks(id) ON DELETE CASCADE,
+    recap_md TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    membership_hash TEXT NOT NULL
+);
+"""
+
 _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_blocks_kind ON blocks(kind);",
     "CREATE INDEX IF NOT EXISTS idx_blocks_source ON blocks(source);",
@@ -152,6 +167,7 @@ class SQLiteStore:
         c.executescript(_FTS_DDL)
         c.executescript(_FTS_TRIGGERS)
         c.executescript(_META_DDL)
+        c.executescript(_RECAPS_DDL)
         for idx_sql in _INDEXES:
             c.execute(idx_sql)
         self._apply_migrations(c)
@@ -520,6 +536,45 @@ class SQLiteStore:
             )
             result.append((_row_to_block(r[:13]), membership))
         return result
+
+    def membership_hash(self, container_id: str) -> str:
+        """Hash of a container's current member set (unified rule).
+
+        Stored with a recap at generation time; a mismatch on read means
+        membership changed since the recap was written — the recap is stale.
+        """
+        rows = self.conn.execute(
+            """SELECT DISTINCT from_id FROM links
+               WHERE to_id = ? AND kind IN ('routed_to', 'contains')
+               ORDER BY from_id""",
+            (container_id,),
+        ).fetchall()
+        return hashlib.sha256("\n".join(r[0] for r in rows).encode()).hexdigest()
+
+    def upsert_recap(
+        self, container_id: str, recap_md: str, generated_at: str, membership_hash: str
+    ) -> None:
+        """Write (or replace) the cached recap for a container."""
+        self.conn.execute(
+            """INSERT INTO recaps (container_id, recap_md, generated_at, membership_hash)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(container_id) DO UPDATE SET
+                 recap_md = excluded.recap_md,
+                 generated_at = excluded.generated_at,
+                 membership_hash = excluded.membership_hash""",
+            (container_id, recap_md, generated_at, membership_hash),
+        )
+        self.conn.commit()
+
+    def get_recap(self, container_id: str) -> dict | None:
+        """The cached recap row for a container, or None if never written."""
+        row = self.conn.execute(
+            "SELECT recap_md, generated_at, membership_hash FROM recaps WHERE container_id = ?",
+            (container_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return {"recap_md": row[0], "generated_at": row[1], "membership_hash": row[2]}
 
     def get_links_from(self, block_id: str, kind: str | None = None) -> list[Link]:
         """Get outgoing links from a block, optionally filtered by kind."""
