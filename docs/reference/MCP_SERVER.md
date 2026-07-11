@@ -88,6 +88,7 @@ Both are optional if you've run `openaugi init` — the config file is the defau
 | `get_block` | Full block content + metadata by ID |
 | `get_blocks` | Batch fetch up to 50 blocks by ID — prefer over calling `get_block` in a loop |
 | `get_related` | Follow links from/to a block (tags, wikilinks, derivations) |
+| `get_members` | A container's members under the unified membership rule (containment ∪ routing) — each member marked `contained`/`routed`/`both`, newest first. The query views render. |
 | `traverse` | Multi-hop graph walk from a starting block |
 | `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links; optional `purpose` applies a `[salience]` min-score gate for proactive surfaces |
 | `recent` | Recently ingested blocks, filtered by kind/source/tags |
@@ -222,7 +223,7 @@ After writing, run `openaugi ingest` to pick up new notes into the knowledge gra
 
 | Tool | Purpose |
 |------|---------|
-| `apply_routing` | THE route write tool: a list of `{block_id, add, remove, augi_tags}` decisions in one call (`containers` is a legacy alias for `add`). Adds and removes `routed_to` links — a wrong route is corrected with one decision carrying both `add` and `remove`. Idempotent both ways; per-decision errors don't block the rest. Current membership is readable via `get_block`/`get_blocks` (`routed_to` field) or `get_related(kind="routed_to")`. |
+| `apply_routing` | THE route write tool: a list of `{block_id, add, remove, augi_tags}` decisions in one call (`containers` is a legacy alias for `add`). Adds and removes `routed_to` links — a wrong route is corrected with one decision carrying both `add` and `remove`. Idempotent both ways; per-decision errors don't block the rest. Home by construction: adding a route to the block's own source note is a counted no-op (`already_home`); removing containment is an error. Current membership is readable via `get_members`, `get_block`/`get_blocks` (`routed_to` field), or `get_related(kind="routed_to")`. |
 | `get_review_state` | Read the review-pass high-water mark (`last_run` timestamp + `last_summary`). Called at the start of a pass to scope new blocks. |
 | `mark_review_complete` | Advance the high-water mark to now with a one-line run summary. Called once at the end of a successful pass. |
 

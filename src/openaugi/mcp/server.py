@@ -9,6 +9,7 @@ Read tools (readOnlyHint):
 - traverse: multi-hop graph walk
 - get_context: compound search → expand → structured result
 - recent: recently created blocks
+- get_members: a container's members under the unified rule (contained ∪ routed)
 
 Write tools:
 - write_document: create a markdown note in OpenAugi/{subfolder}/
@@ -649,10 +650,15 @@ def apply_routing(decisions: list[dict]) -> str:
     adds and removes of absent routes are no-ops (no-op removes are counted
     in 'routes_not_found', not errors).
 
+    Home by construction: a block is already a member of the note it
+    physically lives in — adding a route to the block's own source note is
+    a no-op counted in 'already_home' (no edge is written), and removing
+    that containment is an error (move or delete the text itself instead).
+
     Container titles must match exactly; unknown containers or block_ids fail
     that decision only (reported in 'errors'), the rest still apply. Current
-    membership is visible via get_block/get_blocks ('routed_to') or
-    get_related(kind="routed_to")."""
+    membership is visible via get_members (containment + routes unified),
+    get_block/get_blocks ('routed_to'), or get_related(kind="routed_to")."""
     from openaugi.model.link import Link
 
     store = _get_store()
@@ -674,6 +680,7 @@ def apply_routing(decisions: list[dict]) -> str:
     routed = 0
     removed = 0
     removes_not_found = 0
+    already_home = 0
     tagged = 0
     errors: list[dict] = []
     for d in decisions:
@@ -691,6 +698,7 @@ def apply_routing(decisions: list[dict]) -> str:
                 }
             )
             continue
+        home_id = store.get_contains_parent_id(block_id) if (adds or removes) else None
         for title in adds:
             container_id = container_ids.get(title)
             if container_id is None:
@@ -702,6 +710,9 @@ def apply_routing(decisions: list[dict]) -> str:
                     }
                 )
                 continue
+            if container_id == home_id:
+                already_home += 1
+                continue
             links.append(Link(from_id=block_id, to_id=container_id, kind="routed_to"))
             routed += 1
         for title in removes:
@@ -712,6 +723,15 @@ def apply_routing(decisions: list[dict]) -> str:
                         "block_id": block_id,
                         "reason": f"Container note not found: {title}",
                         "hint": "Use search(title=...) to find the exact note title.",
+                    }
+                )
+                continue
+            if container_id == home_id:
+                errors.append(
+                    {
+                        "block_id": block_id,
+                        "reason": f"Block physically lives in '{title}' — containment "
+                        "can't be removed by unrouting. Move or delete the text itself.",
                     }
                 )
                 continue
@@ -733,8 +753,49 @@ def apply_routing(decisions: list[dict]) -> str:
             "routes_applied": routed,
             "routes_removed": removed,
             "routes_not_found": removes_not_found,
+            "already_home": already_home,
             "blocks_tagged": tagged,
             "errors": errors,
+        }
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@_release_conn
+def get_members(container_title: str, limit: int = 100, offset: int = 0) -> str:
+    """Members of a container note under the unified membership rule.
+
+    A block is a member iff it is routed to the container (routed_to link)
+    OR physically lives in it (the user pasted/wrote it there) — the two are
+    the same fact seen from different sides. Each member carries a
+    'membership' field: 'contained' (lives there), 'routed' (linked there),
+    or 'both'. Newest first.
+
+    This is THE query views render: use it to build a container's membership
+    log instead of assembling routed_to links by hand."""
+    store = _get_store()
+    row = store.conn.execute(
+        "SELECT id FROM blocks WHERE kind = 'context_block:document' AND title = ? LIMIT 1",
+        (container_title,),
+    ).fetchone()
+    if not row:
+        return _json(
+            {
+                "status": "error",
+                "reason": f"Container note not found: {container_title}",
+                "hint": "Use search(title=...) to find the exact note title.",
+            }
+        )
+    members = store.get_container_members(row[0])
+    page = members[offset : offset + limit]
+    return _json(
+        {
+            "container": container_title,
+            "container_id": row[0],
+            "members": [{**_block_summary(b), "membership": membership} for b, membership in page],
+            "count": len(page),
+            "total": len(members),
+            "has_more": offset + limit < len(members),
         }
     )
 

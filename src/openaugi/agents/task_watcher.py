@@ -130,6 +130,7 @@ ALLOWED_TOOLS = [
     "mcp__openaugi__get_related",
     "mcp__openaugi__traverse",
     "mcp__openaugi__recent",
+    "mcp__openaugi__get_members",
     "mcp__openaugi__tag_block",
     "mcp__openaugi__apply_routing",
     "mcp__openaugi__get_review_state",

@@ -60,6 +60,13 @@ carries `add` and/or `remove` container lists). Views distill a container's
 routed blocks. Unrouted is also a valid state — route only what a view should
 distill.
 
+**Membership = containment ∪ routing.** A block the user pasted into a
+container and a block the agent routed there are the same fact: member of
+that container. Routing a block to its own source note is a no-op
+(`already_home`), and `get_members` returns the unified list with each
+member marked contained/routed. Design record:
+[views-as-rendered-queries.md](../plans/views-as-rendered-queries.md).
+
 Both live in the DB only, which is why routing costs nothing and is always
 correctable: the user's files never change.
 

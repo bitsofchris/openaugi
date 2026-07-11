@@ -458,12 +458,15 @@ class TestRoutingCrud:
     """apply_routing is the single route write tool: add, remove, move."""
 
     def _block_and_container(self):
-        from openaugi.mcp.server import search
+        from openaugi.mcp.server import get_related, search
 
         blocks = json.loads(search(keyword="career"))["results"]
         block_id = next(b["id"] for b in blocks if b["kind"] == "data_block")
-        docs = json.loads(search(kind="context_block:document", k=5))["results"]
-        return block_id, docs[0]["title"], docs[1]["title"]
+        related = json.loads(get_related(block_id, direction="out", kind="contains"))
+        home_title = related["related"][0]["block"]["title"]
+        docs = json.loads(search(kind="context_block:document", k=10))["results"]
+        foreign = [d["title"] for d in docs if d["title"] != home_title]
+        return block_id, foreign[0], foreign[1]
 
     def test_add_creates_link_and_is_readable(self):
         from openaugi.mcp.server import apply_routing, get_block, get_related
@@ -542,6 +545,68 @@ class TestRoutingCrud:
         result = json.loads(apply_routing([{"block_id": block_id, "add": [title]}]))
         assert result["status"] == "ok"
         assert json.loads(get_block(block_id))["routed_to"] == [title]
+
+    def _block_and_home(self):
+        """A data block plus the title of the document it physically lives in."""
+        from openaugi.mcp.server import get_related, search
+
+        blocks = json.loads(search(keyword="career"))["results"]
+        block_id = next(b["id"] for b in blocks if b["kind"] == "data_block")
+        related = json.loads(get_related(block_id, direction="out", kind="contains"))
+        home_title = related["related"][0]["block"]["title"]
+        return block_id, home_title
+
+    def test_add_to_own_source_note_is_already_home(self):
+        from openaugi.mcp.server import apply_routing, get_block
+
+        block_id, home_title = self._block_and_home()
+        result = json.loads(apply_routing([{"block_id": block_id, "add": [home_title]}]))
+        assert result["status"] == "ok"
+        assert result["already_home"] == 1
+        assert result["routes_applied"] == 0
+        # no redundant edge was written
+        assert json.loads(get_block(block_id))["routed_to"] == []
+
+    def test_remove_containment_is_an_error(self):
+        from openaugi.mcp.server import apply_routing
+
+        block_id, home_title = self._block_and_home()
+        result = json.loads(apply_routing([{"block_id": block_id, "remove": [home_title]}]))
+        assert result["status"] == "partial"
+        assert result["routes_removed"] == 0
+        assert "physically lives" in result["errors"][0]["reason"]
+
+
+class TestGetMembers:
+    def test_unified_membership(self):
+        from openaugi.mcp.server import apply_routing, get_members, get_related, search
+
+        # the container is a real source document; its own blocks are 'contained'
+        blocks = json.loads(search(keyword="career"))["results"]
+        block_id = next(b["id"] for b in blocks if b["kind"] == "data_block")
+        related = json.loads(get_related(block_id, direction="out", kind="contains"))
+        home_title = related["related"][0]["block"]["title"]
+
+        # route a foreign block in from another document
+        others = json.loads(search(kind="data_block", k=50))["results"]
+        foreign = next(
+            b["id"]
+            for b in others
+            if b["id"] != block_id and b["source_path"] != blocks[0].get("source_path", "")
+        )
+        apply_routing([{"block_id": foreign, "add": [home_title]}])
+
+        result = json.loads(get_members(home_title))
+        by_id = {m["id"]: m["membership"] for m in result["members"]}
+        assert by_id[block_id] == "contained"
+        assert by_id[foreign] in ("routed", "both")
+        assert result["total"] == len(result["members"])
+
+    def test_unknown_container(self):
+        from openaugi.mcp.server import get_members
+
+        result = json.loads(get_members("No Such Container"))
+        assert result["status"] == "error"
 
 
 class TestWriteContextPack:
