@@ -11,6 +11,7 @@ Read tools (readOnlyHint):
 - recent: recently created blocks
 - get_members: a container's members under the unified rule (contained ∪ routed)
 - get_view: render a container's view from the DB (membership log + cached recap)
+- list_views: the render list — every container with a cached recap
 
 Write tools:
 - write_document: create a markdown note in OpenAugi/{subfolder}/
@@ -848,6 +849,30 @@ def get_view(container_title: str, member_limit: int = 50) -> str:
             "member_count": len(members),
         }
     )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@_release_conn
+def list_views() -> str:
+    """The render list: every container with a cached recap, newest first.
+
+    A container appears here once the review pass has written its recap row
+    (write_recap) — that row IS the "this container has a view" bit.
+    Containers the user curates entirely by hand (recap off, e.g. a dream
+    journal) never show up. Surfaces iterate this list and call get_view
+    per container."""
+    store = _get_store()
+    views = []
+    for r in store.list_recaps():
+        views.append(
+            {
+                "container": r["title"],
+                "container_id": r["container_id"],
+                "generated_at": r["generated_at"],
+                "stale": r["membership_hash"] != store.membership_hash(r["container_id"]),
+            }
+        )
+    return _json({"views": views, "count": len(views)})
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))

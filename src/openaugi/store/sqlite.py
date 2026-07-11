@@ -576,6 +576,23 @@ class SQLiteStore:
             return None
         return {"recap_md": row[0], "generated_at": row[1], "membership_hash": row[2]}
 
+    def list_recaps(self) -> list[dict]:
+        """Every cached recap joined to its container, newest first."""
+        rows = self.conn.execute(
+            """SELECT r.container_id, b.title, r.generated_at, r.membership_hash
+               FROM recaps r JOIN blocks b ON b.id = r.container_id
+               ORDER BY r.generated_at DESC""",
+        ).fetchall()
+        return [
+            {
+                "container_id": r[0],
+                "title": r[1],
+                "generated_at": r[2],
+                "membership_hash": r[3],
+            }
+            for r in rows
+        ]
+
     def get_links_from(self, block_id: str, kind: str | None = None) -> list[Link]:
         """Get outgoing links from a block, optionally filtered by kind."""
         if kind:
