@@ -801,7 +801,7 @@ def write_document(
       views (subfolder='Views'); never overwrite notes.
     - extra_frontmatter: Optional machine-readable frontmatter keys, e.g.
       {"lens": "echoes"} when a lens writes its output — this is what keeps
-      the lens-output index (View - Lenses.md) reconstructible from disk.
+      the Dashboard's Lenses section reconstructible from disk.
       Reserved keys (type/description/created) are ignored.
 
     Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""

@@ -77,28 +77,32 @@ any new lens; don't freestyle the frontmatter.
    **When you call `write_document` for a `note` or `view` output, pass
    `extra_frontmatter={"lens": "<name>"}`** — this stamps provenance so
    the index below is reconstructible from disk.
-5. **Update the lens-output index** (`OpenAugi/Views/View - Lenses.md`,
-   see below) — upsert this lens's row: today's date, a link to (or
-   pointer at) what you just wrote, and any waiting-on-you note.
+5. **Update the lens index** (the `## Lenses` section of
+   `View - Dashboard.md`, see below) — upsert this lens's row: today's
+   date, a link to (or pointer at) what you just wrote, and any
+   waiting-on-you note.
 
-**The lens-output index** (`View - Lenses.md`) is one row per lens — the
-central place to see every lens's latest run and jump to its output. It
-is itself a `view` (regenerable cache; `overwrite=True`, subfolder
-`Views`). Columns: **lens · last run · latest output · waiting on you ·
-run it** (the launcher — the exact phrase to copy; targeted lenses show a
+**The lens index** lives ON the Dashboard — a `## Lenses` section of
+`View - Dashboard.md`, one row per lens: the central place to see every
+lens's latest run and jump to its output (there is no separate
+`View - Lenses.md` file; the Dashboard is the single entry point).
+Columns: **lens · last run · latest output · waiting on you · run it**
+(the launcher — the exact phrase to copy; targeted lenses show a
 `<topic>` placeholder so it's obvious a subject is required). Two ways it
-stays current: (a) each apply upserts its own row (step 5); (b) the
-review pass can fully regenerate it from the `lens:` frontmatter stamps
-across `Notes/` + `Views/` as a self-heal. Never list a lens that isn't
-in `OpenAugi/AGENT/lenses/`, and never omit one that is.
+stays current: (a) each apply upserts its own row by editing the table in
+place (step 5 — touch ONLY the `## Lenses` section, never the rest of the
+Dashboard); (b) the review pass regenerates the section from the `lens:`
+frontmatter stamps across `Notes/` + `Views/` as a self-heal. Never list
+a lens that isn't in `OpenAugi/AGENT/lenses/`, and never omit one that
+is.
 
 **Creating a lens** — instruction shape: "new lens <name>: <intent>"
 (from any surface, including mobile zzz). Write the spec file directly to
 `OpenAugi/AGENT/lenses/<slug>.md` (kebab-case slug; agent-space, so no
 nomination needed): draft sensible `scope`/`trigger`/`target` defaults
-from the intent, tag the body `#human-review`, and add one line to the
-Dashboard noting the new lens exists. Also add its row to
-`View - Lenses.md` (last run = "never"). The user edits or deletes the
+from the intent and tag the body `#human-review`. Add its row to the
+Dashboard's `## Lenses` section (last run = "never") — the row doubles as
+the Dashboard notice that the lens exists. The user edits or deletes the
 file to tune it — the file is the interface.
 
 **Frontmatter MUST be valid YAML.** Write `description`/`scope`/`target`
