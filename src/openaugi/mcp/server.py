@@ -116,6 +116,7 @@ def search(
     before: str | None = None,
     kind: str | None = None,
     source: str | None = None,
+    exclude_path_prefix: str | None = None,
 ) -> str:
     """Search the knowledge base. Returns block summaries (not full content).
 
@@ -135,7 +136,11 @@ def search(
     page. Response includes 'total' so you know how many pages to expect.
     Example: search(after="2026-04-05", before="2026-04-12") returns all blocks in that week.
     Call again with offset=100 if has_more is true.
-    Dates use ISO format: after="2025-01-01", before="2025-06-01"."""
+    Dates use ISO format: after="2025-01-01", before="2025-06-01".
+
+    exclude_path_prefix drops blocks whose source_path starts with the given
+    prefix (e.g. exclude_path_prefix="OpenAugi/" keeps derived artifacts out
+    of a review queue). Works in every mode."""
     if not query and not keyword and not title and not any([tags, after, before, kind, source]):
         return _json(
             {
@@ -150,6 +155,7 @@ def search(
 
     if title:
         results = store.search_fts(f"title:{title}", limit=k + 1)
+        results = [b for b in results if not _path_excluded(b, exclude_path_prefix)]
         has_more = len(results) > k
         results = results[:k]
         return _json(
@@ -163,6 +169,7 @@ def search(
 
     if keyword:
         results = store.search_fts(keyword, limit=k + 1)
+        results = [b for b in results if not _path_excluded(b, exclude_path_prefix)]
         has_more = len(results) > k
         results = results[:k]
         return _json(
@@ -199,6 +206,8 @@ def search(
                 continue
             if before and (block.block_time or "") > before:
                 continue
+            if _path_excluded(block, exclude_path_prefix):
+                continue
             summary = _block_summary(block)
             summary["score"] = round(1.0 - distance, 4)
             results.append(summary)
@@ -224,6 +233,7 @@ def search(
         before=before,
         limit=k + 1,
         offset=offset,
+        exclude_path_prefix=exclude_path_prefix,
     )
     # Tags filtering happens in Python (not pushed to SQL)
     results = []
@@ -821,6 +831,11 @@ def get_note_resource(title: str) -> str:
 # ── Helpers ────────────────────────────────────────────────────────
 
 
+def _path_excluded(block, prefix: str | None) -> bool:
+    """True if the block's source_path falls under an excluded prefix."""
+    return bool(prefix) and block.metadata.get("source_path", "").startswith(prefix)
+
+
 def _block_summary(block) -> dict:
     return {
         "id": block.id,
@@ -831,6 +846,7 @@ def _block_summary(block) -> dict:
         "augi_tags": block.metadata.get("augi_tags", []),
         "block_time": block.block_time,
         "source": block.source,
+        "source_path": block.metadata.get("source_path", ""),
     }
 
 

@@ -254,6 +254,7 @@ class SQLiteStore:
         order_by: str = "block_time",
         limit: int = 100,
         offset: int = 0,
+        exclude_path_prefix: str | None = None,
     ) -> tuple[list[Block], int]:
         """Fetch blocks with SQL-level filtering and pagination.
 
@@ -264,6 +265,10 @@ class SQLiteStore:
         order_by: 'block_time' (default, for date-range queries) or 'ingested_at'
         (for recency queries). NULLs sort last in both cases.
         Tags filtering is not pushed to SQL — apply in the caller if needed.
+
+        exclude_path_prefix: drop blocks whose metadata.source_path starts with
+        this prefix (e.g. "OpenAugi/" to keep derived artifacts out of a
+        review queue). Blocks with no source_path are kept.
         """
         conditions: list[str] = []
         params: list[str | int] = []
@@ -280,6 +285,11 @@ class SQLiteStore:
         if before:
             conditions.append("block_time <= ?")
             params.append(before)
+        if exclude_path_prefix:
+            conditions.append(
+                "COALESCE(json_extract(metadata, '$.source_path'), '') NOT LIKE ? ESCAPE '\\'"
+            )
+            params.append(_escape_like(exclude_path_prefix) + "%")
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -1007,6 +1017,11 @@ def _normalize_blob(blob: bytes) -> bytes:
     if norm > 0:
         arr = arr / norm
     return arr.tobytes()
+
+
+def _escape_like(value: str) -> str:
+    """Escape LIKE wildcards so a path prefix matches literally (ESCAPE '\\')."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 # ── Row conversion helpers ─────────────────────────────────────────
