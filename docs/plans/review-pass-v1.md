@@ -51,6 +51,11 @@ Event sourcing / CQRS applied to the vault:
 
 ## Containers (the registry)
 
+> **Superseded 2026-07-11** by the unified rule in
+> [review-pass-v2-workstreams.md](review-pass-v2-workstreams.md): registered
+> = container tag (`amoc` / active `pmoc` / `moc`) + filled `description`.
+> The list below is the historical starting set.
+
 The registry is the taxonomy, not a new file: `#note-type/amoc` plus
 (`#note-type/pmoc` AND `#status/active`). Starting set — the five AMOCs from
 `OpenAugi/AGENT/My Taxonomy.md`:
