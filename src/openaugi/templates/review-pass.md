@@ -177,7 +177,7 @@ bullets, every claim linked to its source note):
   repeated, never one-shot.
 
 **Every view ends with a `## Log` section** — the container's routed blocks
-(membership via `routed_to` links), newest first, one line per block:
+(membership via `get_members` — contained + routed), newest first, one line per block:
 `- YYYY-MM-DD — <one-line gist> ([[source note]])`. This materializes the
 append-only log so the user can SEE membership in Obsidian (DB links are
 otherwise invisible there). Small containers: full log. Big containers:
@@ -278,7 +278,11 @@ Always regenerate `View - Dashboard.md` (same folder):
    evolves; LEFT OFF advances or stands), integrate the new blocks, drop
    what's no longer salient. "New this period" covers only the current
    window. If deeper context is needed, pull the container's full membership
-   via its `routed_to` links (`get_related` on the container, direction=in).
+   with `get_members(container_title)` (contained + routed, unified).
+   **Dual-write the recap:** whenever you write or carry forward a recap in
+   a view file, also call `write_recap(container_title, recap_md)` — the DB
+   cache row rendered surfaces read (`get_view`). File views are the
+   transition render target; the recap row is the durable one.
 5. Regenerate `View - Dashboard.md`.
 6. `write_context_pack()` — regenerates `OpenAugi/context-pack.json`, the
    sidecar the mobile app's tag/link suggestions are served from. One call,

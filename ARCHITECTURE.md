@@ -16,6 +16,11 @@ blocks (id, kind, content, summary, embedding, source, title, tags, timestamp, m
 links  (from_id, to_id, kind, weight, metadata)  — PK: (from_id, to_id, kind)
 ```
 
+Sidecars: `meta` (key-value, review-pass high-water mark), `recaps`
+(per-container view-synthesis cache, staleness-hashed — see
+[docs/plans/views-as-rendered-queries.md](docs/plans/views-as-rendered-queries.md)),
+`vec_blocks`/`blocks_fts` (derived indexes).
+
 **Block kinds:** data_block, context_block:document, context_block:tag
 **Link kinds:** contains, groups, links_to
 
@@ -114,7 +119,9 @@ Claude → MCP tool call → server.py
                  → expand via links
   → recent: recently created blocks
   → get_members: container members under the unified rule (contained ∪ routed)
+  → get_view: rendered view from the DB (live membership log + cached recap)
   → write_document: save a note to the vault (OpenAugi/{subfolder}/)
+  → write_recap: cache a container's recap row (recaps table, staleness-hashed)
   → tag_block: stamp AI-classified augi_tags onto a block (taxonomy-only)
   → apply_routing: block → container membership (add/remove routed_to links, batch)
   → get_review_state / mark_review_complete: review-pass high-water mark

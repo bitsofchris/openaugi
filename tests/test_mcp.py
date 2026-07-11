@@ -609,6 +609,68 @@ class TestGetMembers:
         assert result["status"] == "error"
 
 
+class TestRenderedViews:
+    """§2 of views-as-rendered-queries: get_view + write_recap recap cache."""
+
+    def _container(self):
+        from openaugi.mcp.server import get_related, search
+
+        blocks = json.loads(search(keyword="career"))["results"]
+        block_id = next(b["id"] for b in blocks if b["kind"] == "data_block")
+        related = json.loads(get_related(block_id, direction="out", kind="contains"))
+        return related["related"][0]["block"]["title"]
+
+    def test_view_without_recap(self):
+        from openaugi.mcp.server import get_view
+
+        title = self._container()
+        result = json.loads(get_view(title))
+        assert result["container"] == title
+        assert result["recap"] is None
+        assert result["member_count"] > 0
+        assert all(m["membership"] in ("contained", "routed", "both") for m in result["members"])
+
+    def test_write_recap_then_view_is_fresh(self):
+        from openaugi.mcp.server import get_view, write_recap
+
+        title = self._container()
+        result = json.loads(write_recap(title, "## TLDR\nAll quiet."))
+        assert result["status"] == "ok"
+
+        view = json.loads(get_view(title))
+        assert view["recap"]["recap_md"] == "## TLDR\nAll quiet."
+        assert view["recap"]["stale"] is False
+
+    def test_membership_change_makes_recap_stale(self):
+        from openaugi.mcp.server import apply_routing, get_view, search, write_recap
+
+        title = self._container()
+        write_recap(title, "recap before the change")
+        assert json.loads(get_view(title))["recap"]["stale"] is False
+
+        # route in a foreign block → membership hash changes → recap is stale
+        docs_members = {m["id"] for m in json.loads(get_view(title))["members"]}
+        others = json.loads(search(kind="data_block", k=50))["results"]
+        foreign = next(b["id"] for b in others if b["id"] not in docs_members)
+        apply_routing([{"block_id": foreign, "add": [title]}])
+
+        assert json.loads(get_view(title))["recap"]["stale"] is True
+
+    def test_recap_overwrites(self):
+        from openaugi.mcp.server import get_view, write_recap
+
+        title = self._container()
+        write_recap(title, "first")
+        write_recap(title, "second")
+        assert json.loads(get_view(title))["recap"]["recap_md"] == "second"
+
+    def test_unknown_container(self):
+        from openaugi.mcp.server import get_view, write_recap
+
+        assert json.loads(get_view("No Such Container"))["status"] == "error"
+        assert json.loads(write_recap("No Such Container", "x"))["status"] == "error"
+
+
 class TestWriteContextPack:
     def test_requires_vault_path(self, monkeypatch: pytest.MonkeyPatch):
         from openaugi.mcp.server import write_context_pack
