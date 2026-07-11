@@ -147,23 +147,25 @@ a warning lands in the log. Validate any time with **`openaugi lenses`**
 exit on broken specs — CI-able). The safe authoring style is folded
 scalars: `description: >-` with the text indented on the next line.
 
-## The lens-output index (`View - Lenses.md`)
+## The lens index (`## Lenses` on the Dashboard)
 
 Because the three output modes scatter their artifacts (view caches in
 `Views/`, dated notes in `Notes/`, nominations merged into the
 Dashboard), there is one place that answers **"what has each lens
-produced, and how do I run it?"** — `OpenAugi/Views/View - Lenses.md`,
-one row per lens. Columns: **lens · mode · last run · latest output ·
-waiting on you · run it**. The last column is a launcher — the exact
-copy-paste phrase, with a `<topic>` placeholder on targeted lenses so
-the index doubles as the menu.
+produced, and how do I run it?"** — the `## Lenses` section of
+`View - Dashboard.md`, one row per lens. Columns: **lens · mode ·
+last run · latest output · waiting on you · run it**. The last column is
+a launcher — the exact copy-paste phrase, with a `<topic>` placeholder
+on targeted lenses so the index doubles as the menu.
 
-**Why a view, not a tag.** "Is there new lens output?" is already
-answered by `#human-review` (every note/dashboard output carries it);
-a second tag would just duplicate that workflow state. The unmet need is
-*latest-run-per-lens, grouped, in order* — which is a cache of current
-state, i.e. the view primitive. So the index is a `view` target
-(`overwrite=True`, regenerated freely).
+**Why on the Dashboard, not its own file.** It lived in
+`View - Lenses.md` until 2026-07-11; folded into the Dashboard because
+the Dashboard is the single entry point after a pass — a separate index
+file was one more surface to remember. "Is there new lens output?" is
+already answered by `#human-review`; the unmet need is
+*latest-run-per-lens, grouped, in order* — a cache of current state that
+now renders as a Dashboard section (upserts edit the section in place,
+never the rest of the Dashboard).
 
 **Two mechanisms keep it current, and they reinforce each other:**
 
@@ -173,9 +175,10 @@ state, i.e. the view primitive. So the index is a `view` target
    dashboard lenses that have no file of their own.
 2. **Full regen from provenance stamps.** Every note/view a lens writes
    carries `lens: <name>` in frontmatter (via `write_document`'s
-   `extra_frontmatter`). The review pass can rebuild the whole table from
-   those stamps across `Notes/` + `Views/` — a self-heal if upserts drift,
-   and the reason the index is reconstructible from disk alone.
+   `extra_frontmatter`). The review pass rebuilds the section from those
+   stamps across `Notes/` + `Views/` when it regenerates the Dashboard —
+   a self-heal if upserts drift, and the reason the index is
+   reconstructible from disk alone.
 
 Invariant: the index lists exactly the lenses in
 `OpenAugi/AGENT/lenses/` — adding/removing a lens file adds/removes its
