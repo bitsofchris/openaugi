@@ -13,6 +13,7 @@ import json
 import logging
 import re
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -267,6 +268,7 @@ class SQLiteStore:
         source: str | None = None,
         after: str | None = None,
         before: str | None = None,
+        after_ingested: str | None = None,
         order_by: str = "block_time",
         limit: int = 100,
         offset: int = 0,
@@ -277,6 +279,15 @@ class SQLiteStore:
         Filters kind/source/after/before in the database — no silent post-hoc
         truncation. Returns (blocks, total_count) where total_count is the full
         result set size before the LIMIT/OFFSET is applied.
+
+        after/before compare against block_time — the content date. block_time
+        may be date-only ("2026-07-12"), which sorts before any same-day
+        timestamp, and an edited block re-arrives keeping its note's old date —
+        so block_time is the wrong axis for "what's new since the last run".
+        after_ingested compares against ingested_at (full UTC timestamp, set at
+        insert) and is the correct filter for ingest-order queues like the
+        review pass. Any ISO-8601 input is accepted; it is normalized to the
+        storage format before comparison.
 
         order_by: 'block_time' (default, for date-range queries) or 'ingested_at'
         (for recency queries). NULLs sort last in both cases.
@@ -301,6 +312,9 @@ class SQLiteStore:
         if before:
             conditions.append("block_time <= ?")
             params.append(before)
+        if after_ingested:
+            conditions.append("ingested_at >= ?")
+            params.append(normalize_utc_timestamp(after_ingested))
         if exclude_path_prefix:
             conditions.append(
                 "COALESCE(json_extract(metadata, '$.source_path'), '') NOT LIKE ? ESCAPE '\\'"
@@ -1162,6 +1176,22 @@ def _normalize_blob(blob: bytes) -> bytes:
 def _escape_like(value: str) -> str:
     """Escape LIKE wildcards so a path prefix matches literally (ESCAPE '\\')."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def normalize_utc_timestamp(ts: str) -> str:
+    """Coerce an ISO-8601 timestamp to the ingested_at storage format.
+
+    ingested_at is stored as "%Y-%m-%dT%H:%M:%S.%fZ" (UTC), but callers hand
+    us whatever isoformat() produced — "+00:00" offsets, other zones, date-only
+    strings — and those don't compare lexicographically against the stored
+    form ("Z" sorts above digits). Parse, convert to UTC, re-emit in the
+    storage format; date-only input becomes that day's midnight UTC. Raises
+    ValueError on unparseable input rather than silently comparing garbage.
+    """
+    parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 # ── Row conversion helpers ─────────────────────────────────────────
