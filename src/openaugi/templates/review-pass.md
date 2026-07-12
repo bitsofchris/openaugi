@@ -231,6 +231,37 @@ Always regenerate `View - Dashboard.md` (same folder):
   "yes, as proposed." A filled answer (checked or not) is a specific
   instruction and takes precedence. **Unchecked + empty = still pending:**
   carry the nomination forward verbatim, anchor and checkbox included.
+
+  **A third answer: "park" — "no strong feelings, not now."** Parked ≠
+  rejected: the underlying blocks stay as they are and the cluster may
+  legitimately re-nominate later. Handling:
+  - If the nomination's subject is an existing note, prefer parking the
+    NOTE: draft a `#status/parked` paste-line (any note can carry it, not
+    just PMOCs — taxonomy widened 2026-07-12). The Dataview query below
+    then handles visibility and fall-away automatically.
+  - Otherwise (cluster-only subjects), move the nomination to the
+    Dashboard's Parked section as one dated line, anchor preserved:
+    `- parked YYYY-MM-DD: <one-line gist> ^nom-...`
+  - **Fall-away:** drop parked ledger lines older than 14 days on
+    regeneration. If the same anchor gets parked a THIRD time, say so on
+    the Dashboard — three parks is a pattern (probably a "no", or a badly
+    framed nomination).
+- **Parked section**: a static heading the Dashboard carries on every
+  regeneration — the "not now" shelf. It contains (1) this Dataview query
+  verbatim, which surfaces recently-touched parked notes and lets ignored
+  ones fall away on their own, and (2) any parked-nomination ledger lines
+  still inside their 14-day window:
+
+  ````
+  ```dataview
+  LIST FROM #status/parked
+  WHERE file.mtime >= date(today) - dur(14 days)
+  SORT file.mtime DESC
+  ```
+  ````
+
+  Parked material stays fully visible to search/retrieval — parking only
+  removes it from active attention, never from the knowledge base.
 - Anything unroutable or confusing, listed honestly.
 - Permanent footer: `*How this works: docs/reference/review-pass.md in the openaugi
   repo · design record: docs/plans/review-pass-v1.md · agent instructions:
