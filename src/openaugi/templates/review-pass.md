@@ -67,6 +67,19 @@ but no description is NOT registered: don't route to it by inference
 **drafted description as a paste-line** — filling the description IS
 registration, so make saying yes cost one paste.
 
+**Registry restraint — registration is for INFERENCE targets only.**
+Register a note when captures from *elsewhere* (dailies, mobile, random
+notes) should land in it automatically. A contained-and-clear note the
+user writes in directly — or routes to explicitly when needed — gains
+nothing from registration; nominating it just bloats the registry and
+the user's yes/no queue. Unregistered ≠ unroutable: `aaa:` and explicit
+links always work on any note. Precedents (both the user's calls):
+Dream Journal registered as routing-target-only because dreams captured
+in OTHER files must find it; Wind Turbine PMOC registration declined
+2026-07-12 — "contained and clear, I route there directly on my own;
+don't bloat the registry." Before nominating a registration, ask: does
+anything actually arrive here from elsewhere by inference?
+
 ## Routing
 
 **Routing ≠ surfacing.** Every block routes (cheap DB tags); views surface
