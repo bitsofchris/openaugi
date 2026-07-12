@@ -12,6 +12,11 @@ something — without reading code or the build history. For "what's next /
 what shipped when," go to [docs/plans/master-plan.md](../plans/master-plan.md)
 instead — that STATUS header is the chronological record; this doc is not.
 
+The design commitments underneath everything here — the capture grammar,
+the truth/index/cache/render layer model, the trust model, promotion —
+live in [core-principles.md](core-principles.md). Read that first if
+you're designing or changing the system rather than just using it.
+
 ## Entry points — where to start
 
 | Context | Start here | What it gives you |
@@ -118,6 +123,7 @@ header — read that first in any new session.
 
 ## Related docs
 
+- [core-principles.md](core-principles.md) — **the skeleton**: capture grammar, truth/index/cache/render, trust model, promotion — the four invariants under everything in this guide (read first when designing, not just using)
 - [master-plan.md](../plans/master-plan.md) — the sequence + STATUS header (start every session here)
 - [lenses.md](lenses.md) — lens spec format, apply/create mechanics, output modes
 - [review-pass.md](review-pass.md) — the write-back loop manual
