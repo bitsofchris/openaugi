@@ -7,6 +7,35 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-12 (Sunday): pass #5 ran, found and fixed the queue's blind
+spot, and the weekly loop closed end-to-end for the first time.**
+(1) **Pass #5** — the queue query returned ZERO blocks while 10 waited:
+`search(after=mark)` compares `block_time`, which is date-only for daily
+notes (sorts before any same-day timestamp) and unchanged on re-ingest
+(the 22:11–22:47 late edits were invisible too). Widened by hand, routed
+6 blocks / 12 routes (producer-writer → Fiction+Content, simplify-OpenAugi
+think block, CQRS↔Contextgraph, niche note per `aaa:`), 6 views + recaps +
+Dashboard regenerated. (2) **The durable fix (`ad111f1`)**:
+`search(after_ingested=...)` — ingest-time filter in all four modes,
+`normalize_utc_timestamp()` reconciles isoformat variants, regression
+tests for both failure modes; template/AGENT/docs now say the queue pulls
+by `after_ingested`, never `after`. 489 green. **MCP server must restart
+to expose the new param before pass #6.** (3) **Weekly reflection ran**
+(skill + Chris's TLDR prompt) → `OpenAugi/Drafts/WK-26-07-12-Reflection.md`;
+nomination queue triaged to zero (positioning-reconcile approved — pass #6
+drafts the top-line paste-line; wind-turbine registration declined —
+"don't bloat the registry"; niche note + 2 promotes parked). (4) **Parked
+is now a first-class state (`10458fa`)**: `#status/parked` widened beyond
+PMOCs (taxonomy updated, Chris's call), Dashboard carries a permanent
+Parked shelf — Dataview over the tag scoped to mtime ≤14 days so ignored
+parks fall away; cluster nominations park as dated ledger lines, third
+park of the same anchor gets called out. Retrieval never filters parked.
+**Left off / next:** pass #6 executes the positioning reconcile; the 10
+registry description paste-lines are STILL unapplied (registry runs on
+AGENT seeds); phone pass + Dashboard-on-phone staleness UI unchanged from
+below; two #human-review research notes (Shusett producer-writer, CQRS
+prior-art) await Chris.
+
 **2026-07-11 (evening): views-as-rendered-queries ADOPTED and its whole
 buildable slice shipped in one day.** The design doc
 ([views-as-rendered-queries.md](views-as-rendered-queries.md)) went
