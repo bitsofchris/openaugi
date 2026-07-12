@@ -292,11 +292,9 @@ materialized file, as §3.3 / question 3 already suggested.
 
 - **The layer model's canonical home is now
   [../reference/core-principles.md](../reference/core-principles.md)**
-  (capture grammar · truth/index/cache/render · trust model · promotion —
-  affirmed with Chris as "the skeleton, lean and correct"). This doc's
-  inline copy is the design-time snapshot; if they ever disagree, the
-  reference doc wins. Also captured there: the governing metric
-  (minutes-of-Chris/week) and lens discipline (usage before spec).
+  (capture grammar · truth/index/cache/render · trust model · promotion).
+  This doc's inline copy is the design-time snapshot; if they ever
+  disagree, the reference doc wins.
 - **Gap found processing pass #3 answers — nominations have no
   deferred state.** Chris answered two cluster-weather nominations
   "no not now" / "leave it alone for now." Under the current contract a
