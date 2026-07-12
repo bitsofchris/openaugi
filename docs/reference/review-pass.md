@@ -188,7 +188,11 @@ Any of these fire a pass; they all converge on the same mechanism:
 
 - **One-time:** the Obsidian setup above.
 - **Weekly:** read `View - Dashboard.md`; answer the gravity nominations
-  (inline note or zzz) — that's the entire review burden.
+  (inline note or zzz) — that's the entire review burden. Besides yes/no,
+  any nomination (or any note, via `#status/parked`) can be **parked** —
+  "no strong feelings, not now." Parked items sit on the Dashboard's
+  Parked shelf and fall away after ~2 weeks untouched; they stay fully
+  searchable, and a real cluster can re-nominate later.
 - **Anytime:** correct a bad route by telling the agent ("that block doesn't
   belong in Meta — it's Content"); the agent fixes it with one `apply_routing`
   decision (`remove` the wrong container, `add` the right one). Use `aaa:` on
