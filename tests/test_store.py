@@ -569,3 +569,121 @@ class TestReviewState:
         state = store.get_review_state()
         assert state["last_run"] == "2026-07-06T12:00:00+00:00"
         assert state["last_summary"] == "persisted"
+
+
+class TestAfterIngested:
+    """The review-pass queue filter — ingest time, not content date.
+
+    Regression coverage for the pass-#5 bug (2026-07-12): date-only
+    block_time sorts before any same-day timestamp, and edited blocks
+    re-ingest keeping their note's old date, so after= (block_time)
+    silently dropped both from the queue.
+    """
+
+    def _seed(self, store: SQLiteStore):
+        store.insert_blocks(
+            [
+                # Captured today as a daily note: date-only block_time,
+                # ingested after the mark.
+                Block(
+                    id="today",
+                    kind="data_block",
+                    content="this morning's capture",
+                    block_time="2026-07-12",
+                    ingested_at="2026-07-12T12:21:52.009852Z",
+                ),
+                # Yesterday's note edited late: re-derived block keeps the
+                # old content date but a fresh ingested_at.
+                Block(
+                    id="reingested",
+                    kind="data_block",
+                    content="edited last night",
+                    block_time="2026-07-11",
+                    ingested_at="2026-07-12T12:21:52.017928Z",
+                ),
+                # Processed by the previous pass — must stay out of the queue.
+                Block(
+                    id="old",
+                    kind="data_block",
+                    content="already routed",
+                    block_time="2026-07-11",
+                    ingested_at="2026-07-11T22:49:05.932347Z",
+                ),
+            ]
+        )
+
+    # The high-water mark as mark_review_complete stores it:
+    # datetime.now(UTC).isoformat() — microseconds, "+00:00" suffix.
+    MARK = "2026-07-12T00:29:50.356550+00:00"
+
+    def test_after_block_time_misses_same_day_date_only(self, store: SQLiteStore):
+        # Documents the bug: the old filter returns nothing for this window.
+        self._seed(store)
+        blocks, total = store.get_blocks_filtered(kind="data_block", after=self.MARK)
+        assert total == 0
+
+    def test_after_ingested_catches_new_and_reingested(self, store: SQLiteStore):
+        self._seed(store)
+        blocks, total = store.get_blocks_filtered(kind="data_block", after_ingested=self.MARK)
+        assert {b.id for b in blocks} == {"today", "reingested"}
+        assert total == 2
+
+    def test_after_ingested_z_suffix_input(self, store: SQLiteStore):
+        self._seed(store)
+        blocks, _ = store.get_blocks_filtered(
+            kind="data_block", after_ingested="2026-07-12T00:29:50Z"
+        )
+        assert {b.id for b in blocks} == {"today", "reingested"}
+
+    def test_after_ingested_combines_with_exclude_prefix(self, store: SQLiteStore):
+        self._seed(store)
+        store.insert_blocks(
+            [
+                Block(
+                    id="derived",
+                    kind="data_block",
+                    content="agent output",
+                    ingested_at="2026-07-12T12:30:00.000000Z",
+                    metadata={"source_path": "OpenAugi/Views/View - X.md"},
+                )
+            ]
+        )
+        blocks, _ = store.get_blocks_filtered(
+            kind="data_block", after_ingested=self.MARK, exclude_path_prefix="OpenAugi/"
+        )
+        assert {b.id for b in blocks} == {"today", "reingested"}
+
+
+class TestNormalizeUtcTimestamp:
+    def test_offset_suffix_to_storage_format(self):
+        from openaugi.store.sqlite import normalize_utc_timestamp
+
+        assert (
+            normalize_utc_timestamp("2026-07-12T00:29:50.356550+00:00")
+            == "2026-07-12T00:29:50.356550Z"
+        )
+
+    def test_date_only_becomes_midnight_utc(self):
+        from openaugi.store.sqlite import normalize_utc_timestamp
+
+        assert normalize_utc_timestamp("2026-07-12") == "2026-07-12T00:00:00.000000Z"
+
+    def test_non_utc_offset_is_converted(self):
+        from openaugi.store.sqlite import normalize_utc_timestamp
+
+        assert (
+            normalize_utc_timestamp("2026-07-12T08:00:00-04:00") == "2026-07-12T12:00:00.000000Z"
+        )
+
+    def test_naive_input_assumed_utc(self):
+        from openaugi.store.sqlite import normalize_utc_timestamp
+
+        assert normalize_utc_timestamp("2026-07-12T05:00:00") == "2026-07-12T05:00:00.000000Z"
+
+    def test_garbage_raises(self):
+        import pytest
+
+        from openaugi.store.sqlite import normalize_utc_timestamp
+
+        with pytest.raises(ValueError):
+            normalize_utc_timestamp("not a timestamp")

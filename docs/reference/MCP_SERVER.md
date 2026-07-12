@@ -112,6 +112,11 @@ search(after="2026-04-05", before="2026-04-12")
 - Tags filtering still happens in Python — `total` reflects pre-tag counts
 - `exclude_path_prefix="OpenAugi/"` — drop blocks by `source_path` prefix at the SQL
   level (keeps derived artifacts out of a review queue); works in every mode
+- `after_ingested=<iso timestamp>` — filter on when the block entered the DB rather
+  than its content date; works in every mode. `after`/`before` compare `block_time`,
+  which is often date-only (`"2026-07-12"` sorts before any same-day timestamp) and is
+  kept when an edited block re-ingests — so ingest-order queues (the review pass,
+  "what's new since X") must use `after_ingested`, not `after`
 - Block summaries include `source_path`, so derived-vs-capture is explicit
 - **Reference grouping**: blocks carrying a `source/*` tag (Readwise, Snipd — set via
   `[vault.source_rules]`) are collapsed into `reference_documents`, one entry per source

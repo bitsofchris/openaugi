@@ -46,7 +46,7 @@ from mcp.types import ToolAnnotations
 from openaugi.config import load_config
 from openaugi.models import get_embedding_model
 from openaugi.pipeline.rerank import rerank as _rerank
-from openaugi.store.sqlite import SQLiteStore
+from openaugi.store.sqlite import SQLiteStore, normalize_utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +119,7 @@ def search(
     tags: list[str] | None = None,
     after: str | None = None,
     before: str | None = None,
+    after_ingested: str | None = None,
     kind: str | None = None,
     source: str | None = None,
     exclude_path_prefix: str | None = None,
@@ -129,7 +130,7 @@ def search(
     - Title: provide 'title' to search note/document titles only (e.g. title="meeting notes")
     - Semantic: provide 'query' for vector similarity search (best for concepts/questions)
     - Keyword: provide 'keyword' for FTS5 full-text search (best for exact terms)
-    - Browse: provide only filters (tags, after, before, kind, source)
+    - Browse: provide only filters (tags, after, before, after_ingested, kind, source)
 
     Do NOT use this to get full block content — use get_block or get_blocks for that.
     For a complete research workflow (search + deduplicate + expand), use get_context instead.
@@ -143,6 +144,13 @@ def search(
     Call again with offset=100 if has_more is true.
     Dates use ISO format: after="2025-01-01", before="2025-06-01".
 
+    after/before filter on block_time — the CONTENT date, which may be
+    date-only and doesn't change when a note is edited. after_ingested
+    filters on when the block entered the DB (full UTC timestamp): use it
+    for "what's new since <timestamp>" queues like the review pass, where
+    it catches same-day date-only blocks and re-ingested edits that
+    after= would silently miss. The two can combine but usually don't.
+
     exclude_path_prefix drops blocks whose source_path starts with the given
     prefix (e.g. exclude_path_prefix="OpenAugi/" keeps derived artifacts out
     of a review queue). Works in every mode.
@@ -152,21 +160,37 @@ def search(
     'reference_documents' — one entry per source document with document_id,
     block_count, and time range. Route the DOCUMENT (apply_routing with
     document_id), never its individual blocks."""
-    if not query and not keyword and not title and not any([tags, after, before, kind, source]):
+    if (
+        not query
+        and not keyword
+        and not title
+        and not any([tags, after, before, after_ingested, kind, source])
+    ):
         return _json(
             {
                 "error": "No search parameters provided.",
                 "hint": "Provide at least one of: query (semantic), keyword (FTS), "
-                "title, or filters (tags, after, before, kind, source). "
+                "title, or filters (tags, after, before, after_ingested, kind, source). "
                 "Example: search(keyword='project plan')",
             }
         )
+
+    # Normalize once so every mode compares in the storage format; a bad
+    # timestamp fails loudly here instead of silently matching nothing.
+    ingested_bound = normalize_utc_timestamp(after_ingested) if after_ingested else None
+
+    def _ingested_too_old(block) -> bool:
+        return ingested_bound is not None and (block.ingested_at or "") < ingested_bound
 
     store = _get_store()
 
     if title:
         results = store.search_fts(f"title:{title}", limit=k + 1)
-        results = [b for b in results if not _path_excluded(b, exclude_path_prefix)]
+        results = [
+            b
+            for b in results
+            if not _path_excluded(b, exclude_path_prefix) and not _ingested_too_old(b)
+        ]
         has_more = len(results) > k
         results = results[:k]
         return _json(
@@ -180,7 +204,11 @@ def search(
 
     if keyword:
         results = store.search_fts(keyword, limit=k + 1)
-        results = [b for b in results if not _path_excluded(b, exclude_path_prefix)]
+        results = [
+            b
+            for b in results
+            if not _path_excluded(b, exclude_path_prefix) and not _ingested_too_old(b)
+        ]
         has_more = len(results) > k
         results = results[:k]
         return _json(
@@ -217,6 +245,8 @@ def search(
                 continue
             if before and (block.block_time or "") > before:
                 continue
+            if _ingested_too_old(block):
+                continue
             if _path_excluded(block, exclude_path_prefix):
                 continue
             summary = _block_summary(block)
@@ -242,6 +272,7 @@ def search(
         source=source,
         after=after,
         before=before,
+        after_ingested=after_ingested,
         limit=k + 1,
         offset=offset,
         exclude_path_prefix=exclude_path_prefix,
@@ -918,8 +949,10 @@ def get_review_state() -> str:
 
     Returns last_run (ISO timestamp of the last completed review pass) and
     last_summary (its one-line summary). Call at the start of a review pass
-    to scope which blocks are new: search(after=last_run). If last_run is
-    null this is the first run — backfill from a sensible date instead.
+    to scope which blocks are new: search(after_ingested=last_run) — filter
+    on ingest time, NOT after=, which compares content dates and misses
+    same-day date-only blocks and re-ingested edits. If last_run is null
+    this is the first run — backfill from a sensible date instead.
     """
     store = _get_store()
     return _json(store.get_review_state())

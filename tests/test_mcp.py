@@ -110,6 +110,32 @@ class TestMCPTools:
         filtered = json.loads(search(keyword="career", exclude_path_prefix=target))
         assert all(b["source_path"] != target for b in filtered["results"])
 
+    def test_search_after_ingested_browse(self, populated_db: Path):
+        from openaugi.mcp.server import search
+        from openaugi.model.block import Block
+
+        store = SQLiteStore(populated_db)
+        store.insert_blocks(
+            [
+                # Same-day date-only capture, ingested after the mark — the
+                # review-pass queue case that after= (block_time) misses.
+                Block(
+                    id="fresh",
+                    kind="data_block",
+                    content="captured after the mark",
+                    block_time="2031-06-01",
+                    ingested_at="2031-06-01T12:00:00.000000Z",
+                ),
+            ]
+        )
+        store.close()
+
+        mark = "2031-06-01T00:30:00.000000+00:00"
+        missed = json.loads(search(after=mark))
+        assert all(b["id"] != "fresh" for b in missed["results"])
+        queued = json.loads(search(after_ingested=mark))
+        assert [b["id"] for b in queued["results"]] == ["fresh"]
+
     def test_browse_groups_reference_documents(self, populated_db: Path):
         from openaugi.mcp.server import search
         from openaugi.model.block import Block

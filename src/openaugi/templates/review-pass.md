@@ -253,9 +253,12 @@ Always regenerate `View - Dashboard.md` (same folder):
 1. `get_review_state()` → `since` = last_run. If null, this is the first
    run: backfill from a sensible recent date (e.g. two weeks back, or the
    date the user gives).
-2. Pull new blocks: `search(after=since, exclude_path_prefix="OpenAugi/")`
+2. Pull new blocks: `search(after_ingested=since, exclude_path_prefix="OpenAugi/")`
    (browse mode, paginate via offset) — the prefix filter keeps derived
-   artifacts out of the queue server-side. Group reference-source blocks by
+   artifacts out of the queue server-side. `after_ingested` filters on when
+   a block entered the DB; do NOT use `after=` here — it compares content
+   dates (often date-only, and unchanged by edits), so it misses same-day
+   captures and re-ingested edited blocks. Group reference-source blocks by
    their `source_path` and handle each reference document as one item. Use
    `recent`/`get_context`/`get_related` for extra context.
 3. Decide routes for every block per the precedence above, then persist the

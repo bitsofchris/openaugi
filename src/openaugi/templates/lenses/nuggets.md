@@ -33,7 +33,8 @@ search. When unsure, skip.
 
 1. **Scope the window.** Check the Dashboard's Nuggets section for the
    last run's date (footer line); scan blocks since then via
-   `search(after=...)` / `recent`, applying the scope above.
+   `search(after_ingested=...)` / `recent`, applying the scope above
+   (ingest time, not `after=` — content dates miss same-day captures).
 2. **Harvest candidates.** Read for stand-alone value, not topical
    relevance. The test: would this sentence be worth reading with NO
    surrounding context? Check the block isn't already promoted (search
