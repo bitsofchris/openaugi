@@ -7,6 +7,33 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-11 (evening): views-as-rendered-queries ADOPTED and its whole
+buildable slice shipped in one day.** The design doc
+([views-as-rendered-queries.md](views-as-rendered-queries.md)) went
+draft → resolutions with Chris → adopted; its ledger tracks every step
+by commit. Shipped: (1) **`apply_routing` is the single route CRUD
+tool** — add/remove per decision, `route_block` deleted, wrong routes
+now actually correctable; (2) **membership = containment ∪ routing** —
+`already_home` no-op, `get_members` unified query, 44 legacy redundant
+edges cleaned; (3) **recap cache** — `recaps` table, `write_recap` /
+`get_view` / `list_views` (a container has a view iff its recap row
+exists — that IS the per-container view bit; Dream Journal needs no
+config); (4) **lens index folded into the Dashboard** (`View - Lenses.md`
+deleted — one entry point); (5) **mobile bridge phase 1**
+(`private-augi-mobile` `5bfe323`): `/views` renders from daemon queries
+under the frozen contract, file parser as fallback, Dashboard stays the
+one materialized file; (6) mobile test-suite timezone fix (TZ pinned —
+385 green there, 479 green here). **Pass #4 ran (evening, light):** 11
+new blocks, 5 routed, wind-turbine PMOC detected → registration
+nomination pending; recaps seeded for all 9 registered containers.
+**Left off / next:** Chris answers 4 nominations + paste-lines; Sunday
+pass #5 (first fully native run); phone pass (mobile TESTING.md — needs
+launchd daemon+bridge first); then Dashboard-on-phone staleness UI,
+`/context-pack` absorption, Obsidian plugin pane, lens convergence.
+Docs refreshed: [core-principles.md](../reference/core-principles.md)
+(the invariants, committed), scratch user-guide.html regenerated
+(`docs/scratch/2026-07-11-session/`).
+
 **2026-07-09 (later): route durability re-decided — similarity matcher
 RIPPED OUT, re-derive contract in (Chris's call).** The CQRS discussion
 landed the right model: the vault is the current-state store for content,
