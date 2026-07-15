@@ -477,6 +477,33 @@ class TestDispatchTask:
         fm, _ = tw.parse_note(new_file.read_text())
         assert fm["status"] == "active"
 
+    def test_anchor_refs_kept_out_of_linked_notes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """[[date#^augi-id]] refs are resolved inline by dispatch — not
+        pullable note titles, so they stay off the Linked notes line."""
+        monkeypatch.setattr(tw, "CONTEXT_DIR", tmp_path / "ctx")
+        calls: dict = {}
+
+        def fake_launch(tmux, claude, session_name, prompt, working_dir=None):
+            calls["prompt"] = prompt
+            return True
+
+        monkeypatch.setattr(tw, "launch_tmux", fake_launch)
+
+        task = tmp_path / "Apply lens.md"
+        task.write_text(
+            "---\nstatus: pending\n---\n# Apply lens\n\n## Context\n\n"
+            "gathered 1 block:\n[[2026-07-14#^augi-aaaa1111]]\nzzz: apply lens nuggets\n"
+            "See also [[Real Note]].\n",
+            encoding="utf-8",
+        )
+
+        assert tw.dispatch_task(task, tmux="/fake/tmux", claude="/fake/claude", repo_paths={})
+        assert "Linked notes" in calls["prompt"]
+        assert "[[Real Note]]" in calls["prompt"]
+        assert "Linked notes (pull via openaugi MCP): [[Real Note]]" in calls["prompt"]
+
     def test_returns_none_when_session_exists(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ):
