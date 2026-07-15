@@ -52,6 +52,21 @@ class TestSplitText:
         # clean_content differs from raw content
         assert "zzz" not in segs[0].clean_content
 
+    def test_zzz_behind_daily_note_timestamp_prefix(self):
+        """The mobile daily-note writer inlined `HH:MM — ` in front of a
+        block's first line (pre-2026-07-15 notes), hiding a leading zzz from
+        dispatch. The pattern tolerates the prefix so historical notes still
+        dispatch."""
+        segs = split_text("# 2026-07-14\n21:42 — zzz: recap my two feature prompts")
+        assert len(segs) == 1
+        assert segs[0].zzz_instructions == ["recap my two feature prompts"]
+        assert "zzz" not in segs[0].clean_content
+
+    def test_plain_timestamp_line_is_not_a_zzz(self):
+        segs = split_text("# 2026-07-14\n21:42 — a plain thought, no directive")
+        assert segs[0].zzz_instructions == []
+        assert "21:42 — a plain thought" in segs[0].clean_content
+
     def test_date_flows_down_sections(self):
         text = "# 2026-04-08 Monday\nmorning\n## Evening\nsomething\n# 2026-04-09 Tuesday\nnext"
         segs = split_text(text)
