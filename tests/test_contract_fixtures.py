@@ -161,12 +161,24 @@ def test_capture_daily_note_ingests_to_expected_blocks():
     content = block.content or ""
 
     anchors = ANCHOR_RE.findall(content)
-    assert anchors == ["^augi-a1b2c3d4", "^augi-e5f6a7b8", "^augi-c9d0e1f2", "^augi-b3c4d5e6"]
+    assert anchors == [
+        "^augi-a1b2c3d4",
+        "^augi-e5f6a7b8",
+        "^augi-c9d0e1f2",
+        "^augi-b3c4d5e6",
+        "^augi-d7e8f9a0",
+    ]
 
     # Inline tags become block tags; the `zzz:` lens line is extracted to a
     # dispatch instruction (and stripped from content); `aaa:` stays in the text.
+    # The 16:45 entry pins the grammar-first shape: a block that OPENS with a
+    # zzz gets its timestamp on its own line (mobile writer, 2026-07-15) so
+    # the token stays at line start and dispatch fires.
     assert block.tags == ["idea", "area/openaugi"]
-    assert block.metadata.get("zzz_instructions") == ["apply lens distill"]
+    assert block.metadata.get("zzz_instructions") == [
+        "apply lens distill",
+        "recap my open questions from today",
+    ]
     assert "aaa: link this to OpenAugi Main" in content
     assert "zzz:" not in content
     # The `# 2026-07-08` header date drives the block timestamp.

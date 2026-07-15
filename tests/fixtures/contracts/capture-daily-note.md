@@ -14,3 +14,7 @@ aaa: link this to OpenAugi Main
 14:20 — try a saved question on my recent notes
 zzz: apply lens distill
 ^augi-b3c4d5e6
+
+16:45 —
+zzz: recap my open questions from today
+^augi-d7e8f9a0
