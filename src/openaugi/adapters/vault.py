@@ -84,7 +84,7 @@ def parse_vault(
 
     Returns (blocks, links) ready to insert into the store.
     """
-    vault = Path(vault_path)
+    vault = Path(vault_path).expanduser()
     if not vault.is_dir():
         raise FileNotFoundError(f"Vault path does not exist: {vault}")
     excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
@@ -147,7 +147,7 @@ def parse_vault_incremental(
         - current_hashes: {relative_path: hash} for all current files
         - deleted_paths: relative paths no longer on disk
     """
-    vault = Path(vault_path)
+    vault = Path(vault_path).expanduser()
     if not vault.is_dir():
         raise FileNotFoundError(f"Vault path does not exist: {vault}")
     excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
