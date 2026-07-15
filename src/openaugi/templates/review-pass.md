@@ -297,29 +297,51 @@ Always regenerate `View - Dashboard.md` (same folder):
 1. `get_review_state()` → `since` = last_run. If null, this is the first
    run: backfill from a sensible recent date (e.g. two weeks back, or the
    date the user gives).
-2. Pull new blocks: `search(after_ingested=since, exclude_path_prefix="OpenAugi/")`
-   (browse mode, paginate via offset) — the prefix filter keeps derived
-   artifacts out of the queue server-side. `after_ingested` filters on when
-   a block entered the DB; do NOT use `after=` here — it compares content
-   dates (often date-only, and unchanged by edits), so it misses same-day
-   captures and re-ingested edited blocks. Group reference-source blocks by
-   their `source_path` and handle each reference document as one item. Use
-   `recent`/`get_context`/`get_related` for extra context.
-3. Decide routes for every block per the precedence above, then persist the
-   whole batch with `apply_routing(decisions=[{block_id, add, remove,
-   augi_tags}, ...])` — one call, not a per-block loop. `remove` un-routes:
-   when the user says a block was routed wrong, fix it with one decision
-   carrying both `add` (right container) and `remove` (wrong one).
-4. Regenerate views for containers that received blocks (`overwrite=True`).
-   Untouched containers keep their old view. **Two refresh tiers — don't
-   re-derive what didn't change:**
+2. **Pull the new-blocks batch — one query, read by every step below.**
+   `search(after_ingested=since, exclude_path_prefix="OpenAugi/")` (browse
+   mode, paginate via offset) — the prefix filter keeps derived artifacts
+   out of the queue server-side. `after_ingested` filters on when a block
+   entered the DB; do NOT use `after=` here — it compares content dates
+   (often date-only, and unchanged by edits), so it misses same-day
+   captures and re-ingested edited blocks. This is the full pass scope;
+   steps 3 and 4 both read from this one batch — don't re-query. Group
+   reference-source blocks by their `source_path` and handle each
+   reference document as one item. Use `recent`/`get_context`/`get_related`
+   for extra context.
+
+   **Partition the batch deterministically, before deciding anything:**
+   - **Home blocks** — any block whose `source_path` matches a registered
+     container note's own file (check against the registry from the
+     Container registry section above). These are members by
+     construction — `apply_routing` would return them in `already_home` if
+     you tried. No routing decision needed for these.
+   - **Routable blocks** — everything else. These get a routing decision
+     per the precedence rules below.
+3. Decide routes for every **routable** block per the precedence above,
+   then persist the whole batch with `apply_routing(decisions=[{block_id,
+   add, remove, augi_tags}, ...])` — one call, not a per-block loop.
+   `remove` un-routes: when the user says a block was routed wrong, fix it
+   with one decision carrying both `add` (right container) and `remove`
+   (wrong one).
+4. **Compute touched containers, then regenerate their views
+   (`overwrite=True`).**
+   `touched = {containers that appear as an "add" target in step 3's
+   apply_routing decisions} ∪ {registered containers whose own note
+   appears as a source_path among step 2's home blocks}`.
+   A container touched only by containment — nothing routed to it, but a
+   new block landed straight in its own journal — still needs its recap
+   checked. Home-block content is often *higher* signal than routed
+   life-log (LEFT OFF edits, definition-of-done, direct season-log
+   entries), not lower — don't skip a container just because nothing was
+   routed there this pass. Untouched containers keep their old view.
+   **Two refresh tiers — don't re-derive what didn't change:**
    - **Log section: always refresh** (mechanical render of routed_to links —
      no LLM judgment, effectively free).
    - **Recap: refresh only when it would change** — salient new blocks
-     arrived, drift appeared, or the user asked. A handful of life-log
-     blocks routing through does NOT warrant re-synthesizing a recap; carry
-     the old recap forward verbatim and only update the log. When in doubt,
-     keep the old recap.
+     arrived (routed OR home), drift appeared, or the user asked. A
+     handful of life-log blocks routing through does NOT warrant
+     re-synthesizing a recap; carry the old recap forward verbatim and
+     only update the log. When in doubt, keep the old recap.
    **Regeneration is a merge, not a reset:** read the existing view first —
    it is the prior head state. Carry forward what's still true (the TLDR
    evolves; LEFT OFF advances or stands), integrate the new blocks, drop
