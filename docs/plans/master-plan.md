@@ -7,6 +7,29 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-15: mobile's curation layer (bronze demote + distill, shipped
+there 2026-07-14) honored on this side.** Three pieces:
+(1) **`#layer/bronze` down-weighting** — new `[layers] bronze_weight`
+config (default 0.5); `get_context` multiplies bronze candidates' scores
+before MMR rerank, and `purpose=...` (proactive surfaces) excludes bronze
+outright — demoted thoughts never resurface unprompted. Store gained
+`get_tags_for_ids` (lightweight tag lookup, no content load). Review-pass
+prompt (repo template + vault copy) gained the rule: bronze still routes,
+but never feeds view heads, recaps, Gravity, or nominations. Docs:
+MCP_SERVER.md §bronze layer. (2) **Anchor-ref resolution at dispatch** —
+mobile distill-with-lens writes `gathered N blocks:\n[[YYYY-MM-DD#^augi-id]]…\n
+zzz: apply lens <name>`; the zzz dispatch hook now resolves each ref from
+`OpenAugi/Capture/<date>.md` (any `<date>.md` as fallback; dangling refs
+marked) and inlines the content into the task file's `## Context` as a
+`### Referenced blocks` subsection — the M3b "Distill selection" contract:
+the gathered blocks ARE the lens context. The task watcher keeps anchor
+refs off the "Linked notes" prompt line. (3) **Context-pack taxonomy is
+curated-only when `My Taxonomy.md` exists** — DB tags (40 incl. junk) are
+now only the no-note fallback; tidying the one note tidies every surface.
+**MCP server must restart to pick up the bronze weighting before it
+applies live.** Left off / next: unchanged from 07-12 below (pass #6
+positioning reconcile, registry paste-lines, phone pass).
+
 **2026-07-12 (Sunday): pass #5 ran, found and fixed the queue's blind
 spot, and the weekly loop closed end-to-end for the first time.**
 (1) **Pass #5** — the queue query returned ZERO blocks while 10 waited:
