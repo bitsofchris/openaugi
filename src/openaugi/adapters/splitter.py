@@ -58,8 +58,10 @@ FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 QQQ_PATTERN = re.compile(r"^[ \t]*[qQ]{3}[ \t]*$", re.MULTILINE)
 DATAVIEW_BLOCK_PATTERN = re.compile(r"```dataview\b.*?```", re.DOTALL | re.IGNORECASE)
 # Per-block agent instructions — lines starting with `zzz` (case-insensitive),
-# optionally followed by a colon.
-ZZZ_PATTERN = re.compile(r"^[ \t]*[zZ]{3}\b[:\s]*(.*?)\s*$", re.MULTILINE)
+# optionally followed by a colon. Also tolerates the mobile daily-note writer's
+# inlined `HH:MM — ` timestamp prefix (notes written before 2026-07-15 put it
+# in front of a block's first line, hiding a leading zzz from dispatch).
+ZZZ_PATTERN = re.compile(r"^[ \t]*(?:\d{1,2}:\d{2} — )?[zZ]{3}\b[:\s]*(.*?)\s*$", re.MULTILINE)
 
 
 # ── Public types ──────────────────────────────────────────────────
