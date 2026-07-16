@@ -34,6 +34,7 @@ import functools
 import json
 import logging
 import os
+import re
 from datetime import UTC
 from pathlib import Path
 from typing import Literal
@@ -51,6 +52,32 @@ from openaugi.store.sqlite import SQLiteStore, normalize_utc_timestamp
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP("openaugi")
+
+# User-demoted scaffolding (mobile curation demote). Stored without the `#`,
+# like every parsed tag. See [layers] bronze_weight in config.py.
+BRONZE_TAG = "layer/bronze"
+
+# A capture daily-note entry ends with its Obsidian block anchor on its own
+# line (mobile writer contract, tests/fixtures/contracts/capture-daily-note.md).
+_ANCHOR_LINE_RE = re.compile(r"^\^augi-[A-Za-z0-9]+\s*$", re.MULTILINE)
+_BRONZE_INLINE_RE = re.compile(r"#layer/bronze(?![\w/-])")
+
+
+def _all_entries_bronze(block) -> bool:
+    """Whether the block's content is bronze through and through.
+
+    Capture daily notes ingest as one document-granularity block, so a single
+    demoted entry puts #layer/bronze in the block's tags while the rest of the
+    day is full-weight thinking. Only treat the block as bronze when every
+    anchored entry carries the tag inline; blocks without anchors (ordinary
+    notes) are bronze by tag alone.
+    """
+    parts = [p.strip() for p in _ANCHOR_LINE_RE.split(block.content or "")]
+    parts = [p for p in parts if p]
+    if len(parts) <= 1:
+        return True
+    return all(_BRONZE_INLINE_RE.search(p) for p in parts)
+
 
 # ── State (initialized lazily) ─────────────────────────────────────
 
@@ -493,7 +520,11 @@ def get_context(
     - purpose: optional salience gate for proactive surfaces (e.g. 'resurface').
       Applies the min-score from config [salience] and drops results below it —
       scores themselves are unchanged. Unknown purpose or no config key = no gate.
-      Regular research calls should omit this."""
+      Regular research calls should omit this.
+
+    Blocks tagged #layer/bronze (user-demoted scaffolding) are down-weighted by
+    config [layers] bronze_weight before reranking, and excluded entirely when
+    purpose is set — demoted thoughts never resurface proactively."""
     store = _get_store()
     config = load_config()
     retrieval = config.get("retrieval", {})
@@ -528,6 +559,30 @@ def get_context(
 
     all_ids = list(candidate_scores.keys())
 
+    # Bronze layer — #layer/bronze marks user-demoted scaffolding (mobile
+    # curation). Kept in the DB (raw data is truth) but down-weighted here so
+    # full-weight thinking outranks it; proactive surfaces (purpose=...)
+    # exclude it outright below, like the source/* firewall.
+    raw_weight = config.get("layers", {}).get("bronze_weight", 1.0)
+    bronze_weight = (
+        float(raw_weight)
+        if isinstance(raw_weight, int | float) and not isinstance(raw_weight, bool)
+        else 1.0
+    )
+    bronze_ids: set[str] = set()
+    if purpose is not None or bronze_weight < 1.0:
+        tags_map = store.get_tags_for_ids(all_ids)
+        tagged = [bid for bid, tags in tags_map.items() if BRONZE_TAG in tags]
+        # Capture daily notes ingest as ONE document-granularity block, so one
+        # demoted entry would stamp the tag on a whole day of good thinking —
+        # confirm against content: bronze only if EVERY entry carries the tag.
+        if tagged:
+            tagged_blocks = store.get_blocks_by_ids(tagged)
+            bronze_ids = {bid for bid, b in tagged_blocks.items() if _all_entries_bronze(b)}
+    if bronze_weight < 1.0:
+        for bid in bronze_ids:
+            candidate_scores[bid] = round(candidate_scores[bid] * bronze_weight, 4)
+
     # Batch-fetch embeddings for all candidates (single query, no full block load)
     emb_map = store.get_embeddings_for_ids(all_ids)
 
@@ -550,9 +605,11 @@ def get_context(
 
     # Salience gate — purpose-based min-score policy owned here, not by callers
     # (mobile resurfacing today, push notifications later). Drops low-salience
-    # results after reranking; the scores themselves are untouched.
+    # results after reranking; the scores themselves are untouched. Proactive
+    # surfaces never resurface bronze: the user already demoted it.
     min_score: float | None = None
     if purpose is not None:
+        final_ids = [bid for bid in final_ids if bid not in bronze_ids]
         threshold = config.get("salience", {}).get(purpose)
         if isinstance(threshold, int | float) and not isinstance(threshold, bool):
             min_score = float(threshold)

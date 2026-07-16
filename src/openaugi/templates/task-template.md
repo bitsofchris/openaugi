@@ -12,7 +12,12 @@ source_note: "[[Journal 2026-04-09]]"
 
 <!-- The source block content, verbatim. This is what the user wrote that
 triggered the task. The remote agent reads this to understand the trigger.
-Keep it as-is — do not paraphrase. -->
+Keep it as-is — do not paraphrase.
+
+If the block carries [[YYYY-MM-DD#^augi-<id8>]] anchor refs (mobile
+distill-with-lens), the dispatch hook appends a `### Referenced blocks`
+subsection here with each ref's resolved content — the gathered blocks
+ARE the context the lens runs over (dangling refs show `(unresolved)`). -->
 
 Need to fix the README onboarding flow before Thursday — users are getting
 stuck on the initial install step.

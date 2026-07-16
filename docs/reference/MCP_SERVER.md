@@ -211,6 +211,34 @@ push = 0.15       # reserved — push notifications need a stricter gate (no con
 - When `purpose` is passed, the response carries a `salience: {purpose, min_score}`
   field so callers can see which gate ran.
 
+#### The bronze layer (`#layer/bronze` down-weighting)
+
+Mobile curation (2026-07-14, `private-augi-mobile` docs/systems/curation.md) lets the
+user demote a block to scaffolding by tagging it `#layer/bronze` — a tag, not a move,
+so ingest keeps the block untouched (raw data is truth). `get_context` honors the
+demotion the same way the `source/*` firewall handles third-party material:
+
+```toml
+[layers]
+bronze_weight = 0.5  # retrieval-score multiplier for #layer/bronze blocks; 1.0 disables
+```
+
+- Candidate scores for bronze blocks are multiplied by `bronze_weight` *before*
+  reranking, so full-weight thinking outranks demoted scaffolding but bronze is
+  still reachable by a direct query.
+- When `purpose` is set (proactive surfaces: resurfacing, push), bronze blocks are
+  excluded outright regardless of score — the user already demoted them; they never
+  resurface unprompted.
+- **Granularity guard:** capture daily notes ingest as ONE document-granularity
+  block, so a single demoted entry stamps the tag on a whole day of good thinking.
+  A tagged block only counts as bronze if *every* anchored entry (`^augi-*`) carries
+  `#layer/bronze` inline; blocks without anchors are bronze by tag alone. Erring
+  toward full weight is deliberate — wrongly muting good thinking costs trust,
+  under-dimming scaffolding costs nothing.
+- Promote = the user removes the tag; the next ingest of the file restores full weight.
+- Review-pass policy (route bronze, never nominate or feature it) lives in the
+  agent prompt: `OpenAugi/AGENT/review-pass.md` / `src/openaugi/templates/review-pass.md`.
+
 ### Write tools
 
 | Tool | Purpose |

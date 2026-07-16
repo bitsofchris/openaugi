@@ -53,6 +53,13 @@ DEFAULT_CONFIG = {
         "resurface": 0.06,  # in-app resurfacing (mobile bridge)
         "push": 0.15,  # reserved: push notifications need a stricter gate (no consumer yet)
     },
+    "layers": {
+        # #layer/bronze marks user-demoted scaffolding (mobile curation demote).
+        # Bronze blocks stay ingested — raw data is truth — but get_context
+        # multiplies their retrieval score by this weight, and proactive
+        # surfaces (purpose=...) exclude them outright. 1.0 disables.
+        "bronze_weight": 0.5,
+    },
 }
 
 

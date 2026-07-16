@@ -11,8 +11,8 @@ the phone at `GET /context-pack`. The shape is pinned by the mobile repo's
 Extra keys (`generatedAt`) are additive-safe for the TS consumer.
 
 Sources, in trust order:
-- taxonomy: curated inline tags from `OpenAugi/AGENT/My Taxonomy.md`,
-  then top-used DB tags appended (capped) — curation first, usage second.
+- taxonomy: curated inline tags from `OpenAugi/AGENT/My Taxonomy.md` —
+  authoritative when the note exists; top-used DB tags only as fallback.
 - recentConcepts: route targets (AMOC/PMOC containers) by most recent
   routing activity — this is what the DB knows that a vault glob doesn't.
 - noteTitles: containers first, then documents by recency (capped).
@@ -155,19 +155,23 @@ def build_context_pack(store: SQLiteStore, vault_path: str | Path) -> dict:
     """Assemble the ContextPack dict from the DB + curated vault notes."""
     vault = Path(vault_path)
 
-    # Taxonomy: curated note first, then top-used DB tags not already listed.
-    taxonomy = _parse_taxonomy_note(vault)
-    seen_tags = set(taxonomy)
-    for tag in store.get_tag_details(limit=MAX_TAXONOMY):
-        if len(taxonomy) >= MAX_TAXONOMY:
-            break
-        name = tag.get("tag_name") or ""
-        if not name:
-            continue
-        hashed = name if name.startswith("#") else f"#{name}"
-        if hashed not in seen_tags:
-            taxonomy.append(hashed)
-            seen_tags.add(hashed)
+    # Taxonomy: the curated note is authoritative when it exists — tidying
+    # that one note tidies every surface. Top-used DB tags are only the
+    # fallback for vaults without a curated note; the DB set includes every
+    # tag ever typed, junk included.
+    taxonomy = _parse_taxonomy_note(vault)[:MAX_TAXONOMY]
+    if not taxonomy:
+        seen_tags: set[str] = set()
+        for tag in store.get_tag_details(limit=MAX_TAXONOMY):
+            if len(taxonomy) >= MAX_TAXONOMY:
+                break
+            name = tag.get("tag_name") or ""
+            if not name:
+                continue
+            hashed = name if name.startswith("#") else f"#{name}"
+            if hashed not in seen_tags:
+                taxonomy.append(hashed)
+                seen_tags.add(hashed)
 
     # Recent concepts: containers by most recent routing activity.
     containers = store.get_recent_route_targets(limit=MAX_RECENT_CONCEPTS)

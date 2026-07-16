@@ -87,6 +87,13 @@ selectively. A "played fifa, pool with kids" life-log block routes to
 `area/self` but does not appear in a view head — salience is decided at
 view-generation time, not routing time.
 
+**Bronze is scaffolding.** `#layer/bronze` = the user demoted the block
+(mobile curation demote/distill). It stays ingested — raw data is truth —
+and still routes like anything else, but it carries no signal: never
+feature it in a view head or recap, never count it toward Gravity
+clusters, and never build a nomination on it. Promote = the user removes
+the tag. (Retrieval already down-weights it; see `[layers]` in config.)
+
 Precedence (highest wins; a block may route to multiple containers):
 
 1. **`aaa:` instruction** in the block — obey it.

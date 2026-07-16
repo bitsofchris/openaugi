@@ -13,7 +13,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from openaugi.model.block import Block
-from openaugi.pipeline.dispatch import build_task_file, dispatch_zzz_blocks
+from openaugi.pipeline.dispatch import (
+    build_task_file,
+    dispatch_zzz_blocks,
+    resolve_anchor_refs,
+)
 
 
 def _make_block(
@@ -128,6 +132,124 @@ class TestDispatchZzzBlocks:
         written = dispatch_zzz_blocks(blocks, vault)
 
         assert len(written) == 2
+
+
+def _capture_note(vault: Path, date: str, entries: dict[str, str]) -> Path:
+    """Write a mobile-style daily note: `HH:MM — text` entries + anchor lines."""
+    note = vault / "OpenAugi" / "Capture" / f"{date}.md"
+    note.parent.mkdir(parents=True, exist_ok=True)
+    parts = [f"# {date}"]
+    for anchor, text in entries.items():
+        parts.append(f"09:15 — {text}\n^{anchor}")
+    note.write_text("\n\n".join(parts) + "\n")
+    return note
+
+
+LENS_CONTENT = (
+    "gathered 2 blocks:\n"
+    "[[2026-07-14#^augi-aaaa1111]] [[2026-07-14#^augi-bbbb2222]]\n"
+    "zzz: apply lens nuggets"
+)
+
+
+class TestAnchorRefResolution:
+    def test_resolves_refs_from_capture_daily_note(self, tmp_path: Path):
+        vault = tmp_path / "vault"
+        _capture_note(
+            vault,
+            "2026-07-14",
+            {"augi-aaaa1111": "first gathered thought", "augi-bbbb2222": "second thought"},
+        )
+
+        resolved = resolve_anchor_refs(LENS_CONTENT, vault)
+
+        assert resolved == [
+            ("[[2026-07-14#^augi-aaaa1111]]", "09:15 — first gathered thought"),
+            ("[[2026-07-14#^augi-bbbb2222]]", "09:15 — second thought"),
+        ]
+
+    def test_multiline_entry_resolved_whole(self, tmp_path: Path):
+        vault = tmp_path / "vault"
+        note = vault / "OpenAugi" / "Capture" / "2026-07-14.md"
+        note.parent.mkdir(parents=True)
+        note.write_text(
+            "# 2026-07-14\n\n09:15 — line one\nline two\n^augi-aaaa1111\n",
+        )
+
+        resolved = resolve_anchor_refs("[[2026-07-14#^augi-aaaa1111]]", vault)
+
+        assert resolved == [("[[2026-07-14#^augi-aaaa1111]]", "09:15 — line one\nline two")]
+
+    def test_dangling_ref_is_none(self, tmp_path: Path):
+        vault = tmp_path / "vault"
+        vault.mkdir()
+
+        resolved = resolve_anchor_refs("[[2026-07-14#^augi-gone0000]]", vault)
+
+        assert resolved == [("[[2026-07-14#^augi-gone0000]]", None)]
+
+    def test_duplicate_refs_resolved_once(self, tmp_path: Path):
+        vault = tmp_path / "vault"
+        _capture_note(vault, "2026-07-14", {"augi-aaaa1111": "thought"})
+        content = "[[2026-07-14#^augi-aaaa1111]] [[2026-07-14#^augi-aaaa1111]]"
+
+        resolved = resolve_anchor_refs(content, vault)
+
+        assert len(resolved) == 1
+
+    def test_falls_back_to_daily_note_outside_capture_folder(self, tmp_path: Path):
+        vault = tmp_path / "vault"
+        note = vault / "Daily" / "2026-07-14.md"
+        note.parent.mkdir(parents=True)
+        note.write_text("# 2026-07-14\n\nsome thought\n^augi-aaaa1111\n")
+
+        resolved = resolve_anchor_refs("[[2026-07-14#^augi-aaaa1111]]", vault)
+
+        assert resolved == [("[[2026-07-14#^augi-aaaa1111]]", "some thought")]
+
+    def test_build_task_file_inlines_referenced_blocks(self, tmp_path: Path):
+        vault = tmp_path / "vault"
+        _capture_note(
+            vault,
+            "2026-07-14",
+            {"augi-aaaa1111": "first gathered thought", "augi-bbbb2222": "second thought"},
+        )
+        block = _make_block("a" * 16, LENS_CONTENT, zzz=["apply lens nuggets"])
+
+        result = build_task_file(block, vault_path=vault)
+
+        assert "### Referenced blocks" in result
+        assert "first gathered thought" in result
+        assert "second thought" in result
+        # Resolved context lands in ## Context, before ## User instruction
+        assert result.index("first gathered thought") < result.index("## User instruction")
+
+    def test_build_task_file_marks_unresolved_refs(self, tmp_path: Path):
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        block = _make_block("a" * 16, LENS_CONTENT, zzz=["apply lens nuggets"])
+
+        result = build_task_file(block, vault_path=vault)
+
+        assert "[[2026-07-14#^augi-aaaa1111]]: (unresolved)" in result
+
+    def test_build_task_file_without_refs_unchanged(self, tmp_path: Path):
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        block = _make_block("a" * 16, "plain content", zzz=["do this"])
+
+        assert "### Referenced blocks" not in build_task_file(block, vault_path=vault)
+
+    def test_dispatch_writes_resolved_context(self, tmp_path: Path):
+        vault = tmp_path / "vault"
+        _capture_note(vault, "2026-07-14", {"augi-aaaa1111": "the gathered idea"})
+        content = "gathered 1 block:\n[[2026-07-14#^augi-aaaa1111]]\nzzz: apply lens nuggets"
+        blocks = [_make_block("a" * 16, content, zzz=["apply lens nuggets"])]
+
+        written = dispatch_zzz_blocks(blocks, vault)
+
+        assert len(written) == 1
+        assert "the gathered idea" in written[0].read_text()
 
 
 class TestReviewCLI:

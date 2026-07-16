@@ -103,14 +103,15 @@ class TestBuildContextPack:
         assert "#todo" in pack["taxonomy"]
         assert "#area/openaugi" in pack["taxonomy"]
 
-    def test_taxonomy_note_comes_first(self, populated: SQLiteStore, tmp_path: Path):
+    def test_taxonomy_note_is_authoritative(self, populated: SQLiteStore, tmp_path: Path):
         agent_dir = tmp_path / "OpenAugi" / "AGENT"
         agent_dir.mkdir(parents=True)
         (agent_dir / "My Taxonomy.md").write_text("Facets: #area/content #question and #todo.")
         pack = build_context_pack(populated, tmp_path)
-        assert pack["taxonomy"][:3] == ["#area/content", "#question", "#todo"]
-        # DB tags not in the note are appended, not lost
-        assert "#area/openaugi" in pack["taxonomy"]
+        assert pack["taxonomy"] == ["#area/content", "#question", "#todo"]
+        # DB tags NOT in the curated note stay out — tidying the note tidies
+        # every surface; the DB set is only the no-note fallback.
+        assert "#area/openaugi" not in pack["taxonomy"]
 
     def test_taxonomy_note_backticked_tags(self, populated: SQLiteStore, tmp_path: Path):
         # The real taxonomy note writes tags in table cells as `#status/active`.
