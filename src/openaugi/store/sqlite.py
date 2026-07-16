@@ -752,6 +752,28 @@ class SQLiteStore:
         ).fetchall()
         return {row[0]: row[1] for row in rows}
 
+    def get_tags_for_ids(self, block_ids: list[str]) -> dict[str, list[str]]:
+        """Fetch tags (user tags + augi_tags) for a list of block IDs.
+
+        Returns a dict {block_id: combined_tag_list}. Lightweight — no
+        content or embedding load; use when only tag membership matters
+        (e.g. the #layer/bronze down-weighting in get_context).
+        """
+        if not block_ids:
+            return {}
+        placeholders = ",".join("?" * len(block_ids))
+        rows = self.conn.execute(
+            f"""SELECT id, tags, json_extract(metadata, '$.augi_tags')
+                FROM blocks WHERE id IN ({placeholders})""",
+            block_ids,
+        ).fetchall()
+        result: dict[str, list[str]] = {}
+        for block_id, tags_json, augi_json in rows:
+            tags = json.loads(tags_json) if tags_json else []
+            augi = json.loads(augi_json) if augi_json else []
+            result[block_id] = tags + augi
+        return result
+
     def reset_embeddings(self, kind: str = "data_block") -> int:
         """NULL out embeddings for all blocks of the given kind.
 

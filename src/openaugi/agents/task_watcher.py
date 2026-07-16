@@ -492,7 +492,10 @@ def dispatch_task(
 
     text = new_path.read_text()
     fm, body = parse_note(text)
-    links = extract_wiki_links(body)
+    # Capture anchor refs ([[date#^augi-id]]) are already resolved inline by
+    # the zzz dispatch hook — not pullable note titles, so keep them out of
+    # the "Linked notes" prompt line.
+    links = [lnk for lnk in extract_wiki_links(body) if "#^augi-" not in lnk]
 
     # Resolve the augi-agent skill file
     skill_file = None

@@ -370,6 +370,110 @@ class TestMCPTools:
         assert result["salience"]["min_score"] == 3.0
         assert result["direct_results"] == []
 
+    def _insert_bronze_pair(self, populated_db: Path) -> None:
+        """Two FTS-matching blocks on a distinctive keyword; one bronze."""
+        from openaugi.model.block import Block
+
+        store = SQLiteStore(populated_db)
+        store.insert_blocks(
+            [
+                Block(
+                    id="silver1",
+                    kind="data_block",
+                    content="quokka research still full weight",
+                    block_time="2031-01-01",
+                ),
+                Block(
+                    id="bronze1",
+                    kind="data_block",
+                    content="quokka research demoted scaffolding #layer/bronze",
+                    block_time="2031-01-02",
+                    tags=["layer/bronze"],
+                ),
+            ]
+        )
+        store.close()
+
+    def test_get_context_downweights_bronze(self, populated_db: Path):
+        """#layer/bronze blocks score bronze_weight × normal in retrieval."""
+        from openaugi.config import DEFAULT_CONFIG
+        from openaugi.mcp.server import get_context
+
+        assert DEFAULT_CONFIG["layers"]["bronze_weight"] == 0.5
+
+        self._insert_bronze_pair(populated_db)
+        result = json.loads(get_context("quokka research", expand=False))
+        scores = {r["id"]: r["score"] for r in result["direct_results"]}
+        assert scores["silver1"] == 1.0
+        assert scores["bronze1"] == 0.5
+
+    def test_get_context_purpose_excludes_bronze(self, populated_db: Path, monkeypatch):
+        """Proactive surfaces (purpose=...) never return bronze, even above the gate."""
+        import openaugi.mcp.server as srv
+        from openaugi.mcp.server import get_context
+
+        self._insert_bronze_pair(populated_db)
+        monkeypatch.setattr(srv, "load_config", lambda: _config_with({"resurface": 0.1}))
+        result = json.loads(get_context("quokka research", expand=False, purpose="resurface"))
+        ids = [r["id"] for r in result["direct_results"]]
+        assert "silver1" in ids
+        assert "bronze1" not in ids  # 0.5 clears the 0.1 gate — excluded by tag, not score
+
+    def test_mixed_capture_day_block_keeps_full_weight(self, populated_db: Path):
+        """A day-note block (document granularity) with one demoted entry is NOT
+        bronze — only a block whose every anchored entry carries the tag is."""
+        from openaugi.model.block import Block
+
+        store = SQLiteStore(populated_db)
+        store.insert_blocks(
+            [
+                Block(
+                    id="mixedday",
+                    kind="data_block",
+                    content=(
+                        "# 2026-07-14\n\n"
+                        "09:15 — wombat scaffolding thought #layer/bronze\n^augi-aaaa1111\n\n"
+                        "10:30 — wombat keeper insight, full weight\n^augi-bbbb2222\n"
+                    ),
+                    block_time="2026-07-14",
+                    tags=["layer/bronze"],
+                ),
+                Block(
+                    id="allbronze",
+                    kind="data_block",
+                    content=(
+                        "# 2026-07-13\n\n"
+                        "09:15 — wombat exhaust one #layer/bronze\n^augi-cccc3333\n\n"
+                        "09:20 — wombat exhaust two #layer/bronze\n^augi-dddd4444\n"
+                    ),
+                    block_time="2026-07-13",
+                    tags=["layer/bronze"],
+                ),
+            ]
+        )
+        store.close()
+
+        from openaugi.mcp.server import get_context
+
+        result = json.loads(get_context("wombat", expand=False))
+        scores = {r["id"]: r["score"] for r in result["direct_results"]}
+        assert scores["mixedday"] == 1.0  # one good entry keeps the day full weight
+        assert scores["allbronze"] == 0.5  # fully demoted day is bronze
+
+    def test_get_context_bronze_weight_one_disables(self, populated_db: Path, monkeypatch):
+        """[layers] bronze_weight = 1.0 turns the down-weighting off."""
+        import openaugi.mcp.server as srv
+        from openaugi.config import DEFAULT_CONFIG, _merge
+        from openaugi.mcp.server import get_context
+
+        self._insert_bronze_pair(populated_db)
+        monkeypatch.setattr(
+            srv, "load_config", lambda: _merge(DEFAULT_CONFIG, {"layers": {"bronze_weight": 1.0}})
+        )
+        result = json.loads(get_context("quokka research", expand=False))
+        scores = {r["id"]: r["score"] for r in result["direct_results"]}
+        assert scores["bronze1"] == 1.0
+
     def test_recent(self):
         from openaugi.mcp.server import recent
 
