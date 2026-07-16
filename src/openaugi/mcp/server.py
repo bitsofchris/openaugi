@@ -130,6 +130,7 @@ def search(
     kind: str | None = None,
     source: str | None = None,
     exclude_path_prefix: str | None = None,
+    has_task: bool | None = None,
 ) -> str:
     """Search the knowledge base. Returns block summaries (not full content).
 
@@ -162,6 +163,13 @@ def search(
     prefix (e.g. exclude_path_prefix="OpenAugi/" keeps derived artifacts out
     of a review queue). Works in every mode.
 
+    has_task=True keeps only blocks the user marked as a task — an open
+    `- [ ] …` checkbox (metadata has_open_task, extracted at ingest) or a
+    type/task tag — and always excludes layer/bronze (demoted scaffolding
+    carries no signal). Deterministic: this is the Dashboard task-shelf
+    query (e.g. search(has_task=True, after=<14 days ago>)). Works in
+    every mode.
+
     Browse mode groups reference material: blocks carrying a source/* tag
     (Readwise, Snipd, and other synced imports) are collapsed into
     'reference_documents' — one entry per source document with document_id,
@@ -171,7 +179,7 @@ def search(
         not query
         and not keyword
         and not title
-        and not any([tags, after, before, after_ingested, kind, source])
+        and not any([tags, after, before, after_ingested, kind, source, has_task])
     ):
         return _json(
             {
@@ -189,6 +197,15 @@ def search(
     def _ingested_too_old(block) -> bool:
         return ingested_bound is not None and (block.ingested_at or "") < ingested_bound
 
+    def _fails_task_filter(block) -> bool:
+        """has_task=True: keep only user-marked tasks; bronze never counts."""
+        if has_task is not True:
+            return False
+        all_tags = {t.lstrip("#") for t in block.tags + block.metadata.get("augi_tags", [])}
+        if "layer/bronze" in all_tags:
+            return True
+        return not (block.metadata.get("has_open_task") or "type/task" in all_tags)
+
     store = _get_store()
 
     if title:
@@ -196,7 +213,9 @@ def search(
         results = [
             b
             for b in results
-            if not _path_excluded(b, exclude_path_prefix) and not _ingested_too_old(b)
+            if not _path_excluded(b, exclude_path_prefix)
+            and not _ingested_too_old(b)
+            and not _fails_task_filter(b)
         ]
         has_more = len(results) > k
         results = results[:k]
@@ -214,7 +233,9 @@ def search(
         results = [
             b
             for b in results
-            if not _path_excluded(b, exclude_path_prefix) and not _ingested_too_old(b)
+            if not _path_excluded(b, exclude_path_prefix)
+            and not _ingested_too_old(b)
+            and not _fails_task_filter(b)
         ]
         has_more = len(results) > k
         results = results[:k]
@@ -256,6 +277,8 @@ def search(
                 continue
             if _path_excluded(block, exclude_path_prefix):
                 continue
+            if _fails_task_filter(block):
+                continue
             summary = _block_summary(block)
             summary["score"] = round(1.0 - distance, 4)
             results.append(summary)
@@ -289,6 +312,8 @@ def search(
     reference_blocks = []
     for b in blocks:
         if tags and not set(tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
+            continue
+        if _fails_task_filter(b):
             continue
         if _reference_source_tags(b):
             reference_blocks.append(b)

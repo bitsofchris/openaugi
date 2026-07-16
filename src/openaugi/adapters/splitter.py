@@ -76,6 +76,10 @@ ANCHOR_LINE_PATTERN = re.compile(r"^[ \t]*\^([A-Za-z0-9-]+)[ \t]*$", re.MULTILIN
 # entry opens with a grammar token (mobile writer, 2026-07-15). MULTILINE so
 # `$` accepts the bare-line form; only ever applied with .match() at pos 0.
 ENTRY_TIME_PATTERN = re.compile(r"^(\d{1,2}):(\d{2}) —(?: |$)", re.MULTILINE)
+# An uncompleted task line WITH text (`- [ ] call the plumber`). A bare
+# `- [ ]` is structural noise (already dropped by meaningfulness); a checked
+# box is done and doesn't count. Feeds the Dashboard's 14-day task shelf.
+OPEN_TASK_PATTERN = re.compile(r"^[ \t]*[-*+] \[ \] \S", re.MULTILINE)
 
 # Bump when a rule change alters segmentation output. The vault adapter salts
 # document hashes with this, so every file re-parses once after an upgrade —
@@ -105,6 +109,7 @@ class Segment(BaseModel):
     section_date: str | None = None  # YYYY-MM-DD inherited from nearest date-headed ancestor
     anchor_id: str | None = None  # Obsidian block anchor closing this segment, without the `^`
     entry_time: str | None = None  # HH:MM from an anchored entry's lead line, if present
+    has_open_task: bool = False  # an uncompleted `- [ ] …` line with text (task-shelf queries)
     granularity: Literal["document", "section"] = "section"
     raw_hash: str  # sha256(content)[:16] — stable identity for this segment
 
@@ -224,6 +229,7 @@ def _segments_from_single_section(
                     granularity="section",
                     anchor_id=anchor_id,
                     entry_time=_extract_entry_time(stripped) if anchor_id else None,
+                    has_open_task=bool(OPEN_TASK_PATTERN.search(clean)),
                     raw_hash=_hash(stripped),
                 )
             )
