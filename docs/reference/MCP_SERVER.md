@@ -94,6 +94,15 @@ Both are optional if you've run `openaugi init` — the config file is the defau
 | `traverse` | Multi-hop graph walk from a starting block |
 | `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links; optional `purpose` applies a `[salience]` min-score gate for proactive surfaces |
 | `recent` | Recently ingested blocks, filtered by kind/source/tags |
+| `list_queries` | Saved queries at `OpenAugi/AGENT/queries/*.md` — named, user-editable QuerySpecs (see [query-layer.md](query-layer.md)) |
+| `run_query` | Execute a saved query by name; relative-date tokens (`-14d`, `today`, `$review-mark`) resolve at run time |
+
+All read-tool semantics execute in the shared query engine
+(`src/openaugi/query/` — [query-layer.md](query-layer.md)); this server is
+the agent-shaped adapter (500-char summaries, docstrings, pagination
+hints). The same engine also serves plain-JSON `/api/*` routes for UIs
+when running with `--transport streamable-http` (full blocks, read-only,
+same auth posture as `/mcp`).
 
 ### `search` — browse mode and date-range queries
 
