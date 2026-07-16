@@ -105,7 +105,7 @@ def configure_cloudflare_auth(
     """Configure Cloudflare Access OAuth on a FastMCP server.
 
     Adds:
-    - ASGI middleware that validates Bearer tokens on /mcp
+    - ASGI middleware that validates Bearer tokens on /mcp and /api
     - /.well-known/oauth-authorization-server metadata
     - /.well-known/oauth-protected-resource metadata
     - /authorize proxy -> Cloudflare Access
@@ -248,7 +248,7 @@ def _register_routes(
 
 
 def _register_auth_middleware(mcp_server: FastMCP, verifier: CloudflareTokenVerifier) -> None:
-    """Register ASGI middleware that validates Bearer tokens on /mcp requests.
+    """Register ASGI middleware that validates Bearer tokens on /mcp and /api requests.
 
     We hook into FastMCP's streamable_http_app() by monkey-patching it to
     wrap the returned Starlette app with our auth middleware. This avoids
@@ -261,7 +261,7 @@ def _register_auth_middleware(mcp_server: FastMCP, verifier: CloudflareTokenVeri
         from starlette.types import ASGIApp, Receive, Scope, Send
 
         class CloudflareAuthMiddleware:
-            """ASGI middleware: require valid Bearer token on /mcp requests."""
+            """ASGI middleware: require valid Bearer token on /mcp and /api requests."""
 
             def __init__(self, app: ASGIApp):
                 self.app = app
@@ -273,8 +273,11 @@ def _register_auth_middleware(mcp_server: FastMCP, verifier: CloudflareTokenVeri
 
                 path = scope.get("path", "")
 
-                # Only protect /mcp — let .well-known, /authorize, /token, /register through
-                if not path.startswith("/mcp"):
+                # Protect /mcp AND /api (the HTTP read adapter shares the
+                # MCP endpoint's auth posture — a tunnel must never expose
+                # reads unauthenticated). .well-known, /authorize, /token,
+                # /register stay open: the OAuth flow needs them.
+                if not (path.startswith("/mcp") or path.startswith("/api")):
                     await self.app(scope, receive, send)
                     return
 
