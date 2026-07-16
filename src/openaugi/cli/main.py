@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -190,6 +191,9 @@ def init():
         "lens-template.md": "THE lens contract — copy to start a new lens",
         "lenses/distill.md": "Distill lens — on-command topic distillation with provenance",
         "lenses/nuggets.md": "Nugget lens — nominate promotable insights from working notes",
+        "queries/dashboard-task-shelf.md": "Saved query — the Dashboard task shelf",
+        "queries/review-queue.md": "Saved query — blocks ingested since the last review pass",
+        "queries/today.md": "Saved query — today's blocks by content date",
     }
 
     copied = 0
@@ -1083,43 +1087,129 @@ def watch(
 
 @app.command()
 def search(
-    query: str = typer.Argument(..., help="Search query"),
+    query: str | None = typer.Argument(None, help="Semantic search query"),
     k: int = typer.Option(10, "--k", "-k", help="Number of results"),
     db: str | None = typer.Option(None, "--db", help="Database path"),
     keyword: bool = typer.Option(False, "--keyword", help="Use FTS instead of semantic"),
+    title: str | None = typer.Option(None, "--title", help="Search note titles only"),
+    tag: Annotated[
+        list[str] | None, typer.Option("--tag", help="Filter by tag (repeatable)")
+    ] = None,
+    after: str | None = typer.Option(None, "--after", help="block_time >= (YYYY-MM-DD)"),
+    before: str | None = typer.Option(None, "--before", help="block_time <= (YYYY-MM-DD)"),
+    after_ingested: str | None = typer.Option(
+        None, "--after-ingested", help="Ingested since (ISO timestamp)"
+    ),
+    kind: str | None = typer.Option(None, "--kind", help="Block kind (default data_block)"),
+    exclude_path_prefix: str | None = typer.Option(
+        None, "--exclude-path-prefix", help="Drop blocks whose source_path starts with this"
+    ),
+    task: bool = typer.Option(False, "--task", help="Only user-marked tasks (bronze excluded)"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
-    """Search the knowledge base from terminal."""
+    """Search the knowledge base from the terminal.
+
+    Same engine and rules as the MCP search tool: positional QUERY is
+    semantic, --keyword flips it to FTS, --title searches titles, and
+    filters alone browse. Every filter the agents get works here too.
+    """
     _setup_logging(verbose)
 
+    from openaugi.query import QuerySpec
     from openaugi.store.sqlite import SQLiteStore
 
-    db_path = db or str(_default_db())
-    store = SQLiteStore(db_path, read_only=True)
+    spec = QuerySpec(
+        query=None if keyword else query,
+        keyword=query if keyword else None,
+        title=title,
+        tags=list(tag) if tag else None,
+        after=after,
+        before=before,
+        after_ingested=after_ingested,
+        kind=kind,
+        exclude_path_prefix=exclude_path_prefix,
+        has_task=task or None,
+        k=k,
+    )
+    if spec.is_empty():
+        console.print("[red]Provide a query, --title, or at least one filter.[/red]")
+        raise typer.Exit(1)
+
+    store = SQLiteStore(db or str(_default_db()), read_only=True)
+    try:
+        _run_and_print_spec(store, spec)
+    finally:
+        store.close()
+
+
+def _run_and_print_spec(store, spec) -> None:
+    """Execute a QuerySpec and render results for the terminal."""
+    from openaugi.config import load_config
+    from openaugi.models import get_embedding_model
+    from openaugi.query import engine
+
+    model = None
+    if spec.mode == "semantic":
+        config = load_config()
+        model = get_embedding_model(config.get("models", {}).get("embedding"))
+
+    result = engine.run(store, spec, embedding_model=model)
+
+    if not result.blocks:
+        console.print("[yellow]No results. (New vault? Run 'openaugi ingest' first.)[/yellow]")
+    for b in result.blocks:
+        _print_block(b, score=result.scores.get(b.id))
+    if result.mode == "browse" and result.reference_documents:
+        console.print(
+            f"\n[dim]{result.reference_block_count} reference block(s) collapsed into "
+            f"{len(result.reference_documents)} source document(s).[/dim]"
+        )
+    if result.has_more:
+        console.print("[dim]More results available — raise -k or use --after/--before.[/dim]")
+
+
+@app.command("query")
+def query_cmd(
+    name: str | None = typer.Argument(None, help="Saved query name (omit to list)"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (default: config)"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Run a saved query from <vault>/OpenAugi/AGENT/queries/ (list with no args)."""
+    _setup_logging(verbose)
+
+    from openaugi.config import load_config
+    from openaugi.query import saved
+    from openaugi.store.sqlite import SQLiteStore
+
+    vault_path = vault or load_config().get("vault", {}).get("default_path")
+    if not vault_path:
+        console.print("[red]No vault path configured. Use --vault or run 'openaugi init'.[/red]")
+        raise typer.Exit(1)
+
+    if name is None:
+        queries = saved.list_saved(vault_path)
+        if not queries:
+            console.print(f"[yellow]No saved queries in {saved.queries_dir(vault_path)}[/yellow]")
+            return
+        for q in queries:
+            console.print(f"[bold]{q.name}[/bold] — {q.description}")
+        return
 
     try:
-        if keyword:
-            results = store.search_fts(query, limit=k)
-            for b in results:
-                _print_block(b)
-        else:
-            # Semantic search via sqlite-vec
-            from openaugi.config import load_config
-            from openaugi.models import get_embedding_model
+        sq = saved.load_saved(vault_path, name)
+    except saved.SavedQueryNotFound:
+        console.print(f"[red]Saved query not found: {name}[/red] (run 'openaugi query' to list)")
+        raise typer.Exit(1) from None
+    except saved.SavedQueryError as e:
+        console.print(f"[red]Saved query '{name}' is invalid:[/red] {e}")
+        raise typer.Exit(1) from None
 
-            config = load_config()
-            model = get_embedding_model(config.get("models", {}).get("embedding"))
-            query_vec = model.embed_query(query)
-            hits = store.semantic_search(query_vec, k=k)
-
-            if not hits:
-                console.print(
-                    "[yellow]No semantic search results. Run 'openaugi ingest' first.[/yellow]"
-                )
-            for block_id, distance in hits:
-                block = store.get_block(block_id)
-                if block:
-                    _print_block(block, score=round(1.0 - distance, 4))
+    store = SQLiteStore(db or str(_default_db()), read_only=True)
+    try:
+        resolved = saved.resolve_spec(sq.spec, store=store)
+        console.print(f"[dim]{sq.description}[/dim]")
+        _run_and_print_spec(store, resolved)
     finally:
         store.close()
 

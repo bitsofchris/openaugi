@@ -7,6 +7,28 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-16: the query layer — one engine, thin adapters (read side of
+the CQRS split made first-class).** All deterministic read semantics
+moved out of `mcp/server.py` into a new `query/` package
+([query-layer.md](query-layer.md) SHIPPED, reference:
+`docs/reference/query-layer.md`): `QuerySpec` (serializable, mode
+derived) + `engine.py` (search dispatch, has_task+bronze rule, ingested
+bound, path exclusion, reference grouping, get_context mechanics) +
+`saved.py`. Three adapters now share it: **MCP** (agent presentation
+only; wire format proven byte-identical by a 40-case golden harness),
+**HTTP** (`/api/*` JSON on the same daemon under streamable-http — full
+blocks never truncated, read-only, k≤500, Cloudflare auth now guards
+`/api` like `/mcp`), **CLI** (`openaugi search` gains all the MCP
+filters; the old filter-less duplicate is deleted; new `openaugi query`).
+**Saved queries are data**: `OpenAugi/AGENT/queries/*.md`
+(markdown+frontmatter per Chris, tokens `-14d`/`today`/`$review-mark`
+resolve at run time); seeds `dashboard-task-shelf` (the has_task
+docstring convention is now a file), `review-queue`, `today` ship via
+init. views-as-rendered-queries step 5 now has its landing format.
+625 tests green. **MCP server must restart to expose
+run_query/list_queries.** Left off / next: unchanged from 07-12 below;
+mobile bridge can migrate /views reads to `/api/*` on its own schedule.
+
 **2026-07-15 (later): anchor segmentation — capture daily notes now ingest
 per entry.** The splitter gained a format-native rule: a line that is solely
 an Obsidian block anchor (`^augi-<id8>`, any `^id`) closes the segment above
