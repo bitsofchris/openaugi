@@ -41,14 +41,16 @@ The JSON shape:
   "frontmatter_tags": ["journal"],
   "segments": [
     {
-      "content": "…raw sub-section, zzz lines included…",
-      "clean_content": "…zzz lines stripped, ready to store or display…",
+      "content": "…raw sub-section, zzz lines and closing anchor line included…",
+      "clean_content": "…zzz + anchor lines stripped, ready to store or display…",
       "zzz_instructions": ["research this later"],
       "tags": ["career", "focus"],
       "links": ["Project Alpha"],
       "section_heading": "Morning",
       "section_date": "2026-04-08",
       "granularity": "section",
+      "anchor_id": "augi-a1b2c3d4",
+      "entry_time": "09:15",
       "raw_hash": "a1b2c3d4e5f60718"
     }
   ]
@@ -83,10 +85,11 @@ Applied in this order:
 1. **Frontmatter.** YAML frontmatter at the top of the file is stripped; `tags:` in it are captured (exposed via `SplitResult.frontmatter_tags` from `split_file` — `split_text` discards them).
 2. **Headings.** Any markdown heading (`#`–`######`) starts a new section. `#` lines inside fenced code blocks (``` or `~~~`) are ignored.
 3. **`qqq` markers.** Within a section, standalone `qqq` lines split further. A section without `qqq` stays whole.
-4. **`zzz` instructions.** Lines starting with `zzz` (optionally `zzz: …`) are extracted into `zzz_instructions` and stripped from `clean_content`. The segment's `raw_hash` still covers them, so editing a zzz line produces a new block.
-5. **Empty / structural-only segments** (just `---`, empty checkboxes, URL-only lines, dataview queries) are dropped.
-6. **Dates.** A `YYYY-MM-DD` prefix on a heading sets the date for that section and every section after it until the next date-headed section. `split_file` also extracts a filename date (`2026-04-08-*.md` or `WK - 25-11-09.md`) as a fallback.
-7. **Weekly-reflection notes** (2-digit-year `WK` stems) are kept as one segment so question/answer pairs don't fragment.
+4. **Obsidian block anchors.** A line that is *solely* a block anchor (`^augi-a1b2c3d4`, `^my-ref`) closes the current segment — per Obsidian's own block-reference semantics, the anchor names the content above it. The anchor line stays in the raw `content` (so `raw_hash` covers it) but is extracted to `anchor_id` and stripped from `clean_content`. Text after the last anchor becomes its own anchor-less segment. This is what makes mobile capture daily notes (one `^augi-<id8>` per entry) ingest as one block per entry; an anchored entry whose lead line starts `HH:MM — ` also gets `entry_time`. Inline carets and block *references* (`[[note#^ref]]`) don't split.
+5. **`zzz` instructions.** Lines starting with `zzz` (optionally `zzz: …`) are extracted into `zzz_instructions` and stripped from `clean_content`. The segment's `raw_hash` still covers them, so editing a zzz line produces a new block.
+6. **Empty / structural-only segments** (just `---`, empty checkboxes, URL-only lines, dataview queries) are dropped. A dangling anchor with no content above it is dropped too.
+7. **Dates.** A `YYYY-MM-DD` prefix on a heading sets the date for that section and every section after it until the next date-headed section. `split_file` also extracts a filename date (`2026-04-08-*.md` or `WK - 25-11-09.md`) as a fallback. During vault ingest, an anchored entry's `entry_time` refines a date-only timestamp to `YYYY-MM-DDTHH:MM:00`.
+8. **Weekly-reflection notes** (2-digit-year `WK` stems) are kept as one segment so question/answer pairs don't fragment.
 
 ## Contract guarantees
 
@@ -94,6 +97,7 @@ Applied in this order:
 - **No side effects.** Pure functions. No filesystem writes from `split_text`; `split_file` only reads.
 - **No dependencies on a store or model.** Import path: `openaugi.adapters.splitter`.
 - **Stable hashes.** `raw_hash = sha256(raw_segment_content)[:16]`. You can use it as a content-addressable ID for cache keys or diffing.
+- **Versioned rules.** `SPLITTER_VERSION` bumps when a rule change alters segmentation output. The vault adapter salts its document hashes with it, so every file re-parses once after an upgrade (block-level diffing keeps unchanged segments — only re-segmented notes churn).
 
 If you need the full Block+Link shape (document blocks, tag blocks, `links_to` edges), call `openaugi.adapters.vault.parse_vault` — that wraps the splitter with vault-level context.
 

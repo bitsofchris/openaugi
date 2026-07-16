@@ -26,11 +26,17 @@ the `zzz:` convention.
 2. Split on ANY markdown heading (`#`–`######`). Heading-like lines inside
    fenced code blocks are ignored.
 3. Within each section, split on standalone `qqq` marker lines.
-4. For each sub-section:
+4. Within each qqq sub-section, a line consisting solely of an Obsidian
+   block anchor (`^id`) CLOSES the current segment — per Obsidian's own
+   block-reference semantics, the anchor names the content above it. The
+   anchor stays in the raw `content` (hash identity) but is extracted to
+   `anchor_id` and stripped from `clean_content`. Text after the last
+   anchor becomes its own anchor-less segment.
+5. For each sub-section:
    - Extract `zzz[:] body` lines → `zzz_instructions` list, strip from content.
    - Drop if the remaining content is empty or structurally meaningless
      (horizontal rules, empty checkboxes, URL-only lines, dataview blocks).
-5. A YYYY-MM-DD prefix on a heading sets the date for itself and subsequent
+6. A YYYY-MM-DD prefix on a heading sets the date for itself and subsequent
    sections until the next date-headed section.
 """
 
@@ -62,6 +68,20 @@ DATAVIEW_BLOCK_PATTERN = re.compile(r"```dataview\b.*?```", re.DOTALL | re.IGNOR
 # inlined `HH:MM — ` timestamp prefix (notes written before 2026-07-15 put it
 # in front of a block's first line, hiding a leading zzz from dispatch).
 ZZZ_PATTERN = re.compile(r"^[ \t]*(?:\d{1,2}:\d{2} — )?[zZ]{3}\b[:\s]*(.*?)\s*$", re.MULTILINE)
+# A line that is only an Obsidian block anchor (e.g. `^augi-a1b2c3d4`). Per
+# Obsidian's block-reference semantics the anchor names the content ABOVE it,
+# so such a line CLOSES the current segment. Format-native, not mobile-specific.
+ANCHOR_LINE_PATTERN = re.compile(r"^[ \t]*\^([A-Za-z0-9-]+)[ \t]*$", re.MULTILINE)
+# Capture-entry lead: `HH:MM — thought`, or a bare `HH:MM —` line when the
+# entry opens with a grammar token (mobile writer, 2026-07-15). MULTILINE so
+# `$` accepts the bare-line form; only ever applied with .match() at pos 0.
+ENTRY_TIME_PATTERN = re.compile(r"^(\d{1,2}):(\d{2}) —(?: |$)", re.MULTILINE)
+
+# Bump when a rule change alters segmentation output. The vault adapter salts
+# document hashes with this, so every file re-parses once after an upgrade —
+# block-level diffing keeps unchanged segments, so only re-segmented notes
+# actually churn.
+SPLITTER_VERSION = "2"
 
 
 # ── Public types ──────────────────────────────────────────────────
@@ -70,18 +90,21 @@ ZZZ_PATTERN = re.compile(r"^[ \t]*(?:\d{1,2}:\d{2} — )?[zZ]{3}\b[:\s]*(.*?)\s*
 class Segment(BaseModel):
     """One deterministic split of a note.
 
-    `content` is the raw sub-section (including any `zzz` lines); `clean_content`
-    has the `zzz` lines stripped. The raw form is what you hash for identity —
-    editing a `zzz` instruction should produce a new block.
+    `content` is the raw sub-section (including any `zzz` lines and the
+    closing anchor line, if any); `clean_content` has both stripped. The raw
+    form is what you hash for identity — editing a `zzz` instruction should
+    produce a new block.
     """
 
-    content: str  # raw, pre-zzz-strip
-    clean_content: str  # zzz lines removed, ready to store/display
+    content: str  # raw, pre-zzz-strip (closing anchor line included)
+    clean_content: str  # zzz + anchor lines removed, ready to store/display
     zzz_instructions: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     links: list[str] = Field(default_factory=list)
     section_heading: str | None = None
     section_date: str | None = None  # YYYY-MM-DD inherited from nearest date-headed ancestor
+    anchor_id: str | None = None  # Obsidian block anchor closing this segment, without the `^`
+    entry_time: str | None = None  # HH:MM from an anchored entry's lead line, if present
     granularity: Literal["document", "section"] = "section"
     raw_hash: str  # sha256(content)[:16] — stable identity for this segment
 
@@ -173,29 +196,37 @@ def _segments_from_single_section(
 ) -> list[Segment]:
     results: list[Segment] = []
     for sub in _split_by_qqq(section_content):
-        stripped = sub.strip()
-        if not stripped or not _has_meaningful_content(stripped):
-            continue
-        clean, zzz = _extract_zzz_instructions(stripped)
-        # Drop only if the sub has no content AND no zzz directive. A
-        # zzz-only block (header + just a `zzz:` line) is still meaningful
-        # — it's a directive to the agent, so we keep the segment so
-        # dispatch can fire.
-        if not clean and not zzz:
-            continue
-        results.append(
-            Segment(
-                content=stripped,
-                clean_content=clean,
-                zzz_instructions=zzz,
-                tags=_extract_tags(clean),
-                links=_extract_links(clean),
-                section_heading=section_heading,
-                section_date=section_date,
-                granularity="section",
-                raw_hash=_hash(stripped),
+        for piece, anchor_id in _split_by_anchor(sub):
+            stripped = piece.strip()
+            if not stripped:
+                continue
+            # The anchor line is identity, not content — meaningfulness and
+            # clean_content are judged on the text it names.
+            body = ANCHOR_LINE_PATTERN.sub("", stripped) if anchor_id else stripped
+            if not _has_meaningful_content(body):
+                continue
+            clean, zzz = _extract_zzz_instructions(body)
+            # Drop only if the sub has no content AND no zzz directive. A
+            # zzz-only block (header + just a `zzz:` line) is still meaningful
+            # — it's a directive to the agent, so we keep the segment so
+            # dispatch can fire.
+            if not clean and not zzz:
+                continue
+            results.append(
+                Segment(
+                    content=stripped,
+                    clean_content=clean,
+                    zzz_instructions=zzz,
+                    tags=_extract_tags(clean),
+                    links=_extract_links(clean),
+                    section_heading=section_heading,
+                    section_date=section_date,
+                    granularity="section",
+                    anchor_id=anchor_id,
+                    entry_time=_extract_entry_time(stripped) if anchor_id else None,
+                    raw_hash=_hash(stripped),
+                )
             )
-        )
     return results
 
 
@@ -278,6 +309,38 @@ def _split_by_qqq(content: str) -> list[str]:
         cursor = match.end()
     segments.append(content[cursor:])
     return segments
+
+
+def _split_by_anchor(content: str) -> list[tuple[str, str | None]]:
+    """Split on standalone Obsidian block-anchor lines (`^id`).
+
+    The anchor names the content above it, so each anchor line CLOSES a
+    segment and stays attached to it (raw identity covers the anchor).
+    Returns [(text, anchor_id_or_None), ...]; content without anchor lines
+    passes through as [(content, None)]. Text after the last anchor becomes
+    a final anchor-less piece (callers drop it if empty).
+    """
+    matches = list(ANCHOR_LINE_PATTERN.finditer(content))
+    if not matches:
+        return [(content, None)]
+    pieces: list[tuple[str, str | None]] = []
+    cursor = 0
+    for match in matches:
+        pieces.append((content[cursor : match.end()], match.group(1)))
+        cursor = match.end()
+    pieces.append((content[cursor:], None))
+    return pieces
+
+
+def _extract_entry_time(text: str) -> str | None:
+    """HH:MM from a capture entry's lead line (`HH:MM — …`), zero-padded."""
+    match = ENTRY_TIME_PATTERN.match(text)
+    if not match:
+        return None
+    hour, minute = int(match.group(1)), int(match.group(2))
+    if hour > 23 or minute > 59:
+        return None
+    return f"{hour:02d}:{minute:02d}"
 
 
 def _has_meaningful_content(text: str) -> bool:
