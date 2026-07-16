@@ -35,7 +35,12 @@ facets and the container registry.
   disposable. Regenerate them freely — no review needed.
 - **Structure changes** (new tag/area, new silver/gold note, merging notes)
   are NEVER done autonomously. You nominate on the Dashboard; the user
-  commands; only then do you assemble.
+  commands; only then do you assemble. **An approved nomination IS the
+  command:** apply the exact edit it drafted (registration tag +
+  description frontmatter, an embed/link line) directly to the target
+  note — nothing beyond what was drafted — and record the edit in the
+  Dashboard's Processed section. Approval-executed edits are the one
+  exception to "never edit outside OpenAugi/".
 
 ## Capture grammar
 
@@ -64,8 +69,9 @@ containers map to.
 to route here* (skill-file style: name + description). A note with the tag
 but no description is NOT registered: don't route to it by inference
 (explicit signals still work); instead nominate on the Dashboard with a
-**drafted description as a paste-line** — filling the description IS
-registration, so make saying yes cost one paste.
+**drafted tag + description included verbatim** — filling the description
+IS registration. When the user approves, apply the drafted frontmatter to
+the note yourself (approval is the command); saying yes costs one checkbox.
 
 **Registry restraint — registration is for INFERENCE targets only.**
 Register a note when captures from *elsewhere* (dailies, mobile, random
@@ -211,7 +217,15 @@ Always regenerate `View - Dashboard.md` (same folder):
 - One line per area: what moved, what's next.
 - One line per concept note (silver) that saw activity: "Positioning: +3
   this pass" — the gravity signal for where ideas are accumulating.
-- Cross-area task rollup (union of the views' task lists).
+- **Recent tasks (14-day shelf, rendered query).** Populate by running
+  `search(has_task=True, after=<14 days ago>, exclude_path_prefix="OpenAugi/")`
+  and rendering the results **verbatim** — one plain bullet per block:
+  `- <first task line or gist> — [[source note]] (M/D)`. No checkboxes, no
+  additions, no carrying forward: the query is the section. A task leaves
+  the shelf by aging out or by its checkbox being completed in the source
+  note (re-ingest drops it). Never invent a task the user didn't mark;
+  recurring concerns earn renewal only by being captured again. Tasks that
+  need real management belong in a PMOC's LEFT OFF, not here.
 - **Gravity section**: unrouted blocks that cluster together — nominate,
   one line each: "5 blocks over 3 weeks orbit *capture UX* — make it a note?"
   Take NO action on nominations. The user answers inline or via zzz.
@@ -219,9 +233,10 @@ Always regenerate `View - Dashboard.md` (same folder):
   `aaa:`), adopt before create:**
   1. Search first — title, semantic, and tag search for an existing note
      that already is (or wants to be) the canonical home.
-  2. If found: upgrade it — draft the container tag + description as a
-     paste-line (that is registration; you never edit the user's note),
-     then route the accumulated blocks to it.
+  2. If found: upgrade it — the nomination carries the drafted container
+     tag + description; on approval, apply them to the note's frontmatter
+     yourself (that is registration), then route the accumulated blocks
+     to it.
   3. Only if nothing exists: create the concept note fresh (with the
      `![[View - ...]]` transclusion line at birth).
   4. Either way, sweep OLD blocks beyond the current window — "I've said
@@ -252,37 +267,13 @@ Always regenerate `View - Dashboard.md` (same folder):
   instruction and takes precedence. **Unchecked + empty = still pending:**
   carry the nomination forward verbatim, anchor and checkbox included.
 
-  **A third answer: "park" — "no strong feelings, not now."** Parked ≠
-  rejected: the underlying blocks stay as they are and the cluster may
-  legitimately re-nominate later. Handling:
-  - If the nomination's subject is an existing note, prefer parking the
-    NOTE: draft a `#status/parked` paste-line (any note can carry it, not
-    just PMOCs — taxonomy widened 2026-07-12). The Dataview query below
-    then handles visibility and fall-away automatically.
-  - Otherwise (cluster-only subjects), move the nomination to the
-    Dashboard's Parked section as one dated line, anchor preserved:
-    `- parked YYYY-MM-DD: <one-line gist> ^nom-...`
-  - **Fall-away:** drop parked ledger lines older than 14 days on
-    regeneration. If the same anchor gets parked a THIRD time, say so on
-    the Dashboard — three parks is a pattern (probably a "no", or a badly
-    framed nomination).
-- **Parked section**: a static heading the Dashboard carries on every
-  regeneration — the "not now" shelf. It contains (1) this Dataview query
-  verbatim, which surfaces recently-touched parked notes and lets ignored
-  ones fall away on their own, and (2) any parked-nomination ledger lines
-  still inside their 14-day window:
-
-  ````
-  ```dataview
-  LIST FROM #status/parked
-  WHERE file.mtime >= date(today) - dur(14 days)
-  SORT file.mtime DESC
-  ```
-  ````
-
-  Parked material stays fully visible to search/retrieval — parking only
-  removes it from active attention, never from the knowledge base.
-- Anything unroutable or confusing, listed honestly.
+  There is no "park" state and no Parked section — a nomination is
+  answered (yes/no/instruction) or it pends with its age showing. An
+  unanswered nomination costs nothing; a "not now" is just a slow no.
+- **No honesty/appendix section.** Anything unroutable, confusing, or
+  anomalous is said in ONE line inside the report prose (usually "What
+  moved"), right where it's relevant — the Dashboard has no dumping
+  ground. Honesty is a property of the report, not a section of it.
 - Permanent footer: `*How this works: docs/reference/review-pass.md in the openaugi
   repo · design record: docs/plans/review-pass-v1.md · agent instructions:
   OpenAugi/AGENT/review-pass.md*` — the Dashboard is the discovery surface;
@@ -297,10 +288,11 @@ Always regenerate `View - Dashboard.md` (same folder):
    takes precedence over the checkbox. Unchecked + empty = still pending —
    carry it forward verbatim, anchor and checkbox included; take no action.
    Also read any free-form inline notes or `aaa:` lines. Execute approved
-   ones — update the registry, route the relevant blocks, draft paste-lines
-   for anything that touches the user's notes — BEFORE regenerating
-   anything, or the answers are lost to the overwrite. Record each outcome
-   in the new Dashboard.
+   ones — apply the exact drafted edits the approvals authorize
+   (registration tag + description, embed/link lines), update the
+   registry, route the relevant blocks — BEFORE regenerating anything, or
+   the answers are lost to the overwrite. Record each outcome in the new
+   Dashboard.
 1. `get_review_state()` → `since` = last_run. If null, this is the first
    run: backfill from a sensible recent date (e.g. two weeks back, or the
    date the user gives).
@@ -377,8 +369,9 @@ Dashboard step, list the lens folder, run whatever is due, then continue.
 
 ## Hard rules
 
-- Never modify notes outside `OpenAugi/`. Never use `overwrite=True` outside
-  `Views/`.
+- Never modify notes outside `OpenAugi/` — except to apply the exact edit
+  an approved nomination drafted (approval is the command; apply nothing
+  beyond the draft). Never use `overwrite=True` outside `Views/`.
 - Never invent new `area/*` or `type/*` tags — the taxonomy changes only via
   a Dashboard nomination the user approves.
 - Every surfaced claim links back to its source note (block IDs in the DB,
