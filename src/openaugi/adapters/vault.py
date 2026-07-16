@@ -311,6 +311,8 @@ def _parse_file(
         }
         if seg.anchor_id:
             entry_metadata["anchor_id"] = seg.anchor_id
+        if seg.has_open_task:
+            entry_metadata["has_open_task"] = True
         if fm_created:
             entry_metadata["frontmatter_created"] = fm_created
         if seg.zzz_instructions:
