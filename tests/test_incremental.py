@@ -232,3 +232,58 @@ class TestBlockLevelIncremental:
         assert len(entries) == 1
         assert entries[0].metadata.get("section_heading") == "Brand New"
         assert "new content" in (entries[0].content or "")
+
+
+class TestAnchoredCaptureIncremental:
+    """Per-entry blocks from the splitter anchor rule keep incremental ingest
+    and zzz dispatch precise: editing one capture entry re-ingests only that
+    entry, and an unrelated edit no longer re-adds (= re-dispatches) the
+    day's zzz blocks."""
+
+    CAPTURE = (
+        "# 2026-07-08\n\n"
+        "09:15 — first thought about capture friction\n^augi-aaaa1111\n\n"
+        "14:20 — try a saved question\nzzz: apply lens distill\n^augi-bbbb2222\n\n"
+        "16:45 — closing thought for the day\n^augi-cccc3333\n"
+    )
+
+    def _write_capture(self, vault: Path, text: str) -> Path:
+        cap = vault / "OpenAugi" / "Capture"
+        cap.mkdir(parents=True, exist_ok=True)
+        note = cap / "2026-07-08.md"
+        note.write_text(text)
+        return note
+
+    def test_edit_one_entry_reingests_only_that_entry(
+        self, tmp_path: Path, vault_path: Path, store: SQLiteStore
+    ):
+        temp_vault = _make_temp_vault(tmp_path, vault_path)
+        note = self._write_capture(temp_vault, self.CAPTURE)
+        run_layer0(temp_vault, store)
+
+        note.write_text(self.CAPTURE.replace("closing thought", "closing REVISED thought"))
+        result = run_layer0(temp_vault, store)
+
+        assert result["blocks_kept"] == 2
+        assert result["blocks_added"] == 1
+        assert result["blocks_removed"] == 1
+        new_blocks = result["new_data_blocks"]
+        assert len(new_blocks) == 1
+        assert new_blocks[0].metadata.get("anchor_id") == "augi-cccc3333"
+
+    def test_unrelated_edit_does_not_readd_zzz_block(
+        self, tmp_path: Path, vault_path: Path, store: SQLiteStore
+    ):
+        """The zzz entry's block hash is untouched by edits elsewhere in the
+        day, so dispatch (which fires on new_data_blocks) stays quiet."""
+        temp_vault = _make_temp_vault(tmp_path, vault_path)
+        note = self._write_capture(temp_vault, self.CAPTURE)
+        first = run_layer0(temp_vault, store)
+        assert any(
+            b.metadata.get("zzz_instructions") for b in first["new_data_blocks"]
+        )  # first ingest dispatches the zzz entry
+
+        note.write_text(self.CAPTURE.replace("first thought", "first EDITED thought"))
+        result = run_layer0(temp_vault, store)
+
+        assert not any(b.metadata.get("zzz_instructions") for b in result["new_data_blocks"])

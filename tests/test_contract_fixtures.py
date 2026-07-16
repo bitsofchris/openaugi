@@ -137,14 +137,14 @@ ANCHOR_RE = re.compile(r"\^augi-[a-zA-Z0-9]{1,8}")
 
 
 def test_capture_daily_note_ingests_to_expected_blocks():
-    """A mobile-written daily note ingests as ONE document block carrying every
-    entry's `^augi-` anchor.
+    """A mobile-written daily note ingests as one block PER anchored entry.
 
-    Note the real behavior this pins: the splitter cuts on headings/`qqq` only,
-    so a daily note (single `# YYYY-MM-DD` header, blank-line-separated entries)
-    collapses to a single content-hash block — editing any entry rehashes the
-    whole note into a new block. That is intentional ("text is truth"); the
-    fixture documents it rather than changing it.
+    The splitter's anchor rule (2026-07-15): a line that is solely an Obsidian
+    block anchor closes the segment above it, so each `… ^augi-<id8>` entry
+    becomes its own content-hash block. The anchor stays in the raw hashed
+    content but is extracted to metadata `anchor_id` and stripped from the
+    stored content; the `HH:MM —` lead refines the block timestamp. Editing
+    one entry re-ingests only that entry.
     """
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp)
@@ -155,31 +155,41 @@ def test_capture_daily_note_ingests_to_expected_blocks():
         blocks, links = parse_vault(vault)
 
     data = [b for b in blocks if b.kind == "data_block"]
-    assert len(data) == 1
-    block = data[0]
-    assert block.metadata["granularity"] == "document"
-    content = block.content or ""
+    assert len(data) == 5
+    assert all(b.metadata["granularity"] == "section" for b in data)
 
-    anchors = ANCHOR_RE.findall(content)
-    assert anchors == [
-        "^augi-a1b2c3d4",
-        "^augi-e5f6a7b8",
-        "^augi-c9d0e1f2",
-        "^augi-b3c4d5e6",
-        "^augi-d7e8f9a0",
+    assert [b.metadata.get("anchor_id") for b in data] == [
+        "augi-a1b2c3d4",
+        "augi-e5f6a7b8",
+        "augi-c9d0e1f2",
+        "augi-b3c4d5e6",
+        "augi-d7e8f9a0",
+    ]
+    # Anchors are identity metadata, not content — stripped from every block.
+    assert not any(ANCHOR_RE.search(b.content or "") for b in data)
+
+    # The `HH:MM —` entry lead refines the `# 2026-07-08` header date into a
+    # per-entry timestamp (including the bare-lead 16:45 grammar-first entry).
+    assert [b.block_time for b in data] == [
+        "2026-07-08T09:15:00",
+        "2026-07-08T10:30:00",
+        "2026-07-08T11:05:00",
+        "2026-07-08T14:20:00",
+        "2026-07-08T16:45:00",
     ]
 
-    # Inline tags become block tags; the `zzz:` lens line is extracted to a
-    # dispatch instruction (and stripped from content); `aaa:` stays in the text.
-    # The 16:45 entry pins the grammar-first shape: a block that OPENS with a
-    # zzz gets its timestamp on its own line (mobile writer, 2026-07-15) so
-    # the token stays at line start and dispatch fires.
-    assert block.tags == ["idea", "area/openaugi"]
-    assert block.metadata.get("zzz_instructions") == [
-        "apply lens distill",
-        "recap my open questions from today",
-    ]
-    assert "aaa: link this to OpenAugi Main" in content
-    assert "zzz:" not in content
-    # The `# 2026-07-08` header date drives the block timestamp.
-    assert block.block_time == "2026-07-08"
+    # Inline tags land on their own entry's block; the `zzz:` lens line is
+    # extracted to a dispatch instruction on ITS entry (and stripped from
+    # content); `aaa:` stays in the text. The 16:45 entry pins the
+    # grammar-first shape: a block that OPENS with a zzz gets its timestamp
+    # on its own line (mobile writer, 2026-07-15) so the token stays at line
+    # start and dispatch fires.
+    tagged = data[1]
+    assert tagged.tags == ["idea", "area/openaugi"]
+    assert "aaa: link this to OpenAugi Main" in (tagged.content or "")
+    assert all(b.tags == [] for b in data if b is not tagged)
+
+    assert data[3].metadata.get("zzz_instructions") == ["apply lens distill"]
+    assert data[4].metadata.get("zzz_instructions") == ["recap my open questions from today"]
+    assert all(b.metadata.get("zzz_instructions") is None for b in data[:3])
+    assert not any("zzz:" in (b.content or "") for b in data)
