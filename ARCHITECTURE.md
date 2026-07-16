@@ -78,11 +78,16 @@ src/openaugi/
 │   │   └── openai.py               # OpenAI API adapter
 │   └── llms/
 │       └── openai.py               # OpenAI-compatible LLM (gpt-5.4-nano default)
+├── query/                 # THE query engine — read semantics shared by every adapter (docs/reference/query-layer.md)
+│   ├── spec.py            # QuerySpec — serializable query object (also the saved-query file format)
+│   ├── engine.py          # run/fetch/related/traverse/recent/members/view/context — full blocks, no transport imports
+│   └── saved.py           # Saved queries: OpenAugi/AGENT/queries/*.md + relative-date tokens
 ├── mcp/
-│   ├── server.py          # MCP tools (read + write + review pass), stdio + streamable-http transport
+│   ├── server.py          # MCP adapter — agent presentation (summaries, docstrings) over query/; write + review tools
 │   └── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
+├── http_api.py            # HTTP adapter — /api/* JSON routes on the daemon (full blocks, read-only)
 ├── cli/
-│   └── main.py            # typer CLI (up, ingest, serve, watch, search, hubs, status, service)
+│   └── main.py            # typer CLI (up, ingest, serve, watch, search, query, hubs, status, service)
 └── config.py              # TOML config loader + .env loader
 ```
 
@@ -105,25 +110,33 @@ Vault .md files
     → write float32 blobs to blocks.embedding + vec_blocks (sqlite-vec)
 ```
 
-### Query (MCP)
+### Query (engine + adapters)
+
+All read semantics live in ONE place — `query/engine.py` — and three thin
+adapters present it (docs/reference/query-layer.md):
 
 ```
-Claude → MCP tool call → server.py
-  → search: sqlite-vec KNN (semantic) or FTS5 (keyword) + filters
-  → get_block / get_blocks: full content by ID (single or batch)
-  → get_related: follow links from/to a block
-  → traverse: multi-hop graph walk
-  → get_context: FTS + semantic (3× overfetch)
-                 → deduplicate (cosine grouping, rerank.py)
-                 → MMR re-rank
-                 → expand via links
-  → recent: recently created blocks
-  → get_members: container members under the unified rule (contained ∪ routed)
-  → get_view: rendered view from the DB (live membership log + cached recap)
-  → write_document: save a note to the vault (OpenAugi/{subfolder}/)
-  → write_recap: cache a container's recap row (recaps table, staleness-hashed)
-  → tag_block: stamp AI-classified augi_tags onto a block (taxonomy-only)
-  → apply_routing: block → container membership (add/remove routed_to links, batch)
+                       query/engine.py  (full blocks, deterministic,
+                        never imports mcp/web — semantics only)
+                      ↗        ↑         ↖
+   mcp/server.py         http_api.py        cli/main.py
+   (agent shape:         (/api/* JSON:      (openaugi search /
+    500-char summaries,   full blocks,       openaugi query,
+    docstrings,           no handshake,      terminal output)
+    pagination hints)     k ≤ 500)
+
+  engine functions:
+  → run(QuerySpec): title/keyword/semantic/browse dispatch + filters
+    (after_ingested bound, has_task + bronze exclusion, path exclusion,
+     reference-document grouping, pagination envelope)
+  → fetch / related / traverse / recent / members / view / views
+  → context: FTS + semantic (3× overfetch) → bronze weighting
+             → MMR re-rank (rerank.py) → salience gate → expand via links
+  → saved queries: OpenAugi/AGENT/queries/*.md (QuerySpec in frontmatter,
+    tokens "-14d"/"today"/"$review-mark" resolved at run time)
+
+  write side (MCP only — the command half of the CQRS split):
+  → write_document / write_recap / tag_block / apply_routing
   → get_review_state / mark_review_complete: review-pass high-water mark
 ```
 
