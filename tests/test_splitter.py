@@ -289,3 +289,30 @@ class TestCLISplitCommand:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestOpenTaskFlag:
+    """`has_open_task` — deterministic ingest-time fact feeding the Dashboard's
+    14-day task shelf (rendered query, no agent judgment)."""
+
+    def test_open_checkbox_with_text_sets_flag(self):
+        segs = split_text("a thought\n- [ ] call the plumber\n^augi-aaaa1111")
+        assert len(segs) == 1
+        assert segs[0].has_open_task is True
+
+    def test_completed_checkbox_does_not_count(self):
+        segs = split_text("a thought\n- [x] already shipped")
+        assert segs[0].has_open_task is False
+
+    def test_plain_prose_has_no_flag(self):
+        segs = split_text("just thinking out loud, no task here")
+        assert segs[0].has_open_task is False
+
+    def test_bare_empty_checkbox_is_still_structural_noise(self):
+        # `- [ ]` with no text stays meaningless — no segment survives.
+        segs = split_text("# H\n- [ ]")
+        assert segs == []
+
+    def test_star_and_plus_bullets_count(self):
+        assert split_text("x\n* [ ] star task")[0].has_open_task is True
+        assert split_text("x\n+ [ ] plus task")[0].has_open_task is True

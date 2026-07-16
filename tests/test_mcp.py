@@ -828,3 +828,75 @@ class TestWriteContextPack:
         pack = json.loads((vault / "OpenAugi" / "context-pack.json").read_text())
         assert set(pack) >= {"agentFile", "taxonomy", "recentConcepts", "noteTitles"}
         assert pack["noteTitles"]  # fixture vault has documents
+
+
+class TestHasTaskFilter:
+    """search(has_task=True) — the Dashboard task shelf as a deterministic
+    query: open `- [ ]` checkboxes or type/task tags, bronze always excluded."""
+
+    @pytest.fixture
+    def task_db(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _set_db_env) -> Path:
+        vault = tmp_path / "task-vault"
+        vault.mkdir()
+        (vault / "2026-07-15.md").write_text(
+            "# 2026-07-15\n\n"
+            "09:00 — plain thought, no task here\n^augi-plain111\n\n"
+            "09:05 — remember the gutter\n- [ ] call the plumber\n^augi-task1111\n\n"
+            "09:10 — tagged as a task #type/task\n^augi-task2222\n\n"
+            "09:15 — demoted task\n- [ ] never mind this\n#layer/bronze\n^augi-brnz1111\n\n"
+            "09:20 — finished already\n- [x] shipped the thing\n^augi-done1111\n",
+            encoding="utf-8",
+        )
+        db_path = tmp_path / "tasks.db"
+        store = SQLiteStore(db_path)
+        run_layer0(vault, store)
+        store.close()
+        monkeypatch.setenv("OPENAUGI_DB", str(db_path))
+        import openaugi.mcp.server as srv
+
+        srv._store = None
+        return db_path
+
+    def test_browse_mode_returns_only_open_user_tasks(self, task_db):
+        from openaugi.mcp.server import search
+
+        result = json.loads(search(has_task=True, after="2026-07-01"))
+        contents = [b.get("content_preview") or b.get("content", "") for b in result["results"]]
+        joined = " ".join(contents)
+        assert result["count"] == 2, result
+        assert "call the plumber" in joined
+        assert "tagged as a task" in joined
+        assert "never mind" not in joined  # bronze excluded
+        assert "shipped the thing" not in joined  # completed excluded
+        assert "plain thought" not in joined
+
+    def test_has_task_alone_is_a_valid_filter(self, task_db):
+        from openaugi.mcp.server import search
+
+        result = json.loads(search(has_task=True))
+        assert "error" not in result
+        assert result["count"] == 2
+
+    def test_completion_falls_off_on_reingest(self, task_db, tmp_path: Path):
+        from openaugi.mcp.server import search
+
+        vault = tmp_path / "task-vault"
+        note = vault / "2026-07-15.md"
+        note.write_text(
+            note.read_text(encoding="utf-8").replace(
+                "- [ ] call the plumber", "- [x] call the plumber"
+            ),
+            encoding="utf-8",
+        )
+        store = SQLiteStore(task_db)
+        run_layer0(vault, store)
+        store.close()
+        import openaugi.mcp.server as srv
+
+        srv._store = None
+        result = json.loads(search(has_task=True, after="2026-07-01"))
+        joined = " ".join(
+            b.get("content_preview") or b.get("content", "") for b in result["results"]
+        )
+        assert "call the plumber" not in joined
+        assert result["count"] == 1  # the tagged task remains
