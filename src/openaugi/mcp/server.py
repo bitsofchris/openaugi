@@ -43,6 +43,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
 from openaugi.config import load_config
+from openaugi.http_api import register_api_routes
 from openaugi.models import get_embedding_model
 from openaugi.query import QuerySpec, engine
 from openaugi.store.sqlite import SQLiteStore
@@ -907,6 +908,20 @@ def _block_full(block, routed_to: list[str] | None = None) -> dict:
         "content_hash": block.content_hash,
         "ingested_at": block.ingested_at,
     }
+
+
+# ── HTTP API (/api/*) ───────────────────────────────────────────────
+# The HTTP read adapter mounts on this same daemon (one process, one
+# store handle). Routes are registered unconditionally — they are only
+# reachable when serving with --transport streamable-http; stdio never
+# opens a socket. Auth posture matches /mcp (see auth/cloudflare.py).
+
+register_api_routes(
+    mcp,
+    get_store=_get_store,
+    get_embedding_model=_get_embedding_model,
+    release_store=lambda: _store.close() if _store is not None else None,
+)
 
 
 # ── Entry point ────────────────────────────────────────────────────
