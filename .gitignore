@@ -15,6 +15,7 @@ storage/
 !experiments/**/package.json
 !experiments/**/tsconfig*.json
 !tests/fixtures/contracts/*.json
+!tests/fixtures/golden/*.json
 notes_network.html
 knowledge-explorer/*.html
 .playwright-mcp/

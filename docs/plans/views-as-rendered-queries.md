@@ -341,4 +341,4 @@ noted).
 | Step 3 phase 1: mobile bridge `/views` renders from daemon queries (Dashboard stays the file; fallback to file parser) | **shipped 2026-07-11** | `private-augi-mobile` `5bfe323` |
 | Step 3 phase 2: Dashboard-on-phone staleness UI, `/context-pack` absorption (Q4 cutover) | pending — needs phone verification of phase 1 first | — |
 | Step 4: cut view-file generation per container as Chris confirms rendered-surface usage; Dashboard stays a file until answer-UI | blocked on step 3 + usage | — |
-| Step 5: converge lenses onto saved queries; view-target lenses stop writing files | blocked on step 3 | — |
+| Step 5: converge lenses onto saved queries; view-target lenses stop writing files | blocked on step 3 — **the saved-query format + engine landed 2026-07-16** ([query-layer.md](query-layer.md): `OpenAugi/AGENT/queries/*.md`, QuerySpec in frontmatter, relative-date tokens); this step converges lenses onto THAT format | — |

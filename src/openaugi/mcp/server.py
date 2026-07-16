@@ -38,25 +38,19 @@ from datetime import UTC
 from pathlib import Path
 from typing import Literal
 
-import numpy as np
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
 from openaugi.config import load_config
+from openaugi.http_api import register_api_routes
 from openaugi.models import get_embedding_model
-from openaugi.pipeline.rerank import rerank as _rerank
-from openaugi.store.sqlite import SQLiteStore, normalize_utc_timestamp
+from openaugi.query import QuerySpec, engine, saved
+from openaugi.store.sqlite import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP("openaugi")
-
-# User-demoted scaffolding (mobile curation demote). Stored without the `#`,
-# like every parsed tag. See [layers] bronze_weight in config.py. Capture
-# daily notes ingest per anchored entry (splitter anchor rule), so the tag
-# lands exactly on the demoted entry's block — bronze is by tag alone.
-BRONZE_TAG = "layer/bronze"
 
 
 # ── State (initialized lazily) ─────────────────────────────────────
@@ -175,12 +169,22 @@ def search(
     'reference_documents' — one entry per source document with document_id,
     block_count, and time range. Route the DOCUMENT (apply_routing with
     document_id), never its individual blocks."""
-    if (
-        not query
-        and not keyword
-        and not title
-        and not any([tags, after, before, after_ingested, kind, source, has_task])
-    ):
+    spec = QuerySpec(
+        query=query,
+        keyword=keyword,
+        title=title,
+        tags=tags,
+        after=after,
+        before=before,
+        after_ingested=after_ingested,
+        kind=kind,
+        source=source,
+        exclude_path_prefix=exclude_path_prefix,
+        has_task=has_task,
+        k=k,
+        offset=offset,
+    )
+    if spec.is_empty():
         return _json(
             {
                 "error": "No search parameters provided.",
@@ -190,152 +194,45 @@ def search(
             }
         )
 
-    # Normalize once so every mode compares in the storage format; a bad
-    # timestamp fails loudly here instead of silently matching nothing.
-    ingested_bound = normalize_utc_timestamp(after_ingested) if after_ingested else None
+    model = _get_embedding_model() if spec.mode == "semantic" else None
+    result = engine.run(_get_store(), spec, embedding_model=model)
+    return _json(_render_run_result(result))
 
-    def _ingested_too_old(block) -> bool:
-        return ingested_bound is not None and (block.ingested_at or "") < ingested_bound
 
-    def _fails_task_filter(block) -> bool:
-        """has_task=True: keep only user-marked tasks; bronze never counts."""
-        if has_task is not True:
-            return False
-        all_tags = {t.lstrip("#") for t in block.tags + block.metadata.get("augi_tags", [])}
-        if "layer/bronze" in all_tags:
-            return True
-        return not (block.metadata.get("has_open_task") or "type/task" in all_tags)
-
-    store = _get_store()
-
-    if title:
-        results = store.search_fts(f"title:{title}", limit=k + 1)
-        results = [
-            b
-            for b in results
-            if not _path_excluded(b, exclude_path_prefix)
-            and not _ingested_too_old(b)
-            and not _fails_task_filter(b)
-        ]
-        has_more = len(results) > k
-        results = results[:k]
-        return _json(
-            {
-                "results": [_block_summary(b) for b in results],
-                "count": len(results),
-                "has_more": has_more,
-                "mode": "title",
-            }
-        )
-
-    if keyword:
-        results = store.search_fts(keyword, limit=k + 1)
-        results = [
-            b
-            for b in results
-            if not _path_excluded(b, exclude_path_prefix)
-            and not _ingested_too_old(b)
-            and not _fails_task_filter(b)
-        ]
-        has_more = len(results) > k
-        results = results[:k]
-        return _json(
-            {
-                "results": [_block_summary(b) for b in results],
-                "count": len(results),
-                "has_more": has_more,
-                "mode": "keyword",
-            }
-        )
-
-    if query:
-        query_vec = _get_embedding_model().embed_query(query)
-        hits = store.semantic_search(query_vec, k=k * 3)
-
-        # Batch-fetch all hit blocks
-        hit_ids = [block_id for block_id, _ in hits]
-        blocks_map = store.get_blocks_by_ids(hit_ids)
-
+def _render_run_result(result: engine.RunResult) -> dict:
+    """Agent-shaped envelope for an engine RunResult — shared by search and
+    run_query. Key order is part of the golden wire format; don't reorder."""
+    if result.mode == "semantic":
         results = []
-        for block_id, distance in hits:
-            block = blocks_map.get(block_id)
-            if block is None:
-                continue
-            if kind and block.kind != kind:
-                continue
-            if source and block.source != source:
-                continue
-            if tags and not set(tags).intersection(
-                block.tags + block.metadata.get("augi_tags", [])
-            ):
-                continue
-            if after and (block.block_time or "") < after:
-                continue
-            if before and (block.block_time or "") > before:
-                continue
-            if _ingested_too_old(block):
-                continue
-            if _path_excluded(block, exclude_path_prefix):
-                continue
-            if _fails_task_filter(block):
-                continue
-            summary = _block_summary(block)
-            summary["score"] = round(1.0 - distance, 4)
+        for b in result.blocks:
+            summary = _block_summary(b)
+            summary["score"] = result.scores[b.id]
             results.append(summary)
-            if len(results) > k:
-                break
-
-        has_more = len(results) > k
-        results = results[:k]
-        return _json(
-            {
-                "results": results,
-                "count": len(results),
-                "has_more": has_more,
-                "mode": "semantic",
-            }
-        )
-
-    # Browse mode — SQL-filtered and paginated
-    blocks, total = store.get_blocks_filtered(
-        kind=kind or "data_block",
-        source=source,
-        after=after,
-        before=before,
-        after_ingested=after_ingested,
-        limit=k + 1,
-        offset=offset,
-        exclude_path_prefix=exclude_path_prefix,
-    )
-    # Tags filtering happens in Python (not pushed to SQL)
-    kept = []
-    reference_blocks = []
-    for b in blocks:
-        if tags and not set(tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
-            continue
-        if _fails_task_filter(b):
-            continue
-        if _reference_source_tags(b):
-            reference_blocks.append(b)
-        else:
-            kept.append(b)
-
-    reference_documents = _group_reference_documents(reference_blocks)
-    results = [_block_summary(b) for b in kept]
-    has_more = len(blocks) > k
-    results = results[:k]
-    return _json(
-        {
+        return {
             "results": results,
             "count": len(results),
-            "reference_documents": reference_documents,
-            "reference_block_count": len(reference_blocks),
-            "total": total,
-            "has_more": has_more,
-            "next_offset": offset + k if has_more else None,
-            "mode": "browse",
+            "has_more": result.has_more,
+            "mode": "semantic",
         }
-    )
+
+    if result.mode in ("title", "keyword"):
+        return {
+            "results": [_block_summary(b) for b in result.blocks],
+            "count": len(result.blocks),
+            "has_more": result.has_more,
+            "mode": result.mode,
+        }
+
+    return {
+        "results": [_block_summary(b) for b in result.blocks],
+        "count": len(result.blocks),
+        "reference_documents": result.reference_documents,
+        "reference_block_count": result.reference_block_count,
+        "total": result.total,
+        "has_more": result.has_more,
+        "next_offset": result.next_offset,
+        "mode": "browse",
+    }
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -346,9 +243,8 @@ def get_block(block_id: str) -> str:
     Use after search/get_context to read the complete content of a specific block.
     For multiple blocks, use get_blocks instead — one call vs. many.
     Do NOT use this in a loop — use get_blocks with a list of IDs."""
-    store = _get_store()
-    block = store.get_block(block_id)
-    if block is None:
+    result = engine.fetch(_get_store(), [block_id])
+    if not result.blocks:
         return _json(
             {
                 "error": f"Block not found: {block_id}",
@@ -356,8 +252,8 @@ def get_block(block_id: str) -> str:
                 "search(title=...) to find valid block IDs.",
             }
         )
-    routes = store.get_routed_container_titles([block_id]).get(block_id, [])
-    return _json(_block_full(block, routes))
+    block = result.blocks[0]
+    return _json(_block_full(block, result.routes.get(block.id, [])))
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -375,17 +271,12 @@ def get_blocks(block_ids: list[str]) -> str:
                 "hint": "Split into multiple get_blocks calls of 50 or fewer IDs each.",
             }
         )
-    store = _get_store()
-    found = store.get_blocks_by_ids(block_ids)
-    missing = [bid for bid in block_ids if bid not in found]
-    routes = store.get_routed_container_titles(list(found))
+    result = engine.fetch(_get_store(), block_ids)
     return _json(
         {
-            "blocks": [
-                _block_full(found[bid], routes.get(bid, [])) for bid in block_ids if bid in found
-            ],
-            "count": len(found),
-            "missing": missing,
+            "blocks": [_block_full(b, result.routes.get(b.id, [])) for b in result.blocks],
+            "count": len(result.blocks),
+            "missing": result.missing,
         }
     )
 
@@ -408,33 +299,11 @@ def get_related(
     - kind: filter by link kind. Common kinds: 'contains' (data_block→context_block:document),
       'groups' (data_block→context_block:tag), 'links_to' (wikilink between notes)
     - limit: max results (default 50)"""
-    store = _get_store()
-
-    out_links = (
-        store.get_links_from(block_id, kind=kind)[:limit] if direction in ("out", "both") else []
-    )
-    in_links = (
-        store.get_links_to(block_id, kind=kind)[:limit] if direction in ("in", "both") else []
-    )
-
-    # Batch-fetch all linked blocks in one query
-    needed_ids = [lnk.to_id for lnk in out_links] + [lnk.from_id for lnk in in_links]
-    blocks_map = store.get_blocks_by_ids(needed_ids) if needed_ids else {}
-
-    results = []
-    for lnk in out_links:
-        target = blocks_map.get(lnk.to_id)
-        if target:
-            results.append(
-                {"block": _block_summary(target), "link_kind": lnk.kind, "direction": "out"}
-            )
-    for lnk in in_links:
-        source_block = blocks_map.get(lnk.from_id)
-        if source_block:
-            results.append(
-                {"block": _block_summary(source_block), "link_kind": lnk.kind, "direction": "in"}
-            )
-
+    items = engine.related(_get_store(), block_id, kind=kind, direction=direction, limit=limit)
+    results = [
+        {"block": _block_summary(i.block), "link_kind": i.link_kind, "direction": i.direction}
+        for i in items
+    ]
     return _json({"block_id": block_id, "related": results, "count": len(results)})
 
 
@@ -456,43 +325,10 @@ def traverse(
     - max_hops: how many link-steps to follow (default 2, max recommended 3)
     - link_kinds: restrict to specific link types (e.g. ['links_to', 'groups'])
     - limit: max results (default 50)"""
-    store = _get_store()
-
-    visited: set[str] = {start_id}
-    results: list[dict] = []
-    current_level = [start_id]
-
-    for depth in range(1, max_hops + 1):
-        if not current_level or len(results) >= limit:
-            break
-
-        # Gather all neighbor IDs for this frontier level
-        next_ids: list[str] = []
-        for cid in current_level:
-            links_out = store.get_links_from(cid)
-            links_in = store.get_links_to(cid)
-            for lnk in links_out + links_in:
-                nid = lnk.to_id if lnk.from_id == cid else lnk.from_id
-                if nid not in visited:
-                    if link_kinds and lnk.kind not in link_kinds:
-                        continue
-                    next_ids.append(nid)
-                    visited.add(nid)
-
-        if not next_ids:
-            break
-
-        # Batch-fetch all blocks for this level
-        blocks_map = store.get_blocks_by_ids(next_ids)
-        for nid in next_ids:
-            block = blocks_map.get(nid)
-            if block:
-                results.append({**_block_summary(block), "depth": depth})
-                if len(results) >= limit:
-                    break
-
-        current_level = next_ids
-
+    items = engine.traverse(
+        _get_store(), start_id, max_hops=max_hops, link_kinds=link_kinds, limit=limit
+    )
+    results = [{**_block_summary(i.block), "depth": i.depth} for i in items]
     return _json(
         {
             "start_id": start_id,
@@ -530,133 +366,33 @@ def get_context(
     Blocks tagged #layer/bronze (user-demoted scaffolding) are down-weighted by
     config [layers] bronze_weight before reranking, and excluded entirely when
     purpose is set — demoted thoughts never resurface proactively."""
-    store = _get_store()
-    config = load_config()
-    retrieval = config.get("retrieval", {})
-    overfetch_ratio = retrieval.get("overfetch_ratio", 3)
-    group_threshold = retrieval.get("group_threshold", 0.15)
-    mmr_lambda = retrieval.get("mmr_lambda", 0.5)
-    representative = retrieval.get("representative", "centroid")
-
-    fetch_limit = k * overfetch_ratio
-
-    # Collect candidate IDs and their best relevance scores
-    candidate_scores: dict[str, float] = {}
-
-    # Prong 1: FTS — score 1.0 (keyword match = high relevance)
-    fts_results = store.search_fts(query, limit=fetch_limit)
-    for b in fts_results:
-        candidate_scores[b.id] = 1.0
-
-    # Prong 2: semantic search
-    query_vec: list[float] | None = None
     try:
-        query_vec = _get_embedding_model().embed_query(query)
-        hits = store.semantic_search(query_vec, k=fetch_limit)
-        for block_id, distance in hits:
-            score = round(1.0 - distance, 4)
-            candidate_scores[block_id] = max(candidate_scores.get(block_id, 0.0), score)
+        model = _get_embedding_model()
     except Exception:
-        logger.warning("Semantic search unavailable in get_context", exc_info=True)
-
-    if not candidate_scores:
-        return _json({"query": query, "direct_results": [], "expanded": [], "total_blocks": 0})
-
-    all_ids = list(candidate_scores.keys())
-
-    # Bronze layer — #layer/bronze marks user-demoted scaffolding (mobile
-    # curation). Kept in the DB (raw data is truth) but down-weighted here so
-    # full-weight thinking outranks it; proactive surfaces (purpose=...)
-    # exclude it outright below, like the source/* firewall.
-    raw_weight = config.get("layers", {}).get("bronze_weight", 1.0)
-    bronze_weight = (
-        float(raw_weight)
-        if isinstance(raw_weight, int | float) and not isinstance(raw_weight, bool)
-        else 1.0
+        # Engine falls back to FTS-only, matching historical get_context
+        # behavior when the embedding model can't be constructed.
+        logger.warning("Embedding model unavailable in get_context", exc_info=True)
+        model = None
+    ctx = engine.context(
+        _get_store(),
+        query,
+        k=k,
+        expand=expand,
+        purpose=purpose,
+        embedding_model=model,
+        config=load_config(),
     )
-    bronze_ids: set[str] = set()
-    if purpose is not None or bronze_weight < 1.0:
-        tags_map = store.get_tags_for_ids(all_ids)
-        bronze_ids = {bid for bid, tags in tags_map.items() if BRONZE_TAG in tags}
-    if bronze_weight < 1.0:
-        for bid in bronze_ids:
-            candidate_scores[bid] = round(candidate_scores[bid] * bronze_weight, 4)
-
-    # Batch-fetch embeddings for all candidates (single query, no full block load)
-    emb_map = store.get_embeddings_for_ids(all_ids)
-
-    # Build candidates for reranker: (block_id, embedding_blob_or_None, score)
-    candidates = [(bid, emb_map.get(bid), candidate_scores[bid]) for bid in all_ids]
-
-    # Rerank if we have a query embedding; fall back to score order otherwise
-    if query_vec is not None:
-        query_blob = np.array(query_vec, dtype=np.float32).tobytes()
-        final_ids = _rerank(
-            candidates,
-            query_blob,
-            k,
-            group_threshold=group_threshold,
-            mmr_lambda=mmr_lambda,
-            representative=representative,
-        )
-    else:
-        final_ids = sorted(all_ids, key=lambda bid: candidate_scores[bid], reverse=True)[:k]
-
-    # Salience gate — purpose-based min-score policy owned here, not by callers
-    # (mobile resurfacing today, push notifications later). Drops low-salience
-    # results after reranking; the scores themselves are untouched. Proactive
-    # surfaces never resurface bronze: the user already demoted it.
-    min_score: float | None = None
-    if purpose is not None:
-        final_ids = [bid for bid in final_ids if bid not in bronze_ids]
-        threshold = config.get("salience", {}).get(purpose)
-        if isinstance(threshold, int | float) and not isinstance(threshold, bool):
-            min_score = float(threshold)
-            final_ids = [bid for bid in final_ids if candidate_scores[bid] >= min_score]
-
-    # Batch-fetch full blocks for the final k IDs
-    final_blocks = store.get_blocks_by_ids(final_ids)
-    fts_ids = {b.id for b in fts_results}
-    blocks_seen: dict[str, dict] = {}
-    for block_id in final_ids:
-        block = final_blocks.get(block_id)
-        if block:
-            entry = {**_block_summary(block), "score": candidate_scores.get(block_id, 0.0)}
-            entry["source"] = "fts" if block_id in fts_ids else "semantic"
-            blocks_seen[block_id] = entry
-
-    # Expand: follow links from top results, batch-fetch targets
-    expanded: list[dict] = []
-    if expand:
-        expand_targets: list[tuple[str, str, str]] = []  # (to_id, from_id, link_kind)
-        for block_id in final_ids:
-            links = store.get_links_from(block_id)
-            for lnk in links[:5]:
-                if lnk.to_id not in blocks_seen:
-                    expand_targets.append((lnk.to_id, block_id, lnk.kind))
-
-        if expand_targets:
-            expand_ids = list({t[0] for t in expand_targets})
-            expand_blocks = store.get_blocks_by_ids(expand_ids)
-            for to_id, from_id, link_kind in expand_targets:
-                target = expand_blocks.get(to_id)
-                if target and to_id not in blocks_seen:
-                    entry = {
-                        **_block_summary(target),
-                        "expanded_from": from_id,
-                        "link_kind": link_kind,
-                    }
-                    expanded.append(entry)
-                    blocks_seen[to_id] = entry
+    if not ctx.had_candidates:
+        return _json({"query": query, "direct_results": [], "expanded": [], "total_blocks": 0})
 
     result = {
         "query": query,
-        "direct_results": list(blocks_seen.values())[:k],
-        "expanded": expanded[:k],
-        "total_blocks": len(blocks_seen),
+        "direct_results": [{**_block_summary(e.block), **e.extras} for e in ctx.seen[:k]],
+        "expanded": [{**_block_summary(e.block), **e.extras} for e in ctx.expanded[:k]],
+        "total_blocks": len(ctx.seen),
     }
     if purpose is not None:
-        result["salience"] = {"purpose": purpose, "min_score": min_score}
+        result["salience"] = {"purpose": purpose, "min_score": ctx.min_score}
     return _json(result)
 
 
@@ -678,23 +414,97 @@ def recent(
       'data_block', 'context_block:document', 'context_block:tag'
     - source: filter by source (e.g. 'vault')
     - tags: filter to blocks matching any of these tags"""
-    store = _get_store()
-    blocks, _ = store.get_blocks_filtered(
-        kind=kind or "data_block",
-        source=source,
-        order_by="ingested_at",
-        limit=k * 3,  # overfetch to absorb tag filtering below
+    blocks = engine.recent(_get_store(), k=k, kind=kind, source=source, tags=tags)
+    results = [_block_summary(b) for b in blocks]
+    return _json({"results": results, "count": len(results), "has_more": False})
+
+
+# ── Saved Queries ──────────────────────────────────────────────────
+
+
+def _no_vault_error() -> str:
+    return _json(
+        {
+            "status": "error",
+            "reason": (
+                "No vault path configured. "
+                "Run 'openaugi init' to set a default vault, "
+                "or set OPENAUGI_VAULT_PATH environment variable."
+            ),
+        }
     )
 
-    results = []
-    for b in blocks:
-        if tags and not set(tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
-            continue
-        results.append(_block_summary(b))
-        if len(results) >= k:
-            break
 
-    return _json({"results": results, "count": len(results), "has_more": False})
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@_release_conn
+def list_queries() -> str:
+    """List saved queries — named, user-editable QuerySpecs.
+
+    A saved query is a markdown file at OpenAugi/AGENT/queries/<name>.md:
+    frontmatter carries a description plus the query definition, with
+    relative-date tokens ("-14d", "today", "$review-mark") resolved when
+    it runs — the lens principle applied to retrieval. Execute one with
+    run_query(name); edit the file in Obsidian to change what it returns."""
+    vault_path = _get_vault_path()
+    if not vault_path:
+        return _no_vault_error()
+    queries = saved.list_saved(vault_path)
+    return _json(
+        {
+            "queries": [
+                {
+                    "name": q.name,
+                    "description": q.description,
+                    "spec": q.spec.model_dump(exclude_none=True),
+                }
+                for q in queries
+            ],
+            "count": len(queries),
+        }
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@_release_conn
+def run_query(name: str) -> str:
+    """Execute a saved query by name (see list_queries).
+
+    Resolves the spec's relative-date tokens ("-14d", "today" against
+    today's date; "$review-mark" against the review-pass high-water mark),
+    runs it through the same engine as search, and returns the search
+    envelope prefixed with the query's name, description, and the resolved
+    spec. This is how recurring product queries (Dashboard task shelf,
+    review queue) stay data instead of hard-coded conventions."""
+    vault_path = _get_vault_path()
+    if not vault_path:
+        return _no_vault_error()
+    try:
+        sq = saved.load_saved(vault_path, name)
+    except saved.SavedQueryNotFound:
+        return _json(
+            {
+                "error": f"Saved query not found: {name}",
+                "hint": "Use list_queries() to see available saved queries.",
+            }
+        )
+    except saved.SavedQueryError as e:
+        return _json({"error": f"Saved query '{name}' is invalid: {e}"})
+
+    store = _get_store()
+    resolved = saved.resolve_spec(sq.spec, store=store)
+    model = _get_embedding_model() if resolved.mode == "semantic" else None
+    try:
+        result = engine.run(store, resolved, embedding_model=model)
+    except engine.EmptyQuerySpec:
+        return _json({"error": f"Saved query '{name}' resolves to an empty spec."})
+    return _json(
+        {
+            "query": name,
+            "description": sq.description,
+            "resolved_spec": resolved.model_dump(exclude_none=True),
+            **_render_run_result(result),
+        }
+    )
 
 
 # ── Classification Tools ───────────────────────────────────────────
@@ -863,12 +673,9 @@ def get_members(container_title: str, limit: int = 100, offset: int = 0) -> str:
 
     This is THE query views render: use it to build a container's membership
     log instead of assembling routed_to links by hand."""
-    store = _get_store()
-    row = store.conn.execute(
-        "SELECT id FROM blocks WHERE kind = 'context_block:document' AND title = ? LIMIT 1",
-        (container_title,),
-    ).fetchone()
-    if not row:
+    try:
+        result = engine.members(_get_store(), container_title, limit=limit, offset=offset)
+    except engine.ContainerNotFound:
         return _json(
             {
                 "status": "error",
@@ -876,16 +683,16 @@ def get_members(container_title: str, limit: int = 100, offset: int = 0) -> str:
                 "hint": "Use search(title=...) to find the exact note title.",
             }
         )
-    members = store.get_container_members(row[0])
-    page = members[offset : offset + limit]
     return _json(
         {
             "container": container_title,
-            "container_id": row[0],
-            "members": [{**_block_summary(b), "membership": membership} for b, membership in page],
-            "count": len(page),
-            "total": len(members),
-            "has_more": offset + limit < len(members),
+            "container_id": result.container_id,
+            "members": [
+                {**_block_summary(m.block), "membership": m.membership} for m in result.members
+            ],
+            "count": len(result.members),
+            "total": result.total,
+            "has_more": offset + limit < result.total,
         }
     )
 
@@ -901,12 +708,9 @@ def get_view(container_title: str, member_limit: int = 50) -> str:
     recap was generated). This is what rendered surfaces (plugin pane,
     mobile bridge, markdown export) consume; prefer it over reading
     View - *.md files."""
-    store = _get_store()
-    row = store.conn.execute(
-        "SELECT id FROM blocks WHERE kind = 'context_block:document' AND title = ? LIMIT 1",
-        (container_title,),
-    ).fetchone()
-    if not row:
+    try:
+        result = engine.view(_get_store(), container_title, member_limit=member_limit)
+    except engine.ContainerNotFound:
         return _json(
             {
                 "status": "error",
@@ -914,26 +718,15 @@ def get_view(container_title: str, member_limit: int = 50) -> str:
                 "hint": "Use search(title=...) to find the exact note title.",
             }
         )
-    container_id = row[0]
-    members = store.get_container_members(container_id)
-    recap_row = store.get_recap(container_id)
-    recap = None
-    if recap_row is not None:
-        recap = {
-            "recap_md": recap_row["recap_md"],
-            "generated_at": recap_row["generated_at"],
-            "stale": recap_row["membership_hash"] != store.membership_hash(container_id),
-        }
     return _json(
         {
             "container": container_title,
-            "container_id": container_id,
-            "recap": recap,
+            "container_id": result.container_id,
+            "recap": result.recap,
             "members": [
-                {**_block_summary(b), "membership": membership}
-                for b, membership in members[:member_limit]
+                {**_block_summary(m.block), "membership": m.membership} for m in result.members
             ],
-            "member_count": len(members),
+            "member_count": result.member_count,
         }
     )
 
@@ -948,17 +741,7 @@ def list_views() -> str:
     Containers the user curates entirely by hand (recap off, e.g. a dream
     journal) never show up. Surfaces iterate this list and call get_view
     per container."""
-    store = _get_store()
-    views = []
-    for r in store.list_recaps():
-        views.append(
-            {
-                "container": r["title"],
-                "container_id": r["container_id"],
-                "generated_at": r["generated_at"],
-                "stale": r["membership_hash"] != store.membership_hash(r["container_id"]),
-            }
-        )
+    views = engine.views(_get_store())
     return _json({"views": views, "count": len(views)})
 
 
@@ -1010,8 +793,7 @@ def get_review_state() -> str:
     same-day date-only blocks and re-ingested edits. If last_run is null
     this is the first run — backfill from a sensible date instead.
     """
-    store = _get_store()
-    return _json(store.get_review_state())
+    return _json(engine.review_state(_get_store()))
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
@@ -1177,53 +959,6 @@ def get_note_resource(title: str) -> str:
 # ── Helpers ────────────────────────────────────────────────────────
 
 
-def _path_excluded(block, prefix: str | None) -> bool:
-    """True if the block's source_path falls under an excluded prefix."""
-    return bool(prefix) and block.metadata.get("source_path", "").startswith(prefix)
-
-
-def _reference_source_tags(block) -> list[str]:
-    """The block's source/* tags (set by [vault.source_rules] for synced
-    reference material like Readwise or Snipd). Empty list = user capture."""
-    all_tags = block.tags + block.metadata.get("augi_tags", [])
-    return [t for t in all_tags if t.startswith("source/")]
-
-
-def _group_reference_documents(blocks) -> list[dict]:
-    """Collapse reference-source blocks into one entry per source document.
-
-    Reference material is one artifact: the review pass routes the document
-    once (apply_routing with document_id), never its individual blocks.
-    """
-    from openaugi.model.block import Block as BlockModel
-
-    groups: dict[str, dict] = {}
-    for b in blocks:
-        source_path = b.metadata.get("source_path", "")
-        g = groups.get(source_path)
-        if g is None:
-            g = groups[source_path] = {
-                "source_path": source_path,
-                "document_id": BlockModel.make_document_id(source_path),
-                "title": Path(source_path).stem if source_path else b.title,
-                "source_tags": [],
-                "block_count": 0,
-                "first_block_time": b.block_time,
-                "last_block_time": b.block_time,
-                "snippet": (b.content or "")[:200],
-            }
-        g["block_count"] += 1
-        for t in _reference_source_tags(b):
-            if t not in g["source_tags"]:
-                g["source_tags"].append(t)
-        if b.block_time:
-            if not g["first_block_time"] or b.block_time < g["first_block_time"]:
-                g["first_block_time"] = b.block_time
-            if not g["last_block_time"] or b.block_time > g["last_block_time"]:
-                g["last_block_time"] = b.block_time
-    return list(groups.values())
-
-
 def _decision_adds(d: dict) -> list[str]:
     """Containers to route into — "add" plus its legacy alias "containers"."""
     return [*d.get("add", []), *d.get("containers", [])]
@@ -1260,6 +995,21 @@ def _block_full(block, routed_to: list[str] | None = None) -> dict:
         "content_hash": block.content_hash,
         "ingested_at": block.ingested_at,
     }
+
+
+# ── HTTP API (/api/*) ───────────────────────────────────────────────
+# The HTTP read adapter mounts on this same daemon (one process, one
+# store handle). Routes are registered unconditionally — they are only
+# reachable when serving with --transport streamable-http; stdio never
+# opens a socket. Auth posture matches /mcp (see auth/cloudflare.py).
+
+register_api_routes(
+    mcp,
+    get_store=_get_store,
+    get_embedding_model=_get_embedding_model,
+    release_store=lambda: _store.close() if _store is not None else None,
+    get_vault_path=_get_vault_path,
+)
 
 
 # ── Entry point ────────────────────────────────────────────────────
