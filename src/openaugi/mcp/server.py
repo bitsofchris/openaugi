@@ -34,7 +34,6 @@ import functools
 import json
 import logging
 import os
-import re
 from datetime import UTC
 from pathlib import Path
 from typing import Literal
@@ -54,29 +53,10 @@ logger = logging.getLogger(__name__)
 mcp = FastMCP("openaugi")
 
 # User-demoted scaffolding (mobile curation demote). Stored without the `#`,
-# like every parsed tag. See [layers] bronze_weight in config.py.
+# like every parsed tag. See [layers] bronze_weight in config.py. Capture
+# daily notes ingest per anchored entry (splitter anchor rule), so the tag
+# lands exactly on the demoted entry's block — bronze is by tag alone.
 BRONZE_TAG = "layer/bronze"
-
-# A capture daily-note entry ends with its Obsidian block anchor on its own
-# line (mobile writer contract, tests/fixtures/contracts/capture-daily-note.md).
-_ANCHOR_LINE_RE = re.compile(r"^\^augi-[A-Za-z0-9]+\s*$", re.MULTILINE)
-_BRONZE_INLINE_RE = re.compile(r"#layer/bronze(?![\w/-])")
-
-
-def _all_entries_bronze(block) -> bool:
-    """Whether the block's content is bronze through and through.
-
-    Capture daily notes ingest as one document-granularity block, so a single
-    demoted entry puts #layer/bronze in the block's tags while the rest of the
-    day is full-weight thinking. Only treat the block as bronze when every
-    anchored entry carries the tag inline; blocks without anchors (ordinary
-    notes) are bronze by tag alone.
-    """
-    parts = [p.strip() for p in _ANCHOR_LINE_RE.split(block.content or "")]
-    parts = [p for p in parts if p]
-    if len(parts) <= 1:
-        return True
-    return all(_BRONZE_INLINE_RE.search(p) for p in parts)
 
 
 # ── State (initialized lazily) ─────────────────────────────────────
@@ -572,13 +552,7 @@ def get_context(
     bronze_ids: set[str] = set()
     if purpose is not None or bronze_weight < 1.0:
         tags_map = store.get_tags_for_ids(all_ids)
-        tagged = [bid for bid, tags in tags_map.items() if BRONZE_TAG in tags]
-        # Capture daily notes ingest as ONE document-granularity block, so one
-        # demoted entry would stamp the tag on a whole day of good thinking —
-        # confirm against content: bronze only if EVERY entry carries the tag.
-        if tagged:
-            tagged_blocks = store.get_blocks_by_ids(tagged)
-            bronze_ids = {bid for bid, b in tagged_blocks.items() if _all_entries_bronze(b)}
+        bronze_ids = {bid for bid, tags in tags_map.items() if BRONZE_TAG in tags}
     if bronze_weight < 1.0:
         for bid in bronze_ids:
             candidate_scores[bid] = round(candidate_scores[bid] * bronze_weight, 4)

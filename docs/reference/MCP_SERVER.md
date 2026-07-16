@@ -229,12 +229,11 @@ bronze_weight = 0.5  # retrieval-score multiplier for #layer/bronze blocks; 1.0 
 - When `purpose` is set (proactive surfaces: resurfacing, push), bronze blocks are
   excluded outright regardless of score — the user already demoted them; they never
   resurface unprompted.
-- **Granularity guard:** capture daily notes ingest as ONE document-granularity
-  block, so a single demoted entry stamps the tag on a whole day of good thinking.
-  A tagged block only counts as bronze if *every* anchored entry (`^augi-*`) carries
-  `#layer/bronze` inline; blocks without anchors are bronze by tag alone. Erring
-  toward full weight is deliberate — wrongly muting good thinking costs trust,
-  under-dimming scaffolding costs nothing.
+- Bronze is by tag alone. Capture daily notes ingest per anchored entry (the
+  splitter's anchor rule, see [splitter.md](../reference/splitter.md) and
+  [docs/plans/anchor-segmentation.md](../plans/anchor-segmentation.md)), so the
+  tag lands exactly on the demoted entry's block — a demoted entry never dims
+  the rest of its day.
 - Promote = the user removes the tag; the next ingest of the file restores full weight.
 - Review-pass policy (route bronze, never nominate or feature it) lives in the
   agent prompt: `OpenAugi/AGENT/review-pass.md` / `src/openaugi/templates/review-pass.md`.
