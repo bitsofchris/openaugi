@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import ValidationError
 
 from openaugi.model.block import Block
-from openaugi.query import QuerySpec, engine
+from openaugi.query import QuerySpec, engine, saved
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -49,6 +49,7 @@ def register_api_routes(
     get_store: Callable[[], SQLiteStore],
     get_embedding_model: Callable[[], Any],
     release_store: Callable[[], None],
+    get_vault_path: Callable[[], str | None] = lambda: None,
 ) -> None:
     """Mount /api/* on the FastMCP daemon.
 
@@ -73,7 +74,7 @@ def register_api_routes(
 
     # ── /api/search + /api/query ───────────────────────────────────
 
-    def _execute_spec(spec: QuerySpec) -> Response:
+    def _execute_spec(spec: QuerySpec, prefix: dict[str, Any] | None = None) -> Response:
         spec.k = min(spec.k, HTTP_MAX_K)
         if spec.is_empty():
             return _error(
@@ -92,6 +93,7 @@ def register_api_routes(
             results.append(item)
 
         payload: dict[str, Any] = {
+            **(prefix or {}),
             "results": results,
             "count": len(results),
             "has_more": result.has_more,
@@ -103,6 +105,26 @@ def register_api_routes(
             payload["reference_documents"] = result.reference_documents
             payload["reference_block_count"] = result.reference_block_count
         return _json_response(payload)
+
+    def _execute_saved(name: str) -> Response:
+        vault_path = get_vault_path()
+        if not vault_path:
+            return _error("No vault path configured on the daemon.", 503)
+        try:
+            sq = saved.load_saved(vault_path, name)
+        except saved.SavedQueryNotFound:
+            return _error(f"Saved query not found: {name}", 404)
+        except saved.SavedQueryError as e:
+            return _error(f"Saved query '{name}' is invalid: {e}", 422)
+        resolved = saved.resolve_spec(sq.spec, store=get_store())
+        return _execute_spec(
+            resolved,
+            prefix={
+                "query": name,
+                "description": sq.description,
+                "resolved_spec": resolved.model_dump(exclude_none=True),
+            },
+        )
 
     @mcp_server.custom_route("/api/search", methods=["GET"])
     async def api_search(request: Request) -> Response:
@@ -121,8 +143,10 @@ def register_api_routes(
         if not isinstance(body, dict):
             return _error("Body must be a JSON object (QuerySpec or {'saved': name}).", 400)
         if "saved" in body:
-            # Saved queries land in query-layer step 5.
-            return _error("Saved queries are not available yet.", 501)
+            name = body["saved"]
+            if not isinstance(name, str) or not name:
+                return _error("'saved' must be a query name.", 400)
+            return _run_released(lambda: _execute_saved(name))
         try:
             spec = QuerySpec.model_validate(body)
         except ValidationError as e:
@@ -184,6 +208,32 @@ def register_api_routes(
             )
 
         return _run_released(body)
+
+    # ── /api/queries ───────────────────────────────────────────────
+
+    @mcp_server.custom_route("/api/queries", methods=["GET"])
+    async def api_queries(request: Request) -> Response:
+        vault_path = get_vault_path()
+        if not vault_path:
+            return _error("No vault path configured on the daemon.", 503)
+        queries = saved.list_saved(vault_path)
+        return _json_response(
+            {
+                "queries": [
+                    {
+                        "name": q.name,
+                        "description": q.description,
+                        "spec": q.spec.model_dump(exclude_none=True),
+                    }
+                    for q in queries
+                ],
+                "count": len(queries),
+            }
+        )
+
+    @mcp_server.custom_route("/api/queries/{name}/results", methods=["GET"])
+    async def api_query_results(request: Request) -> Response:
+        return _run_released(lambda: _execute_saved(request.path_params["name"]))
 
     # ── /api/views ─────────────────────────────────────────────────
 

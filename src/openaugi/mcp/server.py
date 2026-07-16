@@ -45,7 +45,7 @@ from mcp.types import ToolAnnotations
 from openaugi.config import load_config
 from openaugi.http_api import register_api_routes
 from openaugi.models import get_embedding_model
-from openaugi.query import QuerySpec, engine
+from openaugi.query import QuerySpec, engine, saved
 from openaugi.store.sqlite import SQLiteStore
 
 logger = logging.getLogger(__name__)
@@ -196,44 +196,43 @@ def search(
 
     model = _get_embedding_model() if spec.mode == "semantic" else None
     result = engine.run(_get_store(), spec, embedding_model=model)
+    return _json(_render_run_result(result))
 
+
+def _render_run_result(result: engine.RunResult) -> dict:
+    """Agent-shaped envelope for an engine RunResult — shared by search and
+    run_query. Key order is part of the golden wire format; don't reorder."""
     if result.mode == "semantic":
         results = []
         for b in result.blocks:
             summary = _block_summary(b)
             summary["score"] = result.scores[b.id]
             results.append(summary)
-        return _json(
-            {
-                "results": results,
-                "count": len(results),
-                "has_more": result.has_more,
-                "mode": "semantic",
-            }
-        )
+        return {
+            "results": results,
+            "count": len(results),
+            "has_more": result.has_more,
+            "mode": "semantic",
+        }
 
     if result.mode in ("title", "keyword"):
-        return _json(
-            {
-                "results": [_block_summary(b) for b in result.blocks],
-                "count": len(result.blocks),
-                "has_more": result.has_more,
-                "mode": result.mode,
-            }
-        )
-
-    return _json(
-        {
+        return {
             "results": [_block_summary(b) for b in result.blocks],
             "count": len(result.blocks),
-            "reference_documents": result.reference_documents,
-            "reference_block_count": result.reference_block_count,
-            "total": result.total,
             "has_more": result.has_more,
-            "next_offset": result.next_offset,
-            "mode": "browse",
+            "mode": result.mode,
         }
-    )
+
+    return {
+        "results": [_block_summary(b) for b in result.blocks],
+        "count": len(result.blocks),
+        "reference_documents": result.reference_documents,
+        "reference_block_count": result.reference_block_count,
+        "total": result.total,
+        "has_more": result.has_more,
+        "next_offset": result.next_offset,
+        "mode": "browse",
+    }
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -418,6 +417,94 @@ def recent(
     blocks = engine.recent(_get_store(), k=k, kind=kind, source=source, tags=tags)
     results = [_block_summary(b) for b in blocks]
     return _json({"results": results, "count": len(results), "has_more": False})
+
+
+# ── Saved Queries ──────────────────────────────────────────────────
+
+
+def _no_vault_error() -> str:
+    return _json(
+        {
+            "status": "error",
+            "reason": (
+                "No vault path configured. "
+                "Run 'openaugi init' to set a default vault, "
+                "or set OPENAUGI_VAULT_PATH environment variable."
+            ),
+        }
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@_release_conn
+def list_queries() -> str:
+    """List saved queries — named, user-editable QuerySpecs.
+
+    A saved query is a markdown file at OpenAugi/AGENT/queries/<name>.md:
+    frontmatter carries a description plus the query definition, with
+    relative-date tokens ("-14d", "today", "$review-mark") resolved when
+    it runs — the lens principle applied to retrieval. Execute one with
+    run_query(name); edit the file in Obsidian to change what it returns."""
+    vault_path = _get_vault_path()
+    if not vault_path:
+        return _no_vault_error()
+    queries = saved.list_saved(vault_path)
+    return _json(
+        {
+            "queries": [
+                {
+                    "name": q.name,
+                    "description": q.description,
+                    "spec": q.spec.model_dump(exclude_none=True),
+                }
+                for q in queries
+            ],
+            "count": len(queries),
+        }
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@_release_conn
+def run_query(name: str) -> str:
+    """Execute a saved query by name (see list_queries).
+
+    Resolves the spec's relative-date tokens ("-14d", "today" against
+    today's date; "$review-mark" against the review-pass high-water mark),
+    runs it through the same engine as search, and returns the search
+    envelope prefixed with the query's name, description, and the resolved
+    spec. This is how recurring product queries (Dashboard task shelf,
+    review queue) stay data instead of hard-coded conventions."""
+    vault_path = _get_vault_path()
+    if not vault_path:
+        return _no_vault_error()
+    try:
+        sq = saved.load_saved(vault_path, name)
+    except saved.SavedQueryNotFound:
+        return _json(
+            {
+                "error": f"Saved query not found: {name}",
+                "hint": "Use list_queries() to see available saved queries.",
+            }
+        )
+    except saved.SavedQueryError as e:
+        return _json({"error": f"Saved query '{name}' is invalid: {e}"})
+
+    store = _get_store()
+    resolved = saved.resolve_spec(sq.spec, store=store)
+    model = _get_embedding_model() if resolved.mode == "semantic" else None
+    try:
+        result = engine.run(store, resolved, embedding_model=model)
+    except engine.EmptyQuerySpec:
+        return _json({"error": f"Saved query '{name}' resolves to an empty spec."})
+    return _json(
+        {
+            "query": name,
+            "description": sq.description,
+            "resolved_spec": resolved.model_dump(exclude_none=True),
+            **_render_run_result(result),
+        }
+    )
 
 
 # ── Classification Tools ───────────────────────────────────────────
@@ -921,6 +1008,7 @@ register_api_routes(
     get_store=_get_store,
     get_embedding_model=_get_embedding_model,
     release_store=lambda: _store.close() if _store is not None else None,
+    get_vault_path=_get_vault_path,
 )
 
 
