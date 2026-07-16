@@ -46,17 +46,13 @@ from mcp.types import ToolAnnotations
 from openaugi.config import load_config
 from openaugi.models import get_embedding_model
 from openaugi.pipeline.rerank import rerank as _rerank
-from openaugi.store.sqlite import SQLiteStore, normalize_utc_timestamp
+from openaugi.query import QuerySpec, engine
+from openaugi.query.engine import BRONZE_TAG
+from openaugi.store.sqlite import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
 mcp = FastMCP("openaugi")
-
-# User-demoted scaffolding (mobile curation demote). Stored without the `#`,
-# like every parsed tag. See [layers] bronze_weight in config.py. Capture
-# daily notes ingest per anchored entry (splitter anchor rule), so the tag
-# lands exactly on the demoted entry's block — bronze is by tag alone.
-BRONZE_TAG = "layer/bronze"
 
 
 # ── State (initialized lazily) ─────────────────────────────────────
@@ -175,12 +171,22 @@ def search(
     'reference_documents' — one entry per source document with document_id,
     block_count, and time range. Route the DOCUMENT (apply_routing with
     document_id), never its individual blocks."""
-    if (
-        not query
-        and not keyword
-        and not title
-        and not any([tags, after, before, after_ingested, kind, source, has_task])
-    ):
+    spec = QuerySpec(
+        query=query,
+        keyword=keyword,
+        title=title,
+        tags=tags,
+        after=after,
+        before=before,
+        after_ingested=after_ingested,
+        kind=kind,
+        source=source,
+        exclude_path_prefix=exclude_path_prefix,
+        has_task=has_task,
+        k=k,
+        offset=offset,
+    )
+    if spec.is_empty():
         return _json(
             {
                 "error": "No search parameters provided.",
@@ -190,149 +196,43 @@ def search(
             }
         )
 
-    # Normalize once so every mode compares in the storage format; a bad
-    # timestamp fails loudly here instead of silently matching nothing.
-    ingested_bound = normalize_utc_timestamp(after_ingested) if after_ingested else None
+    model = _get_embedding_model() if spec.mode == "semantic" else None
+    result = engine.run(_get_store(), spec, embedding_model=model)
 
-    def _ingested_too_old(block) -> bool:
-        return ingested_bound is not None and (block.ingested_at or "") < ingested_bound
-
-    def _fails_task_filter(block) -> bool:
-        """has_task=True: keep only user-marked tasks; bronze never counts."""
-        if has_task is not True:
-            return False
-        all_tags = {t.lstrip("#") for t in block.tags + block.metadata.get("augi_tags", [])}
-        if "layer/bronze" in all_tags:
-            return True
-        return not (block.metadata.get("has_open_task") or "type/task" in all_tags)
-
-    store = _get_store()
-
-    if title:
-        results = store.search_fts(f"title:{title}", limit=k + 1)
-        results = [
-            b
-            for b in results
-            if not _path_excluded(b, exclude_path_prefix)
-            and not _ingested_too_old(b)
-            and not _fails_task_filter(b)
-        ]
-        has_more = len(results) > k
-        results = results[:k]
-        return _json(
-            {
-                "results": [_block_summary(b) for b in results],
-                "count": len(results),
-                "has_more": has_more,
-                "mode": "title",
-            }
-        )
-
-    if keyword:
-        results = store.search_fts(keyword, limit=k + 1)
-        results = [
-            b
-            for b in results
-            if not _path_excluded(b, exclude_path_prefix)
-            and not _ingested_too_old(b)
-            and not _fails_task_filter(b)
-        ]
-        has_more = len(results) > k
-        results = results[:k]
-        return _json(
-            {
-                "results": [_block_summary(b) for b in results],
-                "count": len(results),
-                "has_more": has_more,
-                "mode": "keyword",
-            }
-        )
-
-    if query:
-        query_vec = _get_embedding_model().embed_query(query)
-        hits = store.semantic_search(query_vec, k=k * 3)
-
-        # Batch-fetch all hit blocks
-        hit_ids = [block_id for block_id, _ in hits]
-        blocks_map = store.get_blocks_by_ids(hit_ids)
-
+    if result.mode == "semantic":
         results = []
-        for block_id, distance in hits:
-            block = blocks_map.get(block_id)
-            if block is None:
-                continue
-            if kind and block.kind != kind:
-                continue
-            if source and block.source != source:
-                continue
-            if tags and not set(tags).intersection(
-                block.tags + block.metadata.get("augi_tags", [])
-            ):
-                continue
-            if after and (block.block_time or "") < after:
-                continue
-            if before and (block.block_time or "") > before:
-                continue
-            if _ingested_too_old(block):
-                continue
-            if _path_excluded(block, exclude_path_prefix):
-                continue
-            if _fails_task_filter(block):
-                continue
-            summary = _block_summary(block)
-            summary["score"] = round(1.0 - distance, 4)
+        for b in result.blocks:
+            summary = _block_summary(b)
+            summary["score"] = result.scores[b.id]
             results.append(summary)
-            if len(results) > k:
-                break
-
-        has_more = len(results) > k
-        results = results[:k]
         return _json(
             {
                 "results": results,
                 "count": len(results),
-                "has_more": has_more,
+                "has_more": result.has_more,
                 "mode": "semantic",
             }
         )
 
-    # Browse mode — SQL-filtered and paginated
-    blocks, total = store.get_blocks_filtered(
-        kind=kind or "data_block",
-        source=source,
-        after=after,
-        before=before,
-        after_ingested=after_ingested,
-        limit=k + 1,
-        offset=offset,
-        exclude_path_prefix=exclude_path_prefix,
-    )
-    # Tags filtering happens in Python (not pushed to SQL)
-    kept = []
-    reference_blocks = []
-    for b in blocks:
-        if tags and not set(tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
-            continue
-        if _fails_task_filter(b):
-            continue
-        if _reference_source_tags(b):
-            reference_blocks.append(b)
-        else:
-            kept.append(b)
+    if result.mode in ("title", "keyword"):
+        return _json(
+            {
+                "results": [_block_summary(b) for b in result.blocks],
+                "count": len(result.blocks),
+                "has_more": result.has_more,
+                "mode": result.mode,
+            }
+        )
 
-    reference_documents = _group_reference_documents(reference_blocks)
-    results = [_block_summary(b) for b in kept]
-    has_more = len(blocks) > k
-    results = results[:k]
     return _json(
         {
-            "results": results,
-            "count": len(results),
-            "reference_documents": reference_documents,
-            "reference_block_count": len(reference_blocks),
-            "total": total,
-            "has_more": has_more,
-            "next_offset": offset + k if has_more else None,
+            "results": [_block_summary(b) for b in result.blocks],
+            "count": len(result.blocks),
+            "reference_documents": result.reference_documents,
+            "reference_block_count": result.reference_block_count,
+            "total": result.total,
+            "has_more": result.has_more,
+            "next_offset": result.next_offset,
             "mode": "browse",
         }
     )
@@ -1175,53 +1075,6 @@ def get_note_resource(title: str) -> str:
 
 
 # ── Helpers ────────────────────────────────────────────────────────
-
-
-def _path_excluded(block, prefix: str | None) -> bool:
-    """True if the block's source_path falls under an excluded prefix."""
-    return bool(prefix) and block.metadata.get("source_path", "").startswith(prefix)
-
-
-def _reference_source_tags(block) -> list[str]:
-    """The block's source/* tags (set by [vault.source_rules] for synced
-    reference material like Readwise or Snipd). Empty list = user capture."""
-    all_tags = block.tags + block.metadata.get("augi_tags", [])
-    return [t for t in all_tags if t.startswith("source/")]
-
-
-def _group_reference_documents(blocks) -> list[dict]:
-    """Collapse reference-source blocks into one entry per source document.
-
-    Reference material is one artifact: the review pass routes the document
-    once (apply_routing with document_id), never its individual blocks.
-    """
-    from openaugi.model.block import Block as BlockModel
-
-    groups: dict[str, dict] = {}
-    for b in blocks:
-        source_path = b.metadata.get("source_path", "")
-        g = groups.get(source_path)
-        if g is None:
-            g = groups[source_path] = {
-                "source_path": source_path,
-                "document_id": BlockModel.make_document_id(source_path),
-                "title": Path(source_path).stem if source_path else b.title,
-                "source_tags": [],
-                "block_count": 0,
-                "first_block_time": b.block_time,
-                "last_block_time": b.block_time,
-                "snippet": (b.content or "")[:200],
-            }
-        g["block_count"] += 1
-        for t in _reference_source_tags(b):
-            if t not in g["source_tags"]:
-                g["source_tags"].append(t)
-        if b.block_time:
-            if not g["first_block_time"] or b.block_time < g["first_block_time"]:
-                g["first_block_time"] = b.block_time
-            if not g["last_block_time"] or b.block_time > g["last_block_time"]:
-                g["last_block_time"] = b.block_time
-    return list(groups.values())
 
 
 def _decision_adds(d: dict) -> list[str]:
