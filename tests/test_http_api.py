@@ -53,15 +53,21 @@ def http_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture(scope="module")
-def client(http_db: Path):
+def client(http_db: Path, tmp_path_factory: pytest.TempPathFactory):
     """TestClient over the real daemon app (server module's FastMCP)."""
     import openaugi.mcp.server as srv
 
     old_db = os.environ.get("OPENAUGI_DB")
+    old_vault = os.environ.get("OPENAUGI_VAULT_PATH")
     os.environ["OPENAUGI_DB"] = str(http_db)
+    # Empty vault: saved-query routes resolve against a vault with no
+    # queries dir (and never against the developer's real config.toml).
+    os.environ["OPENAUGI_VAULT_PATH"] = str(tmp_path_factory.mktemp("empty-vault"))
     srv._store = None
     srv._embedding_model = FakeEmbedder()
 
+    # The session manager's run() is once-per-instance; tests build fresh apps.
+    srv.mcp._session_manager = None
     app = srv.mcp.streamable_http_app()
     with TestClient(app) as c:
         yield c
@@ -72,6 +78,10 @@ def client(http_db: Path):
         os.environ.pop("OPENAUGI_DB", None)
     else:
         os.environ["OPENAUGI_DB"] = old_db
+    if old_vault is None:
+        os.environ.pop("OPENAUGI_VAULT_PATH", None)
+    else:
+        os.environ["OPENAUGI_VAULT_PATH"] = old_vault
 
 
 class TestSearchRoute:
@@ -139,9 +149,11 @@ class TestQueryRoute:
             store.close()
         assert post_ids == engine_ids
 
-    def test_saved_placeholder_501(self, client: TestClient):
+    def test_saved_unknown_404(self, client: TestClient):
+        """This client's vault has no queries dir — a saved name is a 404
+        (full saved-query coverage lives in test_saved_queries.py)."""
         r = client.post("/api/query", json={"saved": "dashboard-task-shelf"})
-        assert r.status_code == 501
+        assert r.status_code == 404
 
     def test_invalid_spec_400(self, client: TestClient):
         r = client.post("/api/query", json={"k": "many"})

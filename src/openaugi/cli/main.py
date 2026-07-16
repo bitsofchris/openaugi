@@ -190,6 +190,9 @@ def init():
         "lens-template.md": "THE lens contract — copy to start a new lens",
         "lenses/distill.md": "Distill lens — on-command topic distillation with provenance",
         "lenses/nuggets.md": "Nugget lens — nominate promotable insights from working notes",
+        "queries/dashboard-task-shelf.md": "Saved query — the Dashboard task shelf",
+        "queries/review-queue.md": "Saved query — blocks ingested since the last review pass",
+        "queries/today.md": "Saved query — today's blocks by content date",
     }
 
     copied = 0
