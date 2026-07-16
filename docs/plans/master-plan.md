@@ -7,6 +7,25 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-07-15 (later): anchor segmentation — capture daily notes now ingest
+per entry.** The splitter gained a format-native rule: a line that is solely
+an Obsidian block anchor (`^augi-<id8>`, any `^id`) closes the segment above
+it, so a mobile capture day ingests as one block PER anchored entry instead
+of one whole-day blob — per-entry embeddings/tags/timestamps (`HH:MM —`
+leads become `block_time`), zzz dispatch scoped to its own entry (unrelated
+edits no longer re-dispatch), and `#layer/bronze` is by tag alone (the
+`_all_entries_bronze` whole-day workaround from the morning's bronze work is
+removed). Anchor extracted to block metadata `anchor_id`; raw hash still
+covers it. New `SPLITTER_VERSION` salts doc hashes so the first ingest
+re-parses everything once — capture notes churn (day-block removed, N entry
+blocks added + embedded, their zzz re-dispatch once); all other notes land
+in `blocks_kept`. Design + migration notes:
+[anchor-segmentation.md](anchor-segmentation.md). Contract fixture FILE
+unchanged (mobile writer untouched; re-vendor via mobile's
+`sync-contract-fixtures.sh`); pinned expectations in
+`test_contract_fixtures.py` now assert 5 per-entry blocks. Left off / next:
+unchanged from 07-12 below.
+
 **2026-07-15: mobile's curation layer (bronze demote + distill, shipped
 there 2026-07-14) honored on this side.** Three pieces:
 (1) **`#layer/bronze` down-weighting** — new `[layers] bronze_weight`
@@ -181,7 +200,9 @@ prefix was demonstrated to fail a test in BOTH repos. Documented latent
 behavior worth noting: a mobile daily note (one `# YYYY-MM-DD` header,
 blank-line-separated entries) ingests as a SINGLE content-hash block — the
 splitter cuts on headings/`qqq` only — so editing any entry rehashes the whole
-note; consistent with "text is truth," pinned not fixed.
+note; consistent with "text is truth," pinned not fixed. *(Reversed
+2026-07-15: the splitter's anchor rule now cuts per `^augi-` entry — see
+that STATUS entry and docs/plans/anchor-segmentation.md.)*
 
 **2026-07-07 (last session of the day): M8 opened — source firewall LIVE
 + idea-lineage lens.** Two builds, both grounded in Chris's own notes

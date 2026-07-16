@@ -296,6 +296,11 @@ def _parse_file(
 
         all_tags = _apply_source_rules(rel_path, _unique_ordered(fm_tags + seg.tags), source_rules)
 
+        # An anchored capture entry with a parsed `HH:MM —` lead gets a
+        # time-of-day timestamp instead of inheriting the bare file date.
+        if seg.entry_time and _parse_date(resolved_ts):
+            resolved_ts = f"{resolved_ts}T{seg.entry_time}:00"
+
         entry_metadata: dict = {
             "source_path": rel_path,
             "section_date": seg.section_date,
@@ -304,6 +309,8 @@ def _parse_file(
             "file_created_at": file_created,
             "granularity": seg.granularity,
         }
+        if seg.anchor_id:
+            entry_metadata["anchor_id"] = seg.anchor_id
         if fm_created:
             entry_metadata["frontmatter_created"] = fm_created
         if seg.zzz_instructions:
@@ -409,15 +416,22 @@ def _resolve_wikilink(link_target: str, file_index: dict[str, str]) -> str:
     return file_index.get(link_target, f"{link_target}.md")
 
 
+# Document hashes gate file-level incremental parsing, so they are salted
+# with the splitter version: a segmentation-rule change re-parses every file
+# once (block-level diffing keeps unchanged segments, so only notes whose
+# segmentation actually changed churn).
+_DOC_HASH_SALT = f"splitter-v{_splitter.SPLITTER_VERSION}:".encode()
+
+
 def _hash_file(file_path: Path) -> str:
-    """SHA-256 hash of file content (truncated to 16 hex chars)."""
+    """Salted SHA-256 hash of file content (truncated to 16 hex chars)."""
     with open(file_path, "rb") as f:
-        return hashlib.sha256(f.read()).hexdigest()[:16]
+        return hashlib.sha256(_DOC_HASH_SALT + f.read()).hexdigest()[:16]
 
 
 def _hash_content(content: str) -> str:
-    """SHA-256 hash of string content."""
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+    """Salted SHA-256 hash of string content — must match `_hash_file`."""
+    return hashlib.sha256(_DOC_HASH_SALT + content.encode("utf-8")).hexdigest()[:16]
 
 
 def _should_include(file_path: Path, vault_root: Path, patterns: list[str]) -> bool:

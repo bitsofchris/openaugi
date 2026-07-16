@@ -419,35 +419,30 @@ class TestMCPTools:
         assert "silver1" in ids
         assert "bronze1" not in ids  # 0.5 clears the 0.1 gate — excluded by tag, not score
 
-    def test_mixed_capture_day_block_keeps_full_weight(self, populated_db: Path):
-        """A day-note block (document granularity) with one demoted entry is NOT
-        bronze — only a block whose every anchored entry carries the tag is."""
+    def test_capture_entry_blocks_bronze_by_tag_alone(self, populated_db: Path):
+        """Capture entries ingest per anchor (splitter anchor rule), so the
+        demoted entry's block is bronze by tag alone while its siblings from
+        the same day keep full weight — no whole-day content inspection.
+        Replaces the pre-anchor-rule mixed-day workaround test."""
         from openaugi.model.block import Block
 
         store = SQLiteStore(populated_db)
         store.insert_blocks(
             [
                 Block(
-                    id="mixedday",
+                    id="entrykeep",
                     kind="data_block",
-                    content=(
-                        "# 2026-07-14\n\n"
-                        "09:15 — wombat scaffolding thought #layer/bronze\n^augi-aaaa1111\n\n"
-                        "10:30 — wombat keeper insight, full weight\n^augi-bbbb2222\n"
-                    ),
-                    block_time="2026-07-14",
-                    tags=["layer/bronze"],
+                    content="10:30 — wombat keeper insight, full weight",
+                    block_time="2026-07-14T10:30:00",
+                    metadata={"anchor_id": "augi-bbbb2222"},
                 ),
                 Block(
-                    id="allbronze",
+                    id="entrydemoted",
                     kind="data_block",
-                    content=(
-                        "# 2026-07-13\n\n"
-                        "09:15 — wombat exhaust one #layer/bronze\n^augi-cccc3333\n\n"
-                        "09:20 — wombat exhaust two #layer/bronze\n^augi-dddd4444\n"
-                    ),
-                    block_time="2026-07-13",
+                    content="09:15 — wombat scaffolding thought #layer/bronze",
+                    block_time="2026-07-14T09:15:00",
                     tags=["layer/bronze"],
+                    metadata={"anchor_id": "augi-aaaa1111"},
                 ),
             ]
         )
@@ -457,8 +452,8 @@ class TestMCPTools:
 
         result = json.loads(get_context("wombat", expand=False))
         scores = {r["id"]: r["score"] for r in result["direct_results"]}
-        assert scores["mixedday"] == 1.0  # one good entry keeps the day full weight
-        assert scores["allbronze"] == 0.5  # fully demoted day is bronze
+        assert scores["entrykeep"] == 1.0
+        assert scores["entrydemoted"] == 0.5
 
     def test_get_context_bronze_weight_one_disables(self, populated_db: Path, monkeypatch):
         """[layers] bronze_weight = 1.0 turns the down-weighting off."""

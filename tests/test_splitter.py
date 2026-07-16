@@ -117,6 +117,92 @@ class TestSplitText:
         assert segs[0].section_heading == "Real"
 
 
+class TestAnchorSplitting:
+    """A line that is only an Obsidian block anchor (`^id`) closes the current
+    segment — the anchor names the content above it. Format-native: applies to
+    any note, not just mobile capture daily notes."""
+
+    def test_anchored_entries_become_per_entry_segments(self):
+        text = (
+            "# 2026-07-08\n\n"
+            "09:15 — first thought\n^augi-aaaa1111\n\n"
+            "10:30 — second thought\n^augi-bbbb2222\n"
+        )
+        segs = split_text(text)
+        assert len(segs) == 2
+        assert [s.anchor_id for s in segs] == ["augi-aaaa1111", "augi-bbbb2222"]
+        assert [s.clean_content for s in segs] == [
+            "09:15 — first thought",
+            "10:30 — second thought",
+        ]
+        assert all(s.section_heading == "2026-07-08" for s in segs)
+
+    def test_anchor_kept_in_raw_content_stripped_from_clean(self):
+        segs = split_text("a hand-anchored paragraph\n^my-ref")
+        assert segs[0].anchor_id == "my-ref"
+        assert segs[0].content.endswith("^my-ref")  # hash identity covers the anchor
+        assert "^my-ref" not in segs[0].clean_content
+
+    def test_multi_paragraph_entry_stays_one_segment(self):
+        text = "first paragraph of the entry\n\nsecond paragraph, same entry\n^augi-cccc3333\n"
+        segs = split_text(text)
+        assert len(segs) == 1
+        assert segs[0].anchor_id == "augi-cccc3333"
+        assert "second paragraph" in segs[0].clean_content
+
+    def test_unanchored_trailing_text_is_own_segment(self):
+        segs = split_text("an anchored entry\n^augi-dddd4444\n\na human annotation added later\n")
+        assert [s.anchor_id for s in segs] == ["augi-dddd4444", None]
+        assert segs[1].clean_content == "a human annotation added later"
+
+    def test_inline_caret_does_not_split(self):
+        """Only a line that is SOLELY an anchor closes a segment — inline
+        `^ref` text and block references like [[note#^ref]] don't."""
+        segs = split_text("see the earlier point ^not-alone here\nand [[note#^some-ref]] too")
+        assert len(segs) == 1
+        assert segs[0].anchor_id is None
+
+    def test_qqq_and_anchors_mixed(self):
+        text = "alpha\n^a1\nbeta\nqqq\ngamma\n^a2\n"
+        segs = split_text(text)
+        assert [(s.clean_content, s.anchor_id) for s in segs] == [
+            ("alpha", "a1"),
+            ("beta", None),
+            ("gamma", "a2"),
+        ]
+
+    def test_anchor_only_piece_dropped(self):
+        """A dangling anchor with no content above it names nothing — dropped."""
+        segs = split_text("real entry\n^a1\n^a2\n")
+        assert len(segs) == 1
+        assert segs[0].anchor_id == "a1"
+
+    def test_zzz_attaches_to_its_own_entry(self):
+        text = (
+            "# 2026-07-08\n\n"
+            "09:15 — plain thought\n^augi-aaaa1111\n\n"
+            "14:20 — try a lens\nzzz: apply lens distill\n^augi-bbbb2222\n"
+        )
+        segs = split_text(text)
+        assert segs[0].zzz_instructions == []
+        assert segs[1].zzz_instructions == ["apply lens distill"]
+        assert "zzz" not in segs[1].clean_content
+
+    def test_entry_time_parsed_from_anchored_lead(self):
+        segs = split_text("9:15 — early thought\n^a1\n\n16:45 —\nzzz: recap today\n^a2\n")
+        assert [s.entry_time for s in segs] == ["09:15", "16:45"]
+
+    def test_entry_time_ignored_when_invalid_or_unanchored(self):
+        segs = split_text("29:99 — not a clock\n^a1\n\n10:30 — unanchored trailing text\n")
+        assert [s.entry_time for s in segs] == [None, None]
+
+    def test_single_anchored_note_is_document_granularity(self):
+        segs = split_text("the whole note is one anchored block\n^solo")
+        assert len(segs) == 1
+        assert segs[0].granularity == "document"
+        assert segs[0].anchor_id == "solo"
+
+
 class TestSplitFile:
     def test_split_file_returns_result_with_metadata(self, tmp_path: Path):
         p = tmp_path / "2026-04-08-journal.md"
