@@ -95,6 +95,7 @@ def run(store: SQLiteStore, spec, embedding_model=None) -> RunResult:
             b
             for b in results
             if not _path_excluded(b, spec.exclude_path_prefix)
+            and not _path_not_included(b, spec.include_path_prefix)
             and not _ingested_too_old(b)
             and not _fails_task_filter(b)
         ]
@@ -132,6 +133,8 @@ def run(store: SQLiteStore, spec, embedding_model=None) -> RunResult:
                 continue
             if _path_excluded(block, spec.exclude_path_prefix):
                 continue
+            if _path_not_included(block, spec.include_path_prefix):
+                continue
             if _fails_task_filter(block):
                 continue
             kept.append(block)
@@ -152,6 +155,7 @@ def run(store: SQLiteStore, spec, embedding_model=None) -> RunResult:
         limit=k + 1,
         offset=spec.offset,
         exclude_path_prefix=spec.exclude_path_prefix,
+        include_path_prefix=spec.include_path_prefix,
     )
     # Tags filtering happens in Python (not pushed to SQL)
     kept = []
@@ -590,6 +594,14 @@ def context(
 def _path_excluded(block: Block, prefix: str | None) -> bool:
     """True if the block's source_path falls under an excluded prefix."""
     return bool(prefix) and block.metadata.get("source_path", "").startswith(prefix)
+
+
+def _path_not_included(block: Block, prefix: str | None) -> bool:
+    """True if an include prefix was given and the block falls outside it.
+
+    The mirror of _path_excluded. A block with no source_path can't be under
+    the requested folder, so it fails the filter too."""
+    return bool(prefix) and not block.metadata.get("source_path", "").startswith(prefix)
 
 
 def _reference_source_tags(block: Block) -> list[str]:

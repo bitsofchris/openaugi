@@ -296,10 +296,29 @@ Always regenerate `View - Dashboard.md` (same folder):
 1. `get_review_state()` → `since` = last_run. If null, this is the first
    run: backfill from a sensible recent date (e.g. two weeks back, or the
    date the user gives).
-2. **Pull the new-blocks batch — one query, read by every step below.**
-   `search(after_ingested=since, exclude_path_prefix="OpenAugi/")` (browse
-   mode, paginate via offset) — the prefix filter keeps derived artifacts
-   out of the queue server-side. `after_ingested` filters on when a block
+2. **Pull the new-blocks batch — TWO queries, read by every step below.**
+
+   ```
+   search(after_ingested=since, exclude_path_prefix="OpenAugi/")      # the vault
+   search(after_ingested=since, include_path_prefix="OpenAugi/Capture/")  # the phone
+   ```
+
+   (browse mode, paginate each via offset; concatenate into one batch.)
+
+   The first drops everything under `OpenAugi/`, which is agent-generated
+   output. The second reaches back in for the one folder that isn't:
+   **`OpenAugi/Capture/` is the mobile capture stream** — the user's voice
+   notes, their `aaa:` instructions, and the answers they give to Dashboard
+   nominations from their phone. It is truth, and it must be routed like
+   any other capture.
+
+   Two queries rather than a list of excluded folders, deliberately: a new
+   generated folder is then excluded automatically instead of leaking into
+   the queue unnoticed. (Query 2 did not exist until 2026-08-01. For eight
+   passes the phone stream was invisible — a nomination the user approved
+   from his phone sat unexecuted for a week because the pass never saw it.)
+
+   `after_ingested` filters on when a block
    entered the DB; do NOT use `after=` here — it compares content dates
    (often date-only, and unchanged by edits), so it misses same-day
    captures and re-ingested edited blocks. This is the full pass scope;

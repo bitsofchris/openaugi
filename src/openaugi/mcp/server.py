@@ -124,6 +124,7 @@ def search(
     kind: str | None = None,
     source: str | None = None,
     exclude_path_prefix: str | None = None,
+    include_path_prefix: str | None = None,
     has_task: bool | None = None,
 ) -> str:
     """Search the knowledge base. Returns block summaries (not full content).
@@ -155,7 +156,20 @@ def search(
 
     exclude_path_prefix drops blocks whose source_path starts with the given
     prefix (e.g. exclude_path_prefix="OpenAugi/" keeps derived artifacts out
-    of a review queue). Works in every mode.
+    of a review queue). include_path_prefix is the mirror — keep ONLY blocks
+    under that prefix. Both work in every mode.
+
+    Use them as a PAIR, in two queries, to reach one folder inside an
+    otherwise-excluded tree. The review pass does exactly this:
+
+        search(after_ingested=since, exclude_path_prefix="OpenAugi/")
+        search(after_ingested=since, include_path_prefix="OpenAugi/Capture/")
+
+    Everything under OpenAugi/ is generated output EXCEPT Capture/, which is
+    the user's mobile capture stream — their voice notes, aaa: instructions,
+    and Dashboard answers. Excluding the tree and then naming the one folder
+    of truth means a new generated folder is excluded automatically, instead
+    of silently leaking into the queue.
 
     has_task=True keeps only blocks the user marked as a task — an open
     `- [ ] …` checkbox (metadata has_open_task, extracted at ingest) or a
@@ -180,6 +194,7 @@ def search(
         kind=kind,
         source=source,
         exclude_path_prefix=exclude_path_prefix,
+        include_path_prefix=include_path_prefix,
         has_task=has_task,
         k=k,
         offset=offset,

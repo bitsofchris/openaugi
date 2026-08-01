@@ -1104,6 +1104,9 @@ def search(
     exclude_path_prefix: str | None = typer.Option(
         None, "--exclude-path-prefix", help="Drop blocks whose source_path starts with this"
     ),
+    include_path_prefix: str | None = typer.Option(
+        None, "--include-path-prefix", help="Keep only blocks whose source_path starts with this"
+    ),
     task: bool = typer.Option(False, "--task", help="Only user-marked tasks (bronze excluded)"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
@@ -1128,6 +1131,7 @@ def search(
         after_ingested=after_ingested,
         kind=kind,
         exclude_path_prefix=exclude_path_prefix,
+        include_path_prefix=include_path_prefix,
         has_task=task or None,
         k=k,
     )

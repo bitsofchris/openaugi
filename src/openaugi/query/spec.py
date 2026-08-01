@@ -23,7 +23,10 @@ class QuerySpec(BaseModel):
     compare block_time (content date); `after_ingested` compares ingest
     time (the review-queue axis); `has_task` keeps user-marked tasks and
     always excludes layer/bronze; `exclude_path_prefix` drops blocks whose
-    source_path starts with the prefix.
+    source_path starts with the prefix and `include_path_prefix` keeps only
+    those that do. The two are mirrors, and pairing them across two queries
+    is how a caller scopes into an otherwise-excluded tree (see the review
+    pass: exclude `OpenAugi/`, then include `OpenAugi/Capture/`).
     """
 
     query: str | None = None
@@ -36,6 +39,7 @@ class QuerySpec(BaseModel):
     kind: str | None = None
     source: str | None = None
     exclude_path_prefix: str | None = None
+    include_path_prefix: str | None = None
     has_task: bool | None = None
     k: int = 100
     offset: int = 0
@@ -56,6 +60,11 @@ class QuerySpec(BaseModel):
 
         `has_task=False` counts as not provided (matches the historical
         `any([...])` truthiness check in the MCP tool).
+
+        `include_path_prefix` counts as a filter — "everything under this
+        folder" is a complete question. `exclude_path_prefix` does not: an
+        exclusion alone only narrows the whole corpus, which is never what
+        the caller meant.
         """
         return not (
             self.query
@@ -69,6 +78,7 @@ class QuerySpec(BaseModel):
                     self.after_ingested,
                     self.kind,
                     self.source,
+                    self.include_path_prefix,
                     self.has_task,
                 ]
             )
