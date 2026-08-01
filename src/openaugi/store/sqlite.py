@@ -273,6 +273,7 @@ class SQLiteStore:
         limit: int = 100,
         offset: int = 0,
         exclude_path_prefix: str | None = None,
+        include_path_prefix: str | None = None,
     ) -> tuple[list[Block], int]:
         """Fetch blocks with SQL-level filtering and pagination.
 
@@ -296,6 +297,14 @@ class SQLiteStore:
         exclude_path_prefix: drop blocks whose metadata.source_path starts with
         this prefix (e.g. "OpenAugi/" to keep derived artifacts out of a
         review queue). Blocks with no source_path are kept.
+
+        include_path_prefix: the mirror — keep ONLY blocks whose source_path
+        starts with this prefix. Blocks with no source_path are dropped, since
+        they cannot be under the requested folder. Pairing the two is how a
+        caller scopes to one folder inside an otherwise-excluded tree: the
+        review pass excludes "OpenAugi/" for its main sweep, then runs a second
+        query with include_path_prefix="OpenAugi/Capture/" to pick up the
+        mobile capture stream, which is truth rather than derived output.
         """
         conditions: list[str] = []
         params: list[str | int] = []
@@ -320,6 +329,11 @@ class SQLiteStore:
                 "COALESCE(json_extract(metadata, '$.source_path'), '') NOT LIKE ? ESCAPE '\\'"
             )
             params.append(_escape_like(exclude_path_prefix) + "%")
+        if include_path_prefix:
+            conditions.append(
+                "COALESCE(json_extract(metadata, '$.source_path'), '') LIKE ? ESCAPE '\\'"
+            )
+            params.append(_escape_like(include_path_prefix) + "%")
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 

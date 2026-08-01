@@ -536,6 +536,83 @@ class TestGetBlocksFiltered:
         assert ids == {"capture1", "capture2", "nopath"}
         assert total == 3
 
+    def test_include_path_prefix(self, store: SQLiteStore):
+        """The review-pass second query: reach into an excluded tree.
+
+        Query 1 excludes OpenAugi/ wholesale; query 2 names the one folder
+        under it that is truth rather than generated output.
+        """
+        self._seed(store)
+        store.insert_blocks(
+            [
+                Block(
+                    id="phone",
+                    kind="data_block",
+                    content="a mobile capture",
+                    block_time="2026-07-05",
+                    metadata={"source_path": "OpenAugi/Capture/2026-07-05.md"},
+                ),
+            ]
+        )
+        blocks, total = store.get_blocks_filtered(
+            kind="data_block", include_path_prefix="OpenAugi/Capture/"
+        )
+        assert {b.id for b in blocks} == {"phone"}
+        assert total == 1  # the count honours the include filter too
+
+    def test_include_drops_blocks_without_a_source_path(self, store: SQLiteStore):
+        """A block with no source_path can't be under the requested folder."""
+        self._seed(store)
+        blocks, total = store.get_blocks_filtered(
+            kind="data_block", include_path_prefix="Journal/"
+        )
+        assert {b.id for b in blocks} == {"capture1", "capture2"}
+        assert "nopath" not in {b.id for b in blocks}
+        assert total == 2
+
+    def test_include_wildcards_match_literally(self, store: SQLiteStore):
+        store.insert_blocks(
+            [
+                Block(
+                    id="under",
+                    kind="data_block",
+                    content="x",
+                    metadata={"source_path": "My_Dir/note.md"},
+                ),
+                Block(
+                    id="lookalike",
+                    kind="data_block",
+                    content="y",
+                    metadata={"source_path": "MyXDir/note.md"},
+                ),
+            ]
+        )
+        blocks, total = store.get_blocks_filtered(kind="data_block", include_path_prefix="My_Dir/")
+        assert {b.id for b in blocks} == {"under"}
+        assert total == 1
+
+    def test_include_and_exclude_compose(self, store: SQLiteStore):
+        """Both applied: include narrows to a folder, exclude carves out of it."""
+        self._seed(store)
+        store.insert_blocks(
+            [
+                Block(
+                    id="phone",
+                    kind="data_block",
+                    content="a mobile capture",
+                    block_time="2026-07-05",
+                    metadata={"source_path": "OpenAugi/Capture/2026-07-05.md"},
+                ),
+            ]
+        )
+        blocks, total = store.get_blocks_filtered(
+            kind="data_block",
+            include_path_prefix="OpenAugi/",
+            exclude_path_prefix="OpenAugi/Views/",
+        )
+        assert {b.id for b in blocks} == {"phone"}
+        assert total == 1
+
     def test_no_prefix_returns_all(self, store: SQLiteStore):
         self._seed(store)
         blocks, total = store.get_blocks_filtered(kind="data_block")

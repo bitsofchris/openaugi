@@ -79,6 +79,31 @@ class TestEngineRun:
             not b.metadata.get("source_path", "").startswith("OpenAugi/") for b in keyword.blocks
         )
 
+    def test_path_inclusion_all_modes(self, store: SQLiteStore):
+        """include_path_prefix is the mirror: keep only what's under the folder.
+
+        This is the review pass's second query — after excluding OpenAugi/
+        wholesale, it names OpenAugi/Capture/ to pick the phone stream back up.
+        """
+        browse = engine.run(store, QuerySpec(after="2026-01-01", include_path_prefix="OpenAugi/"))
+        assert browse.blocks
+        assert all(
+            b.metadata.get("source_path", "").startswith("OpenAugi/") for b in browse.blocks
+        )
+
+        keyword = engine.run(store, QuerySpec(keyword="quantum", include_path_prefix="OpenAugi/"))
+        assert [b.id for b in keyword.blocks] == ["b5-derived"]
+
+        # A folder nothing lives under returns empty, not everything
+        none = engine.run(store, QuerySpec(keyword="quantum", include_path_prefix="Nowhere/"))
+        assert none.blocks == []
+
+    def test_include_prefix_alone_is_a_valid_query(self):
+        """ "Everything under this folder" is a complete question; a bare
+        exclusion is not."""
+        assert not QuerySpec(include_path_prefix="OpenAugi/Capture/").is_empty()
+        assert QuerySpec(exclude_path_prefix="OpenAugi/").is_empty()
+
     def test_after_ingested_bound(self, store: SQLiteStore):
         result = engine.run(store, QuerySpec(after_ingested="2026-05-01T00:00:00Z"))
         ids = [b.id for b in result.blocks]

@@ -118,9 +118,18 @@ search(after="2026-04-05", before="2026-04-12")
 - `total` — full result set size before pagination; use to plan how many calls are needed
 - `has_more` + `next_offset` — call again with `offset=next_offset` to get the next page
 - Default `k` is 100; for a typical week (~200 blocks) you'll need at most 2 calls
-- Tags filtering still happens in Python — `total` reflects pre-tag counts
+- Tags filtering still happens in Python — `total` reflects pre-tag counts, and
+  `tags`/`has_task` are applied only to the rows the current page already fetched.
+  On a large corpus a page can come back **empty while `total` is large**: the
+  filter matched nothing *on that page*. Paginate before concluding there are no
+  matches. (Known sharp edge — these two belong in SQL.)
 - `exclude_path_prefix="OpenAugi/"` — drop blocks by `source_path` prefix at the SQL
   level (keeps derived artifacts out of a review queue); works in every mode
+- `include_path_prefix="OpenAugi/Capture/"` — the mirror: keep **only** blocks under
+  that prefix (blocks with no `source_path` are dropped). Pair the two across two
+  queries to reach one folder inside an otherwise-excluded tree — the review pass
+  excludes `OpenAugi/` for its main sweep, then includes `OpenAugi/Capture/` to pick
+  up the mobile capture stream, which is truth rather than generated output
 - `after_ingested=<iso timestamp>` — filter on when the block entered the DB rather
   than its content date; works in every mode. `after`/`before` compare `block_time`,
   which is often date-only (`"2026-07-12"` sorts before any same-day timestamp) and is
