@@ -116,7 +116,14 @@ def build_store(db_path: Path | str) -> None:
         ),
     ]
     tag_block = Block(
-        id=Block.make_tag_id("idea"), kind="context_block:tag", title="idea", source="vault"
+        id=Block.make_tag_id("idea"),
+        kind="context_block:tag",
+        title="idea",
+        source="vault",
+        # Pinned: Block.ingested_at defaults to now(), which made this corpus
+        # non-deterministic. Latent until the wire format started projecting
+        # ingested_at (2026-08-17) — every other block here was already pinned.
+        ingested_at="2026-05-01T00:00:00.000Z",
     )
 
     data = [

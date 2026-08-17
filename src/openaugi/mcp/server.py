@@ -980,6 +980,16 @@ def _decision_adds(d: dict) -> list[str]:
 
 
 def _block_summary(block) -> dict:
+    """The read-tool wire row.
+
+    `anchor_id` + `ingested_at` are projected so consumers can collapse
+    superseded versions of an entry. Blocks are append-only and identity is a
+    content hash, so editing a note in Obsidian leaves the previous version in
+    the store: two rows sharing `source_path` and `anchor_id` (the Obsidian
+    block anchor — the entry's stable identity) with different content hashes.
+    The newest `ingested_at` is current. Without these fields a reader can only
+    guess by content similarity, which hides genuinely distinct blocks.
+    """
     return {
         "id": block.id,
         "kind": block.kind,
@@ -990,6 +1000,8 @@ def _block_summary(block) -> dict:
         "block_time": block.block_time,
         "source": block.source,
         "source_path": block.metadata.get("source_path", ""),
+        "anchor_id": block.metadata.get("anchor_id"),
+        "ingested_at": block.ingested_at,
     }
 
 
