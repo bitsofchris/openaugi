@@ -127,10 +127,10 @@ adapters present it (docs/reference/query-layer.md):
 
   engine functions:
   → run(QuerySpec): title/keyword/semantic/browse dispatch + filters
-    (after_ingested bound, has_task + bronze exclusion, path exclusion,
+    (after_ingested bound, has_task filter, path exclusion,
      reference-document grouping, pagination envelope)
   → fetch / related / traverse / recent / members / view / views
-  → context: FTS + semantic (3× overfetch) → bronze weighting
+  → context: FTS + semantic (3× overfetch)
              → MMR re-rank (rerank.py) → salience gate → expand via links
   → saved queries: OpenAugi/AGENT/queries/*.md (QuerySpec in frontmatter,
     tokens "-14d"/"today"/"$review-mark" resolved at run time)

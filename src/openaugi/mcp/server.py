@@ -173,8 +173,7 @@ def search(
 
     has_task=True keeps only blocks the user marked as a task — an open
     `- [ ] …` checkbox (metadata has_open_task, extracted at ingest) or a
-    type/task tag — and always excludes layer/bronze (demoted scaffolding
-    carries no signal). Deterministic: this is the Dashboard task-shelf
+    type/task tag. Deterministic: this is the Dashboard task-shelf
     query (e.g. search(has_task=True, after=<14 days ago>)). Works in
     every mode.
 
@@ -394,8 +393,7 @@ def get_context(
       scores themselves are unchanged. Unknown purpose or no config key = no gate.
       Regular research calls should omit this.
 
-    Blocks tagged #layer/bronze (user-demoted scaffolding) are down-weighted by
-    config [layers] bronze_weight before reranking, and excluded entirely when
+    When
     purpose is set — demoted thoughts never resurface proactively."""
     try:
         model = _get_embedding_model()

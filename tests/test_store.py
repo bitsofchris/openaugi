@@ -344,26 +344,6 @@ class TestEmbeddingHelpers:
         assert with_emb[0].id == "e1"
 
 
-class TestGetTagsForIds:
-    def test_combines_user_tags_and_augi_tags(self, store: SQLiteStore):
-        store.insert_blocks(
-            [
-                Block(id="t1", kind="data_block", content="a", tags=["layer/bronze", "idea"]),
-                Block(id="t2", kind="data_block", content="b", metadata={"augi_tags": ["area/x"]}),
-                Block(id="t3", kind="data_block", content="c"),
-            ]
-        )
-
-        tags = store.get_tags_for_ids(["t1", "t2", "t3", "missing"])
-        assert tags["t1"] == ["layer/bronze", "idea"]
-        assert tags["t2"] == ["area/x"]
-        assert tags["t3"] == []
-        assert "missing" not in tags
-
-    def test_empty_ids(self, store: SQLiteStore):
-        assert store.get_tags_for_ids([]) == {}
-
-
 class TestVectorSearch:
     def _make_blob(self, vec: list[float]) -> bytes:
         return np.array(vec, dtype=np.float32).tobytes()

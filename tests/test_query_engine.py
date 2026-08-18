@@ -62,13 +62,6 @@ class TestEngineRun:
         # is an adapter concern, never lost here.
         assert all(b.content for b in result.blocks)
 
-    def test_has_task_excludes_bronze(self, store: SQLiteStore):
-        result = engine.run(store, QuerySpec(has_task=True, after="2026-01-01"))
-        ids = [b.id for b in result.blocks]
-        assert "b2-open-task" in ids  # open checkbox
-        assert "b4-tagged-task" in ids  # type/task tag
-        assert "b3-bronze-task" not in ids  # bronze never counts
-
     def test_path_exclusion_all_modes(self, store: SQLiteStore):
         browse = engine.run(store, QuerySpec(after="2026-01-01", exclude_path_prefix="OpenAugi/"))
         assert all(
