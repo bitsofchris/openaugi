@@ -1,7 +1,7 @@
 """The query engine — deterministic read semantics, full blocks, no transport.
 
 Every *rule* that used to live inline in mcp/server.py tool bodies executes
-here: mode dispatch, the after_ingested bound, the has_task + bronze filter,
+here: mode dispatch, the after_ingested bound, the has_task filter,
 path exclusion, reference-document grouping, semantic overfetch. Adapters
 (MCP, HTTP, CLI) shape the results — truncation, docstrings, envelopes are
 presentation and stay out of this module.
@@ -30,10 +30,6 @@ if TYPE_CHECKING:
     from openaugi.store.sqlite import SQLiteStore
 
 logger = logging.getLogger(__name__)
-
-# User-demoted scaffolding (mobile curation demote). Stored without the `#`,
-# like every parsed tag. See [layers] bronze_weight in config.py.
-BRONZE_TAG = "layer/bronze"
 
 
 class EmptyQuerySpec(ValueError):
@@ -78,12 +74,10 @@ def run(store: SQLiteStore, spec, embedding_model=None) -> RunResult:
         return ingested_bound is not None and (block.ingested_at or "") < ingested_bound
 
     def _fails_task_filter(block: Block) -> bool:
-        """has_task=True: keep only user-marked tasks; bronze never counts."""
+        """has_task=True: keep only user-marked tasks."""
         if spec.has_task is not True:
             return False
         all_tags = {t.lstrip("#") for t in block.tags + block.metadata.get("augi_tags", [])}
-        if BRONZE_TAG in all_tags:
-            return True
         return not (block.metadata.get("has_open_task") or "type/task" in all_tags)
 
     k = spec.k
@@ -441,10 +435,10 @@ def context(
     embedding_model=None,
     config: dict | None = None,
 ) -> ContextResult:
-    """FTS + semantic retrieval → bronze weighting → MMR rerank → link expand.
+    """FTS + semantic retrieval → MMR rerank → link expand.
 
     Deterministic — the rerank is cosine/MMR math (pipeline.rerank), no LLM.
-    `config` supplies [retrieval]/[layers]/[salience]; callers pass their
+    `config` supplies [retrieval]/[salience]; callers pass their
     loaded config so test monkeypatching stays at the adapter.
     """
     import numpy as np
@@ -491,24 +485,6 @@ def context(
 
     all_ids = list(candidate_scores.keys())
 
-    # Bronze layer — #layer/bronze marks user-demoted scaffolding (mobile
-    # curation). Kept in the DB (raw data is truth) but down-weighted here so
-    # full-weight thinking outranks it; proactive surfaces (purpose=...)
-    # exclude it outright below, like the source/* firewall.
-    raw_weight = config.get("layers", {}).get("bronze_weight", 1.0)
-    bronze_weight = (
-        float(raw_weight)
-        if isinstance(raw_weight, int | float) and not isinstance(raw_weight, bool)
-        else 1.0
-    )
-    bronze_ids: set[str] = set()
-    if purpose is not None or bronze_weight < 1.0:
-        tags_map = store.get_tags_for_ids(all_ids)
-        bronze_ids = {bid for bid, tags in tags_map.items() if BRONZE_TAG in tags}
-    if bronze_weight < 1.0:
-        for bid in bronze_ids:
-            candidate_scores[bid] = round(candidate_scores[bid] * bronze_weight, 4)
-
     # Batch-fetch embeddings for all candidates (single query, no full block load)
     emb_map = store.get_embeddings_for_ids(all_ids)
 
@@ -532,11 +508,9 @@ def context(
     # Salience gate — purpose-based min-score policy owned here, not by
     # callers (mobile resurfacing today, push notifications later). Drops
     # low-salience results after reranking; the scores themselves are
-    # untouched. Proactive surfaces never resurface bronze: the user
-    # already demoted it.
+    # untouched.
     min_score: float | None = None
     if purpose is not None:
-        final_ids = [bid for bid in final_ids if bid not in bronze_ids]
         threshold = config.get("salience", {}).get(purpose)
         if isinstance(threshold, int | float) and not isinstance(threshold, bool):
             min_score = float(threshold)

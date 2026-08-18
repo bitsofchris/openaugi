@@ -21,9 +21,9 @@ class QuerySpec(BaseModel):
 
     Field semantics match the MCP `search` tool docstring: `after`/`before`
     compare block_time (content date); `after_ingested` compares ingest
-    time (the review-queue axis); `has_task` keeps user-marked tasks and
-    always excludes layer/bronze; `exclude_path_prefix` drops blocks whose
-    source_path starts with the prefix and `include_path_prefix` keeps only
+    time (the review-queue axis); `has_task` keeps user-marked tasks;
+    `exclude_path_prefix` drops blocks whose source_path starts with the
+    prefix and `include_path_prefix` keeps only
     those that do. The two are mirrors, and pairing them across two queries
     is how a caller scopes into an otherwise-excluded tree (see the review
     pass: exclude `OpenAugi/`, then include `OpenAugi/Capture/`).

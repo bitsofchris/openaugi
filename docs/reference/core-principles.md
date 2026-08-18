@@ -1,6 +1,6 @@
 ---
 name: core-principles
-description: The skeleton of OpenAugi — the four design commitments everything else hangs on: capture grammar, the layer model (truth/index/cache/render), the trust model, and promotion. If a proposed feature violates one of these, the feature is wrong, not the principle.
+description: The skeleton of OpenAugi — the four design commitments everything else hangs on: capture grammar, the layer model (truth/index/cache/render, plus the bronze/silver/gold canonicity axis), the trust model, and promotion. If a proposed feature violates one of these, the feature is wrong, not the principle.
 ---
 
 # Core Principles
@@ -47,7 +47,7 @@ intent under the re-derive contract.
 ## 2. The layer model — truth / index / cache / render
 
 ```
-TRUTH   vault: captures (bronze) + notes, incl. synthesized ones kept (silver)
+TRUTH   vault: captures + notes, incl. synthesized ones kept on command
 INDEX   augi DB: blocks, edges, membership, embeddings — rebuildable from truth
 CACHE   recaps, views, dashboards, membership logs — rendered queries, disposable
 RENDER  obsidian + plugin pane, mobile app — same API, own nothing
@@ -71,6 +71,43 @@ Consequences:
 - Render surfaces own nothing: same query API whether the pixels are in
   an Obsidian pane or the mobile app
   (see [../plans/views-as-rendered-queries.md](../plans/views-as-rendered-queries.md)).
+
+### The other axis: bronze / silver / gold — canonicity
+
+`truth / index / cache / render` says **where a thing lives**. It does not say
+**how canonical it is**. That's a second, independent axis, and conflating them
+has already caused one naming collision (see below).
+
+| Layer | What it is | In the contextgraph | Marker |
+|---|---|---|---|
+| **Bronze** | Raw capture. Almost everything. | data block | **none — it is the default** |
+| **Silver** | Nuggets aggregated across the vault into something canonical | context block | `#note-type/moc` + a filled `description` |
+| **Gold** | The big never-ending notes you append to; the map | container | `#note-type/amoc` / `#note-type/pmoc` + `description` |
+
+Chris, 2026-08-17: *"Most blocks should just be this bronze layer so they don't
+actually need a tag. And then when we promote it to a silver, that means we've
+aggregated a couple of nuggets across the vault into something more canonical,
+and that's where it gets that description metadata we can start using to
+browse. And then the map is the high level overview of our gold level notes."*
+
+Three things follow, and they're the whole reason this axis is worth naming:
+
+- **Bronze is the absence of a marker, never a tag.** Tagging the default
+  would mean tagging 32,000 blocks to say nothing. If a block carries no
+  container tag and no description, it is bronze.
+- **The `description` is what promotion actually buys.** It is not decoration:
+  a filled `description` is what makes a note a routing target. So silver is
+  the layer at which a note starts *attracting* blocks instead of merely
+  holding them — which is also what makes it browsable.
+- **Promotion is bronze → silver, and it is principle 4.** Rendered by
+  default, materialized on command. The two principles are the same rule seen
+  from the storage axis and the canonicity axis.
+
+**Retired 2026-08-18: `#layer/bronze`.** It used to mean *"the user demoted
+this block; it carries no signal"* — a **salience** flag, not a layer, and
+under "bronze is the default" the two readings can't both hold. It affected 5
+blocks of 32,045. Hiding deprecated or ephemeral material is a real need and
+gets its own mechanism later; it is not a layer.
 
 ## 3. The trust model — nominate → command → assemble
 

@@ -1107,7 +1107,7 @@ def search(
     include_path_prefix: str | None = typer.Option(
         None, "--include-path-prefix", help="Keep only blocks whose source_path starts with this"
     ),
-    task: bool = typer.Option(False, "--task", help="Only user-marked tasks (bronze excluded)"),
+    task: bool = typer.Option(False, "--task", help="Only user-marked tasks"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
     """Search the knowledge base from the terminal.

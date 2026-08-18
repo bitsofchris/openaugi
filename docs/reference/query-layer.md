@@ -29,7 +29,7 @@ One engine, thin adapters. Every deterministic read — SQLite filters, FTS5, sq
 | `kind` / `source` | block kind (browse defaults to `data_block`) / source |
 | `exclude_path_prefix` | drop blocks whose `source_path` starts with this (e.g. `OpenAugi/`) |
 | `include_path_prefix` | keep **only** blocks whose `source_path` starts with this (e.g. `OpenAugi/Capture/`). The mirror of the above — pair them across two queries to reach one folder inside an excluded tree |
-| `has_task` | only user-marked tasks (open `- [ ]` or `type/task`); **always excludes `layer/bronze`** |
+| `has_task` | only user-marked tasks (open `- [ ]` or `type/task`) |
 | `k` / `offset` | page size / browse offset |
 
 The same JSON shape works everywhere: MCP `search` arguments, `POST /api/query` body, saved-query frontmatter, `engine.run` input.

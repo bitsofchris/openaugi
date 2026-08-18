@@ -209,7 +209,7 @@ class TestMCPTools:
 
         equivalent = json.loads(search(has_task=True, after=data["resolved_spec"]["after"]))
         assert ids == [r["id"] for r in equivalent["results"]]
-        assert ids  # bronze-excluded task blocks exist in the corpus
+        assert ids  # task blocks exist in the corpus
 
     def test_run_query_review_queue_uses_mark(self, mcp_env):
         from openaugi.mcp.server import run_query
