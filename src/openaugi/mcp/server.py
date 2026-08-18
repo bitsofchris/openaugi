@@ -214,6 +214,22 @@ def search(
     return _json(_render_run_result(result))
 
 
+def _with_routes(summaries: list[dict]) -> list[dict]:
+    """Stamp `routed_to` onto a page of block summaries.
+
+    One batched lookup for the whole page (never N+1). Membership is the
+    question every reader eventually asks — "which context blocks does this
+    belong to, and does it belong to any?" — and without it a consumer can't
+    tell a routed block from an unrouted one, which is exactly the queue a
+    review surface needs to show.
+    """
+    ids = [s["id"] for s in summaries if isinstance(s.get("id"), str)]
+    routes = _get_store().get_routed_container_titles(ids) if ids else {}
+    for summary in summaries:
+        summary["routed_to"] = routes.get(summary["id"], [])
+    return summaries
+
+
 def _render_run_result(result: engine.RunResult) -> dict:
     """Agent-shaped envelope for an engine RunResult — shared by search and
     run_query. Key order is part of the golden wire format; don't reorder."""
@@ -224,7 +240,7 @@ def _render_run_result(result: engine.RunResult) -> dict:
             summary["score"] = result.scores[b.id]
             results.append(summary)
         return {
-            "results": results,
+            "results": _with_routes(results),
             "count": len(results),
             "has_more": result.has_more,
             "mode": "semantic",
@@ -232,14 +248,14 @@ def _render_run_result(result: engine.RunResult) -> dict:
 
     if result.mode in ("title", "keyword"):
         return {
-            "results": [_block_summary(b) for b in result.blocks],
+            "results": _with_routes([_block_summary(b) for b in result.blocks]),
             "count": len(result.blocks),
             "has_more": result.has_more,
             "mode": result.mode,
         }
 
     return {
-        "results": [_block_summary(b) for b in result.blocks],
+        "results": _with_routes([_block_summary(b) for b in result.blocks]),
         "count": len(result.blocks),
         "reference_documents": result.reference_documents,
         "reference_block_count": result.reference_block_count,
