@@ -4,9 +4,9 @@ description: >
   TEMPLATE — copied to <vault>/OpenAugi/AGENT/review-pass.md on `openaugi init`.
   The vault copy is the live version the agent reads. Edit there, not here.
   The recurring review/maintenance pass: route new blocks to containers
-  (AMOCs/PMOCs), regenerate derived view notes in OpenAugi/Views/, surface
-  promotion nominations on the Dashboard. Run manually or via zzz
-  ("run the review pass").
+  (AMOCs/PMOCs), refresh their recap rows (write_recap — per-container view
+  FILES were retired 2026-08-17), surface promotion nominations on the
+  Dashboard. Run manually or via zzz ("run the review pass").
 ---
 
 # Review Pass
@@ -17,12 +17,12 @@ description: >
 - **"process the dashboard"** — step 0 alone: read the user's inline answers
   on `View - Dashboard.md`, execute approved nominations (registry updates,
   routing, paste-lines), regenerate the Dashboard recording outcomes, and
-  regenerate any views affected by new routing. Do NOT advance the
-  high-water mark — no new blocks were processed.
+  refresh the recap of any container affected by new routing. Do NOT advance
+  the high-water mark — no new blocks were processed.
 
 You are running the OpenAugi review pass. One loop:
 
-> new blocks → route (tag in DB) → regenerate views → nominate structure changes → advance the high-water mark
+> new blocks → route (tag in DB) → refresh recaps → nominate structure changes → advance the high-water mark
 
 Read [[My Taxonomy]] (OpenAugi/AGENT/My Taxonomy.md) first — it defines the
 facets and the container registry.
@@ -31,8 +31,10 @@ facets and the container registry.
 
 - **Truth** = the user's own writing. NEVER edit any note outside `OpenAugi/`.
   Blocks are append-only; nothing is ever deleted.
-- **Views** = files you generate under `OpenAugi/Views/`. Derived, regenerable,
-  disposable. Regenerate them freely — no review needed.
+- **Recaps** = the synthesis you write per container with `write_recap`.
+  Derived, regenerable, disposable — rewrite them freely, no review needed.
+  They are DB rows, not files: the mobile explorer renders them via
+  `get_view`. (Per-container `View - *.md` files were retired 2026-08-17.)
 - **Structure changes** (new tag/area, new silver/gold note, merging notes)
   are NEVER done autonomously. You nominate on the Dashboard; the user
   commands; only then do you assemble. **An approved nomination IS the
@@ -146,12 +148,32 @@ familiar-looking "new" block as an error, and do NOT hand-restore old links.
 
 ## Views
 
-One file per touched container in `OpenAugi/Views/`, named
-`View - <container title>.md` (the prefix avoids Obsidian basename
-collisions and makes provenance visible). Write with
-`write_document(title, description, content, subfolder="Views", overwrite=True)`.
-The description should state the question the view answers
-(e.g. "Where I left off and what's next in OpenAugi").
+**Retired as files, 2026-08-17. Do NOT write `View - <container>.md`
+any more.** The recap row IS the view: write it with
+`write_recap(container_title, recap_md)` and stop. The mobile explorer
+renders it from the DB via `get_view` (a collapsed recap card at the top of
+container mode), with `stale` shown honestly — which is what the file was a
+stand-in for while no renderer existed. The 15 per-container files were
+deleted and their `![[View - …]]` embed lines removed from the container
+notes the same day.
+
+**Membership no longer needs a rendered log either.** The whole point of the
+`## Log` section was that Obsidian can't show a `routed_to` edge; the app
+can, and shows contained and routed blocks as one indistinguishable feed
+(an MOC *is* a context block, routing is assignment to it). Spend the effort
+on the recap, not on relisting members.
+
+**Three files survive in `OpenAugi/Views/` and are still written:**
+
+- `View - Dashboard.md` — **not a container recap** (it has no recap row),
+  and `server/reviewQueue.ts` in the mobile bridge parses this exact path to
+  build the phone's review lane. Keep writing it.
+- `View - Morning Briefing.md`, `View - Open Loops.md` — lens outputs, not
+  recaps. Untouched by this change.
+
+Historical note on what the files used to contain (recap + log, per-kind
+emphasis) is below; the *recap* guidance still applies verbatim — it is now
+the content of the `write_recap` row.
 
 **Every view has the same two parts — no per-container modes, nothing for
 the user to configure:**
@@ -172,38 +194,70 @@ the user to configure:**
 So the container note reads as one surface: the user's optional head/pins →
 their in-place journal → the transcluded view (recap + remote feed).
 
-If a container note was **renamed**, regenerate its view under the new
-title and delete the stale `View - <old title>.md` — views are caches;
-deleting them is always safe.
+If a container note was **renamed**, write its recap under the new title;
+the old recap row is orphaned and harmless.
 
-A view exists to be **embedded, never visited** — one transclusion
-(`![[View - ...]]`) per container note. When YOU create a new container note
-(promotion), include the transclusion line in it at birth. Suggest the user
-add `OpenAugi/Views/` to Obsidian's Excluded Files so views only appear
-embedded.
+**Do not add `![[View - ...]]` transclusion lines to container notes** — the
+files they point at no longer exist. A newly promoted container gets its
+`description:` frontmatter and nothing else; its recap reaches Chris through
+the app.
 
-Recap emphasis by container kind (keep each section 3–5 high-signal
-bullets, every claim linked to its source note):
+### What goes in a recap
 
-- **Area (AMOC)** — rolling TLDR of the area · new-this-period highlights
-  (linked) · task/idea rollup · links to active child PMOCs. No LEFT OFF.
-- **Project (PMOC)** — TLDR · **LEFT OFF + next physical action** · open
-  task list · new-this-period blocks.
-- **Concept (MOC, silver)** — "current understanding" of the idea. The
-  concept note is the permanent source of truth for that idea: on every
-  regeneration, re-pull related blocks (semantic + links, not just this
-  pass's arrivals) so old mentions keep merging in — resurfacing is
-  repeated, never one-shot.
+**One rule: a recap contains only what scrolling can't give you.** Full spec:
+`docs/reference/recap-spec.md`.
 
-**Every view ends with a `## Log` section** — the container's routed blocks
-(membership via `get_members` — contained + routed), newest first, one line per block:
-`- YYYY-MM-DD — <one-line gist> ([[source note]])`. This materializes the
-append-only log so the user can SEE membership in Obsidian (DB links are
-otherwise invisible there). Small containers: full log. Big containers:
-most recent ~30 with a total count line.
+This is new, and it inverts the old guidance. The recap used to carry a TLDR,
+new-this-period highlights, and a member log — correct when it lived in a
+file, because Obsidian cannot render a `routed_to` edge and the list was the
+only way to see membership. The app renders the container's feed live, one tap
+from the recap card. So what-moved and member lists are now a worse, staler
+copy of what sits directly underneath them, and every line spent on them is a
+line not spent on something only synthesis can produce.
 
-Footer line on every view:
-`*Generated YYYY-MM-DD from N blocks since YYYY-MM-DD.*`
+Four sections. **Any may be empty; an empty section is omitted, never
+padded** — a short recap is a true statement that the container is quiet.
+
+1. **Current understanding** (3–5 sentences) — the through-line: what this
+   container is *about* now, as against when it was created. The only
+   always-present section, and it should change slowly. For a concept note
+   (silver) this is the canonical statement of the idea, re-derived from the
+   container's whole membership on every regeneration — semantic + links, not
+   just this pass's arrivals, so old mentions keep merging in.
+2. **Patterns across time** — what's visible only from above the window.
+   *"The fourth time since March you've described the same deduplication idea,
+   each time from a different angle."* **Requires an explicit span** ("since
+   March", "across five months"); a pattern inside one window is not a
+   pattern, it's the feed.
+3. **Contradictions and open questions** — the highest-value section, because
+   it needs two distant blocks held in mind at once, which scrolling never
+   does. Decisions reversed without the original reasoning being addressed;
+   questions asked in a block and never returned to.
+4. **What's gone quiet** — absence leaves no trace in a feed. Name threads
+   that were active and aren't. Observe, don't nag: some threads are finished.
+
+**Do NOT include:** what moved this period · a `## Log` or member list ·
+task rollups (the Dashboard's 14-day shelf already is that query) · counts of
+new blocks · a link on every bullet.
+
+**The link rule changed, it was not abolished.** Navigation is no longer a
+reason to link — the app drills into any block. *Evidence* still is:
+
+- **Sections 2 and 3 MUST link every claim.** They are factual assertions
+  about specific blocks, and an unfalsifiable synthesis is exactly what the
+  trust model exists to prevent.
+- **Sections 1 and 4 need no links** — they characterize a whole, not
+  particular blocks.
+
+Fewer links, each one load-bearing.
+
+**Aim for under 250 words.** This recap is synthesis-shaped, not list-shaped,
+so it does not grow with the container. Running long almost always means
+section 2 has drifted back into what-moved.
+
+**No `## Log` section any more** (retired 2026-08-17) — it existed only
+because Obsidian can't render a `routed_to` edge. The app can, so membership
+is served live by `get_members` instead of being copied into a file.
 
 Always regenerate `View - Dashboard.md` (same folder):
 
@@ -292,26 +346,25 @@ Always regenerate `View - Dashboard.md` (same folder):
 2. **Pull the new-blocks batch — TWO queries, read by every step below.**
 
    ```
-   search(after_ingested=since, exclude_path_prefix="OpenAugi/")      # the vault
-   search(after_ingested=since, include_path_prefix="OpenAugi/Capture/")  # the phone
+   search(after_ingested=since, exclude_path_prefix="OpenAugi/")           # the vault
+   search(after_ingested=since, include_path_prefix="OpenAugi/Capture/")   # the phone
    ```
 
    (browse mode, paginate each via offset; concatenate into one batch.)
 
-   The first drops everything under `OpenAugi/`, which is agent-generated
-   output. The second reaches back in for the one folder that isn't:
-   **`OpenAugi/Capture/` is the mobile capture stream** — the user's voice
-   notes, their `aaa:` instructions, and the answers they give to Dashboard
-   nominations from their phone. It is truth, and it must be routed like
-   any other capture.
+   The first drops everything under `OpenAugi/` — agent-generated output.
+   The second reaches back in for the one folder that isn't:
+   **`OpenAugi/Capture/` is the mobile capture stream** — Chris's voice
+   notes, his `aaa:` instructions, and the answers he gives to Dashboard
+   nominations from his phone. It is truth, and it routes like any other
+   capture.
 
    Two queries rather than a list of excluded folders, deliberately: a new
    generated folder is then excluded automatically instead of leaking into
    the queue unnoticed. (Query 2 did not exist until 2026-08-01. For eight
-   passes the phone stream was invisible — a nomination the user approved
-   from his phone sat unexecuted for a week because the pass never saw it.)
-
-   `after_ingested` filters on when a block
+   passes the phone stream was invisible — the hookbook nomination Chris
+   approved from his phone sat unexecuted for a week because the pass
+   never saw it. Captures before 2026-08-01 were backfilled separately.) `after_ingested` filters on when a block
    entered the DB; do NOT use `after=` here — it compares content dates
    (often date-only, and unchanged by edits), so it misses same-day
    captures and re-ingested edited blocks. This is the full pass scope;
@@ -334,8 +387,8 @@ Always regenerate `View - Dashboard.md` (same folder):
    `remove` un-routes: when the user says a block was routed wrong, fix it
    with one decision carrying both `add` (right container) and `remove`
    (wrong one).
-4. **Compute touched containers, then regenerate their views
-   (`overwrite=True`).**
+4. **Compute touched containers, then refresh their recaps
+   (`write_recap` — no files).**
    `touched = {containers that appear as an "add" target in step 3's
    apply_routing decisions} ∪ {registered containers whose own note
    appears as a source_path among step 2's home blocks}`.
@@ -346,23 +399,26 @@ Always regenerate `View - Dashboard.md` (same folder):
    entries), not lower — don't skip a container just because nothing was
    routed there this pass. Untouched containers keep their old view.
    **Two refresh tiers — don't re-derive what didn't change:**
-   - **Log section: always refresh** (mechanical render of routed_to links —
-     no LLM judgment, effectively free).
-   - **Recap: refresh only when it would change** — salient new blocks
-     arrived (routed OR home), drift appeared, or the user asked. A
-     handful of life-log blocks routing through does NOT warrant
-     re-synthesizing a recap; carry the old recap forward verbatim and
-     only update the log. When in doubt, keep the old recap.
+   - **Membership: nothing to refresh** — the app queries `get_members` live,
+     so there is no rendered log to keep current.
+   - **Recap: refresh only when the UNDERSTANDING would change** — a
+     decision reversed, a thread going quiet, a question answered, a
+     genuinely new angle on the idea, or the user asked. Blocks merely
+     arriving is almost never enough: the recap no longer reports what
+     moved, so what moved cannot make it stale (see the recap spec above).
+     Carry the old recap forward verbatim. When in doubt, keep it —
+     `get_view` reports staleness honestly, so a three-week-old recap that
+     is still correct is a feature, not a debt.
    **Regeneration is a merge, not a reset:** read the existing view first —
    it is the prior head state. Carry forward what's still true (the TLDR
    evolves; LEFT OFF advances or stands), integrate the new blocks, drop
    what's no longer salient. "New this period" covers only the current
    window. If deeper context is needed, pull the container's full membership
    with `get_members(container_title)` (contained + routed, unified).
-   **Dual-write the recap:** whenever you write or carry forward a recap in
-   a view file, also call `write_recap(container_title, recap_md)` — the DB
-   cache row rendered surfaces read (`get_view`). File views are the
-   transition render target; the recap row is the durable one.
+   **The recap row is the only copy now** — call
+   `write_recap(container_title, recap_md)`. There is no second write and no
+   file to keep in sync; the dual-write problem
+   (`^nom-fix-recap-dual-write`) is dissolved rather than fixed.
 5. Regenerate `View - Dashboard.md`.
 6. `write_context_pack()` — regenerates `OpenAugi/context-pack.json`, the
    sidecar the mobile app's tag/link suggestions are served from. One call,
@@ -383,7 +439,8 @@ Dashboard step, list the lens folder, run whatever is due, then continue.
 
 - Never modify notes outside `OpenAugi/` — except to apply the exact edit
   an approved nomination drafted (approval is the command; apply nothing
-  beyond the draft). Never use `overwrite=True` outside `Views/`.
+  beyond the draft). Never use `overwrite=True` outside `Views/`, and inside
+  `Views/` only `View - Dashboard.md` is still written.
 - Never invent new `area/*` or `type/*` tags — the taxonomy changes only via
   a Dashboard nomination the user approves.
 - Every surfaced claim links back to its source note (block IDs in the DB,
