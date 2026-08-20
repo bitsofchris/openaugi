@@ -374,6 +374,47 @@ class TestSplitByHeadings:
         assert len(sections) == 1
         assert sections[0][1] == "2024-03-15"
 
+    def test_daily_journal_template_header_preamble_dropped(self):
+        """The daily-note template's header (dataview block, note-type tag,
+        taxonomy link, capture link) isn't user content — it shouldn't
+        become its own preamble block."""
+        content = (
+            "```dataview\n"
+            "LIST \n"
+            "from #status/active \n"
+            "SORT file.mtime DESC \n"
+            "```\n"
+            "#note-type/daily-journal \n"
+            "\n"
+            "[[My Taxonomy]]\n"
+            "📥 Capture: [[OpenAugi/Capture/2026-08-19|2026-08-19]]\n"
+            "\n"
+            "# Journal\n"
+            "Actual content here."
+        )
+        sections = _split_by_headings(content)
+        # Only the "# Journal" section — the template header preamble is dropped.
+        assert len(sections) == 1
+        assert sections[0][2] == "Journal"
+
+    def test_daily_journal_tag_alone_not_enough_to_drop_preamble(self):
+        """A preamble with real content alongside the tag is kept — only a
+        preamble that's ENTIRELY known template furniture is dropped."""
+        content = "#note-type/daily-journal\nSome actual note before the heading.\n# H\nmore"
+        sections = _split_by_headings(content)
+        assert len(sections) == 2
+        assert sections[0][2] is None
+        assert "Some actual note" in sections[0][0]
+
+    def test_non_daily_journal_preamble_with_dataview_still_kept(self):
+        """Without the daily-journal tag, a dataview-only preamble isn't
+        special-cased — this rule is scoped to the daily-journal signature,
+        not a generic dataview-preamble strip."""
+        content = "```dataview\nLIST FROM #foo\n```\n# H\ncontent"
+        sections = _split_by_headings(content)
+        assert len(sections) == 2
+        assert sections[0][2] is None
+
 
 class TestCodeFenceRanges:
     def test_no_fences_returns_empty(self):
