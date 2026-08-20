@@ -104,7 +104,7 @@ Chris wrote. So the boundary has to be exact.
 ### The three rules. There is no fourth.
 
 Route a block if and **only if** one of these matches. Record which one fired
-with `record_routing(pass_id, block_id, container, rule)`:
+with a record in the `routings` collection (contract below):
 
 | `rule` | Fires on |
 |---|---|
@@ -123,7 +123,7 @@ containers still follow the rules above.
 of the three rules fired, the block **stays in the daily note** — and this is
 the expected outcome for most blocks, not a failure to classify.
 
-Count them as `left_alone` in `record_pass`. **They are not a backlog, not an
+Count them as `left_alone` on the pass record. **They are not a backlog, not an
 unrouted queue, and not something to raise on a later pass.** A life-log block
 about flag football does not need a home. The old rule 4 ("infer from
 taxonomy, route to the most specific match") and rule 5 ("low confidence →
@@ -132,23 +132,57 @@ real decisions sat under nineteen items of noise.
 
 If a block genuinely needs judgment — it looks like it wants a note of its own,
 or several blocks are circling one idea — that is not routing. Use
-`write_proposal` (below), which asks instead of acting.
+a `proposals` record (below), which asks instead of acting.
+
+### The record contract — collections this pass owns
+
+openaugi has **no idea** what these mean. It stores records in named
+collections (`docs/reference/records.md`); the shape below is *this prompt's*
+contract, and the list of legitimate `rule` values is *this vault's* policy.
+A different vault would use different collections and different rules.
+
+```
+collection "passes"     id: pass-<YYYY-MM-DD>
+  { window_from, window_to, scanned, left_alone }
+
+collection "routings"   id: <pass_id>:<block_id>:<container>
+  { pass_id, block_id, container, rule, undone_at? }
+
+collection "proposals"  id: <kind>-<subject-slug>
+  { pass_id, kind, block_ids, target, payload, why, state }
+```
+
+Three conventions that matter:
+
+- **Ids are derived from the subject, never random.** Writes upsert, so
+  `promote-silver-notes` re-proposed next pass updates in place instead of
+  stacking. Random ids turn the queue into a pile — that is exactly how the
+  old Dashboard reached 24 open items.
+- **Do not store counts.** `routed` and `proposed` are `list_records` counts.
+  Storing a number you can count is how a number goes wrong.
+- **`rule` must be one of `instruction`, `link`, `tag`.** openaugi will
+  happily store anything; the constraint is yours, and it is the whole point
+  of the routing section above. If you cannot name one of those three, do not
+  route the block.
 
 ### The pass's routing loop
 
 ```
-record_pass(pass_id="pass-2026-08-20", window_from=…, scanned=N, left_alone=M)
+write_record("passes", "pass-2026-08-20",
+             {window_from, window_to, scanned, left_alone})
 
 for each block in the batch:
     rule = first of (instruction, link, tag) that matches — or None
     if rule is None:  continue          # stays in the daily note. Done.
     apply_routing(decisions=[{block_id, add:[container]}])
-    record_routing(pass_id, block_id, container, rule)
+    write_record("routings", f"{pass_id}:{block_id}:{container}",
+                 {pass_id, block_id, container, rule})
 ```
 
-`record_routing` **rejects any rule name other than those three.** If you find
-yourself wanting to pass `similar` or `inferred`, that is the design telling
-you to leave the block alone.
+**If you find yourself wanting to write `rule: "similar"` or `"inferred"`,
+that is the design telling you to leave the block alone.** openaugi will
+store it — it has no opinion — which is exactly why the discipline has to be
+here.
 
 **Persistence — two separate mechanisms, never conflate them:**
 
@@ -170,8 +204,8 @@ inflate the numbers.
 ## Proposals — the judgment half
 
 Anything that is **not** one of the three rules goes through
-`write_proposal(...)` and is not done until Chris accepts it in the app. Four
-kinds:
+`write_record("proposals", ...)` and is not done until Chris accepts it in the
+app. Four kinds:
 
 | `kind` | Means | `target` |
 |---|---|---|
@@ -187,7 +221,7 @@ open nominations contained **five** actual decisions:
 - **Never propose engineering work.** openaugi bugs belong in the repo, not in
   Chris's knowledge review. (`^nom-fix-sql-tag-task-filters` — "touches the
   golden envelope" — should never have been on a Dashboard.)
-- **Derive `proposal_id` from the target** (`promote-silver-notes`) so
+- **Derive the record id from the target** (`promote-silver-notes`) so
   re-proposing updates in place instead of stacking.
 - **`why` is evidence, not justification.** Name the blocks or the pattern —
   *"5 blocks since 2026-01 restate this"* — so Chris can check you.
@@ -321,11 +355,12 @@ Always regenerate `View - Dashboard.md` (same folder):
   note (re-ingest drops it). Never invent a task the user didn't mark;
   recurring concerns earn renewal only by being captured again. Tasks that
   need real management belong in a PMOC's LEFT OFF, not here.
-- **Gravity → `write_proposal`, not a Dashboard bullet.** Blocks that cluster
+- **Gravity → a `proposals` record, not a Dashboard bullet.** Blocks that cluster
   around one idea are the *only* thing gravity produces now, and it is a
   `promote` (or `adopt`) proposal, never a routing. One per idea:
-  `write_proposal(id="promote-capture-ux", kind="promote", block_ids=[...],
-  target="Capture UX", why="5 blocks over 3 weeks restate this")`.
+  `write_record("proposals", "promote-capture-ux", {kind: "promote",
+  block_ids: [...], target: "Capture UX", state: "proposed",
+  why: "5 blocks over 3 weeks restate this"})`.
   Take NO action on it — Chris accepts it in the app.
 
   **Adopt before create, always:**
@@ -342,7 +377,7 @@ Always regenerate `View - Dashboard.md` (same folder):
   On acceptance, execute via `write_document` + `apply_routing` — the same
   path the mobile app's `POST /promote` takes. There is one promote path;
   do not hand-roll a second.
-- **Nomination format — now a RENDERING of `list_proposals()`, not a store.**
+- **Nomination format — now a RENDERING of `list_records("proposals")`, not a store.**
   The proposals table is the source of truth; the Dashboard mirrors open
   proposals so they stay answerable in Obsidian on a laptop. Answers given
   there are still honoured, but the app writes straight to the table.
