@@ -108,53 +108,27 @@ CREATE TABLE IF NOT EXISTS recaps (
 """
 
 
-# Review-pass accountability (docs/plans/changeset-review.md, mobile repo).
+# Generic records — a small collection store for agent workflow state
+# (docs/reference/records.md).
 #
-# The trust line: **the agent executes Chris's rules; it does not exercise
-# judgment.** These three tables are what make that line legible.
+# openaugi is a general knowledge layer, so it deliberately knows NOTHING
+# about what any particular workflow stores here. Collections are named by the
+# caller, the shape of `data` lives in the caller's prompt, and no schema,
+# vocabulary, or policy is compiled into this file. When a review pass records
+# what it routed, or queues something for a human to approve, that is a
+# *record in a collection*, not a first-class concept openaugi understands.
 #
-# - `pass_runs`      — one row per review pass. The receipt's header.
-# - `routing_audit`  — every routing the pass applied, with WHICH RULE fired.
-#   Routing is autonomous precisely because it is only ever obedience, so the
-#   rule has to be recorded or the claim is unfalsifiable. Also the undo target.
-# - `proposals`      — the judgment half. Nothing here is applied until Chris
-#   accepts it, and it is deliberately a DB row rather than a Dashboard
-#   nomination: a proposal is transactional workflow state (proposed → accepted
-#   → executed), and markdown gives no atomicity, no reliable status, and
-#   forces prose to be regex-parsed back into structure.
-_REVIEW_DDL = """
-CREATE TABLE IF NOT EXISTS pass_runs (
-    id TEXT PRIMARY KEY,
-    started_at TEXT NOT NULL,
-    window_from TEXT,
-    window_to TEXT,
-    scanned INTEGER NOT NULL DEFAULT 0,
-    routed INTEGER NOT NULL DEFAULT 0,
-    proposed INTEGER NOT NULL DEFAULT 0,
-    left_alone INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS routing_audit (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    pass_id TEXT NOT NULL REFERENCES pass_runs(id) ON DELETE CASCADE,
-    block_id TEXT NOT NULL,
-    container TEXT NOT NULL,
-    rule TEXT NOT NULL,
-    applied_at TEXT NOT NULL,
-    undone_at TEXT
-);
-
-CREATE TABLE IF NOT EXISTS proposals (
-    id TEXT PRIMARY KEY,
-    pass_id TEXT REFERENCES pass_runs(id) ON DELETE SET NULL,
-    kind TEXT NOT NULL,
-    block_ids TEXT NOT NULL DEFAULT '[]',
-    target TEXT,
-    payload TEXT NOT NULL DEFAULT '{}',
-    why TEXT NOT NULL DEFAULT '',
-    state TEXT NOT NULL DEFAULT 'proposed',
+# This is the primitive that principle 3 ("structure changes are never
+# autonomous — nominate, command, assemble") always implied, and which had
+# previously been faked with markdown nominations parsed back by regex.
+_RECORDS_DDL = """
+CREATE TABLE IF NOT EXISTS records (
+    collection TEXT NOT NULL,
+    id TEXT NOT NULL,
+    data TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL,
-    answered_at TEXT
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (collection, id)
 );
 """
 
@@ -166,10 +140,7 @@ _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_links_from ON links(from_id);",
     "CREATE INDEX IF NOT EXISTS idx_links_to ON links(to_id);",
     "CREATE INDEX IF NOT EXISTS idx_links_kind ON links(kind);",
-    "CREATE INDEX IF NOT EXISTS idx_routing_audit_pass ON routing_audit(pass_id);",
-    "CREATE INDEX IF NOT EXISTS idx_routing_audit_block ON routing_audit(block_id);",
-    "CREATE INDEX IF NOT EXISTS idx_proposals_state ON proposals(state);",
-    "CREATE INDEX IF NOT EXISTS idx_proposals_target ON proposals(target);",
+    "CREATE INDEX IF NOT EXISTS idx_records_collection ON records(collection, created_at);",
 ]
 
 
@@ -224,7 +195,7 @@ class SQLiteStore:
         c.executescript(_FTS_TRIGGERS)
         c.executescript(_META_DDL)
         c.executescript(_RECAPS_DDL)
-        c.executescript(_REVIEW_DDL)
+        c.executescript(_RECORDS_DDL)
         for idx_sql in _INDEXES:
             c.execute(idx_sql)
         self._apply_migrations(c)
@@ -677,196 +648,78 @@ class SQLiteStore:
             for r in rows
         ]
 
-    # ---------------------------------------------------------- review pass
-    # See docs/plans/changeset-review.md (mobile repo). The split here mirrors
-    # the trust line exactly: routing_audit records what was DONE (obedience,
-    # already applied, undoable), proposals record what is ASKED (judgment,
-    # nothing applied until accepted).
+    # ------------------------------------------------------------- records
+    # A collection store for agent workflow state. openaugi does not know or
+    # care what any collection means — see docs/reference/records.md. Keeping
+    # the meaning out of here is the point: a workflow that needs a new kind
+    # of state names a new collection instead of growing the tool surface.
 
-    def record_pass(
+    def write_record(self, collection: str, record_id: str, data: dict, now: str) -> None:
+        """Create or replace one record. Upserts, so a caller re-recording the
+        same id updates in place — stable ids derived from the subject are how
+        a queue avoids stacking duplicates of the same thing."""
+        self.conn.execute(
+            """INSERT INTO records (collection, id, data, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(collection, id) DO UPDATE SET
+                 data=excluded.data, updated_at=excluded.updated_at""",
+            (collection, record_id, json.dumps(data), now, now),
+        )
+        self.conn.commit()
+
+    def list_records(
         self,
-        pass_id: str,
-        started_at: str,
-        window_from: str | None = None,
-        window_to: str | None = None,
-        scanned: int = 0,
-        left_alone: int = 0,
-    ) -> None:
-        """Open (or update) a pass run. Idempotent on pass_id so a pass that
-        retries mid-flight does not fork its own audit trail."""
-        self.conn.execute(
-            """INSERT INTO pass_runs (id, started_at, window_from, window_to, scanned, left_alone)
-               VALUES (?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET
-                 window_from=excluded.window_from, window_to=excluded.window_to,
-                 scanned=excluded.scanned, left_alone=excluded.left_alone""",
-            (pass_id, started_at, window_from, window_to, scanned, left_alone),
-        )
-        self.conn.commit()
+        collection: str,
+        where: dict | None = None,
+        order: str = "created_at",
+        desc: bool = False,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Records in a collection, optionally filtered by exact matches on
+        top-level `data` fields.
 
-    def record_routing(
-        self, pass_id: str, block_id: str, container: str, rule: str, applied_at: str
-    ) -> None:
-        """Log one applied routing and the rule that produced it.
-
-        The rule is not optional and is not a free-text justification: it is
-        the name of the deterministic rule that fired (`instruction`, `link`,
-        `tag`). A routing that cannot name its rule should not have happened.
+        Equality-only filtering is deliberate: a general store that grows a
+        query language becomes a database with a worse dialect. Anything
+        richer belongs in the caller, which already has the rows.
         """
-        self.conn.execute(
-            """INSERT INTO routing_audit (pass_id, block_id, container, rule, applied_at)
-               VALUES (?, ?, ?, ?, ?)""",
-            (pass_id, block_id, container, rule, applied_at),
-        )
-        self.conn.execute("UPDATE pass_runs SET routed = routed + 1 WHERE id = ?", (pass_id,))
-        self.conn.commit()
-
-    def list_passes(self, limit: int = 10) -> list[dict]:
-        """Recent pass runs, newest first — the pass log's header rows."""
-        rows = self.conn.execute(
-            """SELECT id, started_at, window_from, window_to, scanned, routed,
-                      proposed, left_alone
-               FROM pass_runs ORDER BY started_at DESC, rowid DESC LIMIT ?""",
-            (limit,),
-        ).fetchall()
-        keys = (
-            "id",
-            "started_at",
-            "window_from",
-            "window_to",
-            "scanned",
-            "routed",
-            "proposed",
-            "left_alone",
-        )
-        return [dict(zip(keys, r, strict=True)) for r in rows]
-
-    def list_routings(self, pass_id: str, include_undone: bool = False) -> list[dict]:
-        """Every routing a pass applied. Undone ones are hidden by default —
-        an undo is a correction, not history to re-read every time."""
-        sql = """SELECT id, block_id, container, rule, applied_at, undone_at
-                 FROM routing_audit WHERE pass_id = ?"""
-        if not include_undone:
-            sql += " AND undone_at IS NULL"
-        sql += " ORDER BY id"
-        rows = self.conn.execute(sql, (pass_id,)).fetchall()
-        keys = ("id", "block_id", "container", "rule", "applied_at", "undone_at")
-        return [dict(zip(keys, r, strict=True)) for r in rows]
-
-    def mark_routing_undone(self, audit_id: int, undone_at: str) -> bool:
-        """Tombstone one routing. The edge itself is removed via apply_routing;
-        this records that it was reversed, so the log stays honest about what
-        the pass did rather than quietly rewriting it."""
-        cur = self.conn.execute(
-            "UPDATE routing_audit SET undone_at = ? WHERE id = ? AND undone_at IS NULL",
-            (undone_at, audit_id),
-        )
-        self.conn.commit()
-        return cur.rowcount > 0
-
-    def write_proposal(
-        self,
-        proposal_id: str,
-        kind: str,
-        created_at: str,
-        pass_id: str | None = None,
-        block_ids: list[str] | None = None,
-        target: str | None = None,
-        payload: dict | None = None,
-        why: str = "",
-    ) -> None:
-        """Record something the agent wants to do but will not do unasked.
-
-        Upserts on id so a pass re-proposing the same thing updates it in
-        place. Callers derive a stable id from the target — re-proposing the
-        same note every pass is how the Dashboard reached 24 open items.
-        """
-        self.conn.execute(
-            """INSERT INTO proposals
-                 (id, pass_id, kind, block_ids, target, payload, why, state, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'proposed', ?)
-               ON CONFLICT(id) DO UPDATE SET
-                 pass_id=excluded.pass_id, block_ids=excluded.block_ids,
-                 target=excluded.target, payload=excluded.payload, why=excluded.why""",
-            (
-                proposal_id,
-                pass_id,
-                kind,
-                json.dumps(block_ids or []),
-                target,
-                json.dumps(payload or {}),
-                why,
-                created_at,
-            ),
-        )
-        if pass_id:
-            self.conn.execute(
-                """UPDATE pass_runs SET proposed =
-                     (SELECT COUNT(*) FROM proposals WHERE pass_id = ?) WHERE id = ?""",
-                (pass_id, pass_id),
-            )
-        self.conn.commit()
-
-    def list_proposals(self, state: str | None = "proposed", limit: int = 100) -> list[dict]:
-        """Proposals, oldest first — a decision waiting three passes should
-        not be buried under one raised this morning."""
-        sql = """SELECT id, pass_id, kind, block_ids, target, payload, why, state,
-                        created_at, answered_at FROM proposals"""
-        params: list = []
-        if state:
-            sql += " WHERE state = ?"
-            params.append(state)
-        sql += " ORDER BY created_at, rowid LIMIT ?"
+        sql = "SELECT id, data, created_at, updated_at FROM records WHERE collection = ?"
+        params: list = [collection]
+        for key, value in (where or {}).items():
+            # Keys are field names from the caller's own schema, never user
+            # input, but they are still bound rather than interpolated.
+            sql += " AND json_extract(data, '$.' || ?) = ?"
+            params.extend([key, value])
+        sort = "created_at" if order not in {"created_at", "updated_at", "id"} else order
+        sql += f" ORDER BY {sort} {'DESC' if desc else 'ASC'}, rowid {'DESC' if desc else 'ASC'} LIMIT ?"
         params.append(limit)
         rows = self.conn.execute(sql, params).fetchall()
-        out = []
-        for r in rows:
-            out.append(
-                {
-                    "id": r[0],
-                    "pass_id": r[1],
-                    "kind": r[2],
-                    "block_ids": json.loads(r[3]) if r[3] else [],
-                    "target": r[4],
-                    "payload": json.loads(r[5]) if r[5] else {},
-                    "why": r[6],
-                    "state": r[7],
-                    "created_at": r[8],
-                    "answered_at": r[9],
-                }
-            )
-        return out
+        return [
+            {
+                "id": r[0],
+                **(json.loads(r[1]) if r[1] else {}),
+                "created_at": r[2],
+                "updated_at": r[3],
+            }
+            for r in rows
+        ]
 
-    def answer_proposal(
-        self,
-        proposal_id: str,
-        state: str,
-        answered_at: str,
-        target: str | None = None,
-        payload: dict | None = None,
-        block_ids: list[str] | None = None,
-    ) -> bool:
-        """Answer a proposal, optionally editing it in the same call.
-
-        Editing on answer is deliberate: Chris reviews by changing the thing,
-        not by rejecting and re-proposing. `declined` is durable — the point of
-        recording a no is that the same note is not proposed again next week.
-        """
-        sets = ["state = ?", "answered_at = ?"]
-        params: list = [state, answered_at]
-        if target is not None:
-            sets.append("target = ?")
-            params.append(target)
-        if payload is not None:
-            sets.append("payload = ?")
-            params.append(json.dumps(payload))
-        if block_ids is not None:
-            sets.append("block_ids = ?")
-            params.append(json.dumps(block_ids))
-        params.append(proposal_id)
-        cur = self.conn.execute(f"UPDATE proposals SET {', '.join(sets)} WHERE id = ?", params)
+    def update_record(self, collection: str, record_id: str, patch: dict, now: str) -> bool:
+        """Merge `patch` into a record's data. Returns False if it is absent —
+        callers should surface that rather than silently creating one, because
+        updating something that vanished usually means a stale client."""
+        row = self.conn.execute(
+            "SELECT data FROM records WHERE collection = ? AND id = ?", (collection, record_id)
+        ).fetchone()
+        if not row:
+            return False
+        data = json.loads(row[0]) if row[0] else {}
+        data.update(patch)
+        self.conn.execute(
+            "UPDATE records SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
+            (json.dumps(data), now, collection, record_id),
+        )
         self.conn.commit()
-        return cur.rowcount > 0
+        return True
 
     def get_links_from(self, block_id: str, kind: str | None = None) -> list[Link]:
         """Get outgoing links from a block, optionally filtered by kind."""

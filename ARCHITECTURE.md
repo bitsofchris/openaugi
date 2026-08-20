@@ -137,6 +137,8 @@ adapters present it (docs/reference/query-layer.md):
 
   write side (MCP only — the command half of the CQRS split):
   → write_document / write_recap / tag_block / apply_routing
+  → write_record / list_records / update_record (generic collection store for
+    agent workflow state — docs/reference/records.md; no schema, no policy)
   → get_review_state / mark_review_complete: review-pass high-water mark
 ```
 
@@ -263,6 +265,7 @@ format (`name:`/`description:` frontmatter) so they're scannable.
 - [docs/reference/agentic-kb-field-guide.md](docs/reference/agentic-kb-field-guide.md) — The portable ruleset: what building this hardened or simplified from the "agent + janitor + flat folder" starting advice; transplantable to any agentic knowledge base.
 - [docs/reference/user-guide.md](docs/reference/user-guide.md) — Day-to-day manual: entry points, the loop, trust rules, triggering a pass, lens system in brief. Chronological build history stays in this file's STATUS header, not there.
 - [docs/reference/review-pass.md](docs/reference/review-pass.md) — **The write-back loop (active):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass. Per-container view FILES were retired 2026-08-17 — recaps are `write_recap` rows. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
+- [docs/reference/records.md](docs/reference/records.md) — **The collection store + the test for a new MCP tool:** three generic tools for agent workflow state. Schemas live in the caller's prompt, policy in the caller's config, only mechanism in a tool. Read before adding any tool.
 - [docs/reference/recap-spec.md](docs/reference/recap-spec.md) — **What a recap contains:** only what scrolling can't give you — cross-month patterns, contradictions, unanswered questions, what's gone quiet. Not what-moved, not member lists.
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
 - [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
