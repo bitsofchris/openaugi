@@ -80,12 +80,20 @@ ENTRY_TIME_PATTERN = re.compile(r"^(\d{1,2}):(\d{2}) —(?: |$)", re.MULTILINE)
 # `- [ ]` is structural noise (already dropped by meaningfulness); a checked
 # box is done and doesn't count. Feeds the Dashboard's 14-day task shelf.
 OPEN_TASK_PATTERN = re.compile(r"^[ \t]*[-*+] \[ \] \S", re.MULTILINE)
+# Daily-journal template furniture: the `#note-type/daily-journal` tag line,
+# the `[[My Taxonomy]]` link line, and the `📥 Capture: [[...]]` link line.
+# These come from the daily-note template, not the user, so a preamble made
+# up of only these lines (plus dataview blocks) is boilerplate, not content.
+DAILY_JOURNAL_TAG = "#note-type/daily-journal"
+DAILY_JOURNAL_TEMPLATE_LINE_PATTERN = re.compile(
+    r"^(#note-type/daily-journal|\[\[My Taxonomy\]\]|📥\s*Capture:\s*\[\[.*\]\])\s*$"
+)
 
 # Bump when a rule change alters segmentation output. The vault adapter salts
 # document hashes with this, so every file re-parses once after an upgrade —
 # block-level diffing keeps unchanged segments, so only re-segmented notes
 # actually churn.
-SPLITTER_VERSION = "2"
+SPLITTER_VERSION = "3"
 
 
 # ── Public types ──────────────────────────────────────────────────
@@ -284,7 +292,7 @@ def _split_by_headings(content: str) -> list[tuple[str, str | None, str | None]]
 
     if matches[0].start() > 0:
         preamble = content[: matches[0].start()]
-        if preamble.strip():
+        if preamble.strip() and not _is_daily_journal_template_preamble(preamble):
             sections.append((preamble, None, None))
 
     for i, match in enumerate(matches):
@@ -347,6 +355,26 @@ def _extract_entry_time(text: str) -> str | None:
     if hour > 23 or minute > 59:
         return None
     return f"{hour:02d}:{minute:02d}"
+
+
+def _is_daily_journal_template_preamble(text: str) -> bool:
+    """True if a pre-heading preamble is just the daily note's template header.
+
+    Daily notes carry a fixed header above the first real heading: a
+    dataview status block, the `#note-type/daily-journal` tag, a taxonomy
+    link, and a capture-file link. It's boilerplate from the template, not
+    user-authored content, so it shouldn't become its own block. Scoped to
+    the daily-journal signature (the tag must be present) rather than
+    stripping these lines from every note type.
+    """
+    if DAILY_JOURNAL_TAG not in text:
+        return False
+    cleaned = DATAVIEW_BLOCK_PATTERN.sub("", text)
+    return all(
+        DAILY_JOURNAL_TEMPLATE_LINE_PATTERN.match(line.strip())
+        for line in cleaned.splitlines()
+        if line.strip()
+    )
 
 
 def _has_meaningful_content(text: str) -> bool:
