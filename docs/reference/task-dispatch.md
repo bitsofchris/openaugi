@@ -15,6 +15,20 @@ Write `zzz: <instruction>` in your notes. The file watcher ingests the block, th
 
 Task dispatch runs as part of `openaugi up` by default. Pass `--no-agent` to disable it. You can also run it standalone with `openaugi task-dispatch`.
 
+**`openaugi up` is single-instance.** It holds an advisory lock
+(`~/.openaugi/up.lock`) for its lifetime; a second one prints who has it and
+exits 0. Two watchers over one vault is a correctness bug, not a slowdown —
+both see the same `zzz:` land and both dispatch it, so one instruction becomes
+two agents racing over one database.
+
+The lock is `flock`, not a PID file, because the kernel releases it when the
+holder dies however it dies. A PID file needs a liveness check, and every
+liveness check races.
+
+**It does not cover two machines** sharing a synced vault: a lock is local to
+a filesystem, so a second Mac's watcher is invisible to it. That needs an
+atomic claim on the task file itself.
+
 ## When to use this
 
 - You want a "go do this" capture path from Obsidian (phone or desktop) that triggers agent work automatically.

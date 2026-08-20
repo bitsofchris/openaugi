@@ -955,6 +955,20 @@ def up(
     # Status output must go to stderr — stdout is the MCP stdio protocol channel.
     err = Console(stderr=True)
 
+    # ONE INSTANCE ONLY, and this has to come before anything else touches the
+    # vault or the database. Two `up` processes both watch and both dispatch,
+    # so one `zzz:` becomes two agents racing over the same DB. Exit 0 rather
+    # than 1: under launchd's KeepAlive a non-zero exit is a crash to retry,
+    # and retrying forever against a healthy instance is worse than stopping.
+    from openaugi.singleton import AlreadyRunning, acquire
+
+    try:
+        acquire("up")
+    except AlreadyRunning as exc:
+        err.print(f"[yellow]openaugi up: {exc}[/yellow]")
+        err.print("Stop it first, or use `openaugi serve` for a second read-only server.")
+        raise typer.Exit(0) from None
+
     from openaugi.config import load_config
     from openaugi.pipeline.runner import run_layer0
     from openaugi.store.sqlite import SQLiteStore
