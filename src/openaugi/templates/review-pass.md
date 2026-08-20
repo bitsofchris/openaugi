@@ -88,63 +88,111 @@ in OTHER files must find it; Wind Turbine PMOC registration declined
 don't bloat the registry." Before nominating a registration, ask: does
 anything actually arrive here from elsewhere by inference?
 
-## Routing
+## Routing — you execute rules, you do not exercise judgment
 
-**Routing ≠ surfacing.** Every block routes (cheap DB tags); views surface
-selectively. A "played fifa, pool with kids" life-log block routes to
-`area/self` but does not appear in a view head — salience is decided at
-view-generation time, not routing time.
+**This is the line the whole pass sits on.** Chris, 2026-08-20:
 
-Precedence (highest wins; a block may route to multiple containers):
+> *"I don't want you to guess anything because most blocks don't need to be
+> routed out of the daily note. Things with a link in them, things with the
+> rule in them, or I'm supposedly asking you to make a new note. That's really
+> all you're doing."*
 
-1. **`aaa:` instruction** in the block — obey it.
-2. **Explicit signals**: a `[[AMOC/PMOC/MOC link]]` or `#area/*` tag in the block.
-3. **Location**: a block written inside a MOC's own journal is home by
-   construction — membership is automatic, DO NOT route it there
-   (`apply_routing` returns it in `already_home` if you try); cross-links
-   to *other* containers are still allowed.
-4. **Inference**: classify `area/*` + `type/*` + `status/*` per taxonomy;
-   route to the most *specific* matching container (a matching concept MOC
-   beats an active PMOC beats its parent AMOC). Inference candidates are
-   registered containers ONLY (tag + description); rules 1–3 may route to
-   any note.
-5. **Low confidence** → leave unrouted; it goes to the Dashboard's
-   Unrouted/Gravity section. Never force-fit.
+Routing is **autonomous** — you apply it without asking — and that is only
+acceptable because it is never a judgment call. You are executing instructions
+Chris wrote. So the boundary has to be exact.
+
+### The three rules. There is no fourth.
+
+Route a block if and **only if** one of these matches. Record which one fired
+with `record_routing(pass_id, block_id, container, rule)`:
+
+| `rule` | Fires on |
+|---|---|
+| `instruction` | an `aaa:` in the block naming a container — obey it, including to unregistered notes |
+| `link` | a `[[wikilink]]` in the block pointing at a **registered** container |
+| `tag` | a tag or facet on the block matching a **registered** container's registration |
+
+**Location is not a rule, it is containment.** A block written inside a
+container's own journal is already a member by construction — `apply_routing`
+returns it in `already_home`. Do not route it there. Cross-links to *other*
+containers still follow the rules above.
+
+### What you do with everything else: nothing
+
+**No semantic inference. No "this feels like it belongs in health".** If none
+of the three rules fired, the block **stays in the daily note** — and this is
+the expected outcome for most blocks, not a failure to classify.
+
+Count them as `left_alone` in `record_pass`. **They are not a backlog, not an
+unrouted queue, and not something to raise on a later pass.** A life-log block
+about flag football does not need a home. The old rule 4 ("infer from
+taxonomy, route to the most specific match") and rule 5 ("low confidence →
+Unrouted/Gravity") are both **removed** — they produced a queue in which five
+real decisions sat under nineteen items of noise.
+
+If a block genuinely needs judgment — it looks like it wants a note of its own,
+or several blocks are circling one idea — that is not routing. Use
+`write_proposal` (below), which asks instead of acting.
+
+### The pass's routing loop
+
+```
+record_pass(pass_id="pass-2026-08-20", window_from=…, scanned=N, left_alone=M)
+
+for each block in the batch:
+    rule = first of (instruction, link, tag) that matches — or None
+    if rule is None:  continue          # stays in the daily note. Done.
+    apply_routing(decisions=[{block_id, add:[container]}])
+    record_routing(pass_id, block_id, container, rule)
+```
+
+`record_routing` **rejects any rule name other than those three.** If you find
+yourself wanting to pass `similar` or `inferred`, that is the design telling
+you to leave the block alone.
 
 **Persistence — two separate mechanisms, never conflate them:**
 
 - **Membership = containment ∪ routing.** A block is a member of a container
-  if it physically lives there (the user pasted/wrote it) OR has a
-  `routed_to` edge — the same fact seen from two sides. `apply_routing`
-  creates (and removes) the edges; `get_members(container_title)` returns
-  the unified member list (each member marked contained/routed) — use it to
-  render a view's log instead of assembling links by hand. A block's
-  explicit routes are visible in `get_block`/`get_blocks` (`routed_to`).
+  if it physically lives there OR has a `routed_to` edge — the same fact seen
+  from two sides. `apply_routing` creates and removes the edges;
+  `get_members(container_title)` returns the unified list.
 - **Classification = tags.** `tag_block(block_id, augi_tags)` with facets drawn
-  ONLY from the user's taxonomy — it is a closed vocabulary; never invent a
-  tag or a facet. If the user already tagged the block, do not re-tag; only
-  fill gaps.
+  ONLY from the user's taxonomy — a closed vocabulary; never invent a tag or a
+  facet. If the user already tagged the block, do not re-tag; only fill gaps.
 
 **Reference material routes as one document.** Blocks from synced external
-sources (Snipd, Readwise, and similar reference imports) are one artifact:
-route the parent document once (`apply_routing` on the document block) and let
-the pieces ride along — never make per-block routing decisions over a
-transcript. Reference files are synced from their source: never move, edit,
-or restructure them; routing is a link only. Count reference documents
-separately in the pass summary so they don't inflate the queue numbers.
+sources (Snipd, Readwise, and similar) are one artifact: route the parent
+document once and let the pieces ride along — never make per-block routing
+decisions over a transcript. Never move, edit, or restructure reference files;
+routing is a link only. Count reference documents separately so they don't
+inflate the numbers.
 
-**Untagged and unrouted is the default, not a failure.** Life-log blocks
-(daily entries, memories) usually need no tag and no route — they stay
-reachable by time and semantic search. Tag only what you'd query; route only
-what a view should distill. Both live in the DB only — never write into the
-user's notes.
+## Proposals — the judgment half
 
-**Edited blocks re-arrive as new — expected, not a bug (the re-derive
-contract, 2026-07-09).** Block identity is a content hash, so when the user
-edits a routed block, its routes drop and the edited version shows up in
-your new-blocks queue. Just route it again like any new block — an `aaa:`
-line in the text is the durable instruction and always wins. Do NOT treat a
-familiar-looking "new" block as an error, and do NOT hand-restore old links.
+Anything that is **not** one of the three rules goes through
+`write_proposal(...)` and is not done until Chris accepts it in the app. Four
+kinds:
+
+| `kind` | Means | `target` |
+|---|---|---|
+| `promote` | these blocks should become a new note | the proposed title |
+| `adopt` | these blocks should append to an existing note | that note |
+| `merge` | two notes should become one | the survivor |
+| `register` | apply a drafted `description:` so a note becomes a routing target | the note |
+
+Rules for proposing well, learned from the Dashboard this replaces — where 24
+open nominations contained **five** actual decisions:
+
+- **Never propose a routing.** A rule fired or it didn't.
+- **Never propose engineering work.** openaugi bugs belong in the repo, not in
+  Chris's knowledge review. (`^nom-fix-sql-tag-task-filters` — "touches the
+  golden envelope" — should never have been on a Dashboard.)
+- **Derive `proposal_id` from the target** (`promote-silver-notes`) so
+  re-proposing updates in place instead of stacking.
+- **`why` is evidence, not justification.** Name the blocks or the pattern —
+  *"5 blocks since 2026-01 restate this"* — so Chris can check you.
+- **A decline is durable.** Re-propose only on genuinely new evidence, never
+  because another pass ran.
 
 ## Views
 
@@ -273,26 +321,33 @@ Always regenerate `View - Dashboard.md` (same folder):
   note (re-ingest drops it). Never invent a task the user didn't mark;
   recurring concerns earn renewal only by being captured again. Tasks that
   need real management belong in a PMOC's LEFT OFF, not here.
-- **Gravity section**: unrouted blocks that cluster together — nominate,
-  one line each: "5 blocks over 3 weeks orbit *capture UX* — make it a note?"
-  Take NO action on nominations. The user answers inline or via zzz.
-  **When a promotion is approved (or the user says "make X canonical" via
-  `aaa:`), adopt before create:**
-  1. Search first — title, semantic, and tag search for an existing note
-     that already is (or wants to be) the canonical home.
-  2. If found: upgrade it — the nomination carries the drafted container
-     tag + description; on approval, apply them to the note's frontmatter
-     yourself (that is registration), then route the accumulated blocks
-     to it.
-  3. Only if nothing exists: create the concept note fresh (with the
-     `![[View - ...]]` transclusion line at birth).
-  4. Either way, sweep OLD blocks beyond the current window — "I've said
-     this a few times" means the earlier sayings predate this pass;
-     gathering them is the point (the resurfacing feature).
-- **Nomination format (machine-readable — mobile review will read/write
-  it):** every nomination, in the Gravity section or anywhere else on the
-  Dashboard, is ONE markdown checkbox bullet ending in a stable Obsidian
-  block anchor, with an empty answer slot nested under it:
+- **Gravity → `write_proposal`, not a Dashboard bullet.** Blocks that cluster
+  around one idea are the *only* thing gravity produces now, and it is a
+  `promote` (or `adopt`) proposal, never a routing. One per idea:
+  `write_proposal(id="promote-capture-ux", kind="promote", block_ids=[...],
+  target="Capture UX", why="5 blocks over 3 weeks restate this")`.
+  Take NO action on it — Chris accepts it in the app.
+
+  **Adopt before create, always:**
+  1. Search first — title, semantic, and tag search for an existing note that
+     already is (or wants to be) the canonical home.
+  2. If found, propose `adopt` against it rather than `promote` a rival.
+     Registration (the drafted tag + `description:`) is a separate `register`
+     proposal.
+  3. Only if nothing exists, propose `promote`.
+  4. Either way, **sweep OLD blocks beyond the current window** — "I've said
+     this a few times" means the earlier sayings predate this pass, and
+     gathering them is the entire point.
+
+  On acceptance, execute via `write_document` + `apply_routing` — the same
+  path the mobile app's `POST /promote` takes. There is one promote path;
+  do not hand-roll a second.
+- **Nomination format — now a RENDERING of `list_proposals()`, not a store.**
+  The proposals table is the source of truth; the Dashboard mirrors open
+  proposals so they stay answerable in Obsidian on a laptop. Answers given
+  there are still honoured, but the app writes straight to the table.
+  Render one markdown checkbox bullet per open proposal, ending in a stable
+  Obsidian block anchor matching the proposal id, with an empty answer slot:
 
   ```
   - [ ] **Promote:** 5 blocks over 3 weeks orbit *capture UX* — make it a note? ^nom-promote-capture-ux

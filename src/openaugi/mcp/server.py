@@ -1098,3 +1098,214 @@ def run_server(
 
 if __name__ == "__main__":
     run_server()
+
+
+# ---------------------------------------------------------------- review pass
+# docs/plans/changeset-review.md (mobile repo). The trust line these implement:
+# **the agent executes Chris's rules; it does not exercise judgment.**
+#
+# So there are two families here and they are not symmetric. `record_pass` /
+# `record_routing` log what was ALREADY DONE — routing is autonomous because
+# it only ever obeys a rule Chris wrote, and the rule is recorded so the claim
+# can be checked. `write_proposal` / `answer_proposal` handle what is ASKED —
+# nothing is applied until he accepts it.
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@_release_conn
+def record_pass(
+    pass_id: str,
+    window_from: str = "",
+    window_to: str = "",
+    scanned: int = 0,
+    left_alone: int = 0,
+) -> str:
+    """Open a review-pass run — call this FIRST, before routing anything.
+
+    Everything the pass does hangs off this row, and the app's pass log reads
+    it. `scanned` is the size of the new-blocks batch; `left_alone` is how many
+    of them matched no rule and stayed in the daily note. Left-alone is the
+    expected majority and is NOT a backlog — most blocks belong where they are.
+
+    Idempotent on pass_id, so a pass that retries does not fork its audit
+    trail. Use a stable id like `pass-2026-08-20`.
+    """
+    from datetime import datetime
+
+    store = _get_store()
+    store.record_pass(
+        pass_id=pass_id,
+        started_at=datetime.now(UTC).isoformat(),
+        window_from=window_from or None,
+        window_to=window_to or None,
+        scanned=scanned,
+        left_alone=left_alone,
+    )
+    return _json({"status": "ok", "pass_id": pass_id})
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@_release_conn
+def record_routing(pass_id: str, block_id: str, container: str, rule: str) -> str:
+    """Log one routing you applied, and WHICH RULE made you apply it.
+
+    Call this alongside every `apply_routing` decision made during a pass.
+
+    `rule` must be one of — and if none of them fired, **do not route the
+    block at all**:
+
+    - `instruction` — an `aaa:` in the block naming this container
+    - `link`        — a `[[wikilink]]` in the block pointing at it
+    - `tag`         — a tag/facet on the block matching its registration
+
+    There is no `similar` and no `inferred`. Semantic resemblance is not a
+    rule; a block that merely *feels* related to a container stays in the
+    daily note. Routing is autonomous precisely because it is only ever
+    obedience — a routing that cannot name its rule is a judgment call, and
+    judgment goes through `write_proposal` instead.
+    """
+    from datetime import datetime
+
+    allowed = {"instruction", "link", "tag"}
+    if rule not in allowed:
+        return _json(
+            {
+                "status": "error",
+                "reason": f"rule must be one of {sorted(allowed)}, got {rule!r}",
+                "hint": "No rule fired? Then don't route it — leave the block "
+                "in the daily note, or write_proposal if it needs judgment.",
+            }
+        )
+    _get_store().record_routing(
+        pass_id=pass_id,
+        block_id=block_id,
+        container=container,
+        rule=rule,
+        applied_at=datetime.now(UTC).isoformat(),
+    )
+    return _json({"status": "ok", "block_id": block_id, "rule": rule})
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@_release_conn
+def write_proposal(
+    proposal_id: str,
+    kind: str,
+    block_ids: list[str] | None = None,
+    target: str = "",
+    why: str = "",
+    payload: dict | None = None,
+    pass_id: str = "",
+) -> str:
+    """Propose something you will NOT do unless Chris accepts it.
+
+    This replaces Dashboard nominations for pass output. Kinds:
+
+    - `promote`  — these blocks should become a new note (`target` = proposed title)
+    - `adopt`    — these blocks should be appended to an existing note
+    - `merge`    — two notes should become one
+    - `register` — apply a drafted `description:` so a note becomes a routing target
+
+    **Do not propose routings.** If a rule fired, route it and `record_routing`;
+    if none did, leave the block alone. A queue of "maybe this goes here" is how
+    the Dashboard reached 24 open items with only five real decisions in it.
+
+    `proposal_id` should be derived from the target (e.g. `promote-silver-notes`)
+    so re-proposing the same idea updates it in place rather than stacking.
+    `why` is one line of evidence, not a justification — name the blocks or the
+    pattern, so Chris can check you rather than trust you.
+    """
+    from datetime import datetime
+
+    allowed = {"promote", "adopt", "merge", "register"}
+    if kind not in allowed:
+        return _json({"status": "error", "reason": f"kind must be one of {sorted(allowed)}"})
+    _get_store().write_proposal(
+        proposal_id=proposal_id,
+        kind=kind,
+        created_at=datetime.now(UTC).isoformat(),
+        pass_id=pass_id or None,
+        block_ids=block_ids or [],
+        target=target or None,
+        payload=payload or {},
+        why=why,
+    )
+    return _json({"status": "ok", "proposal_id": proposal_id, "kind": kind})
+
+
+@mcp.tool()
+@_release_conn
+def list_proposals(state: str = "proposed", limit: int = 100) -> str:
+    """Proposals awaiting an answer, oldest first.
+
+    Oldest first on purpose: a decision that has waited three passes should not
+    sit under one raised this morning. Pass `state='accepted'` to find work
+    Chris approved that still needs executing.
+    """
+    proposals = _get_store().list_proposals(state=state or None, limit=limit)
+    return _json({"proposals": proposals, "count": len(proposals)})
+
+
+@mcp.tool()
+@_release_conn
+def list_passes(limit: int = 10) -> str:
+    """Recent review-pass runs, newest first — the pass log.
+
+    Use to answer "when did a pass last run, and what did it do?" before
+    starting another one.
+    """
+    passes = _get_store().list_passes(limit=limit)
+    return _json({"passes": passes, "count": len(passes)})
+
+
+@mcp.tool()
+@_release_conn
+def list_routings(pass_id: str, include_undone: bool = False) -> str:
+    """Every routing one pass applied, with the rule that fired for each.
+
+    This is the receipt. Undone routings are hidden unless asked for — an undo
+    is a correction, not history to re-read.
+    """
+    routings = _get_store().list_routings(pass_id, include_undone=include_undone)
+    return _json({"pass_id": pass_id, "routings": routings, "count": len(routings)})
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False))
+@_release_conn
+def answer_proposal(
+    proposal_id: str,
+    state: str,
+    target: str = "",
+    payload: dict | None = None,
+    block_ids: list[str] | None = None,
+) -> str:
+    """Accept or decline a proposal, optionally editing it in the same call.
+
+    `state` is `accepted` or `declined`. Editing on accept is the normal path:
+    Chris reviews by changing the thing, not by rejecting and waiting for a
+    better proposal.
+
+    **A decline is durable.** The point of recording a no is that the same note
+    is not proposed again next week — re-propose only on genuinely new evidence
+    (more blocks joining the cluster), never because a pass ran again.
+
+    Accepting does not execute. The caller executes — `write_document` +
+    `apply_routing` for a promote, or the mobile bridge's `POST /promote`,
+    which is the same path.
+    """
+    allowed = {"accepted", "declined"}
+    if state not in allowed:
+        return _json({"status": "error", "reason": f"state must be one of {sorted(allowed)}"})
+    from datetime import datetime
+
+    ok = _get_store().answer_proposal(
+        proposal_id=proposal_id,
+        state=state,
+        answered_at=datetime.now(UTC).isoformat(),
+        target=target or None,
+        payload=payload,
+        block_ids=block_ids,
+    )
+    if not ok:
+        return _json({"status": "error", "reason": f"no such proposal: {proposal_id}"})
+    return _json({"status": "ok", "proposal_id": proposal_id, "state": state})
