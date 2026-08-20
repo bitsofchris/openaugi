@@ -1,7 +1,7 @@
 """CLI smoke tests for `openaugi search` and `openaugi query`.
 
 The CLI is the third adapter over the query engine (query-layer step 6):
-same rules as MCP/HTTP — tags/time/task filters, bronze exclusion — where
+same rules as MCP/HTTP — tags/time/task filters — where
 the old CLI search was a filter-less duplicate implementation.
 """
 
@@ -44,15 +44,6 @@ class TestSearchCommand:
         result = runner.invoke(app, ["search", "quantum", "--keyword", "--db", str(golden_db)])
         assert result.exit_code == 0, result.output
         assert "2026-06-01" in result.output  # b1's title (note stem)
-
-    def test_task_filter_excludes_bronze(self, golden_db: Path):
-        result = runner.invoke(
-            app, ["search", "--task", "--after", "2026-01-01", "--db", str(golden_db)]
-        )
-        assert result.exit_code == 0, result.output
-        assert "2026-06-02" in result.output  # open-checkbox task
-        assert "2026-06-04" in result.output  # type/task tagged
-        assert "2026-06-03" not in result.output  # bronze never counts
 
     def test_browse_filters_and_reference_note(self, golden_db: Path):
         result = runner.invoke(app, ["search", "--after", "2026-01-01", "--db", str(golden_db)])

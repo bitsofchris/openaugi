@@ -7,7 +7,7 @@ from mcp/server.py into query/. This module is that contract's fixture:
 - `build_store(db_path)` inserts a fully deterministic dataset (fixed ids,
   block times, ingested_at stamps, embeddings, recaps, review state) that
   exercises every rule the engine owns: mode dispatch, tag/time/kind/source
-  filters, after_ingested normalization, has_task + bronze exclusion,
+  filters, after_ingested normalization, has_task filtering,
   exclude_path_prefix, reference-document grouping, pagination edges,
   membership (contained/routed/both), recap staleness, salience gating.
 - `CASES` maps case name → (tool name, kwargs) across the whole read surface.
@@ -116,7 +116,14 @@ def build_store(db_path: Path | str) -> None:
         ),
     ]
     tag_block = Block(
-        id=Block.make_tag_id("idea"), kind="context_block:tag", title="idea", source="vault"
+        id=Block.make_tag_id("idea"),
+        kind="context_block:tag",
+        title="idea",
+        source="vault",
+        # Pinned: Block.ingested_at defaults to now(), which made this corpus
+        # non-deterministic. Latent until the wire format started projecting
+        # ingested_at (2026-08-17) — every other block here was already pinned.
+        ingested_at="2026-05-01T00:00:00.000Z",
     )
 
     data = [
@@ -135,12 +142,10 @@ def build_store(db_path: Path | str) -> None:
             has_open_task=True,
         ),
         _data_block(
-            "b3-bronze-task",
-            "quantum bronze scaffolding thought #layer/bronze\n- [ ] never surfaces as task",
+            "b3-scaffolding-note",
+            "quantum scaffolding thought, no task in it",
             day="2026-06-03",
             path="Daily/2026-06-03.md",
-            tags=["layer/bronze"],
-            has_open_task=True,
         ),
         _data_block(
             "b4-tagged-task",

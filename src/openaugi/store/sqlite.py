@@ -273,6 +273,7 @@ class SQLiteStore:
         limit: int = 100,
         offset: int = 0,
         exclude_path_prefix: str | None = None,
+        include_path_prefix: str | None = None,
     ) -> tuple[list[Block], int]:
         """Fetch blocks with SQL-level filtering and pagination.
 
@@ -296,6 +297,14 @@ class SQLiteStore:
         exclude_path_prefix: drop blocks whose metadata.source_path starts with
         this prefix (e.g. "OpenAugi/" to keep derived artifacts out of a
         review queue). Blocks with no source_path are kept.
+
+        include_path_prefix: the mirror — keep ONLY blocks whose source_path
+        starts with this prefix. Blocks with no source_path are dropped, since
+        they cannot be under the requested folder. Pairing the two is how a
+        caller scopes to one folder inside an otherwise-excluded tree: the
+        review pass excludes "OpenAugi/" for its main sweep, then runs a second
+        query with include_path_prefix="OpenAugi/Capture/" to pick up the
+        mobile capture stream, which is truth rather than derived output.
         """
         conditions: list[str] = []
         params: list[str | int] = []
@@ -320,6 +329,11 @@ class SQLiteStore:
                 "COALESCE(json_extract(metadata, '$.source_path'), '') NOT LIKE ? ESCAPE '\\'"
             )
             params.append(_escape_like(exclude_path_prefix) + "%")
+        if include_path_prefix:
+            conditions.append(
+                "COALESCE(json_extract(metadata, '$.source_path'), '') LIKE ? ESCAPE '\\'"
+            )
+            params.append(_escape_like(include_path_prefix) + "%")
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -751,28 +765,6 @@ class SQLiteStore:
             block_ids,
         ).fetchall()
         return {row[0]: row[1] for row in rows}
-
-    def get_tags_for_ids(self, block_ids: list[str]) -> dict[str, list[str]]:
-        """Fetch tags (user tags + augi_tags) for a list of block IDs.
-
-        Returns a dict {block_id: combined_tag_list}. Lightweight — no
-        content or embedding load; use when only tag membership matters
-        (e.g. the #layer/bronze down-weighting in get_context).
-        """
-        if not block_ids:
-            return {}
-        placeholders = ",".join("?" * len(block_ids))
-        rows = self.conn.execute(
-            f"""SELECT id, tags, json_extract(metadata, '$.augi_tags')
-                FROM blocks WHERE id IN ({placeholders})""",
-            block_ids,
-        ).fetchall()
-        result: dict[str, list[str]] = {}
-        for block_id, tags_json, augi_json in rows:
-            tags = json.loads(tags_json) if tags_json else []
-            augi = json.loads(augi_json) if augi_json else []
-            result[block_id] = tags + augi
-        return result
 
     def reset_embeddings(self, kind: str = "data_block") -> int:
         """NULL out embeddings for all blocks of the given kind.
