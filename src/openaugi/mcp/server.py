@@ -124,6 +124,7 @@ def search(
     kind: str | None = None,
     source: str | None = None,
     exclude_path_prefix: str | None = None,
+    include_path_prefix: str | None = None,
     has_task: bool | None = None,
 ) -> str:
     """Search the knowledge base. Returns block summaries (not full content).
@@ -155,12 +156,24 @@ def search(
 
     exclude_path_prefix drops blocks whose source_path starts with the given
     prefix (e.g. exclude_path_prefix="OpenAugi/" keeps derived artifacts out
-    of a review queue). Works in every mode.
+    of a review queue). include_path_prefix is the mirror — keep ONLY blocks
+    under that prefix. Both work in every mode.
+
+    Use them as a PAIR, in two queries, to reach one folder inside an
+    otherwise-excluded tree. The review pass does exactly this:
+
+        search(after_ingested=since, exclude_path_prefix="OpenAugi/")
+        search(after_ingested=since, include_path_prefix="OpenAugi/Capture/")
+
+    Everything under OpenAugi/ is generated output EXCEPT Capture/, which is
+    the user's mobile capture stream — their voice notes, aaa: instructions,
+    and Dashboard answers. Excluding the tree and then naming the one folder
+    of truth means a new generated folder is excluded automatically, instead
+    of silently leaking into the queue.
 
     has_task=True keeps only blocks the user marked as a task — an open
     `- [ ] …` checkbox (metadata has_open_task, extracted at ingest) or a
-    type/task tag — and always excludes layer/bronze (demoted scaffolding
-    carries no signal). Deterministic: this is the Dashboard task-shelf
+    type/task tag. Deterministic: this is the Dashboard task-shelf
     query (e.g. search(has_task=True, after=<14 days ago>)). Works in
     every mode.
 
@@ -180,6 +193,7 @@ def search(
         kind=kind,
         source=source,
         exclude_path_prefix=exclude_path_prefix,
+        include_path_prefix=include_path_prefix,
         has_task=has_task,
         k=k,
         offset=offset,
@@ -199,6 +213,22 @@ def search(
     return _json(_render_run_result(result))
 
 
+def _with_routes(summaries: list[dict]) -> list[dict]:
+    """Stamp `routed_to` onto a page of block summaries.
+
+    One batched lookup for the whole page (never N+1). Membership is the
+    question every reader eventually asks — "which context blocks does this
+    belong to, and does it belong to any?" — and without it a consumer can't
+    tell a routed block from an unrouted one, which is exactly the queue a
+    review surface needs to show.
+    """
+    ids = [s["id"] for s in summaries if isinstance(s.get("id"), str)]
+    routes = _get_store().get_routed_container_titles(ids) if ids else {}
+    for summary in summaries:
+        summary["routed_to"] = routes.get(summary["id"], [])
+    return summaries
+
+
 def _render_run_result(result: engine.RunResult) -> dict:
     """Agent-shaped envelope for an engine RunResult — shared by search and
     run_query. Key order is part of the golden wire format; don't reorder."""
@@ -209,7 +239,7 @@ def _render_run_result(result: engine.RunResult) -> dict:
             summary["score"] = result.scores[b.id]
             results.append(summary)
         return {
-            "results": results,
+            "results": _with_routes(results),
             "count": len(results),
             "has_more": result.has_more,
             "mode": "semantic",
@@ -217,14 +247,14 @@ def _render_run_result(result: engine.RunResult) -> dict:
 
     if result.mode in ("title", "keyword"):
         return {
-            "results": [_block_summary(b) for b in result.blocks],
+            "results": _with_routes([_block_summary(b) for b in result.blocks]),
             "count": len(result.blocks),
             "has_more": result.has_more,
             "mode": result.mode,
         }
 
     return {
-        "results": [_block_summary(b) for b in result.blocks],
+        "results": _with_routes([_block_summary(b) for b in result.blocks]),
         "count": len(result.blocks),
         "reference_documents": result.reference_documents,
         "reference_block_count": result.reference_block_count,
@@ -363,8 +393,7 @@ def get_context(
       scores themselves are unchanged. Unknown purpose or no config key = no gate.
       Regular research calls should omit this.
 
-    Blocks tagged #layer/bronze (user-demoted scaffolding) are down-weighted by
-    config [layers] bronze_weight before reranking, and excluded entirely when
+    When
     purpose is set — demoted thoughts never resurface proactively."""
     try:
         model = _get_embedding_model()
@@ -965,6 +994,16 @@ def _decision_adds(d: dict) -> list[str]:
 
 
 def _block_summary(block) -> dict:
+    """The read-tool wire row.
+
+    `anchor_id` + `ingested_at` are projected so consumers can collapse
+    superseded versions of an entry. Blocks are append-only and identity is a
+    content hash, so editing a note in Obsidian leaves the previous version in
+    the store: two rows sharing `source_path` and `anchor_id` (the Obsidian
+    block anchor — the entry's stable identity) with different content hashes.
+    The newest `ingested_at` is current. Without these fields a reader can only
+    guess by content similarity, which hides genuinely distinct blocks.
+    """
     return {
         "id": block.id,
         "kind": block.kind,
@@ -975,6 +1014,8 @@ def _block_summary(block) -> dict:
         "block_time": block.block_time,
         "source": block.source,
         "source_path": block.metadata.get("source_path", ""),
+        "anchor_id": block.metadata.get("anchor_id"),
+        "ingested_at": block.ingested_at,
     }
 
 

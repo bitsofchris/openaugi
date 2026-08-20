@@ -127,10 +127,10 @@ adapters present it (docs/reference/query-layer.md):
 
   engine functions:
   → run(QuerySpec): title/keyword/semantic/browse dispatch + filters
-    (after_ingested bound, has_task + bronze exclusion, path exclusion,
+    (after_ingested bound, has_task filter, path exclusion,
      reference-document grouping, pagination envelope)
   → fetch / related / traverse / recent / members / view / views
-  → context: FTS + semantic (3× overfetch) → bronze weighting
+  → context: FTS + semantic (3× overfetch)
              → MMR re-rank (rerank.py) → salience gate → expand via links
   → saved queries: OpenAugi/AGENT/queries/*.md (QuerySpec in frontmatter,
     tokens "-14d"/"today"/"$review-mark" resolved at run time)
@@ -262,7 +262,8 @@ format (`name:`/`description:` frontmatter) so they're scannable.
 - [docs/reference/core-principles.md](docs/reference/core-principles.md) — **The skeleton (read first when designing):** capture grammar, truth/index/cache/render layer model, trust model, promotion — the four invariants everything else hangs on.
 - [docs/reference/agentic-kb-field-guide.md](docs/reference/agentic-kb-field-guide.md) — The portable ruleset: what building this hardened or simplified from the "agent + janitor + flat folder" starting advice; transplantable to any agentic knowledge base.
 - [docs/reference/user-guide.md](docs/reference/user-guide.md) — Day-to-day manual: entry points, the loop, trust rules, triggering a pass, lens system in brief. Chronological build history stays in this file's STATUS header, not there.
-- [docs/reference/review-pass.md](docs/reference/review-pass.md) — **The write-back loop (active):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass, derived views in OpenAugi/Views/. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
+- [docs/reference/review-pass.md](docs/reference/review-pass.md) — **The write-back loop (active):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass. Per-container view FILES were retired 2026-08-17 — recaps are `write_recap` rows. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
+- [docs/reference/recap-spec.md](docs/reference/recap-spec.md) — **What a recap contains:** only what scrolling can't give you — cross-month patterns, contradictions, unanswered questions, what's gone quiet. Not what-moved, not member lists.
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
 - [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
 - [docs/plans/done/heartbeat.md](docs/plans/done/heartbeat.md) — (shipped, then replaced by zzz dispatch) Heartbeat design history

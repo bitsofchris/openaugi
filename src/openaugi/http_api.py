@@ -321,6 +321,7 @@ def _spec_from_params(params) -> QuerySpec:
         kind=params.get("kind"),
         source=params.get("source"),
         exclude_path_prefix=params.get("exclude_path_prefix"),
+        include_path_prefix=params.get("include_path_prefix"),
         has_task=has_task,
         k=_int_param(params, "k", 100),
         offset=_int_param(params, "offset", 0),

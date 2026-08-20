@@ -62,13 +62,6 @@ class TestEngineRun:
         # is an adapter concern, never lost here.
         assert all(b.content for b in result.blocks)
 
-    def test_has_task_excludes_bronze(self, store: SQLiteStore):
-        result = engine.run(store, QuerySpec(has_task=True, after="2026-01-01"))
-        ids = [b.id for b in result.blocks]
-        assert "b2-open-task" in ids  # open checkbox
-        assert "b4-tagged-task" in ids  # type/task tag
-        assert "b3-bronze-task" not in ids  # bronze never counts
-
     def test_path_exclusion_all_modes(self, store: SQLiteStore):
         browse = engine.run(store, QuerySpec(after="2026-01-01", exclude_path_prefix="OpenAugi/"))
         assert all(
@@ -78,6 +71,31 @@ class TestEngineRun:
         assert all(
             not b.metadata.get("source_path", "").startswith("OpenAugi/") for b in keyword.blocks
         )
+
+    def test_path_inclusion_all_modes(self, store: SQLiteStore):
+        """include_path_prefix is the mirror: keep only what's under the folder.
+
+        This is the review pass's second query — after excluding OpenAugi/
+        wholesale, it names OpenAugi/Capture/ to pick the phone stream back up.
+        """
+        browse = engine.run(store, QuerySpec(after="2026-01-01", include_path_prefix="OpenAugi/"))
+        assert browse.blocks
+        assert all(
+            b.metadata.get("source_path", "").startswith("OpenAugi/") for b in browse.blocks
+        )
+
+        keyword = engine.run(store, QuerySpec(keyword="quantum", include_path_prefix="OpenAugi/"))
+        assert [b.id for b in keyword.blocks] == ["b5-derived"]
+
+        # A folder nothing lives under returns empty, not everything
+        none = engine.run(store, QuerySpec(keyword="quantum", include_path_prefix="Nowhere/"))
+        assert none.blocks == []
+
+    def test_include_prefix_alone_is_a_valid_query(self):
+        """ "Everything under this folder" is a complete question; a bare
+        exclusion is not."""
+        assert not QuerySpec(include_path_prefix="OpenAugi/Capture/").is_empty()
+        assert QuerySpec(exclude_path_prefix="OpenAugi/").is_empty()
 
     def test_after_ingested_bound(self, store: SQLiteStore):
         result = engine.run(store, QuerySpec(after_ingested="2026-05-01T00:00:00Z"))
