@@ -8,6 +8,7 @@ and dispatch_task with a monkeypatched launch_tmux so no real tmux runs.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -600,3 +601,46 @@ class TestTaskTemplateContract:
         assert "README" in calls["prompt"] or "Task" in calls["prompt"]
         assert task_id in calls["prompt"]
         assert calls["working_dir"] == str(tmp_path)
+
+
+class TestRepoNoteLocation:
+    """Working-dir resolution must survive the note moving.
+
+    The agent-facing notes moved under `OpenAugi/AGENT/` and this lookup did
+    not follow. It failed silently: `load_repo_paths` returned {}, every task
+    fell back to the default working directory, and the only evidence was one
+    WARNING at startup that nobody reads.
+    """
+
+    def _note(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("---\nrepos:\n  openaugi: /Users/me/repos/openaugi\n---\n")
+
+    def test_finds_the_note_under_agent(self, tmp_path):
+        self._note(tmp_path / "OpenAugi" / "AGENT" / "Repos.md")
+        assert tw.load_repo_paths(tmp_path) == {"openaugi": "/Users/me/repos/openaugi"}
+
+    def test_still_finds_the_legacy_location(self, tmp_path):
+        self._note(tmp_path / "OpenAugi" / "Repos.md")
+        assert tw.load_repo_paths(tmp_path) == {"openaugi": "/Users/me/repos/openaugi"}
+
+    def test_agent_location_wins_when_both_exist(self, tmp_path):
+        legacy = tmp_path / "OpenAugi" / "Repos.md"
+        self._note(legacy)
+        legacy.write_text("---\nrepos:\n  openaugi: /old/path\n---\n")
+        self._note(tmp_path / "OpenAugi" / "AGENT" / "Repos.md")
+        assert tw.load_repo_paths(tmp_path)["openaugi"] == "/Users/me/repos/openaugi"
+
+    def test_an_explicit_path_is_not_second_guessed(self, tmp_path):
+        # A caller naming a location outright means it; falling back to a
+        # different note would resolve repos they did not ask for.
+        self._note(tmp_path / "OpenAugi" / "AGENT" / "Repos.md")
+        assert tw.load_repo_paths(tmp_path, repos_note="somewhere/else.md") == {}
+
+    def test_missing_everywhere_names_what_it_looked_for(self, tmp_path, caplog):
+        with caplog.at_level(logging.WARNING):
+            assert tw.load_repo_paths(tmp_path) == {}
+        # "not found" without saying where is what made this take months to
+        # notice — the message has to be actionable.
+        assert "OpenAugi/AGENT/Repos.md" in caplog.text
+        assert "OpenAugi/Repos.md" in caplog.text
