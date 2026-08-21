@@ -1338,10 +1338,13 @@ def task_dispatch(
         "--tasks-folder",
         help="Relative folder in the vault where task files live",
     ),
-    repos_note: str = typer.Option(
-        "OpenAugi/Repos.md",
+    repos_note: str | None = typer.Option(
+        None,
         "--repos-note",
-        help="Path (relative to vault) of the note mapping repo names → absolute paths",
+        help=(
+            "Path (relative to vault) of the note mapping repo names → absolute paths. "
+            "Default: OpenAugi/AGENT/Repos.md, falling back to OpenAugi/Repos.md"
+        ),
     ),
     interval: float = typer.Option(5.0, "--interval", help="Poll interval in seconds"),
     settle: float = typer.Option(

@@ -81,7 +81,14 @@ import yaml
 logger = logging.getLogger(__name__)
 
 DEFAULT_TASKS_FOLDER = "OpenAugi/Tasks"
-DEFAULT_REPOS_NOTE = "OpenAugi/Repos.md"
+# Where the repo map may live, first hit wins. Agent-facing notes moved under
+# `OpenAugi/AGENT/` and this lookup did not follow, so working-dir resolution
+# had been silently returning {} — tasks fell back to the default directory
+# and the only sign was one WARNING at startup. Both are checked rather than
+# just repointing, because the vault is a live thing and a note that moved
+# once can move again; a lookup that survives the move is worth six lines.
+REPOS_NOTE_CANDIDATES = ("OpenAugi/AGENT/Repos.md", "OpenAugi/Repos.md")
+DEFAULT_REPOS_NOTE = REPOS_NOTE_CANDIDATES[0]
 DEFAULT_POLL_INTERVAL = 5.0  # seconds between scans
 DEFAULT_SETTLE_TIME = 30.0  # seconds a file must be unchanged before processing
 DEFAULT_REAP_INTERVAL = 3600.0  # seconds between reaps of tmux sessions for done tasks
@@ -242,8 +249,8 @@ def hydrate_note(filepath: Path) -> tuple[str, str, Path]:
 # ── Repo paths ─────────────────────────────────────────────────────────────
 
 
-def load_repo_paths(vault: Path, repos_note: str = DEFAULT_REPOS_NOTE) -> dict[str, str]:
-    """Load name→path mapping from `<vault>/<repos_note>` frontmatter.
+def load_repo_paths(vault: Path, repos_note: str | None = None) -> dict[str, str]:
+    """Load name→path mapping from the repo note's frontmatter.
 
     The note should have YAML frontmatter with a `repos` dict:
 
@@ -253,12 +260,20 @@ def load_repo_paths(vault: Path, repos_note: str = DEFAULT_REPOS_NOTE) -> dict[s
           my-site: /Users/me/repos/my-site
         ---
 
+    With `repos_note` given, only that path is tried — a caller that names a
+    location outright should not be second-guessed. Otherwise
+    REPOS_NOTE_CANDIDATES are tried in order.
+
     Keys are lowercased so lookups are case-insensitive. Missing note or
     malformed frontmatter → empty dict (warn and continue).
     """
-    repos_file = vault / repos_note
-    if not repos_file.exists():
-        logger.warning("Repos note not found: %s", repos_file)
+    candidates = [repos_note] if repos_note else list(REPOS_NOTE_CANDIDATES)
+    repos_file = next((vault / c for c in candidates if (vault / c).exists()), None)
+    if repos_file is None:
+        logger.warning(
+            "Repos note not found in any of: %s",
+            ", ".join(str(vault / c) for c in candidates),
+        )
         return {}
     try:
         text = repos_file.read_text()
@@ -562,7 +577,7 @@ def reap_done_sessions(tasks_dir: Path, tmux: str) -> int:
 def watch_tasks(
     vault_path: str | Path,
     tasks_folder: str = DEFAULT_TASKS_FOLDER,
-    repos_note: str = DEFAULT_REPOS_NOTE,
+    repos_note: str | None = None,
     poll_interval: float = DEFAULT_POLL_INTERVAL,
     settle: float = DEFAULT_SETTLE_TIME,
     reap_interval: float = DEFAULT_REAP_INTERVAL,
