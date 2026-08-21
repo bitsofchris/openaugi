@@ -1073,9 +1073,10 @@ wheels = [
 
 [[package]]
 name = "openaugi"
-version = "0.1.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "mcp" },
     { name = "numpy" },
     { name = "openai" },
@@ -1116,10 +1117,11 @@ remote = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", marker = "extra == 'remote'", specifier = ">=42" },
+    { name = "httpx", specifier = ">=0.27,<1" },
     { name = "httpx", marker = "extra == 'all'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'ollama'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'remote'", specifier = ">=0.27" },
-    { name = "mcp", specifier = ">=1.0" },
+    { name = "mcp", specifier = ">=1.0,<2" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "openai", specifier = ">=1.0" },
     { name = "openai", marker = "extra == 'all'", specifier = ">=1.0" },
