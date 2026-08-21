@@ -76,7 +76,7 @@ Restart Claude Desktop after editing.
 | `OPENAUGI_DB` | Path to SQLite database | `~/.openaugi/openaugi.db` |
 | `OPENAUGI_VAULT_PATH` | Path to Obsidian vault (required for write tools) | From `config.toml [vault] default_path` |
 
-Both are optional if you've run `openaugi init` — the config file is the default.
+Both are optional if you've run `openaugi init` — the config file is the default. `OPENAUGI_VAULT_PATH` may use `~`; it is expanded before use.
 
 ## Tools
 

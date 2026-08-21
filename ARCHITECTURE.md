@@ -88,7 +88,7 @@ src/openaugi/
 ├── http_api.py            # HTTP adapter — /api/* JSON routes on the daemon (full blocks, read-only)
 ├── cli/
 │   └── main.py            # typer CLI (up, ingest, serve, watch, search, query, hubs, status, service)
-└── config.py              # TOML config loader + .env loader
+└── config.py              # TOML config loader + .env loader + vault path resolution
 ```
 
 ## Key Flows

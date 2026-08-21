@@ -87,6 +87,29 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
     return dict(DEFAULT_CONFIG)
 
 
+def resolve_vault_path(
+    explicit: str | Path | None = None,
+    config: dict[str, Any] | None = None,
+) -> str | None:
+    """Resolve the vault path from an explicit value or config, with "~" expanded.
+
+    Precedence: explicit (a --path flag) > [vault] default_path in config.
+
+    Expansion happens here, once, because the raw config string reaches a dozen
+    consumers (parser, watcher, dispatcher, context pack, renderers) and only
+    some of them would survive a literal "~". Note that Path.resolve() does NOT
+    expand "~" — it resolves the tilde as a relative directory name against the
+    cwd — so a caller that only resolves still fails on a "~/vault" config.
+
+    Returns None when neither source supplies a path; callers own that error
+    message since it differs per command.
+    """
+    raw = explicit or (config or {}).get("vault", {}).get("default_path")
+    if not raw:
+        return None
+    return str(Path(raw).expanduser())
+
+
 def _load_toml(path: Path) -> dict[str, Any]:
     """Load a TOML file."""
     with open(path, "rb") as f:

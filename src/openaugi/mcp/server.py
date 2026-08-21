@@ -42,7 +42,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
-from openaugi.config import load_config
+from openaugi.config import load_config, resolve_vault_path
 from openaugi.http_api import register_api_routes
 from openaugi.models import get_embedding_model
 from openaugi.query import QuerySpec, engine, saved
@@ -65,12 +65,11 @@ def _get_db_path() -> str:
 
 
 def _get_vault_path() -> str | None:
-    """Resolve vault path: env var > config.toml > None."""
+    """Resolve vault path: env var > config.toml > None (with ~ expanded)."""
     vault = os.environ.get("OPENAUGI_VAULT_PATH")
     if vault:
-        return vault
-    config = load_config()
-    return config.get("vault", {}).get("default_path")
+        return resolve_vault_path(vault)
+    return resolve_vault_path(config=load_config())
 
 
 def _get_store() -> SQLiteStore:

@@ -36,6 +36,8 @@ openaugi init
 
 Interactive setup — choose embedding model (local or OpenAI), set API key if needed, set your vault path. Config is saved to `~/.openaugi/config.toml`.
 
+The vault path may use `~` (`~/Documents/vault`) — it is expanded to an absolute path everywhere it is used, whether it comes from `init`, a `--path` flag, or `[vault] default_path` edited by hand.
+
 ## Run
 
 Two processes, and it matters which is which.
