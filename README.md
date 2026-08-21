@@ -25,10 +25,30 @@ pip install openaugi
 
 # Configure and run
 openaugi init    # one-time: vault path, embedding model, API key
-openaugi up      # sync vault + start MCP server + watch for changes
+openaugi up      # sync the vault, then watch it and dispatch tasks
 ```
 
-Then [register with Claude](docs/reference/GETTING_STARTED.md#register-with-claude) and start asking questions about your notes.
+Leave `up` running. Then point your MCP client at **`openaugi serve`** —
+[register with Claude](docs/reference/GETTING_STARTED.md#register-with-claude) —
+and start asking questions about your notes.
+
+### Two commands, and why
+
+|  | What it is | How many |
+|---|---|---|
+| **`openaugi up`** | the background service: ingest, watch the vault, dispatch `zzz:` tasks | **one per vault** |
+| **`openaugi serve`** | the MCP interface your clients talk to | **one per client** |
+
+They are separate because they need opposite cardinality. Two watchers see the
+same `zzz:` land and both dispatch it, so one instruction becomes two agents
+racing over one database — `up` therefore takes a lock and refuses to start
+twice. A stdio MCP server is the other way round: Claude Desktop, Codex, and
+any other client each spawn their own, so `serve` takes no lock and any number
+can run.
+
+If you have exactly one client and want a single terminal, `openaugi up
+--serve` does both. Anything supervised — launchd, systemd, a container —
+wants them apart.
 
 ---
 
@@ -42,17 +62,18 @@ Obsidian Vault --> split --> extract --> embed --> SQLite --> MCP Server --> Cla
 
 **Ingest:** Splits your vault by headings, extracts tags and links, builds a graph of blocks and links in SQLite. Embeds everything for semantic search. Watches for changes and re-ingests automatically.
 
-**Query:** Claude gets MCP tools to search (semantic + keyword), traverse your knowledge graph, fetch full context, and understand how your ideas connect. Writes are scoped to an `OpenAugi/` folder in your vault — your own notes are never touched.
+**Query:** Claude gets MCP tools (via `openaugi serve`) to search (semantic + keyword), traverse your knowledge graph, fetch full context, and understand how your ideas connect. Writes are scoped to an `OpenAugi/` folder in your vault — your own notes are never touched.
 
-**One command:**
+**The two processes:**
 
 ```
-openaugi up     ← ingest + file watcher + zzz dispatch + task agent + MCP server
+openaugi up      ← ingest + file watcher + zzz dispatch + task agent   (one per vault)
+openaugi serve   ← MCP tools for your client                          (one per client)
 ```
 
 **ZZZ dispatch:** Write `zzz: <instruction>` anywhere in your notes — any capitalization works (`zzz`, `ZZZ`, `Zzz`). The file watcher detects changes, ingests the block, and writes a task file to `OpenAugi/Tasks/`. The task watcher picks it up and launches a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>`. The agent's behavior is governed by a skill file you edit in Obsidian. See [Getting Started](docs/reference/GETTING_STARTED.md).
 
-**Review pass (write-back):** The loop that keeps the knowledge base maintained. On trigger ("run the review pass"), an agent routes new blocks to your area/project notes as graph links, regenerates derived view notes under `OpenAugi/Views/` — a where-did-I-leave-off head per area/project plus a Dashboard — and nominates structure changes (new tags, new notes) for your approval. Agents never edit your notes; views are regenerable caches. See [Review Pass](docs/reference/review-pass.md).
+**Review pass (write-back):** The loop that keeps the knowledge base maintained. On trigger ("run the review pass"), an agent routes new blocks to your area/project notes as graph links, refreshes each container's recap, and proposes structure changes (new notes, merges, registrations) for your approval. Agents never edit your notes; views are regenerable caches. See [Review Pass](docs/reference/review-pass.md).
 
 **Capture grammar** — three tokens: `qqq` on its own line splits blocks · `zzz:` dispatches a task *immediately* (file watcher acts at ingest) · `aaa:` is a filing instruction that stays inert in the block until the next review pass reads it. Nothing else to learn.
 
