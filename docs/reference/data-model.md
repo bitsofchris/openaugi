@@ -57,6 +57,33 @@ Data blocks are like parquet files — raw data with a footer full of statistics
 
 Block IDs are deterministic: `hash(source_path + content_hash)`. This gives stable identity across section reordering and incremental re-ingestion. If the content hasn't changed, the block doesn't change.
 
+### Document identity — `augi_id`
+
+A document block's ID comes from its **file path** by default. That is fine for
+notes nothing points at, and wrong for a container: every edge into one
+(`contains` and `routed_to` alike) is keyed on that ID, so renaming or moving
+the file in the editor produces a *new* document and orphans every edge into
+the old one. Silently — there is no error and no repair, and the container
+simply resolves to fewer members than it has.
+
+A note can therefore name itself, in frontmatter:
+
+```yaml
+---
+augi_id: 898c3199-596c-4154-8be2-b7b862ec12d7
+---
+```
+
+When present, the document's ID derives from that instead of the path, so it
+survives renames and moves. The value is opaque — any stable token works; it is
+a name, not a structure.
+
+**Give one to any note that receives `routed_to` edges** (containers), and skip
+it everywhere else. Adding one to a note that is already ingested changes its
+ID, which re-keys its edges — see
+`scripts/migrate_container_augi_id.py`, which does that remap and verifies no
+edge is lost.
+
 ### Tags as blocks
 
 Tags are first-class graph nodes, not string annotations. This means hub scoring, traversal, and entity resolution work uniformly across all block kinds. A tag like `#data-engineering` is a block that connects to every document and entry tagged with it — making it a natural navigation hub.

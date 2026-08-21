@@ -938,6 +938,11 @@ def up(
     no_agent: bool = typer.Option(
         False, "--no-agent", help="Disable task dispatch (watcher + MCP only, no agent sessions)"
     ),
+    no_mcp: bool = typer.Option(
+        False,
+        "--no-mcp",
+        help="Watch and dispatch only; don't serve MCP (something else already does)",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
     """Ingest, watch, dispatch, and serve — the one command to run OpenAugi.
@@ -1049,12 +1054,29 @@ def up(
         dispatch_thread.start()
         err.print("[bold]Agent:[/bold] watching OpenAugi/Tasks/")
 
-    err.print(f"[bold]MCP:[/bold] {transport}")
-    err.print()
-
-    # Step 4: MCP server (blocks main thread)
     if db:
         os.environ["OPENAUGI_DB"] = db
+
+    # Step 4: block the main thread. Either serving MCP, or just parking so the
+    # daemon threads keep running.
+    if no_mcp:
+        # Watch-and-dispatch only. Needed whenever something ELSE already
+        # serves MCP — the common supervised setup, where one agent runs
+        # `serve` on a port and this one only watches.
+        #
+        # Without this the default transport is stdio, and under a supervisor
+        # stdin is /dev/null: the MCP server reads EOF immediately and exits,
+        # taking the watcher and dispatcher down with it. The process looks
+        # like it started fine, logs "Watching …", and is gone a moment later.
+        err.print("[bold]MCP:[/bold] not served (--no-mcp)")
+        err.print()
+        import threading as _threading
+
+        _threading.Event().wait()  # park forever; daemon threads do the work
+        return
+
+    err.print(f"[bold]MCP:[/bold] {transport}")
+    err.print()
 
     from openaugi.mcp.server import run_server
 
@@ -1316,10 +1338,13 @@ def task_dispatch(
         "--tasks-folder",
         help="Relative folder in the vault where task files live",
     ),
-    repos_note: str = typer.Option(
-        "OpenAugi/Repos.md",
+    repos_note: str | None = typer.Option(
+        None,
         "--repos-note",
-        help="Path (relative to vault) of the note mapping repo names → absolute paths",
+        help=(
+            "Path (relative to vault) of the note mapping repo names → absolute paths. "
+            "Default: OpenAugi/AGENT/Repos.md, falling back to OpenAugi/Repos.md"
+        ),
     ),
     interval: float = typer.Option(5.0, "--interval", help="Poll interval in seconds"),
     settle: float = typer.Option(
