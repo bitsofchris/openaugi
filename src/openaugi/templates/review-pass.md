@@ -90,16 +90,15 @@ anything actually arrive here from elsewhere by inference?
 
 ## Routing — you execute rules, you do not exercise judgment
 
-**This is the line the whole pass sits on.** Chris, 2026-08-20:
+**This is the line the whole pass sits on.**
 
-> *"I don't want you to guess anything because most blocks don't need to be
-> routed out of the daily note. Things with a link in them, things with the
-> rule in them, or I'm supposedly asking you to make a new note. That's really
-> all you're doing."*
+> Do not guess. Most blocks do not need to be routed out of the daily note.
+> A block with a link in it, a block carrying a rule, or a block asking for a
+> new note — that is the whole job.
 
 Routing is **autonomous** — you apply it without asking — and that is only
 acceptable because it is never a judgment call. You are executing instructions
-Chris wrote. So the boundary has to be exact.
+the user wrote. So the boundary has to be exact.
 
 ### The three rules. There is no fourth.
 
@@ -204,8 +203,8 @@ inflate the numbers.
 ## Proposals — the judgment half
 
 Anything that is **not** one of the three rules goes through
-`write_record("proposals", ...)` and is not done until Chris accepts it in the
-app. Four kinds:
+`write_record("proposals", ...)` and is not done until the user accepts it.
+Four kinds:
 
 | `kind` | Means | `target` |
 |---|---|---|
@@ -214,17 +213,18 @@ app. Four kinds:
 | `merge` | two notes should become one | the survivor |
 | `register` | apply a drafted `description:` so a note becomes a routing target | the note |
 
-Rules for proposing well, learned from the Dashboard this replaces — where 24
-open nominations contained **five** actual decisions:
+Rules for proposing well, learned from the markdown nomination queue this
+replaces — where 24 open items contained **five** actual decisions:
 
 - **Never propose a routing.** A rule fired or it didn't.
-- **Never propose engineering work.** openaugi bugs belong in the repo, not in
-  Chris's knowledge review. (`^nom-fix-sql-tag-task-filters` — "touches the
-  golden envelope" — should never have been on a Dashboard.)
+- **Never propose engineering work.** Bugs in the tooling belong in its issue
+  tracker, not in someone's knowledge review. A queue that mixes "should this
+  become a note?" with "fix this SQL filter" gets abandoned, and the decisions
+  that mattered are what get lost.
 - **Derive the record id from the target** (`promote-silver-notes`) so
   re-proposing updates in place instead of stacking.
 - **`why` is evidence, not justification.** Name the blocks or the pattern —
-  *"5 blocks since 2026-01 restate this"* — so Chris can check you.
+  *"5 blocks since January restate this"* — so the user can check you.
 - **A decline is durable.** Re-propose only on genuinely new evidence, never
   because another pass ran.
 
@@ -281,8 +281,8 @@ the old recap row is orphaned and harmless.
 
 **Do not add `![[View - ...]]` transclusion lines to container notes** — the
 files they point at no longer exist. A newly promoted container gets its
-`description:` frontmatter and nothing else; its recap reaches Chris through
-the app.
+`description:` frontmatter and nothing else; its recap is read through the
+app, not from a file.
 
 ### What goes in a recap
 
@@ -361,7 +361,7 @@ Always regenerate `View - Dashboard.md` (same folder):
   `write_record("proposals", "promote-capture-ux", {kind: "promote",
   block_ids: [...], target: "Capture UX", state: "proposed",
   why: "5 blocks over 3 weeks restate this"})`.
-  Take NO action on it — Chris accepts it in the app.
+  Take NO action on it — the user accepts it in the app.
 
   **Adopt before create, always:**
   1. Search first — title, semantic, and tag search for an existing note that
@@ -444,17 +444,18 @@ Always regenerate `View - Dashboard.md` (same folder):
 
    The first drops everything under `OpenAugi/` — agent-generated output.
    The second reaches back in for the one folder that isn't:
-   **`OpenAugi/Capture/` is the mobile capture stream** — Chris's voice
-   notes, his `aaa:` instructions, and the answers he gives to Dashboard
-   nominations from his phone. It is truth, and it routes like any other
-   capture.
+   **`OpenAugi/Capture/` is the mobile capture stream** — voice notes,
+   `aaa:` instructions, and answers given from the phone. It is truth, and it
+   routes like any other capture.
 
    Two queries rather than a list of excluded folders, deliberately: a new
    generated folder is then excluded automatically instead of leaking into
-   the queue unnoticed. (Query 2 did not exist until 2026-08-01. For eight
-   passes the phone stream was invisible — the hookbook nomination Chris
-   approved from his phone sat unexecuted for a week because the pass
-   never saw it. Captures before 2026-08-01 were backfilled separately.) `after_ingested` filters on when a block
+   the queue unnoticed. Skipping query 2 is a silent failure worth naming:
+   the phone stream simply does not appear, so instructions captured there —
+   including answers to the pass's own proposals — are never seen, and the
+   pass looks healthy while ignoring them.
+
+   `after_ingested` filters on when a block
    entered the DB; do NOT use `after=` here — it compares content dates
    (often date-only, and unchanged by edits), so it misses same-day
    captures and re-ingested edited blocks. This is the full pass scope;
