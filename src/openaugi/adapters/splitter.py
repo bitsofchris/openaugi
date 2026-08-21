@@ -429,6 +429,33 @@ def _strip_frontmatter(content: str) -> tuple[str, list[str]]:
     return body, tags
 
 
+AUGI_ID_PATTERN = re.compile(r"^augi_id:\s*[\"']?([A-Za-z0-9._:-]+)[\"']?\s*$")
+
+
+def _extract_augi_id(content: str) -> str | None:
+    """Extract `augi_id:` from YAML frontmatter, if present.
+
+    A container note's identity. It exists because the alternative — deriving
+    a document's id from its file path — makes the id a function of where the
+    file happens to sit, so renaming or moving a note in the editor silently
+    orphans every edge pointing at it. An id written into the note travels
+    with it.
+
+    Deliberately permissive about the value: any opaque token is fine. It is a
+    name, not a structure, and validating it as a UUID would only break vaults
+    that name their notes some other way.
+    """
+    match = FRONTMATTER_PATTERN.match(content)
+    if not match:
+        return None
+
+    for line in match.group(1).split("\n"):
+        found = AUGI_ID_PATTERN.match(line.strip())
+        if found:
+            return found.group(1)
+    return None
+
+
 def _extract_frontmatter_created(content: str) -> str | None:
     """Extract a `created:` date from YAML frontmatter, if present.
 

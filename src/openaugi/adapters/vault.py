@@ -23,6 +23,7 @@ from openaugi.adapters import splitter as _splitter
 # docstring and [docs/reference/splitter.md](../../../docs/reference/splitter.md).
 from openaugi.adapters.splitter import (
     _code_fence_ranges,  # noqa: F401
+    _extract_augi_id,
     _extract_filename_date,
     _extract_frontmatter_created,
     _extract_links,  # noqa: F401
@@ -255,16 +256,25 @@ def _parse_file(
     links: list[Link] = []
     tag_blocks: dict[str, Block] = {}
 
-    # Document block
+    # Document block.
+    #
+    # Identity comes from the note when the note carries one. `augi_id` in the
+    # frontmatter is the document's name; the path is only a fallback for
+    # notes that have not been given one. This matters because every edge into
+    # a container — `contains` and `routed_to` alike — is keyed on this id, so
+    # deriving it from the path meant that renaming or moving a note in the
+    # editor orphaned all of them, with no error and no repair: the container
+    # simply looked emptier than it should.
     file_hash = _hash_content(content)
-    doc_id = Block.make_document_id(rel_path)
+    augi_id = _extract_augi_id(content)
+    doc_id = Block.make_document_id(f"augi:{augi_id}" if augi_id else rel_path)
     doc_block = Block(
         id=doc_id,
         kind="context_block:document",
         title=parent_title,
         source="vault",
         content_hash=file_hash,
-        metadata={"source_path": rel_path},
+        metadata={"source_path": rel_path, **({"augi_id": augi_id} if augi_id else {})},
     )
     blocks.append(doc_block)
 
