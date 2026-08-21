@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.1 — 2026-08-21
+
+**Dependency pins so the package installs.** `mcp>=1.0` was an open range and
+`mcp` 2.0.0 shipped, which moves `mcp.server.fastmcp` and drops `readOnlyHint`
+from `ToolAnnotations` — so a fresh install resolved to a version that does not
+import. Now `mcp>=1.0,<2`; lift that bound with a migration, not by widening it.
+
+`httpx` is also declared explicitly. It is imported directly by
+`auth/cloudflare.py` and had been arriving transitively via mcp 1.x; under
+2.x that transitive dep became `httpx2` and the import broke. Depend on what
+you import.
+
+0.2.0 was tagged but never published — the release workflow gates on the type
+check that this failure tripped.
+
 ## 0.2.0 — 2026-08-20
 
 The release where OpenAugi stopped being a retrieval library with a write
