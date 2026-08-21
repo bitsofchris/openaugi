@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openaugi"
-version = "0.1.0"
+version = "0.2.0"
 description = "Self-hostable personal intelligence engine. One pip install. One SQLite file. One MCP server."
 readme = "README.md"
 license = "Apache-2.0"

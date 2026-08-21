@@ -938,19 +938,38 @@ def up(
     no_agent: bool = typer.Option(
         False, "--no-agent", help="Disable task dispatch (watcher + MCP only, no agent sessions)"
     ),
-    no_mcp: bool = typer.Option(
+    serve_mcp: bool = typer.Option(
         False,
-        "--no-mcp",
-        help="Watch and dispatch only; don't serve MCP (something else already does)",
+        "--serve",
+        help=(
+            "Also serve MCP in the foreground. Single-terminal use only — "
+            "normally point clients at `openaugi serve`"
+        ),
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
-    """Ingest, watch, dispatch, and serve — the one command to run OpenAugi.
+    """The background service: ingest, watch, dispatch. ONE per vault.
 
     1. Runs incremental ingest (fast if already up-to-date)
     2. Starts file watcher as a background thread (zzz → task files)
     3. Starts task dispatch as a background thread (task files → tmux agents)
-    4. Starts MCP server in the foreground
+
+    **This does not serve MCP.** Use `openaugi serve` for that, and point every
+    MCP client at it.
+
+    The two have opposite cardinality, which is why they are separate commands:
+
+    - A watcher/dispatcher must be **singleton**. Two of them see the same
+      `zzz:` land and both dispatch it, so one instruction becomes two agents
+      racing over one database.
+    - A stdio MCP server is inherently **per-client**. Claude Desktop, Codex,
+      and any other client each spawn their own; that is how stdio transport
+      works.
+
+    Conflating them meant a second client's launch either raced the first or,
+    once the singleton lock existed, exited immediately and handed that client
+    a dead server. `--serve` exists for the single-terminal case where you want
+    both and there is only one client.
     """
     import os
     import threading
@@ -1059,16 +1078,16 @@ def up(
 
     # Step 4: block the main thread. Either serving MCP, or just parking so the
     # daemon threads keep running.
-    if no_mcp:
-        # Watch-and-dispatch only. Needed whenever something ELSE already
-        # serves MCP — the common supervised setup, where one agent runs
-        # `serve` on a port and this one only watches.
+    if not serve_mcp:
+        # The default: this is a service, not an interface. Park the main
+        # thread so the watcher and dispatcher keep running.
         #
-        # Without this the default transport is stdio, and under a supervisor
-        # stdin is /dev/null: the MCP server reads EOF immediately and exits,
-        # taking the watcher and dispatcher down with it. The process looks
-        # like it started fine, logs "Watching …", and is gone a moment later.
-        err.print("[bold]MCP:[/bold] not served (--no-mcp)")
+        # Serving here by default was the old behaviour and it was wrong twice
+        # over. Under a supervisor, stdin is /dev/null — the stdio server reads
+        # EOF and returns, taking the watcher down with it, after logging a
+        # clean startup. And under an MCP client, every client spawns its own,
+        # so the singleton watcher could not coexist with them.
+        err.print("[bold]MCP:[/bold] not served — point clients at `openaugi serve`")
         err.print()
         import threading as _threading
 
