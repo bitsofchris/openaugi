@@ -38,7 +38,7 @@ See [docs/reference/data-model.md](docs/reference/data-model.md) for the full da
 
 ## Two Planes
 
-The codebase separates two fundamentally different kinds of work, both run by `openaugi up`:
+The codebase separates two fundamentally different kinds of work, run by `openaugi up` (the service) and `openaugi serve` (the MCP interface):
 
 **Data plane (`pipeline/`)** — passive transforms on blocks. Ingest, embed, watch for file changes, dispatch zzz instructions as task files, re-rank search results. All in-process Python, no external processes.
 
@@ -203,10 +203,10 @@ See [docs/plans/m0.md](docs/plans/m0.md) § Key Design Decisions for full ration
 
 ```bash
 openaugi init          # one-time: configure embedding model, API key, vault path
-openaugi up            # daily: sync vault + file watcher + MCP server
+openaugi up            # daily: sync vault + file watcher + zzz dispatch
 ```
 
-`openaugi up` is the single command to run OpenAugi:
+`openaugi up` is the background service; `openaugi serve` is what MCP clients talk to:
 
 1. **Incremental ingest** — syncs vault to SQLite (skips unchanged files via content hash)
 2. **File watcher** — daemon thread watches for `.md` changes, debounces (default 30s), re-ingests
@@ -217,14 +217,15 @@ Embedding is attempted with the user's configured model. If it fails, blocks are
 ### Daily use — one command
 
 ```
-openaugi up     ← ingest + watcher + zzz dispatch + task agent + MCP server
+openaugi up      ← ingest + watcher + zzz dispatch + task agent   (one per vault, locked)
+openaugi serve   ← MCP tools for one client                       (one per client)
 ```
 
 ### All commands
 
 | Command | What |
 |---------|------|
-| `openaugi up` | Ingest + watcher + zzz dispatch + task agent + MCP server |
+| `openaugi up` | Ingest + watcher + zzz dispatch + task agent. **One per vault** — takes a lock. Does not serve MCP |
 | `openaugi up --no-agent` | Same but without task dispatch (no tmux agent sessions) |
 | `openaugi task-dispatch` | Watch `OpenAugi/Tasks/` and launch pending tasks in tmux (standalone) |
 | `openaugi serve` | MCP server only (stdio or HTTP) |
@@ -242,8 +243,8 @@ Two transport modes — see [docs/REMOTE_ACCESS.md](docs/REMOTE_ACCESS.md) for f
 
 | Transport | Command | Use Case |
 |-----------|---------|----------|
-| stdio (default) | `openaugi up` | Claude Desktop/Code on same machine |
-| streamable-http | `openaugi up --transport http` | Remote clients, Claude mobile via Cloudflare Tunnel |
+| stdio (default) | `openaugi serve` | Claude Desktop/Code on same machine |
+| streamable-http | `openaugi serve --transport streamable-http` | Remote clients, Claude mobile via Cloudflare Tunnel |
 
 Service management (macOS): `openaugi service install/uninstall/status` — launchd plist, starts on boot.
 

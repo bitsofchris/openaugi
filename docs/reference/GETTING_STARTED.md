@@ -38,22 +38,39 @@ Interactive setup — choose embedding model (local or OpenAI), set API key if n
 
 ## Run
 
-One command does everything:
+Two processes, and it matters which is which.
 
 ```bash
-openaugi up
+openaugi up        # the service — leave it running
 ```
 
-Add to your Claude Desktop MCP config (see [Register with Claude](#register-with-claude)) and it starts automatically. Does four things:
+Does four things:
 
 1. **Syncs your vault** — incremental ingest (skips unchanged files via content hash)
 2. **Starts file watcher** — watches for `.md` changes, debounces (30s default), re-ingests automatically
 3. **Dispatches zzz instructions** — blocks with `zzz:` lines get written as task files to `OpenAugi/Tasks/`
 4. **Launches agents** — task watcher picks up pending task files and launches Claude Code agents in named tmux sessions
-5. **Starts MCP server** — stdio transport so Claude can query your vault
+
+**It does not serve MCP.** That is `openaugi serve`, and it is what you
+register with your client (see [Register with Claude](#register-with-claude)).
+
+### Why two commands
+
+They need opposite cardinality:
+
+- **`up` is one per vault.** Two watchers see the same `zzz:` land and both
+  dispatch it, so one instruction becomes two agents racing over one database.
+  It takes a lock (`~/.openaugi/up.lock`) and a second one exits rather than
+  competing.
+- **`serve` is one per client.** Every stdio MCP client spawns its own — that
+  is how the transport works. It takes no lock and any number can run.
+
+Registering `up` as your MCP server conflates the two: your client spawns a
+new one each time it starts, and only the first can hold the lock.
 
 ```bash
-openaugi up --no-agent     # disable task dispatch (watcher + MCP only)
+openaugi up --serve        # both, for a single terminal with one client
+openaugi up --no-agent     # disable task dispatch (watcher only)
 openaugi up --debounce 10  # faster watcher response (default 30s)
 ```
 
@@ -74,7 +91,7 @@ openaugi task-dispatch     # task dispatch only (standalone)
 
 ```bash
 claude mcp add --transport stdio --scope user openaugi -- \
-  /path/to/openaugi/.venv/bin/openaugi up
+  /path/to/openaugi/.venv/bin/openaugi serve
 ```
 
 ### Claude Desktop
@@ -86,11 +103,14 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "openaugi": {
       "command": "/path/to/openaugi/.venv/bin/openaugi",
-      "args": ["up"]
+      "args": ["serve"]
     }
   }
 }
 ```
+
+Keep `openaugi up` running separately — as a launchd/systemd service, or in a
+terminal. If you previously registered `up` here, change it to `serve`.
 
 ### Remote access (advanced)
 
@@ -103,11 +123,12 @@ The MCP server supports HTTP transport with OAuth authentication for remote acce
 | Command | What |
 |---------|------|
 | `openaugi init` | Configure embedding model, API key, vault path |
-| `openaugi up` | Ingest + watcher + zzz dispatch + task agent + MCP server |
+| `openaugi up` | **The service, one per vault:** ingest + watcher + zzz dispatch + task agent. Does not serve MCP |
+| `openaugi up --serve` | Also serve MCP in the foreground (single terminal, one client) |
 | `openaugi up --no-agent` | Same but without task dispatch (no tmux agent sessions) |
 | `openaugi task-dispatch` | Task dispatch only (standalone) |
 | `openaugi ingest` | One-off ingest without serving |
-| `openaugi serve` | MCP server only (stdio or HTTP) |
+| `openaugi serve` | **The MCP interface, one per client** (stdio or HTTP). Register this with Claude |
 | `openaugi watch` | File watcher only |
 | `openaugi search "query"` | Search from terminal (semantic or `--keyword`) |
 | `openaugi hubs` | Top connected notes by link count |
