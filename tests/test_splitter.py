@@ -11,7 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from openaugi.adapters.splitter import Segment, SplitResult, split_file, split_text
+from openaugi.adapters.splitter import (
+    Segment,
+    SplitResult,
+    _extract_augi_id,
+    split_file,
+    split_text,
+)
 
 
 class TestSplitText:
@@ -316,3 +322,28 @@ class TestOpenTaskFlag:
     def test_star_and_plus_bullets_count(self):
         assert split_text("x\n* [ ] star task")[0].has_open_task is True
         assert split_text("x\n+ [ ] plus task")[0].has_open_task is True
+
+
+class TestExtractAugiId:
+    """A container note's identity, read from its frontmatter."""
+
+    def test_reads_a_plain_value(self):
+        assert _extract_augi_id("---\naugi_id: 898c3199-596c\n---\nbody") == "898c3199-596c"
+
+    def test_reads_a_quoted_value(self):
+        assert _extract_augi_id('---\naugi_id: "quoted-id"\n---\n') == "quoted-id"
+        assert _extract_augi_id("---\naugi_id: 'sq-id'\n---\n") == "sq-id"
+
+    def test_none_without_frontmatter(self):
+        assert _extract_augi_id("augi_id: not-in-frontmatter\n") is None
+
+    def test_none_when_absent(self):
+        assert _extract_augi_id("---\ndescription: x\n---\nbody") is None
+
+    def test_ignores_a_body_line_that_looks_like_one(self):
+        assert _extract_augi_id("---\ndescription: x\n---\naugi_id: nope\n") is None
+
+    def test_takes_any_opaque_token_not_only_uuids(self):
+        """It is a name, not a structure — validating it as a UUID would only
+        break vaults that name their notes some other way."""
+        assert _extract_augi_id("---\naugi_id: moc.mindfulness:v1\n---\n") == "moc.mindfulness:v1"

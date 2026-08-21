@@ -30,6 +30,7 @@ from openaugi.adapters.vault import (
     parse_vault,
     parse_vault_incremental,
 )
+from openaugi.model.block import Block
 
 
 class TestRegexExtraction:
@@ -1024,3 +1025,69 @@ class TestEdgeCases:
         # The key assertion: no crash, and good.md content is present
         entries = [b for b in blocks if b.kind == "data_block"]
         assert any("Normal content" in (b.content or "") for b in entries)
+
+
+class TestContainerIdentity:
+    """A document's id comes from the note, not from where the file sits.
+
+    Every edge into a container — `contains` and `routed_to` alike — is keyed
+    on this id. When it was derived from the file path, renaming or moving a
+    note in the editor orphaned all of them: no error, no repair, the
+    container just looked emptier than it should.
+    """
+
+    def _doc(self, blocks):
+        docs = [b for b in blocks if b.kind == "context_block:document"]
+        assert len(docs) == 1
+        return docs[0]
+
+    def test_id_survives_a_rename(self, tmp_path: Path):
+        body = "---\naugi_id: 898c3199-596c-4154\ndescription: A container.\n---\n\nSome idea.\n"
+        (tmp_path / "MOC - mindfulness.md").write_text(body, encoding="utf-8")
+        before = self._doc(parse_vault(tmp_path)[0])
+
+        (tmp_path / "MOC - mindfulness.md").unlink()
+        (tmp_path / "MOC - Mindfulness Practice.md").write_text(body, encoding="utf-8")
+        after = self._doc(parse_vault(tmp_path)[0])
+
+        assert after.id == before.id
+        # The title still tracks the filename — only identity is pinned.
+        assert after.title != before.title
+
+    def test_id_survives_a_move(self, tmp_path: Path):
+        body = "---\naugi_id: abc-123\ndescription: A container.\n---\n\nSome idea.\n"
+        (tmp_path / "note.md").write_text(body, encoding="utf-8")
+        before = self._doc(parse_vault(tmp_path)[0])
+
+        (tmp_path / "note.md").unlink()
+        nested = tmp_path / "Projects" / "Deep"
+        nested.mkdir(parents=True)
+        (nested / "note.md").write_text(body, encoding="utf-8")
+        after = self._doc(parse_vault(tmp_path)[0])
+
+        assert after.id == before.id
+        assert after.metadata["source_path"] != before.metadata["source_path"]
+
+    def test_two_notes_with_the_same_title_get_different_ids(self, tmp_path: Path):
+        """The failure the title lookup alone could not distinguish."""
+        (tmp_path / "a").mkdir()
+        (tmp_path / "b").mkdir()
+        (tmp_path / "a" / "Notes.md").write_text(
+            "---\naugi_id: id-a\n---\n\nOne.\n", encoding="utf-8"
+        )
+        (tmp_path / "b" / "Notes.md").write_text(
+            "---\naugi_id: id-b\n---\n\nTwo.\n", encoding="utf-8"
+        )
+        docs = [b for b in parse_vault(tmp_path)[0] if b.kind == "context_block:document"]
+        assert len({d.id for d in docs}) == 2
+
+    def test_falls_back_to_the_path_without_an_augi_id(self, tmp_path: Path):
+        """Most notes are not containers and never receive routing edges."""
+        (tmp_path / "plain.md").write_text("Just a note.\n", encoding="utf-8")
+        doc = self._doc(parse_vault(tmp_path)[0])
+        assert doc.id == Block.make_document_id("plain.md")
+        assert "augi_id" not in doc.metadata
+
+    def test_the_id_is_recorded_on_the_document(self, tmp_path: Path):
+        (tmp_path / "c.md").write_text("---\naugi_id: keep-me\n---\n\nx\n", encoding="utf-8")
+        assert self._doc(parse_vault(tmp_path)[0]).metadata["augi_id"] == "keep-me"
