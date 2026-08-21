@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openaugi"
-version = "0.2.0"
+version = "0.2.1"
 description = "Self-hostable personal intelligence engine. One pip install. One SQLite file. One MCP server."
 readme = "README.md"
 license = "Apache-2.0"
@@ -24,7 +24,17 @@ dependencies = [
     "pydantic>=2.6",
     "typer>=0.12",
     "rich>=13",
-    "mcp>=1.0",
+    # Upper bound is load-bearing, not caution. mcp 2.0.0 moved
+    # `mcp.server.fastmcp` and dropped `readOnlyHint` from ToolAnnotations, so
+    # 2.x does not import. It shipped on 2026-08-20 and broke CI on a commit
+    # that touched none of this — the hazard of an open range on a dependency
+    # whose internals we import directly. Lift the bound with a migration, not
+    # by widening it.
+    "mcp>=1.0,<2",
+    # Imported directly by auth/cloudflare.py. Previously arrived transitively
+    # via mcp 1.x; under mcp 2.x the transitive dep became `httpx2` and the
+    # import broke. Depend on what you import.
+    "httpx>=0.27,<1",
     "numpy>=1.26",
     "openai>=1.0",
     "tiktoken>=0.7",
