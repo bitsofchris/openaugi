@@ -716,6 +716,24 @@ class TestVaultValidation:
         finally:
             blocked.chmod(0o755)
 
+    def test_tilde_path_expands(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Paths like ~/vault should resolve via expanduser, not raise FileNotFoundError."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        (vault / "note.md").write_text("# Hello\n- entry\n")
+        blocks, _ = parse_vault("~/vault")
+        assert len(blocks) > 0
+
+    def test_tilde_path_expands_incremental(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """parse_vault_incremental should also expand ~ in vault path."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        (vault / "note.md").write_text("# Hello\n- entry\n")
+        blocks, _, _, _ = parse_vault_incremental("~/vault", known_doc_hashes={})
+        assert len(blocks) > 0
+
 
 class TestWeeklyNotes:
     def test_extract_wk_date_standard(self, tmp_path: Path):
