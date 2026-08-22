@@ -129,7 +129,7 @@ def init():
         "\nDefault vault path (Obsidian vault)",
         default=str(Path.home() / "Documents" / "vault"),
     )
-    vault_path = vault_path.strip().strip("'\"")
+    vault_path = str(Path(vault_path.strip().strip("'\"")).expanduser())
 
     # Write config.toml
     toml_lines = []
@@ -244,14 +244,14 @@ def ingest(
     """Run Layer 0 + Layer 1 pipeline: ingest vault → embed → store."""
     _setup_logging(verbose)
 
-    from openaugi.config import load_config
+    from openaugi.config import load_config, resolve_vault_path
     from openaugi.pipeline.runner import run_layer0
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
 
     # Resolve vault path: CLI arg > config > error
-    vault_path = path or config.get("vault", {}).get("default_path")
+    vault_path = resolve_vault_path(path, config)
     if not vault_path:
         console.print("[red]No vault path specified.[/red]")
         console.print("Use --path or run 'openaugi init' to set a default.")
@@ -310,12 +310,12 @@ def context_pack(
     """Regenerate OpenAugi/context-pack.json (mobile capture-assist sidecar)."""
     _setup_logging(verbose)
 
-    from openaugi.config import load_config
+    from openaugi.config import load_config, resolve_vault_path
     from openaugi.pipeline.context_pack import write_context_pack
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
-    vault_path = path or config.get("vault", {}).get("default_path")
+    vault_path = resolve_vault_path(path, config)
     if not vault_path:
         console.print("[red]No vault path specified.[/red]")
         console.print("Use --path or run 'openaugi init' to set a default.")
@@ -337,11 +337,11 @@ def lenses(
     ),
 ):
     """List the lens registry (OpenAugi/AGENT/lenses/) and flag broken specs."""
-    from openaugi.config import load_config
+    from openaugi.config import load_config, resolve_vault_path
     from openaugi.pipeline.context_pack import LENSES_DIR, read_lens_specs
 
     config = load_config()
-    vault_path = path or config.get("vault", {}).get("default_path")
+    vault_path = resolve_vault_path(path, config)
     if not vault_path:
         console.print("[red]No vault path specified.[/red]")
         console.print("Use --path or run 'openaugi init' to set a default.")
@@ -392,12 +392,12 @@ def render(
     """Render the lifestream — static HTML stream + heat strip from the DB."""
     _setup_logging(verbose)
 
-    from openaugi.config import load_config
+    from openaugi.config import load_config, resolve_vault_path
     from openaugi.render.lifestream import render_lifestream
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
-    vault_path = path or config.get("vault", {}).get("default_path")
+    vault_path = resolve_vault_path(path, config)
     if not vault_path and not out:
         console.print("[red]No vault path specified.[/red]")
         console.print("Use --path / --out, or run 'openaugi init' to set a default.")
@@ -614,7 +614,7 @@ def lineage(
 
     import json as json_mod
 
-    from openaugi.config import load_config
+    from openaugi.config import load_config, resolve_vault_path
     from openaugi.models import get_embedding_model
     from openaugi.pipeline.lineage import (
         compute_lineage,
@@ -634,7 +634,7 @@ def lineage(
         else:
             print(render_lineage_markdown(report))
         if write:
-            vault_path = config.get("vault", {}).get("default_path")
+            vault_path = resolve_vault_path(config=config)
             err = Console(stderr=True)  # keep stdout clean for --json consumers
             if not vault_path:
                 err.print("[red]--write needs [vault] default_path in config.toml[/red]")
@@ -845,11 +845,11 @@ def review(
     """
     from datetime import datetime
 
-    from openaugi.config import load_config
+    from openaugi.config import load_config, resolve_vault_path
     from openaugi.pipeline.dispatch import DEFAULT_TASKS_FOLDER
 
     config = load_config()
-    vault_path = path or config.get("vault", {}).get("default_path")
+    vault_path = resolve_vault_path(path, config)
     if not vault_path:
         console.print("[red]No vault path specified.[/red]")
         console.print("Use --path or run 'openaugi init' to set a default.")
@@ -993,13 +993,13 @@ def up(
         err.print("Stop it first, or use `openaugi serve` for a second read-only server.")
         raise typer.Exit(0) from None
 
-    from openaugi.config import load_config
+    from openaugi.config import load_config, resolve_vault_path
     from openaugi.pipeline.runner import run_layer0
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
 
-    vault_path = path or config.get("vault", {}).get("default_path")
+    vault_path = resolve_vault_path(path, config)
     if not vault_path:
         err.print("[red]No vault path specified.[/red]")
         err.print("Use --path or run 'openaugi init' to set a default.")
@@ -1119,12 +1119,12 @@ def watch(
     """
     _setup_logging(verbose)
 
-    from openaugi.config import load_config
+    from openaugi.config import load_config, resolve_vault_path
     from openaugi.pipeline.watcher import watch_vault
 
     config = load_config()
 
-    vault_path = path or config.get("vault", {}).get("default_path")
+    vault_path = resolve_vault_path(path, config)
     if not vault_path:
         console.print("[red]No vault path specified.[/red]")
         console.print("Use --path or run 'openaugi init' to set a default.")
@@ -1237,11 +1237,11 @@ def query_cmd(
     """Run a saved query from <vault>/OpenAugi/AGENT/queries/ (list with no args)."""
     _setup_logging(verbose)
 
-    from openaugi.config import load_config
+    from openaugi.config import load_config, resolve_vault_path
     from openaugi.query import saved
     from openaugi.store.sqlite import SQLiteStore
 
-    vault_path = vault or load_config().get("vault", {}).get("default_path")
+    vault_path = resolve_vault_path(vault, load_config())
     if not vault_path:
         console.print("[red]No vault path configured. Use --vault or run 'openaugi init'.[/red]")
         raise typer.Exit(1)
@@ -1389,10 +1389,10 @@ def task_dispatch(
     _setup_logging(verbose)
 
     from openaugi.agents.task_watcher import watch_tasks
-    from openaugi.config import load_config
+    from openaugi.config import load_config, resolve_vault_path
 
     config = load_config()
-    vault_path = path or config.get("vault", {}).get("default_path")
+    vault_path = resolve_vault_path(path, config)
     if not vault_path:
         console.print("[red]No vault path specified.[/red]")
         console.print("Use --path or run 'openaugi init' to set a default.")
