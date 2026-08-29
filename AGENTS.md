@@ -54,6 +54,32 @@ records and active plans, moved to `plans/done/` when shipped;
 first — a "how X works" manual is `reference/`, a "here's what we'll
 build" is `plans/`. Never drop a reference doc at `docs/` root.
 
+# After shipping a feature: update the Command Deck (required)
+
+Chris is still learning his own system, so `<vault>/OpenAugi/Docs/OpenAugi
+Command Deck.md` is his entry point: the one screen that answers "what can I
+actually do with this thing right now." A feature he cannot find there does not
+exist to him.
+
+**Any change to OpenAugi or the Obsidian plugin that adds, alters, or retires
+something Chris can use or must know about ends with an edit to that file** —
+in the same session as the change, not batched later. That includes new
+commands and capture grammar, new lenses or agents, background behavior, new
+config keys, changed defaults, and anything retired.
+
+Write two things:
+
+1. **Where it belongs in the body** — the command to type, or a short "how you
+   use it" for background behavior. Say how to turn it off and how to tune it.
+   Link the design doc and the code files.
+2. **A row at the top of the Changelog table** — date, one line on what
+   changed, and a link into the deck section or design note.
+
+Written for a user, not a reviewer: what to type, what shows up, where. Keep it
+one screen — trim stale entries rather than letting the deck grow unbounded.
+The deck is vault-side, so it may name real notes; the same content must not
+leak into this public repo (see "Where things live").
+
 # Related repos
 
 - `/Users/chris/repos/private-augi-mobile` — **OpenAugi Mobile** (Expo/RN thin
