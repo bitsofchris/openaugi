@@ -71,7 +71,11 @@ Return ONLY JSON:
 {"echo": true|false,
  "lines": [{"title": "<exact older block title>", "why": "<one clause, max 15 words>"}]}
 At most 3 lines. Prefer 1 excellent line over 3 weak ones. The "why" says what
-the older block contributes, never a summary of it."""
+the older block contributes, never a summary of it.
+
+When a block is marked "you have returned to this note Nx", that recurrence is
+itself the finding — say so ("a thread you keep coming back to"), because a
+pattern across time is worth more than any single match."""
 
 
 def _prose_len(content: str) -> int:
@@ -92,21 +96,22 @@ def is_echo_eligible(block: Block) -> bool:
     return not ((block.metadata or {}).get("zzz_instructions") or _INSTRUCTION_RE.search(content))
 
 
-def _candidates(block: Block, store, model, config: dict[str, Any], k: int = 6) -> list[Block]:
-    """Older, non-derived blocks related to this one."""
+def _candidates(block: Block, store, model, config: dict[str, Any], k: int = 6):
+    """Older related blocks, stratified and ranked relative to their own pool."""
+    from openaugi.pipeline.echo_rank import rank
     from openaugi.query import engine
 
     day = (block.block_time or "")[:10]
     result = engine.context(
         store,
         (block.content or "")[:600],
-        k=k * 3,
+        k=k * 4,
         expand=False,
         purpose="resurface",
         embedding_model=model,
         config=config,
     )
-    out: list[Block] = []
+    scored: list[tuple[Block, float]] = []
     for entry in result.seen:
         cand = entry.block
         cpath = (cand.metadata or {}).get("source_path") or ""
@@ -118,24 +123,41 @@ def _candidates(block: Block, store, model, config: dict[str, Any], k: int = 6) 
             continue  # never echo our own artifacts back
         if _prose_len(cand.content or "") < MIN_PROSE_CHARS:
             continue
-        out.append(cand)
-        if len(out) >= k:
-            break
-    return out
+        scored.append((cand, float(entry.extras.get("score") or 0.0)))
+
+    ranked = rank(scored)
+    if ranked.dropped_external or ranked.dropped_noise:
+        logger.debug(
+            f"Echo rank: -{ranked.dropped_external} external, "
+            f"-{ranked.dropped_noise} below z (pool {ranked.pool_mean:.3f}"
+            f"±{ranked.pool_stdev:.3f})"
+        )
+    ranked.candidates = ranked.candidates[:k]
+    return ranked
 
 
-def _judge(block: Block, candidates: list[Block], llm) -> list[dict]:
+def _judge(block: Block, ranked, llm) -> list[dict]:
     """Ask the LLM which candidates are worth surfacing. [] means stay silent."""
-    listing = "\n\n".join(
-        f"[{i + 1}] {c.title} ({(c.block_time or '')[:10]})\n{(c.content or '')[:400]}"
-        for i, c in enumerate(candidates)
-    )
+    recurring = {t.title: t for t in ranked.recurring}
+    parts = []
+    for i, (cand, _score, _z) in enumerate(ranked.candidates):
+        thread = recurring.get(cand.title or "")
+        note = ""
+        if thread:
+            first, last = thread.span
+            note = f" [you have returned to this note {thread.recurrence}x, {first}…{last}]"
+        parts.append(
+            f"[{i + 1}] {cand.title} ({(cand.block_time or '')[:10]}){note}\n"
+            f"{(cand.content or '')[:400]}"
+        )
     prompt = (
         f"NEW BLOCK (being written now):\n{(block.content or '')[:1200]}\n\n"
-        f"OLDER BLOCKS FROM THEIR VAULT:\n{listing}"
+        f"OLDER BLOCKS FROM THEIR VAULT:\n" + "\n\n".join(parts)
     )
     try:
-        raw = llm.complete(prompt, system=JUDGE_SYSTEM).strip()
+        # temperature=0: the same block must not echo on one pass and stay
+        # silent on the next. Judgment is the gate, so it has to be repeatable.
+        raw = llm.complete(prompt, system=JUDGE_SYSTEM, temperature=0).strip()
     except Exception as e:
         logger.warning(f"Echo judge failed: {e}")
         return []
@@ -148,7 +170,7 @@ def _judge(block: Block, candidates: list[Block], llm) -> list[dict]:
         return []
     if not verdict.get("echo"):
         return []
-    titles = {c.title for c in candidates if c.title}
+    titles = {c.title for c, _, _ in ranked.candidates if c.title}
     return [
         line
         for line in (verdict.get("lines") or [])[:3]
@@ -219,12 +241,12 @@ def run_echo(
         existing = _ensure_log(path, day)
         if f"<!-- echo:{block.id} -->" in existing:
             continue  # already spoken about this block
-        candidates = _candidates(block, store, model, config)
-        lines = _judge(block, candidates, llm) if candidates else []
+        ranked = _candidates(block, store, model, config)
+        lines = _judge(block, ranked, llm) if ranked.candidates else []
         if not lines:
             stats["quiet"] += 1
             continue
-        by_title = {c.title: c for c in candidates if c.title}
+        by_title = {c.title: c for c in ranked.blocks if c.title}
         with path.open("a", encoding="utf-8") as fh:
             fh.write(_render(block, lines, by_title))
         stats["spoke"] += 1

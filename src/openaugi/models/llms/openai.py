@@ -38,8 +38,13 @@ class OpenAILLM:
 
             self._client = OpenAI()
 
-    def complete(self, prompt: str, system: str = "") -> str:
-        """Simple text completion."""
+    def complete(self, prompt: str, system: str = "", temperature: float = 0.1) -> str:
+        """Simple text completion.
+
+        `temperature` is a parameter because classification callers (the echo
+        judge) need repeatable verdicts — the same block should not echo on one
+        pass and stay silent on the next.
+        """
         self._ensure_client()
         messages: list[dict[str, str]] = []
         if system:
@@ -49,7 +54,7 @@ class OpenAILLM:
         response = self._client.chat.completions.create(
             model=self.name,
             messages=messages,
-            temperature=0.1,
+            temperature=temperature,
         )
         return response.choices[0].message.content or ""
 

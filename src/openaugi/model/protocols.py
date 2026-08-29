@@ -40,7 +40,7 @@ class LLMModel(Protocol):
 
     name: str
 
-    def complete(self, prompt: str, system: str = "") -> str:
+    def complete(self, prompt: str, system: str = "", temperature: float = 0.1) -> str:
         """Simple text completion."""
         ...
 
