@@ -32,6 +32,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _similarity(distance: float) -> float:
+    """Cosine similarity from an L2 distance over unit vectors: 1 − d²/2.
+
+    vec_blocks stores normalized embeddings and vec0 MATCH returns L2, so the
+    old `1 − distance` formula clamped every pair with cosine < 0.5 (L2 > 1)
+    to a meaningless ≤ 0 — which the salience gate then dropped wholesale.
+    This keeps the full (−1, 1] similarity scale intact.
+    """
+    return round(1.0 - (distance * distance) / 2.0, 4)
+
+
 class EmptyQuerySpec(ValueError):
     """Raised when a spec has no text mode and no filter — nothing to run."""
 
@@ -132,7 +143,7 @@ def run(store: SQLiteStore, spec, embedding_model=None) -> RunResult:
             if _fails_task_filter(block):
                 continue
             kept.append(block)
-            scores[block_id] = round(1.0 - distance, 4)
+            scores[block_id] = _similarity(distance)
             if len(kept) > k:
                 break
 
@@ -475,7 +486,7 @@ def context(
         query_vec = vec
         hits = store.semantic_search(vec, k=fetch_limit)
         for block_id, distance in hits:
-            score = round(1.0 - distance, 4)
+            score = _similarity(distance)
             candidate_scores[block_id] = max(candidate_scores.get(block_id, 0.0), score)
     except Exception:
         logger.warning("Semantic search unavailable in context", exc_info=True)

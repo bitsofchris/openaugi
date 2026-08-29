@@ -48,10 +48,12 @@ DEFAULT_CONFIG = {
     },
     "salience": {
         # Min retrieval score per purpose — get_context(purpose=...) drops results
-        # below the threshold. Calibrated live 2026-07-07: mundane captures ~0,
-        # weak associations 0.01-0.05, genuinely related past thinking 0.06-0.14.
-        "resurface": 0.06,  # in-app resurfacing (mobile bridge)
-        "push": 0.15,  # reserved: push notifications need a stricter gate (no consumer yet)
+        # below the threshold. Scores are cosine similarity as of 2026-08-29
+        # (was 1−L2, which clamped cosine<0.5 to ~0 — the scale change remaps the
+        # 2026-07-07 live calibration: mundane captures ≤0.50, weak associations
+        # 0.51-0.55, genuinely related past thinking ≥0.56).
+        "resurface": 0.55,  # in-app resurfacing (mobile bridge, proactive echo)
+        "push": 0.64,  # reserved: push notifications need a stricter gate (no consumer yet)
     },
 }
 

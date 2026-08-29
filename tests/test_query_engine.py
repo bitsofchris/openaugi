@@ -130,8 +130,9 @@ class TestEngineRun:
         )
         assert result.mode == "semantic"
         assert [b.id for b in result.blocks] == ["b1-quantum-idea"]
-        # score = round(1 - distance, 4); fake L2 distances can exceed 1,
-        # so only the shape is asserted here (real similarity ∈ (0, 1]).
+        # score = cosine similarity derived from L2 over unit vectors
+        # (1 − d²/2), so it stays on the full (−1, 1] scale even when the
+        # fake L2 distance exceeds 1.
         assert isinstance(result.scores["b1-quantum-idea"], float)
         assert result.scores["b1-quantum-idea"] <= 1
 
