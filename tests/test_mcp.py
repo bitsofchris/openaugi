@@ -362,8 +362,8 @@ class TestMCPTools:
 
         # Defaults ship the calibrated gates (2026-07-07 calibration, remapped
         # 2026-08-29 to the cosine scale): resurface permissive, push stricter.
-        assert DEFAULT_CONFIG["salience"]["resurface"] == 0.55
-        assert DEFAULT_CONFIG["salience"]["push"] == 0.64
+        assert DEFAULT_CONFIG["salience"]["resurface"] == 0.50
+        assert DEFAULT_CONFIG["salience"]["push"] == 0.62
 
         monkeypatch.setattr(srv, "load_config", lambda: _config_with({"push": 3.0}))
         result = json.loads(get_context("career direction", purpose="push"))

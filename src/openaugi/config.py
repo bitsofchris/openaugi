@@ -47,13 +47,13 @@ DEFAULT_CONFIG = {
         "representative": "centroid",  # "centroid" | "score"
     },
     "salience": {
-        # Min retrieval score per purpose — get_context(purpose=...) drops results
-        # below the threshold. Scores are cosine similarity as of 2026-08-29
-        # (was 1−L2, which clamped cosine<0.5 to ~0 — the scale change remaps the
-        # 2026-07-07 live calibration: mundane captures ≤0.50, weak associations
-        # 0.51-0.55, genuinely related past thinking ≥0.56).
-        "resurface": 0.55,  # in-app resurfacing (mobile bridge, proactive echo)
-        "push": 0.64,  # reserved: push notifications need a stricter gate (no consumer yet)
+        # Min retrieval score per purpose. Scores are cosine similarity as of
+        # 2026-08-29 (was 1−L2, which clamped cosine<0.5 to ~0). Recalibrated the
+        # same day against a 7-day replay: real scores cluster 0.53-0.68 whatever
+        # the block is, so this is a NOISE FLOOR — the caller's intent classifier
+        # is what actually decides whether a proactive surface should speak.
+        "resurface": 0.50,  # in-app resurfacing (mobile bridge, proactive echo)
+        "push": 0.62,  # reserved: push notifications need a stricter floor (no consumer yet)
     },
 }
 
