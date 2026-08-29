@@ -32,6 +32,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# A keyword hit we cannot score on the cosine scale (no embedding yet). High,
+# because a literal match is strong evidence, but not 1.0 — that would make it
+# an unbeatable outlier in any distribution-based ranking.
+FTS_FALLBACK_SCORE = 0.75
+
+
 def _similarity(distance: float) -> float:
     """Cosine similarity from an L2 distance over unit vectors: 1 − d²/2.
 
@@ -472,10 +478,15 @@ def context(
     # Collect candidate IDs and their best relevance scores
     candidate_scores: dict[str, float] = {}
 
-    # Prong 1: FTS — score 1.0 (keyword match = high relevance)
+    # Prong 1: FTS — keyword hits enter the pool; they are scored below,
+    # alongside semantic hits, on the one comparable scale (cosine). Pinning
+    # them at a constant 1.0 (pre-2026-08-29) made every keyword hit an
+    # automatic outlier, which is fine for a top-k list but breaks any caller
+    # that reasons about the score distribution — see FTS_FALLBACK_SCORE.
     fts_results = store.search_fts(query, limit=fetch_limit)
+    fts_only_ids = [b.id for b in fts_results]
     for b in fts_results:
-        candidate_scores[b.id] = 1.0
+        candidate_scores[b.id] = 0.0
 
     # Prong 2: semantic search
     query_vec: list[float] | None = None
@@ -498,6 +509,26 @@ def context(
 
     # Batch-fetch embeddings for all candidates (single query, no full block load)
     emb_map = store.get_embeddings_for_ids(all_ids)
+
+    # Score the keyword hits on the same cosine scale as the semantic ones, so
+    # every candidate is comparable. A keyword hit with no embedding keeps a
+    # high constant — it matched literally, so it belongs near the top.
+    if query_vec is not None:
+        query_arr = np.array(query_vec, dtype=np.float32)
+        query_norm = float(np.linalg.norm(query_arr)) or 1.0
+        for block_id in fts_only_ids:
+            if candidate_scores.get(block_id, 0.0) > 0.0:
+                continue  # semantic search already scored it
+            blob = emb_map.get(block_id)
+            if blob is None:
+                candidate_scores[block_id] = FTS_FALLBACK_SCORE
+                continue
+            vec_arr = np.frombuffer(blob, dtype=np.float32)
+            denom = query_norm * (float(np.linalg.norm(vec_arr)) or 1.0)
+            candidate_scores[block_id] = round(float(query_arr @ vec_arr) / denom, 4)
+    else:
+        for block_id in fts_only_ids:
+            candidate_scores[block_id] = FTS_FALLBACK_SCORE
 
     # Build candidates for reranker: (block_id, embedding_blob_or_None, score)
     candidates = [(bid, emb_map.get(bid), candidate_scores[bid]) for bid in all_ids]

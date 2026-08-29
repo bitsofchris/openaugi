@@ -38,6 +38,10 @@ LOG_NAME = "Augi Log.md"
 
 # Deterministic filters (the replay's two mandatory additions)
 MIN_PROSE_CHARS = 40
+# A block reached by walking one link from a hit inherits its parent's score,
+# discounted. Graph proximity is real evidence — it is how "the note this
+# belongs to" surfaces — but it is weaker than being retrieved directly.
+LINK_HOP_DISCOUNT = 0.9
 _WIKILINK_RE = re.compile(r"\[\[[^\]]*\]\]")
 _MD_NOISE_RE = re.compile(r"[#>*_`\-\[\]()]|https?://\S+")
 _INSTRUCTION_RE = re.compile(r"^\s*zzz\s*:", re.IGNORECASE | re.MULTILINE)
@@ -106,11 +110,19 @@ def _candidates(block: Block, store, model, config: dict[str, Any], k: int = 6):
         store,
         (block.content or "")[:600],
         k=k * 4,
-        expand=False,
+        expand=True,
         purpose="resurface",
         embedding_model=model,
         config=config,
     )
+
+    # Direct hits carry a score; link-expanded neighbours do not — they were
+    # reached by graph traversal, not similarity. Give them their parent's
+    # score, discounted, so one hop of the graph competes on the same scale
+    # instead of being scored 0 and cut as noise.
+    direct_scores = {
+        e.block.id: float(e.extras.get("score") or 0.0) for e in result.seen if "score" in e.extras
+    }
     scored: list[tuple[Block, float]] = []
     for entry in result.seen:
         cand = entry.block
@@ -123,7 +135,12 @@ def _candidates(block: Block, store, model, config: dict[str, Any], k: int = 6):
             continue  # never echo our own artifacts back
         if _prose_len(cand.content or "") < MIN_PROSE_CHARS:
             continue
-        scored.append((cand, float(entry.extras.get("score") or 0.0)))
+        if "score" in entry.extras:
+            score = float(entry.extras.get("score") or 0.0)
+        else:
+            parent = direct_scores.get(entry.extras.get("expanded_from", ""), 0.0)
+            score = parent * LINK_HOP_DISCOUNT
+        scored.append((cand, score))
 
     ranked = rank(scored)
     if ranked.dropped_external or ranked.dropped_noise:
