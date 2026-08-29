@@ -195,6 +195,7 @@ See [docs/plans/m0.md](docs/plans/m0.md) § Key Design Decisions for full ration
 - **Content hash as block identity**: `hash(source_path + content_hash)` — stable across section reordering.
 - **Tags as blocks**: First-class graph nodes. Hub scoring, traversal, entity resolution work uniformly.
 - **Default local embeddings**: sentence-transformers, no API key. Users upgrade via config.
+- **Proactive echo**: the one pass that runs unasked — new daily-note blocks are matched against the user's own prior writing and, when it would genuinely help, appended to a dated Augi Log with promote/feedback checkboxes. Post-ingest hook in the watcher, sibling of zzz dispatch. See [docs/reference/proactive-echo.md](docs/reference/proactive-echo.md).
 - **`get_context` dedup + MMR**: Over-fetches 3× candidates, collapses near-duplicates via cosine grouping, re-ranks for diversity before returning. See [docs/reference/MCP_SERVER.md](docs/reference/MCP_SERVER.md) for tuning.
 
 ## Running

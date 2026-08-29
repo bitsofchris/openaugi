@@ -39,9 +39,7 @@ def _set_db_env(populated_db: Path, monkeypatch: pytest.MonkeyPatch):
     import openaugi.mcp.server as srv
 
     srv._store = None
-    srv._faiss_index = None
     srv._embedding_model = None
-    srv._db_mtime = 0
 
 
 class TestMCPTools:

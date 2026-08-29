@@ -7,6 +7,44 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-08-29: proactive echo — the first thing that runs unasked.** New
+daily-note blocks are matched against Chris's own prior writing; when the
+match would genuinely help, an echo is appended to
+`OpenAugi/YYYY/MM/DD/Augi Log.md` with promote/good/bad checkboxes that a
+janitor acts on (promotion writes a note; feedback appends to the mobile
+app's existing `feedback-log.ndjson`). **No new daemon** — a post-ingest hook
+in the existing watcher cycle, sibling of zzz dispatch, so it inherits the
+debounce and launchd policy from `openaugi up` (debounce now 45s). Reference:
+`docs/reference/proactive-echo.md`.
+
+Validated replay-first over 7 days of real daily notes before any plumbing was
+written, which produced the design's two load-bearing findings: **the log must
+stay read-optional** (every come-back-and-tend surface in this project has
+died; every fire-and-forget one survived), and **judgment is the gate, not the
+score** — top-scores cluster 0.53–0.68 whether the block is architecture or a
+journal entry about a kid's bike, so no global threshold separates them.
+Ranking therefore stratifies by the taxonomy's `source`/`note-type` facets
+(inferred from the folder when untagged — only 26% of blocks carry tags),
+scores by z-score within the retrieved pool, and clusters by note so recurrence
+reaches the judge (`pipeline/echo_rank.py`).
+
+Three scoring bugs found and fixed along the way, all pre-existing: semantic
+scores were `1 − L2` on unit vectors (everything below cosine 0.5 clamped to
+zero — the `resurface` salience gate was silently dropping 100% of its
+results); FTS hits were pinned at a constant 1.0 (an unbeatable outlier that
+inflated pool variance); salience thresholds were calibrated on the broken
+scale. The query golden fixtures had frozen the first bug as expected output
+and were regenerated.
+
+**Next when resumed:** 5 days of use, no redesign (success = it resumes a real
+thread ≥1×/day), then fit thresholds per stratum from the accumulated
+feedback. Deliberately NOT built: escalation from an echo to a dispatched
+`zzz:` investigation — the cheap-pass/expensive-pass split is the right shape
+but needs the dogfood's feedback to set the bar honestly.
+
+Also merged: `feat/session-indexer-v0` (Claude/Codex transcripts → vault
+session cards, `scripts/session_cards.py`); worktree removed.
+
 **2026-07-16: the query layer — one engine, thin adapters (read side of
 the CQRS split made first-class).** All deterministic read semantics
 moved out of `mcp/server.py` into a new `query/` package
