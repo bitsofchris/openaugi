@@ -132,6 +132,30 @@ def _run_ingest_cycle(
                 dispatch_zzz_blocks(new_blocks, vault_path)
             except Exception as e:
                 logger.error(f"ZZZ dispatch failed: {e}", exc_info=True)
+
+            # Proactive echo: surface older thinking that bears on what was
+            # just written. Never fails the cycle — it is an extra, not a step.
+            try:
+                from openaugi.models import get_embedding_model
+                from openaugi.pipeline.echo import run_echo
+
+                run_echo(
+                    new_blocks,
+                    vault_path,
+                    store,
+                    get_embedding_model(config.get("models", {}).get("embedding")),
+                    config,
+                )
+            except Exception as e:
+                logger.error(f"Proactive echo failed: {e}", exc_info=True)
+
+        # Janitor: act on any checkbox ticked in an Augi Log
+        try:
+            from openaugi.pipeline.echo_janitor import process_changed
+
+            process_changed(changed_paths, vault_path)
+        except Exception as e:
+            logger.error(f"Echo janitor failed: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Ingest cycle failed: {e}", exc_info=True)
     finally:
