@@ -139,3 +139,80 @@ class TestJanitor:
         other = tmp_path / "notes.md"
         other.write_text("- [x] good match\n")
         assert echo_janitor.process_changed({str(path), str(other)}, tmp_path) == 1
+
+
+class TestQuietSection:
+    """Silence is the default, so the quiet log is the only calibration window."""
+
+    def _log(self, tmp_path):
+        path = echo._log_path(tmp_path, "2026-08-30")
+        echo._ensure_log(path, "2026-08-30")
+        return path
+
+    def _ranked(self, n=2):
+        from openaugi.pipeline.echo_rank import rank
+
+        return rank([(_block("y" * 90, id=f"old{i}"), 0.7 - i * 0.1) for i in range(n)])
+
+    def test_quiet_entry_shows_closest_with_scores(self, tmp_path):
+        path = self._log(tmp_path)
+        echo._write_sections(path, quiet_md=echo._render_quiet(_block("x" * 90), self._ranked()))
+        text = path.read_text()
+        assert echo.QUIET_HEADING in text
+        assert "<!-- quiet:abc123 -->" in text
+        assert "closest:" in text and "score 0.70" in text and "z " in text
+        assert "- [ ] should have surfaced" in text
+        assert "- [ ] correctly quiet" in text
+
+    def test_quiet_entry_when_nothing_retrieved(self, tmp_path):
+        from openaugi.pipeline.echo_rank import rank
+
+        path = self._log(tmp_path)
+        echo._write_sections(path, quiet_md=echo._render_quiet(_block("x" * 90), rank([])))
+        assert "nothing retrieved" in path.read_text()
+
+    def test_heartbeat_and_quiet_stay_at_the_end(self, tmp_path):
+        path = self._log(tmp_path)
+        echo._write_sections(path, quiet_md=echo._render_quiet(_block("x" * 90), self._ranked()))
+        echo._write_heartbeat(tmp_path.joinpath(), {"watched": 1, "spoke": 0, "quiet": 1})
+        cand = Block(
+            id="o", kind="data_block", content="c", title="T", block_time="2026-01-01", metadata={}
+        )
+        echo._write_sections(
+            path,
+            echo_md=echo._render(
+                _block("z" * 90, id="zzz"), [{"title": "T", "why": "w"}], {"T": cand}
+            ),
+        )
+        text = path.read_text()
+        assert text.index("<!-- echo:zzz -->") < text.index(echo.QUIET_HEADING)
+
+    def test_quiet_entries_accumulate_under_one_heading(self, tmp_path):
+        path = self._log(tmp_path)
+        for i in range(3):
+            echo._write_sections(
+                path, quiet_md=echo._render_quiet(_block("x" * 90, id=f"b{i}"), self._ranked())
+            )
+        text = path.read_text()
+        assert text.count(echo.QUIET_HEADING) == 1
+        assert all(f"<!-- quiet:b{i} -->" in text for i in range(3))
+
+
+class TestQuietFeedback:
+    def test_should_have_surfaced_records_a_miss(self, tmp_path):
+        path = tmp_path / "OpenAugi/2026/08/30/Augi Log.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "# Augi Log\n\n## Quiet — closest match, not surfaced\n\n"
+            "<!-- quiet:abc123 -->\n"
+            '**"some thought…"**\n'
+            "- closest: [[Older Note]] (2026-07-14) · score 0.70, z +1.20\n"
+            "- [x] should have surfaced\n"
+            "- [ ] correctly quiet\n",
+            encoding="utf-8",
+        )
+        assert echo_janitor.process_log(path, tmp_path) == 1
+        record = json.loads((tmp_path / echo_janitor.FEEDBACK_LOG).read_text().strip())
+        assert record["signal"] == "missed"
+        assert record["links"] == ["Older Note"]
+        assert "✓ feedback recorded" in path.read_text()

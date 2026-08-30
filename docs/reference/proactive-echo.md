@@ -65,6 +65,13 @@ good match, bad match. The day's last line is a heartbeat
 (`watched 12 · spoke 3 · quiet 9`) so silence is legible rather than
 indistinguishable from breakage.
 
+Silent blocks are not invisible: each one gets a compact line under a
+**`## Quiet — closest match, not surfaced`** heading showing what came closest,
+with its score and z, and two boxes — *should have surfaced* / *correctly
+quiet*. Since silence is the default and most of a day is silence, this is the
+only window into whether the judge is calibrated; "should have surfaced" is the
+signal nothing else in the system can produce.
+
 **The log is a cache, not truth.** Delete it with zero grief; nothing depends
 on it and no queue accumulates. This is deliberate: every "come back and tend
 it" surface in this project's history has died, while every fire-and-forget

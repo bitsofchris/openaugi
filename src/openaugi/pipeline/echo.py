@@ -234,6 +234,64 @@ def _render(block: Block, lines: list[dict], by_title: dict[str, Block]) -> str:
     return "\n".join(out)
 
 
+QUIET_HEADING = "## Quiet — closest match, not surfaced"
+_TAIL_RE = re.compile(r"\n## Quiet — closest match.*|\n<!-- heartbeat .*", re.DOTALL)
+
+
+def _render_quiet(block: Block, ranked) -> str:
+    """One compact line per silent block: what was closest, and why it lost.
+
+    Silence is the default and most of the day is silence, so this is the only
+    window into whether the judge is calibrated. Two boxes, not three — the
+    question here is simply whether it should have spoken.
+    """
+    snippet = " ".join((block.content or "").split())[:60]
+    out = [f"\n<!-- quiet:{block.id} -->", f'\n**"{snippet}…"**']
+    if not ranked.candidates:
+        out.append("- nothing retrieved (no older block cleared the floor)")
+    else:
+        for cand, score, z in ranked.candidates[:2]:
+            when = (cand.block_time or "")[:10]
+            out.append(f"- closest: [[{cand.title}]] ({when}) · score {score:.2f}, z {z:+.2f}")
+    out.append("- [ ] should have surfaced")
+    out.append("- [ ] correctly quiet")
+    out.append("")
+    return "\n".join(out)
+
+
+def _write_sections(path: Path, echo_md: str = "", quiet_md: str = "") -> None:
+    """Append into the right section, keeping Quiet and the heartbeat last.
+
+    The file is [header][echoes][## Quiet][heartbeat]; new content is spliced
+    in rather than appended blindly, so the tail keeps its meaning.
+    """
+    text = path.read_text(encoding="utf-8")
+    tail_match = _TAIL_RE.search(text)
+    if tail_match:
+        body, tail = text[: tail_match.start()], text[tail_match.start() :]
+    else:
+        body, tail = text, ""
+
+    if echo_md:
+        body = body.rstrip("\n") + "\n" + echo_md
+
+    if quiet_md:
+        if QUIET_HEADING in tail:
+            head, _, rest = tail.partition(QUIET_HEADING)
+            hb = re.search(r"\n<!-- heartbeat .*", rest, re.DOTALL)
+            quiet_body, hb_text = (rest[: hb.start()], rest[hb.start() :]) if hb else (rest, "")
+            tail = head + QUIET_HEADING + quiet_body.rstrip("\n") + "\n" + quiet_md + hb_text
+        else:
+            hb = re.search(r"\n<!-- heartbeat .*", tail, re.DOTALL)
+            hb_text = tail[hb.start() :] if hb else ""
+            tail = (
+                f"\n{QUIET_HEADING}\n\n*Debug view — what was closest when augi stayed "
+                "silent. Tick a box to teach it.*\n" + quiet_md + hb_text
+            )
+
+    path.write_text(body.rstrip("\n") + "\n" + tail.lstrip("\n"), encoding="utf-8")
+
+
 def run_echo(
     new_blocks: list[Block],
     vault_path: Path,
@@ -256,16 +314,16 @@ def run_echo(
         day = (block.block_time or "")[:10] or date.today().isoformat()
         path = _log_path(vault_path, day)
         existing = _ensure_log(path, day)
-        if f"<!-- echo:{block.id} -->" in existing:
-            continue  # already spoken about this block
+        if f"<!-- echo:{block.id} -->" in existing or f"<!-- quiet:{block.id} -->" in existing:
+            continue  # already handled this block, either way
         ranked = _candidates(block, store, model, config)
         lines = _judge(block, ranked, llm) if ranked.candidates else []
         if not lines:
             stats["quiet"] += 1
+            _write_sections(path, quiet_md=_render_quiet(block, ranked))
             continue
         by_title = {c.title: c for c in ranked.blocks if c.title}
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(_render(block, lines, by_title))
+        _write_sections(path, echo_md=_render(block, lines, by_title))
         stats["spoke"] += 1
 
     if stats["watched"]:

@@ -23,11 +23,25 @@ FEEDBACK_LOG = "OpenAugi/Capture/feedback-log.ndjson"
 PROMOTE_FOLDER = "OpenAugi/Notes"
 
 _ECHO_BLOCK_RE = re.compile(
-    r"<!-- echo:(?P<bid>[0-9a-f]+) -->\n(?P<body>.*?)(?=\n<!-- echo:|\n<!-- heartbeat|\Z)",
+    r"<!-- (?:echo|quiet):(?P<bid>[0-9a-f]+) -->\n(?P<body>.*?)"
+    r"(?=\n<!-- echo:|\n<!-- quiet:|\n## Quiet|\n<!-- heartbeat|\Z)",
     re.DOTALL,
 )
-_CHECKED_RE = re.compile(r"^- \[x\] (promote → new note|good match|bad match)\s*$", re.MULTILINE)
-_LINK_RE = re.compile(r"^- \[\[([^\]]+)\]\]", re.MULTILINE)
+_CHECKED_RE = re.compile(
+    r"^- \[x\] (promote → new note|good match|bad match"
+    r"|should have surfaced|correctly quiet)\s*$",
+    re.MULTILINE,
+)
+# Verdict recorded per label. "should have surfaced" is the valuable one — it
+# is the only signal that says the judge was too strict, which nothing else
+# in the system can tell us.
+_SIGNALS = {
+    "good match": "liked",
+    "bad match": "disliked",
+    "should have surfaced": "missed",
+    "correctly quiet": "correct-silence",
+}
+_LINK_RE = re.compile(r"^- (?:closest: )?\[\[([^\]|]+)\]\]", re.MULTILINE)
 
 
 def _append_feedback(vault_path: Path, record: dict) -> None:
@@ -99,7 +113,7 @@ def process_log(log_path: Path, vault_path: Path) -> int:
                         "ts": stamp,
                         "source": "proactive-echo",
                         "block_id": bid,
-                        "signal": "liked" if label == "good match" else "disliked",
+                        "signal": _SIGNALS.get(label, "unknown"),
                         "links": _LINK_RE.findall(body),
                     },
                 )
