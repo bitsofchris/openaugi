@@ -36,9 +36,20 @@ inflated pool variance); salience thresholds were calibrated on the broken
 scale. The query golden fixtures had frozen the first bug as expected output
 and were regenerated.
 
+**2026-08-30:** first full day of real use was watched 8 / spoke 0, with no
+way to see why — so quiet blocks now log their closest candidate (score + z)
+under a `## Quiet` heading with should-have-surfaced / correctly-quiet boxes.
+Re-running the day on current code gave 1 spoke / 4 quiet: part of the silence
+was a daemon still holding pre-ranking code, which is worth remembering — the
+launchd watcher must be reloaded after any pipeline change. Early read on
+calibration: a family-logging block had the day's highest z (+2.26) and was
+correctly silent, which is the cleanest evidence yet that judgment, not score,
+is the gate.
+
 **Next when resumed:** 5 days of use, no redesign (success = it resumes a real
 thread ≥1×/day), then fit thresholds per stratum from the accumulated
-feedback. Deliberately NOT built: escalation from an echo to a dispatched
+feedback — the `missed` verdicts from the Quiet section are the signal that
+says the judge is too strict. Deliberately NOT built: escalation from an echo to a dispatched
 `zzz:` investigation — the cheap-pass/expensive-pass split is the right shape
 but needs the dogfood's feedback to set the bar honestly.
 
