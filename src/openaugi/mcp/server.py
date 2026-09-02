@@ -125,6 +125,7 @@ def search(
     exclude_path_prefix: str | None = None,
     include_path_prefix: str | None = None,
     has_task: bool | None = None,
+    provenance: list[str] | None = None,
 ) -> str:
     """Search the knowledge base. Returns block summaries (not full content).
 
@@ -170,6 +171,18 @@ def search(
     of truth means a new generated folder is excluded automatically, instead
     of silently leaking into the queue.
 
+    provenance keeps only blocks written by the named authors, any of
+    "human" (the user's own writing), "ai" (model output — everything under
+    OpenAugi/ except Capture/, plus notes tagged as AI summaries or pasted
+    chats), "reference" (imported material: Readwise, Snipd, web clips,
+    gdrive). Set at ingest from [vault.provenance_rules] and tags. Works in
+    every mode. When omitted, SEMANTIC mode drops the config default
+    [retrieval] exclude_provenance (reference, out of the box) so imported
+    quotes do not crowd out the user's thinking; pass
+    provenance=["human","ai","reference"] to search everything. Ask for
+    provenance=["human"] when the question is what the user themselves
+    thought, so model-written reflections are not quoted back as theirs.
+
     has_task=True keeps only blocks the user marked as a task — an open
     `- [ ] …` checkbox (metadata has_open_task, extracted at ingest) or a
     type/task tag. Deterministic: this is the Dashboard task-shelf
@@ -194,6 +207,7 @@ def search(
         exclude_path_prefix=exclude_path_prefix,
         include_path_prefix=include_path_prefix,
         has_task=has_task,
+        provenance=provenance,
         k=k,
         offset=offset,
     )
@@ -208,7 +222,7 @@ def search(
         )
 
     model = _get_embedding_model() if spec.mode == "semantic" else None
-    result = engine.run(_get_store(), spec, embedding_model=model)
+    result = engine.run(_get_store(), spec, embedding_model=model, config=load_config())
     return _json(_render_run_result(result))
 
 
@@ -375,6 +389,12 @@ def get_context(
     k: int = 10,
     expand: bool = True,
     purpose: str | None = None,
+    after: str | None = None,
+    before: str | None = None,
+    tags: list[str] | None = None,
+    exclude_path_prefix: str | None = None,
+    include_path_prefix: str | None = None,
+    provenance: list[str] | None = None,
 ) -> str:
     """Primary research tool. Use this as the default for answering questions against the
     knowledge base — it runs a full retrieval pipeline in one call:
@@ -393,7 +413,20 @@ def get_context(
       Regular research calls should omit this.
 
     When
-    purpose is set — demoted thoughts never resurface proactively."""
+    purpose is set — demoted thoughts never resurface proactively.
+
+    Filters — same meaning as on search, applied to the candidate pool
+    BEFORE rerank, so the answer is ranked within the scope, not trimmed
+    after the fact:
+    - after / before: block_time (content date) bounds, ISO dates. Use these
+      for "what was I thinking about X in March": get_context(query="X",
+      after="2026-03-01", before="2026-03-31").
+    - tags: match any of these (user tags + augi_tags).
+    - exclude_path_prefix / include_path_prefix: source_path scoping, e.g.
+      exclude_path_prefix="OpenAugi/" to keep generated artifacts out.
+    - provenance: any of "human", "ai", "reference" (see search). Omitted =
+      the config default, which drops "reference"; ask for ["human"] when the
+      question is what the user themselves wrote."""
     try:
         model = _get_embedding_model()
     except Exception:
@@ -409,6 +442,12 @@ def get_context(
         purpose=purpose,
         embedding_model=model,
         config=load_config(),
+        after=after,
+        before=before,
+        tags=tags,
+        exclude_path_prefix=exclude_path_prefix,
+        include_path_prefix=include_path_prefix,
+        provenance=provenance,
     )
     if not ctx.had_candidates:
         return _json({"query": query, "direct_results": [], "expanded": [], "total_blocks": 0})

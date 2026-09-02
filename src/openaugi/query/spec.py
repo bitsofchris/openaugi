@@ -24,7 +24,11 @@ class QuerySpec(BaseModel):
     time (the review-queue axis); `has_task` keeps user-marked tasks;
     `exclude_path_prefix` drops blocks whose source_path starts with the
     prefix and `include_path_prefix` keeps only
-    those that do. The two are mirrors, and pairing them across two queries
+    those that do. `provenance` keeps only blocks whose
+    metadata.provenance is in the list (human | ai | reference); when it is
+    None, semantic mode applies the config default `[retrieval]
+    exclude_provenance` so imported reference material stays out unless
+    asked for. The two are mirrors, and pairing them across two queries
     is how a caller scopes into an otherwise-excluded tree (see the review
     pass: exclude `OpenAugi/`, then include `OpenAugi/Capture/`).
     """
@@ -41,6 +45,7 @@ class QuerySpec(BaseModel):
     exclude_path_prefix: str | None = None
     include_path_prefix: str | None = None
     has_task: bool | None = None
+    provenance: list[str] | None = None
     k: int = 100
     offset: int = 0
 
@@ -80,6 +85,7 @@ class QuerySpec(BaseModel):
                     self.source,
                     self.include_path_prefix,
                     self.has_task,
+                    self.provenance,
                 ]
             )
         )

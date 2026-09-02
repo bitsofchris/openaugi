@@ -45,6 +45,13 @@ DEFAULT_CONFIG = {
         "group_threshold": 0.15,  # cosine distance below which chunks are considered duplicates
         "mmr_lambda": 0.5,  # 1.0 = pure relevance, 0.0 = pure diversity
         "representative": "centroid",  # "centroid" | "score"
+        # Provenance values dropped from get_context and semantic search when
+        # the caller does not name a provenance. Imported material (Readwise,
+        # Snipd, gdrive) otherwise drowns a single-author vault: one Hollis
+        # podcast came back as twenty near-identical hits. Keyword and browse
+        # modes are unaffected — keyword is precise by construction and browse
+        # already groups reference documents. Pass provenance=[...] to opt in.
+        "exclude_provenance": ["reference"],
     },
     "salience": {
         # Min retrieval score per purpose. Scores are cosine similarity as of

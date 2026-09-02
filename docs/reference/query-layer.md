@@ -30,11 +30,12 @@ One engine, thin adapters. Every deterministic read — SQLite filters, FTS5, sq
 | `exclude_path_prefix` | drop blocks whose `source_path` starts with this (e.g. `OpenAugi/`) |
 | `include_path_prefix` | keep **only** blocks whose `source_path` starts with this (e.g. `OpenAugi/Capture/`). The mirror of the above — pair them across two queries to reach one folder inside an excluded tree |
 | `has_task` | only user-marked tasks (open `- [ ]` or `type/task`) |
+| `provenance` | keep only blocks whose `metadata.provenance` is in the list: `human` (the user wrote it), `ai` (a model wrote it), `reference` (imported: Readwise, Snipd, gdrive). Stamped at ingest from `[vault.provenance_rules]`, explicit `provenance/*` tags, and the AI/source tag rules; unstamped rows count as `human`. When omitted, **semantic mode** drops `[retrieval] exclude_provenance` (default `["reference"]`); keyword and browse apply no default |
 | `k` / `offset` | page size / browse offset |
 
 The same JSON shape works everywhere: MCP `search` arguments, `POST /api/query` body, saved-query frontmatter, `engine.run` input.
 
-**Where each filter runs.** `kind`, `source`, `after`, `before`, `after_ingested`, and `exclude_path_prefix` are pushed into SQL, so pagination and `total` are correct. `tags` and `has_task` are applied **in Python, after the page is fetched** (`engine.run`, browse branch) — they can only see the rows in the current page, and `total` does not reflect them. A filtered page can therefore come back empty with a large `total`. Callers must paginate; the durable fix is to push both into the SQL `WHERE` clause.
+**Where each filter runs.** `kind`, `source`, `after`, `before`, `after_ingested`, and `exclude_path_prefix` are pushed into SQL, so pagination and `total` are correct. `tags`, `has_task`, and `provenance` are applied **in Python, after the page is fetched** (`engine.run`, browse branch) — they can only see the rows in the current page, and `total` does not reflect them. A filtered page can therefore come back empty with a large `total`. Callers must paginate; the durable fix is to push both into the SQL `WHERE` clause.
 
 ## Saved queries
 

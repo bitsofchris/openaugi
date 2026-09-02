@@ -72,7 +72,7 @@ class RunResult(BaseModel):
     reference_block_count: int = 0
 
 
-def run(store: SQLiteStore, spec, embedding_model=None) -> RunResult:
+def run(store: SQLiteStore, spec, embedding_model=None, config: dict | None = None) -> RunResult:
     """Execute a QuerySpec. Raises EmptyQuerySpec when nothing was asked.
 
     embedding_model is required for semantic mode (callers own model
@@ -109,6 +109,7 @@ def run(store: SQLiteStore, spec, embedding_model=None) -> RunResult:
             and not _path_not_included(b, spec.include_path_prefix)
             and not _ingested_too_old(b)
             and not _fails_task_filter(b)
+            and not _provenance_dropped(b, spec.provenance, None)
         ]
         has_more = len(results) > k
         return RunResult(mode=spec.mode, blocks=results[:k], has_more=has_more)
@@ -118,6 +119,7 @@ def run(store: SQLiteStore, spec, embedding_model=None) -> RunResult:
             raise ValueError("semantic mode requires an embedding model")
         query_vec = embedding_model.embed_query(spec.query)
         hits = store.semantic_search(query_vec, k=k * 3)
+        drop_prov = _default_exclude_provenance(config) if spec.provenance is None else None
 
         hit_ids = [block_id for block_id, _ in hits]
         blocks_map = store.get_blocks_by_ids(hit_ids)
@@ -148,6 +150,8 @@ def run(store: SQLiteStore, spec, embedding_model=None) -> RunResult:
                 continue
             if _fails_task_filter(block):
                 continue
+            if _provenance_dropped(block, spec.provenance, drop_prov):
+                continue
             kept.append(block)
             scores[block_id] = _similarity(distance)
             if len(kept) > k:
@@ -175,6 +179,8 @@ def run(store: SQLiteStore, spec, embedding_model=None) -> RunResult:
         if spec.tags and not set(spec.tags).intersection(b.tags + b.metadata.get("augi_tags", [])):
             continue
         if _fails_task_filter(b):
+            continue
+        if _provenance_dropped(b, spec.provenance, None):
             continue
         if _reference_source_tags(b):
             reference_blocks.append(b)
@@ -451,12 +457,26 @@ def context(
     purpose: str | None = None,
     embedding_model=None,
     config: dict | None = None,
+    after: str | None = None,
+    before: str | None = None,
+    tags: list[str] | None = None,
+    exclude_path_prefix: str | None = None,
+    include_path_prefix: str | None = None,
+    provenance: list[str] | None = None,
 ) -> ContextResult:
     """FTS + semantic retrieval → MMR rerank → link expand.
 
     Deterministic — the rerank is cosine/MMR math (pipeline.rerank), no LLM.
     `config` supplies [retrieval]/[salience]; callers pass their
     loaded config so test monkeypatching stays at the adapter.
+
+    The filters (`after`, `before`, `tags`, the two path prefixes,
+    `provenance`) mean the same as on QuerySpec and apply to the candidate
+    pool before rerank, so a question scoped to one week reranks within
+    that week instead of being answered from the whole vault and then
+    trimmed. When any filter is set the overfetch doubles, so a narrow
+    window does not starve the pool. `provenance=None` applies the config
+    default `[retrieval] exclude_provenance`.
     """
     import numpy as np
 
@@ -473,7 +493,9 @@ def context(
     mmr_lambda = retrieval.get("mmr_lambda", 0.5)
     representative = retrieval.get("representative", "centroid")
 
-    fetch_limit = k * overfetch_ratio
+    has_filter = any([after, before, tags, exclude_path_prefix, include_path_prefix, provenance])
+    fetch_limit = k * overfetch_ratio * (2 if has_filter else 1)
+    drop_prov = _default_exclude_provenance(config) if provenance is None else None
 
     # Collect candidate IDs and their best relevance scores
     candidate_scores: dict[str, float] = {}
@@ -501,6 +523,24 @@ def context(
             candidate_scores[block_id] = max(candidate_scores.get(block_id, 0.0), score)
     except Exception:
         logger.warning("Semantic search unavailable in context", exc_info=True)
+
+    # Apply the filters to the pool. Unstamped blocks count as human, so a
+    # store that predates provenance behaves exactly as before.
+    candidate_blocks = store.get_blocks_by_ids(list(candidate_scores.keys()))
+    for block_id in list(candidate_scores.keys()):
+        block = candidate_blocks.get(block_id)
+        if block is None or _context_filtered(
+            block,
+            after,
+            before,
+            tags,
+            exclude_path_prefix,
+            include_path_prefix,
+            provenance,
+            drop_prov,
+        ):
+            candidate_scores.pop(block_id)
+            candidate_blocks.pop(block_id, None)
 
     if not candidate_scores:
         return ContextResult(had_candidates=False)
@@ -558,8 +598,7 @@ def context(
             min_score = float(threshold)
             final_ids = [bid for bid in final_ids if candidate_scores[bid] >= min_score]
 
-    # Batch-fetch full blocks for the final k IDs
-    final_blocks = store.get_blocks_by_ids(final_ids)
+    final_blocks = {bid: candidate_blocks[bid] for bid in final_ids if bid in candidate_blocks}
     fts_ids = {b.id for b in fts_results}
     seen: dict[str, ContextEntry] = {}
     for block_id in final_ids:
@@ -605,6 +644,53 @@ def context(
 
 
 # ── Shared rules ────────────────────────────────────────────────────
+
+
+def _default_exclude_provenance(config: dict | None) -> set[str]:
+    """`[retrieval] exclude_provenance` — provenance values dropped from
+    relevance-ranked reads when the caller names no provenance. Loads config
+    lazily so `engine.run` callers that never hit semantic mode pay nothing."""
+    if config is None:
+        from openaugi.config import load_config
+
+        config = load_config()
+    values = config.get("retrieval", {}).get("exclude_provenance") or []
+    return {str(v).lower() for v in values}
+
+
+def _provenance_dropped(block: Block, keep: list[str] | None, drop: set[str] | None) -> bool:
+    """Provenance filter. `keep` (an explicit list) wins over `drop` (the
+    config default). A block with no provenance stamped counts as human —
+    the resolver's own default — so pre-provenance stores behave as before."""
+    value = block.metadata.get("provenance") or "human"
+    if keep is not None:
+        return value not in keep
+    return bool(drop) and value in drop
+
+
+def _context_filtered(
+    block: Block,
+    after: str | None,
+    before: str | None,
+    tags: list[str] | None,
+    exclude_path_prefix: str | None,
+    include_path_prefix: str | None,
+    provenance: list[str] | None,
+    drop_prov: set[str] | None,
+) -> bool:
+    """True when a get_context candidate fails any filter. Same semantics
+    as the corresponding QuerySpec fields in `run`."""
+    if after and (block.block_time or "") < after:
+        return True
+    if before and (block.block_time or "") > before:
+        return True
+    if tags and not set(tags).intersection(block.tags + block.metadata.get("augi_tags", [])):
+        return True
+    if _path_excluded(block, exclude_path_prefix):
+        return True
+    if _path_not_included(block, include_path_prefix):
+        return True
+    return _provenance_dropped(block, provenance, drop_prov)
 
 
 def _path_excluded(block: Block, prefix: str | None) -> bool:

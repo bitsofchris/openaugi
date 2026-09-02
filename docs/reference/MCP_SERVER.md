@@ -92,7 +92,7 @@ Both are optional if you've run `openaugi init` — the config file is the defau
 | `get_view` | Render a container's view from the DB: live membership log + cached recap with visible staleness (`stale: true` when membership changed since the recap was written). What rendered surfaces consume instead of `View - *.md` files. |
 | `list_views` | The render list: every container with a cached recap row, newest first, with per-view staleness. A recap row IS the "this container has a view" bit — hand-curated containers (recap off) never appear. |
 | `traverse` | Multi-hop graph walk from a starting block |
-| `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links; optional `purpose` applies a `[salience]` min-score gate for proactive surfaces |
+| `get_context` | Power tool: semantic + keyword → deduplicate → MMR re-rank → expand via links; takes the same `after`/`before`/`tags`/path-prefix/`provenance` filters as `search`, applied before rerank; optional `purpose` applies a `[salience]` min-score gate for proactive surfaces |
 | `recent` | Recently ingested blocks, filtered by kind/source/tags |
 | `list_queries` | Saved queries at `OpenAugi/AGENT/queries/*.md` — named, user-editable QuerySpecs (see [query-layer.md](query-layer.md)) |
 | `run_query` | Execute a saved query by name; relative-date tokens (`-14d`, `today`, `$review-mark`) resolve at run time |
@@ -135,6 +135,13 @@ search(after="2026-04-05", before="2026-04-12")
   which is often date-only (`"2026-07-12"` sorts before any same-day timestamp) and is
   kept when an edited block re-ingests — so ingest-order queues (the review pass,
   "what's new since X") must use `after_ingested`, not `after`
+- `provenance=["human"]` — keep only what the user wrote; `"ai"` is model output
+  (everything under `OpenAugi/` except `Capture/`, plus notes tagged as AI summaries or
+  pasted chats), `"reference"` is imported material. Stamped at ingest by
+  `[vault.provenance_rules]` plus tag rules (see below); works in every mode. Ask for
+  `["human"]` when the question is what the user themselves thought, so a model-written
+  reflection is never quoted back to them as their own. In **semantic mode only**, omitting
+  `provenance` applies `[retrieval] exclude_provenance` (default `["reference"]`)
 - Block summaries include `source_path`, so derived-vs-capture is explicit
 - **Reference grouping**: blocks carrying a `source/*` tag (Readwise, Snipd — set via
   `[vault.source_rules]`) are collapsed into `reference_documents`, one entry per source
@@ -161,6 +168,48 @@ base. It runs a multi-stage pipeline before returning results:
 
 Steps 4–6 eliminate near-duplicate chunks — the same idea phrased multiple times — before
 the results reach Claude, saving context window and improving reasoning quality.
+
+#### Filters (added 2026-09-02)
+
+`get_context` accepts `after`, `before`, `tags`, `exclude_path_prefix`,
+`include_path_prefix`, and `provenance`, with the same meaning as on `search`. They
+apply to the candidate pool **before** step 4, so a question scoped to one week is
+ranked within that week rather than answered from the whole vault and trimmed. When
+any filter is set the overfetch doubles so a narrow window does not starve the pool.
+Link expansion (step 8) is not filtered: an expanded block is context for a result,
+not a result.
+
+```
+get_context(query="what was I building", after="2026-03-01", before="2026-03-31",
+            provenance=["human"])
+```
+
+Omitting `provenance` applies `[retrieval] exclude_provenance` (default `["reference"]`).
+
+#### Provenance (`[vault.provenance_rules]`)
+
+Every data block carries `metadata.provenance`: `human`, `ai`, or `reference`.
+Resolution, first match wins: an explicit `provenance/<value>` tag in the note text;
+the first matching path glob in `[vault.provenance_rules]` (file order, so list the
+narrower folder first); the AI tags (`note-type/ai-summary`, `note-type/ai-response`,
+`source/ai-chat`) give `ai` and any other `source/*` tag except `source/capture` gives
+`reference`; otherwise `human`.
+
+```toml
+[vault.provenance_rules]
+"OpenAugi/Capture/**" = "human"        # the phone capture stream is the user's words
+"OpenAugi/**" = "ai"                   # everything else generated
+"_private/2-Reference/**" = "reference"
+"_sources/**" = "reference"
+
+# Titles to report (never relabel) as likely pasted-in AI output during backfill
+provenance_title_patterns = [" - Jung - "]
+```
+
+Ingest only touches changed files, so after adding rules run
+`openaugi backfill-provenance` (`--dry-run` first). It stamps every existing block and
+lists `human`-labelled blocks whose title matches a pattern, for a hand-added
+`provenance/ai` tag. A title is never treated as evidence on its own.
 
 #### Tuning via `config.toml`
 

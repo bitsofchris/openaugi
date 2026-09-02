@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+**Blocks know who wrote them.** Every data block now carries
+`metadata.provenance`: `human`, `ai`, or `reference`, resolved at ingest from an
+explicit `provenance/*` tag, then `[vault.provenance_rules]` path globs, then the
+AI and `source/*` tag rules. `search` and `get_context` take `provenance=[...]`
+in every mode; semantic retrieval drops `[retrieval] exclude_provenance`
+(default `["reference"]`) unless the caller names a provenance, so a synced
+podcast no longer returns as twenty near-identical hits. `openaugi
+backfill-provenance` stamps existing rows. This came out of an analysis run
+that quoted forty model-written reflections back to the user as his own
+writing because nothing at the query layer could tell them apart
+(docs/plans/query-provenance-and-dates.md).
+
+**`get_context` takes filters.** `after`, `before`, `tags`,
+`exclude_path_prefix`, `include_path_prefix`, and `provenance`, applied to the
+candidate pool before rerank. "What was I thinking about X in March" is now one
+call instead of a browse plus a grep.
+
+**Undated notes take the file's creation time, not its last edit.** The last
+date fallback read `st_mtime`, which stamped every later edit of an undated MOC
+onto its blocks. `st_birthtime` is preferred where the OS has it.
+
 ## 0.2.1 — 2026-08-21
 
 **Dependency pins so the package installs.** `mcp>=1.0` was an open range and
