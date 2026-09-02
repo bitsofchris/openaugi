@@ -29,6 +29,7 @@ def run_layer0(
     exclude_patterns: list[str] | None = None,
     max_workers: int = 4,
     source_rules: dict[str, str] | None = None,
+    provenance_rules: dict[str, str] | None = None,
 ) -> dict:
     """Run Layer 0 pipeline: ingest vault → blocks + links → store.
 
@@ -47,6 +48,7 @@ def run_layer0(
         exclude_patterns=exclude_patterns,
         max_workers=max_workers,
         source_rules=source_rules,
+        provenance_rules=provenance_rules,
     )
 
     # Handle deleted files — CASCADE removes entries and their links

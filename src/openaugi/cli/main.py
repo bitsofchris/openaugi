@@ -264,6 +264,7 @@ def ingest(
         exclude = config.get("vault", {}).get("exclude_patterns")
         workers = config.get("vault", {}).get("max_workers", 4)
         source_rules = config.get("vault", {}).get("source_rules")
+        provenance_rules = config.get("vault", {}).get("provenance_rules")
 
         console.print(f"[bold]Ingesting vault:[/bold] {vault_path}")
         console.print(f"[bold]Database:[/bold] {db_path}")
@@ -274,6 +275,7 @@ def ingest(
             exclude_patterns=exclude,
             max_workers=workers,
             source_rules=source_rules,
+            provenance_rules=provenance_rules,
         )
 
         stats = result["stats"]
@@ -691,6 +693,66 @@ def backfill_source_tags_cmd(
         store.close()
 
 
+@app.command(name="backfill-provenance")
+def backfill_provenance_cmd(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report matches, write nothing"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Stamp metadata.provenance (human | ai | reference) on data_blocks already in the DB.
+
+    Applies [vault.provenance_rules], explicit provenance/* tags, and the
+    AI/source tag rules — the same resolution ingest uses. Idempotent.
+    Blocks whose title matches [vault.provenance_title_patterns] but resolved
+    to `human` are listed as candidates for a hand-added provenance/ai tag;
+    a title is never treated as evidence on its own.
+    """
+    _setup_logging(verbose)
+
+    from openaugi.adapters.vault import backfill_provenance
+    from openaugi.config import load_config
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    vault_cfg = config.get("vault", {})
+    rules = vault_cfg.get("provenance_rules")
+    patterns = vault_cfg.get("provenance_title_patterns") or []
+
+    db_path = db or str(_default_db())
+    console.print(f"[bold]Database:[/bold] {db_path}")
+    console.print(f"[bold]Rules:[/bold] {rules or '(none — tag rules and default only)'}")
+    if dry_run:
+        console.print("[yellow]Dry run — no DB writes[/yellow]")
+
+    store = SQLiteStore(db_path)
+    try:
+        out = backfill_provenance(store, rules, dry_run=dry_run, title_patterns=patterns)
+        updated = out["updated"]
+        if not updated:
+            console.print(
+                f"[green]Nothing to do — {out['unchanged']} blocks already stamped.[/green]"
+            )
+        else:
+            for value, count in sorted(updated.items()):
+                console.print(f"  {value}: {count} blocks")
+            console.print(
+                f"[green]{'Would update' if dry_run else 'Updated'} "
+                f"{sum(updated.values())} blocks ({out['unchanged']} unchanged).[/green]"
+            )
+        if out["candidates"]:
+            console.print(
+                f"\n[yellow]{len(out['candidates'])} human-labelled blocks match a title "
+                "pattern — add a provenance/ai tag to the note if a model wrote it:[/yellow]"
+            )
+            seen: set[str] = set()
+            for _, title in out["candidates"]:
+                if title not in seen:
+                    seen.add(title)
+                    console.print(f"  {title}")
+    finally:
+        store.close()
+
+
 @app.command(name="cluster-weather")
 def cluster_weather(
     db: str | None = typer.Option(None, "--db", help="Database path"),
@@ -1017,12 +1079,14 @@ def up(
         exclude = config.get("vault", {}).get("exclude_patterns")
         workers = config.get("vault", {}).get("max_workers", 4)
         source_rules = config.get("vault", {}).get("source_rules")
+        provenance_rules = config.get("vault", {}).get("provenance_rules")
         result = run_layer0(
             vault_path,
             store,
             exclude_patterns=exclude,
             max_workers=workers,
             source_rules=source_rules,
+            provenance_rules=provenance_rules,
         )
         stats = result["stats"]
         err.print(

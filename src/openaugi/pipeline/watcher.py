@@ -95,6 +95,7 @@ def _run_ingest_cycle(
         exclude = config.get("vault", {}).get("exclude_patterns")
         workers = config.get("vault", {}).get("max_workers", 4)
         source_rules = config.get("vault", {}).get("source_rules")
+        provenance_rules = config.get("vault", {}).get("provenance_rules")
 
         result = run_layer0(
             vault_path,
@@ -102,6 +103,7 @@ def _run_ingest_cycle(
             exclude_patterns=exclude,
             max_workers=workers,
             source_rules=source_rules,
+            provenance_rules=provenance_rules,
         )
         stats = result["stats"]
         logger.info(

@@ -15,6 +15,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from openaugi.adapters import splitter as _splitter
 
@@ -76,12 +77,15 @@ def parse_vault(
     exclude_patterns: list[str] | None = None,
     max_workers: int = 4,
     source_rules: dict[str, str] | None = None,
+    provenance_rules: dict[str, str] | None = None,
 ) -> tuple[list[Block], list[Link]]:
     """Parse an Obsidian vault into blocks and links.
 
     source_rules: {path glob → source/* tag} from [vault.source_rules] config;
     stamps ingest-origin attribution on blocks in matching folders (explicit
     source/* tags in the note text always win — text is truth).
+    provenance_rules: {path glob → human|ai|reference} from
+    [vault.provenance_rules]; see `resolve_provenance`.
 
     Returns (blocks, links) ready to insert into the store.
     """
@@ -90,6 +94,7 @@ def parse_vault(
         raise FileNotFoundError(f"Vault path does not exist: {vault}")
     excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
     rules = _normalize_source_rules(source_rules)
+    prov_rules = _normalize_provenance_rules(provenance_rules)
 
     all_files = list(vault.rglob("*.md"))
     if not all_files:
@@ -104,7 +109,10 @@ def parse_vault(
     tag_blocks: dict[str, Block] = {}  # dedupe tag blocks globally
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(_parse_file, f, vault, file_index, rules): f for f in included}
+        futures = {
+            executor.submit(_parse_file, f, vault, file_index, rules, prov_rules): f
+            for f in included
+        }
         for future in as_completed(futures):
             file_path = futures[future]
             try:
@@ -132,6 +140,7 @@ def parse_vault_incremental(
     exclude_patterns: list[str] | None = None,
     max_workers: int = 4,
     source_rules: dict[str, str] | None = None,
+    provenance_rules: dict[str, str] | None = None,
 ) -> tuple[list[Block], list[Link], dict[str, str], list[str]]:
     """Parse vault with incremental change detection.
 
@@ -141,6 +150,7 @@ def parse_vault_incremental(
         exclude_patterns: Glob patterns to skip.
         max_workers: Thread pool size.
         source_rules: {path glob → source/* tag}; see parse_vault.
+        provenance_rules: {path glob → human|ai|reference}; see parse_vault.
 
     Returns:
         (new_blocks, new_links, current_hashes, deleted_paths)
@@ -153,6 +163,7 @@ def parse_vault_incremental(
         raise FileNotFoundError(f"Vault path does not exist: {vault}")
     excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
     rules = _normalize_source_rules(source_rules)
+    prov_rules = _normalize_provenance_rules(provenance_rules)
 
     all_files = list(vault.rglob("*.md"))
     if not all_files:
@@ -195,7 +206,8 @@ def parse_vault_incremental(
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_parse_file, f, vault, file_index, rules): f for f in files_to_parse
+            executor.submit(_parse_file, f, vault, file_index, rules, prov_rules): f
+            for f in files_to_parse
         }
         for future in as_completed(futures):
             file_path = futures[future]
@@ -238,6 +250,7 @@ def _parse_file(
     vault_root: Path,
     file_index: dict[str, str],
     source_rules: list[tuple[str, str]] | None = None,
+    provenance_rules: list[tuple[str, str]] | None = None,
 ) -> tuple[list[Block], list[Link], dict[str, Block]]:
     """Parse a single .md file into blocks + links.
 
@@ -318,6 +331,7 @@ def _parse_file(
             "parent_note_title": parent_title,
             "file_created_at": file_created,
             "granularity": seg.granularity,
+            "provenance": resolve_provenance(rel_path, all_tags, provenance_rules),
         }
         if seg.anchor_id:
             entry_metadata["anchor_id"] = seg.anchor_id
@@ -511,6 +525,138 @@ def _apply_source_rules(
         if _matches_pattern(rel_path, pattern):
             return [*tags, tag]
     return tags
+
+
+# ── Provenance ─────────────────────────────────────────────────────
+#
+# Who wrote a block: the user, a model, or someone else whose work was
+# imported. A derived field, not a tag, because it is a property every block
+# has exactly one value of and every read tool needs to filter on. The
+# 2026-09-01 high-note analysis quoted forty AI-written reflection sessions
+# back to the user as "your vault" because nothing distinguished them from his
+# own writing at the query layer — docs/plans/query-provenance-and-dates.md.
+
+PROVENANCE_HUMAN = "human"
+PROVENANCE_AI = "ai"
+PROVENANCE_REFERENCE = "reference"
+PROVENANCE_VALUES = (PROVENANCE_HUMAN, PROVENANCE_AI, PROVENANCE_REFERENCE)
+
+# Tags that decide provenance when no explicit provenance/* tag and no path
+# rule applies. Closed list from the taxonomy's note-type and source facets.
+_AI_TAGS = frozenset({"note-type/ai-summary", "note-type/ai-response", "source/ai-chat"})
+_HUMAN_SOURCE_TAGS = frozenset({"source/capture"})
+
+
+def _normalize_provenance_rules(
+    provenance_rules: dict[str, str] | None,
+) -> list[tuple[str, str]] | None:
+    """[vault.provenance_rules] config dict → ordered (pattern, value) list.
+
+    First matching rule wins (dict order = file order in TOML), so a caller
+    lists the narrower folder first: `OpenAugi/Capture/** = human` before
+    `OpenAugi/** = ai`. Unknown values raise — a typo here would silently
+    mislabel a whole folder.
+    """
+    if not provenance_rules:
+        return None
+    out: list[tuple[str, str]] = []
+    for pattern, value in provenance_rules.items():
+        v = value.strip().lower()
+        if v not in PROVENANCE_VALUES:
+            raise ValueError(
+                f"[vault.provenance_rules] {pattern!r}: {value!r} "
+                f"is not one of {PROVENANCE_VALUES}"
+            )
+        out.append((pattern, v))
+    return out
+
+
+def resolve_provenance(
+    rel_path: str,
+    tags: list[str],
+    provenance_rules: list[tuple[str, str]] | None,
+) -> str:
+    """Decide who wrote a block. First match wins:
+
+    1. An explicit `provenance/<value>` tag in the note text — text is truth.
+    2. The first matching path rule from [vault.provenance_rules].
+    3. Tag rules: the AI note-type/source tags give `ai`; any other
+       `source/*` tag except `source/capture` is imported material, `reference`.
+    4. `human`.
+    """
+    for t in tags:
+        if t.startswith("provenance/"):
+            v = t.split("/", 1)[1].lower()
+            if v in PROVENANCE_VALUES:
+                return v
+    if provenance_rules:
+        for pattern, value in provenance_rules:
+            if _matches_pattern(rel_path, pattern):
+                return value
+    tag_set = set(tags)
+    if tag_set & _AI_TAGS:
+        return PROVENANCE_AI
+    if any(t.startswith("source/") and t not in _HUMAN_SOURCE_TAGS for t in tag_set):
+        return PROVENANCE_REFERENCE
+    return PROVENANCE_HUMAN
+
+
+def backfill_provenance(
+    store,
+    provenance_rules: dict[str, str] | None,
+    dry_run: bool = False,
+    title_patterns: list[str] | None = None,
+) -> dict[str, Any]:
+    """Stamp `metadata.provenance` on every data_block already in the DB.
+
+    Ingest only touches changed files, so adding rules does nothing for
+    existing rows. Applies the same resolution as `_parse_file`. Idempotent.
+
+    `title_patterns` is a reporting aid for the one case a rule cannot see:
+    AI output the user pasted into a human folder (a "- Jung - " reflection
+    in the inbox). Blocks whose title contains a pattern AND resolved to
+    `human` are listed under `candidates` for the user to tag by hand. They
+    are never relabelled from a title match — content is not evidence.
+
+    Returns {"updated": {value: count}, "unchanged": n, "candidates": [(id, title)]}.
+    """
+    import json as _json
+
+    rules = _normalize_provenance_rules(provenance_rules)
+    patterns = [p for p in (title_patterns or []) if p]
+
+    rows = store.conn.execute(
+        """SELECT id, title, tags, metadata FROM blocks WHERE kind = 'data_block'"""
+    ).fetchall()
+
+    updates: list[tuple[str, str]] = []
+    counts: dict[str, int] = {}
+    unchanged = 0
+    candidates: list[tuple[str, str]] = []
+
+    for block_id, title, tags_json, metadata_json in rows:
+        metadata = _json.loads(metadata_json) if metadata_json else {}
+        source_path = metadata.get("source_path")
+        if not source_path:
+            continue
+        tags = _json.loads(tags_json) if tags_json else []
+        tags = tags + metadata.get("augi_tags", [])
+        value = resolve_provenance(source_path, tags, rules)
+        if value == PROVENANCE_HUMAN and title and any(p in title for p in patterns):
+            candidates.append((block_id, title))
+        if metadata.get("provenance") == value:
+            unchanged += 1
+            continue
+        metadata["provenance"] = value
+        counts[value] = counts.get(value, 0) + 1
+        updates.append((_json.dumps(metadata), block_id))
+
+    if updates and not dry_run:
+        store.conn.executemany("UPDATE blocks SET metadata = ? WHERE id = ?", updates)
+        store.conn.commit()
+        logger.info("Backfilled provenance on %d blocks: %s", len(updates), counts)
+
+    return {"updated": counts, "unchanged": unchanged, "candidates": candidates}
 
 
 def backfill_source_tags(
