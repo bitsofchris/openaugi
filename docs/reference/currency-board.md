@@ -75,8 +75,35 @@ a stable key in an HTML comment:
 
 Checkboxes are the buttons — the grammar chosen because it is the one review
 gesture that has ever survived in this vault (the Augi Log's promote / good
-match / bad match). `aaa:` is the comment channel, already the review pass's
-instruction grammar, so free text needs no new parser.
+match / bad match).
+
+**Two channels for anything that isn't a checkbox**, because feedback about an
+*item* and feedback about the *board* need different homes:
+
+| Channel | For | Where it goes |
+|---|---|---|
+| `aaa: <why>` under an item | That item — why not, what's actually needed, a correction to carry forward | Stored on the item's key; future boards honor it literally |
+| The `Notes to augi` callout | The board itself — wrong, missing, too vague, noise | Logged as `currency-board-note`, marked `✓ noted`, read as an instruction by the next build |
+
+`aaa:` is already the review pass's instruction grammar, so neither needs a new
+parser or a trip outside Obsidian.
+
+## Every move carries its context
+
+A move the reader cannot *start* is a failed move, however well phrased. Each
+one gets a `↳` line naming where it came from and what to open — the source
+note, the artifact, the session, the file path, the specific blocks.
+
+The sharper rule is about honesty. When the source is vague, the board must
+**name the unknown rather than invent precision**. The first board shipped an
+item that read "Draft the work doc, send it to yourself" — crisp, actionable,
+and false: the underlying note said only *"Neeed to I guess write the thing
+first,"* a phrase with no antecedent anywhere in the vault. The board had
+manufactured confidence out of ambiguity, which is the most expensive failure
+available to it: a stale claim can be corrected, but a confident claim about
+something the vault never named teaches the reader not to trust any of it.
+Quote the vague phrase, say what could not be resolved, list the candidates,
+and make *identifying the object* the first action.
 
 ## How it works
 
@@ -146,7 +173,9 @@ scripts/write-board-task.sh        # honors $OPENAUGI_VAULT; no-ops if today's b
   previous surface, and the reason the janitor exists at all.
 - Item keys are stable across runs; a returning item keeps its key so age
   survives. Never reuse a key for different content.
-- Every left-off line links its source note. No unlinked claims.
+- Every left-off line links its source note, and every move carries a `↳`
+  context line naming what to open. No unlinked claims, no unstartable moves.
+- Never invent precision the source doesn't have — name the gap instead.
 - Three judgment items maximum.
 - Mirror, not coach. Drift states evidence; the human rules.
 - Omit empty sections — an empty section is noise.

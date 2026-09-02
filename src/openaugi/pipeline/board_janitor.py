@@ -48,6 +48,10 @@ _TITLE_RE = re.compile(r"^\s*>?\s*- \*\*(?P<title>.+?)\*\*")
 _LANE_RE = re.compile(r"^\s*>?\s*\[!board-(?P<kind>[a-z]+)\][+-]?\s*(?P<label>.*?)\s*$")
 #: `2026-09-02 - Board.md`
 _DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
+#: The free-text channel for feedback about the board itself.
+_NOTE_MARKER_RE = re.compile(r"^\s*>?\s*<!-- board-note -->\s*$")
+#: A line inside the note callout, once its `> ` prefix is stripped.
+_NOTE_LINE_RE = re.compile(r"^\s*>\s?(?P<text>.*?)\s*$")
 
 _STATES = {"done": "done", "not doing": "not-doing", "someday": "someday"}
 #: How far back an item may be scanned for its title/lane before giving up.
@@ -148,6 +152,54 @@ def parse_items(text: str) -> dict[str, dict]:
     return items
 
 
+def _process_board_note(lines: list[str], vault_path: Path, day: str) -> bool:
+    """Log free text left in the `Notes to augi` callout, then mark it read.
+
+    This is the channel for feedback about the *board* rather than about one
+    item: what was wrong, missing, too vague, or noise. Returns True when
+    something was found, so the caller knows to rewrite the file.
+    """
+    # Answered items leave None tombstones behind; skip them.
+    start = next(
+        (i for i, line in enumerate(lines) if line is not None and _NOTE_MARKER_RE.match(line)),
+        None,
+    )
+    if start is None:
+        return False
+
+    body: list[tuple[int, str]] = []
+    for pos in range(start + 1, len(lines)):
+        if lines[pos] is None:
+            continue
+        match = _NOTE_LINE_RE.match(lines[pos])
+        if not match:  # the callout ended
+            break
+        text = match.group("text")
+        if text.startswith("✓ noted"):  # already processed
+            return False
+        if text:
+            body.append((pos, text))
+
+    if not body:
+        return False
+
+    _append_feedback(
+        vault_path,
+        {
+            "ts": _now(),
+            "source": "currency-board-note",
+            "board": day,
+            "signal": "note",
+            "reason": " ".join(text for _, text in body),
+        },
+    )
+    for pos, _ in body[1:]:
+        lines[pos] = None  # type: ignore[call-overload]
+    lines[body[0][0]] = f"> ✓ noted {day}"
+    logger.info(f"Board janitor: board note recorded for {day}")
+    return True
+
+
 def sync_board(board_path: Path, vault_path: Path) -> int:
     """Record appearances and act on ticked boxes for one board. Idempotent.
 
@@ -217,7 +269,9 @@ def sync_board(board_path: Path, vault_path: Path) -> int:
                 lines[pos] = None  # type: ignore[call-overload]
         answered += 1
 
-    if answered:
+    noted = _process_board_note(lines, vault_path, day)
+
+    if answered or noted:
         board_path.write_text(
             "\n".join(line for line in lines if line is not None) + "\n", encoding="utf-8"
         )

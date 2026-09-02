@@ -43,6 +43,11 @@ cssclasses:
 >     - [ ] not doing
 >     - [ ] someday
 >     <!-- item:archive-sessions -->
+
+> [!board-note]- Notes to augi
+> *Anything that isn't a checkbox.*
+> <!-- board-note -->
+>
 """
 
 
@@ -138,6 +143,41 @@ def test_feedback_is_appended_to_the_shared_stream(board, vault):
     assert record["signal"] == "someday"
     assert record["reason"] == "not this week"
     assert record["board"] == "2026-09-02"
+
+
+def test_free_text_note_about_the_board_is_logged_and_marked_read(board, vault):
+    text = board.read_text(encoding="utf-8")
+    marker = text.index("<!-- board-note -->") + len("<!-- board-note -->")
+    board.write_text(
+        text[:marker]
+        + '\n> the "work doc" item was too vague — no idea which doc\n'
+        + text[marker:],
+        encoding="utf-8",
+    )
+    sync_board(board, vault)
+
+    record = json.loads(
+        (vault / "OpenAugi" / "Capture" / "feedback-log.ndjson")
+        .read_text(encoding="utf-8")
+        .strip()
+        .splitlines()[-1]
+    )
+    assert record["source"] == "currency-board-note"
+    assert "too vague" in record["reason"]
+
+    # Marked read, and a second pass does not log it again.
+    assert "✓ noted 2026-09-02" in board.read_text(encoding="utf-8")
+    before = (vault / "OpenAugi" / "Capture" / "feedback-log.ndjson").read_text(encoding="utf-8")
+    sync_board(board, vault)
+    assert (vault / "OpenAugi" / "Capture" / "feedback-log.ndjson").read_text(
+        encoding="utf-8"
+    ) == before
+
+
+def test_empty_note_callout_logs_nothing(board, vault):
+    sync_board(board, vault)
+    log = vault / "OpenAugi" / "Capture" / "feedback-log.ndjson"
+    assert not log.exists() or "currency-board-note" not in log.read_text(encoding="utf-8")
 
 
 def test_missing_board_and_unreadable_state_are_survivable(vault):
