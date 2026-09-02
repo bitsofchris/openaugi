@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+**Blocks know who wrote them.** Every data block now carries
+`metadata.provenance`: `human`, `ai`, or `reference`, resolved at ingest from an
+explicit `provenance/*` tag, then `[vault.provenance_rules]` path globs, then the
+AI and `source/*` tag rules. `search` and `get_context` take `provenance=[...]`
+in every mode; semantic retrieval drops `[retrieval] exclude_provenance`
+(default `["reference"]`) unless the caller names a provenance, so a synced
+podcast no longer returns as twenty near-identical hits. `openaugi
+backfill-provenance` stamps existing rows. This came out of an analysis run
+that quoted forty model-written reflections back to the user as his own
+writing because nothing at the query layer could tell them apart
+(docs/plans/query-provenance-and-dates.md).
+
+**`get_context` takes filters.** `after`, `before`, `tags`,
+`exclude_path_prefix`, `include_path_prefix`, and `provenance`, applied to the
+candidate pool before rerank. "What was I thinking about X in March" is now one
+call instead of a browse plus a grep.
+
+**Undated notes take the file's creation time, not its last edit.** The last
+date fallback read `st_mtime`, which stamped every later edit of an undated MOC
+onto its blocks. `st_birthtime` is preferred where the OS has it.
+
 **The currency board — the one surface that promises to be current.**
 Everything else in OpenAugi is append-only truth that never claims to be
 up to date; the board is the deliberate exception, which is what makes the
@@ -29,28 +50,22 @@ in a vault lens (`OpenAugi/AGENT/lenses/currency-board.md`), not in code.
 Supersedes the mirror-only `morning-briefing` lens. See
 [docs/reference/currency-board.md](docs/reference/currency-board.md).
 
-## Unreleased
+**One `zzz` instruction now dispatches one task.** Editing a `zzz` line used to
+fire it again: block identity is the hash of the raw text including that line,
+so finishing a half-typed instruction is a delete plus an insert, and the
+post-ingest hook saw a brand-new block with a brand-new instruction. Writing
+one sentence in two passes launched two agents on it.
 
-**Blocks know who wrote them.** Every data block now carries
-`metadata.provenance`: `human`, `ai`, or `reference`, resolved at ingest from an
-explicit `provenance/*` tag, then `[vault.provenance_rules]` path globs, then the
-AI and `source/*` tag rules. `search` and `get_context` take `provenance=[...]`
-in every mode; semantic retrieval drops `[retrieval] exclude_provenance`
-(default `["reference"]`) unless the caller names a provenance, so a synced
-podcast no longer returns as twenty near-identical hits. `openaugi
-backfill-provenance` stamps existing rows. This came out of an analysis run
-that quoted forty model-written reflections back to the user as his own
-writing because nothing at the query layer could tell them apart
-(docs/plans/query-provenance-and-dates.md).
+Dispatch is now queued through a `zzz_queue` ledger. A zzz block becomes a task
+only after it has sat unchanged for `tasks.zzz_settle_seconds` (default 120), so
+drafts abandoned inside that window never become tasks at all. Past the window
+the draft has already launched, so `run_layer0` now reports the entries it
+deleted and a rewritten instruction *supersedes* its predecessor — the old task
+file is marked `status: superseded` and its tmux session killed, leaving the
+final wording as the only one running. Dispatch is also idempotent across
+restarts now: a block id dispatched once never dispatches again.
 
-**`get_context` takes filters.** `after`, `before`, `tags`,
-`exclude_path_prefix`, `include_path_prefix`, and `provenance`, applied to the
-candidate pool before rerank. "What was I thinking about X in March" is now one
-call instead of a browse plus a grep.
-
-**Undated notes take the file's creation time, not its last edit.** The last
-date fallback read `st_mtime`, which stamped every later edit of an undated MOC
-onto its blocks. `st_birthtime` is preferred where the OS has it.
+`SQLiteStore.delete_record` was added so the ledger prunes settled rows.
 
 ## 0.2.1 — 2026-08-21
 

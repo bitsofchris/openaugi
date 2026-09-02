@@ -155,6 +155,9 @@ you write `zzz: <instruction>` in a vault note
   → file watcher detects change (30s debounce)
   → ingest: parse, split, extract blocks + tags + links
   → pipeline/dispatch.py: blocks with zzz_instructions
+    → queue them in the `zzz_queue` ledger (records table)
+    → supersede any instruction this cycle's edit replaced
+    → drain: blocks unchanged for 120s become tasks
     → write task file to OpenAugi/Tasks/<slug>.md (status: pending)
   → agents/task_watcher.py picks it up (5s poll, 30s settle)
     → hydrate: assign task_id, flip status→active, inject ## Session
@@ -165,6 +168,30 @@ you write `zzz: <instruction>` in a vault note
   → writes output to OpenAugi/ tagged #human-review
   → marks task file status: done
 ```
+
+**Dispatch is queued, not immediate.** A block's identity is the hash of its
+raw text *including* the `zzz` line, so finishing a half-written instruction
+deletes one block and inserts another — and a hook that fires on "new block
+with a zzz" fires twice for one instruction. (It did, on 2026-09-01: a task
+launched on `read this voice` at 20:41 and another on the finished sentence at
+20:52.) Two mechanisms, covering different gaps:
+
+- **Settle window** (`tasks.zzz_settle_seconds`, default 120) — a zzz block is
+  queued and only becomes a task once it has survived unchanged. Drafts
+  abandoned inside the window never become tasks. The watcher also drains on a
+  timer, so an instruction written just before the vault goes quiet still fires.
+- **Supersession** — past the window the draft has already launched, so waiting
+  cannot help. `run_layer0` reports the entries it deleted, which is the one
+  place a block's predecessor is still visible; a document that drops a known
+  zzz block and adds a new one in the same cycle has *edited* an instruction.
+  The old task is marked `status: superseded` and its tmux session killed, so
+  the wording you finished is the only one still running. The transcript stays
+  on disk.
+
+The ledger is the `zzz_queue` collection in the `records` table
+([docs/reference/records.md](docs/reference/records.md)) — droppable workflow
+state, pruned 30 days after a row settles. It also makes dispatch idempotent
+across restarts: a block id dispatched once never dispatches again.
 
 Per-block `zzz:` lines are extracted by the vault adapter into
 `metadata["zzz_instructions"]` (a list, one item per line; stripped from
@@ -270,7 +297,6 @@ format (`name:`/`description:` frontmatter) so they're scannable.
 - [docs/reference/user-guide.md](docs/reference/user-guide.md) — Day-to-day manual: entry points, the loop, trust rules, triggering a pass, lens system in brief. Chronological build history stays in this file's STATUS header, not there.
 - [docs/reference/review-pass.md](docs/reference/review-pass.md) — **The write-back loop (active):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass. Per-container view FILES were retired 2026-08-17 — recaps are `write_recap` rows. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
 - [docs/reference/records.md](docs/reference/records.md) — **The collection store + the test for a new MCP tool:** three generic tools for agent workflow state. Schemas live in the caller's prompt, policy in the caller's config, only mechanism in a tool. Read before adding any tool.
-- [docs/reference/currency-board.md](docs/reference/currency-board.md) — **The one surface that promises currency:** scheduled unprompted board (left off → next moves → ≤3 judgment items → drift), the done/not-doing/someday checkbox contract, and the janitor that makes the next board honor the answers.
 - [docs/reference/recap-spec.md](docs/reference/recap-spec.md) — **What a recap contains:** only what scrolling can't give you — cross-month patterns, contradictions, unanswered questions, what's gone quiet. Not what-moved, not member lists.
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
 - [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
