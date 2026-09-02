@@ -66,8 +66,8 @@ Chris's config will carry:
 
 The pasted-in Jung sessions in `_private/0-Inbox/` need either a `provenance/ai`
 tag or a rule. A rule cannot see inside the file, so this plan adds a one-shot
-`openaugi provenance --backfill` that also reports blocks whose title matches a
-configurable pattern (`[vault.provenance_title_patterns]`, e.g. `" - Jung - "`)
+`openaugi backfill-provenance` that also reports blocks whose title matches a
+configurable pattern (`[vault] provenance_title_patterns`, e.g. `" - Jung - "`)
 as candidates. It never guesses from content.
 
 Every read tool that takes filters accepts `provenance: list[str]`. Block
