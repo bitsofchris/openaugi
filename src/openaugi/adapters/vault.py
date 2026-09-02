@@ -373,10 +373,19 @@ def _parse_file(
 
 
 def _get_file_created_time(file_path: Path) -> str | None:
-    """Get file creation time as ISO string."""
+    """File creation time as an ISO string; modification time when the OS
+    has no creation time.
+
+    This is the last fallback in `_resolve_timestamp`, so it only matters
+    for notes with no date in the heading, filename, or frontmatter. Using
+    mtime there stamped every edit of an undated MOC onto its blocks, which
+    is why "what was I doing in March" surfaced notes touched in August.
+    macOS and Windows expose `st_birthtime`; Linux stat() does not, and a git
+    checkout resets it everywhere, so mtime stays as the floor.
+    """
     try:
         stat = file_path.stat()
-        ts = stat.st_mtime
+        ts = getattr(stat, "st_birthtime", None) or stat.st_mtime
         return datetime.fromtimestamp(ts).strftime("%Y-%m-%dT%H:%M:%SZ")
     except Exception:
         return None

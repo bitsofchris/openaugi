@@ -11,6 +11,7 @@ Uses the fixture vault at tests/fixtures/vault/ which contains:
 - .obsidian/config.json (should be excluded)
 """
 
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -1109,3 +1110,35 @@ class TestContainerIdentity:
     def test_the_id_is_recorded_on_the_document(self, tmp_path: Path):
         (tmp_path / "c.md").write_text("---\naugi_id: keep-me\n---\n\nx\n", encoding="utf-8")
         assert self._doc(parse_vault(tmp_path)[0]).metadata["augi_id"] == "keep-me"
+
+
+class TestFileCreatedTime:
+    """`_get_file_created_time` is the last date fallback; it must be the
+    file's creation time where the OS has one, not its last edit."""
+
+    def test_prefers_birthtime_over_mtime(self, tmp_path: Path, monkeypatch):
+        from openaugi.adapters import vault as vault_mod
+
+        note = tmp_path / "undated.md"
+        note.write_text("no dates here")
+
+        class FakeStat:
+            st_birthtime = 1_700_000_000.0  # 2023-11-14
+            st_mtime = 1_720_000_000.0  # 2024-07-03
+
+        monkeypatch.setattr(Path, "stat", lambda self: FakeStat())
+        expected = datetime.fromtimestamp(FakeStat.st_birthtime).strftime("%Y-%m-%dT%H:%M:%SZ")
+        assert vault_mod._get_file_created_time(note) == expected
+
+    def test_falls_back_to_mtime_without_birthtime(self, tmp_path: Path, monkeypatch):
+        from openaugi.adapters import vault as vault_mod
+
+        note = tmp_path / "undated.md"
+        note.write_text("no dates here")
+
+        class FakeStat:  # Linux-shaped: no st_birthtime attribute
+            st_mtime = 1_720_000_000.0
+
+        monkeypatch.setattr(Path, "stat", lambda self: FakeStat())
+        expected = datetime.fromtimestamp(FakeStat.st_mtime).strftime("%Y-%m-%dT%H:%M:%SZ")
+        assert vault_mod._get_file_created_time(note) == expected
