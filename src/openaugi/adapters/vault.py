@@ -561,6 +561,14 @@ def _normalize_provenance_rules(
         return None
     out: list[tuple[str, str]] = []
     for pattern, value in provenance_rules.items():
+        if not isinstance(value, str):
+            # The classic TOML slip: a key written after the [vault.provenance_rules]
+            # header lands inside this table instead of [vault].
+            raise ValueError(
+                f"[vault.provenance_rules] {pattern!r}: expected one of {PROVENANCE_VALUES}, "
+                f"got {type(value).__name__}. Keys like provenance_title_patterns belong "
+                "under [vault], before the [vault.provenance_rules] header."
+            )
         v = value.strip().lower()
         if v not in PROVENANCE_VALUES:
             raise ValueError(

@@ -196,14 +196,17 @@ narrower folder first); the AI tags (`note-type/ai-summary`, `note-type/ai-respo
 `reference`; otherwise `human`.
 
 ```toml
+[vault]
+# Titles to report (never relabel) as likely pasted-in AI output during backfill.
+# Under [vault], BEFORE the sub-table header below — TOML keys belong to the
+# most recent header.
+provenance_title_patterns = [" - Jung - "]
+
 [vault.provenance_rules]
 "OpenAugi/Capture/**" = "human"        # the phone capture stream is the user's words
 "OpenAugi/**" = "ai"                   # everything else generated
 "_private/2-Reference/**" = "reference"
 "_sources/**" = "reference"
-
-# Titles to report (never relabel) as likely pasted-in AI output during backfill
-provenance_title_patterns = [" - Jung - "]
 ```
 
 Ingest only touches changed files, so after adding rules run

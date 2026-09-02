@@ -52,6 +52,12 @@ def test_normalize_rejects_unknown_value():
         _normalize_provenance_rules({"OpenAugi/**": "robot"})
 
 
+def test_normalize_rejects_non_string_value():
+    """A list here means a key was written under the wrong TOML header."""
+    with pytest.raises(ValueError, match="belong under \\[vault\\]"):
+        _normalize_provenance_rules({"provenance_title_patterns": ["x"]})
+
+
 def test_explicit_tag_wins_over_rule():
     rules = _normalize_provenance_rules(RULES)
     got = resolve_provenance("OpenAugi/Notes/x.md", ["provenance/human"], rules)
