@@ -1,0 +1,108 @@
+/* board.css — styling for the OpenAugi currency board.
+   Applies only to notes with `cssclasses: [board]` in frontmatter.
+   Enable in Settings → Appearance → CSS snippets. */
+
+.board {
+  --board-accent: #b87619;
+  --board-warn: #a9543c;
+  --board-good: #3e7a5a;
+  --board-faint: #8b95a0;
+}
+.theme-dark .board {
+  --board-accent: #d9973f;
+  --board-warn: #c97b62;
+  --board-good: #6bae8c;
+  --board-faint: #77828d;
+}
+
+/* --- the four callout types, one hue each ------------------------------ */
+.board .callout[data-callout="board-lane"] {
+  --callout-color: 184, 118, 25;
+  --callout-icon: lucide-milestone;
+}
+.board .callout[data-callout="board-judgment"] {
+  --callout-color: 62, 122, 90;
+  --callout-icon: lucide-gavel;
+}
+.board .callout[data-callout="board-drift"] {
+  --callout-color: 169, 84, 60;
+  --callout-icon: lucide-compass;
+}
+.board .callout[data-callout="board-sessions"] {
+  --callout-color: 110, 120, 130;
+  --callout-icon: lucide-terminal;
+}
+.board .callout[data-callout="board-flags"] {
+  --callout-color: 184, 118, 25;
+  --callout-icon: lucide-flag;
+}
+
+.board .callout {
+  border-radius: 8px;
+  margin-block: 0.85em;
+  padding: 0.7em 0.9em;
+}
+.board .callout-title {
+  font-size: 0.82em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* --- the left-off line: quiet, italic, the evidence -------------------- */
+.board .callout em:first-child {
+  color: var(--board-faint);
+  font-size: 0.92em;
+}
+
+/* --- inline chips: `focus · 90m` --------------------------------------- */
+.board code {
+  background: var(--background-modifier-hover);
+  color: var(--board-faint);
+  font-size: 0.76em;
+  letter-spacing: 0.03em;
+  padding: 0.1em 0.5em;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* --- THE IMPORTANT BIT ------------------------------------------------- */
+/* The three answer boxes are a nested task list under each item. Render
+   them on ONE row so an item costs three lines of markdown but one line
+   of attention. */
+.board .contains-task-list .contains-task-list {
+  margin: 0.15em 0 0.1em 0;
+  padding-left: 0;
+  list-style: none;
+}
+.board .contains-task-list .contains-task-list > li.task-list-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  margin: 0 1.15em 0 0;
+  font-size: 0.82em;
+  color: var(--board-faint);
+}
+.board .contains-task-list .contains-task-list > li.task-list-item::marker {
+  content: "";
+}
+/* answered items recede rather than disappear */
+.board li.task-list-item.is-checked {
+  color: var(--board-good);
+  text-decoration: none;
+}
+.board .contains-task-list > li.task-list-item:has(.contains-task-list .is-checked) {
+  opacity: 0.55;
+}
+
+/* --- the aaa: comment channel ----------------------------------------- */
+.board p:has(> em:only-child),
+.board li > p {
+  margin-block: 0.2em;
+}
+
+/* --- the closing truth line ------------------------------------------- */
+.board > em:last-child,
+.board p:last-child > em:only-child {
+  color: var(--board-faint);
+  font-size: 0.85em;
+}

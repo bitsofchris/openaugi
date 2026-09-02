@@ -148,10 +148,13 @@ launchctl list | grep com.openaugi.board                                     # "
 # 2. build one now, without waiting for 06:00
 scripts/write-board-task.sh        # honors $OPENAUGI_VAULT; no-ops if today's board or task exists
 
-# 3. rendering — enable the vault snippet once
-#    Obsidian → Settings → Appearance → CSS snippets → "board"
-#    (file: <vault>/.obsidian/snippets/board.css)
+# 3. rendering — install and enable the snippet once
+cp src/openaugi/templates/board.css "<vault>/.obsidian/snippets/board.css"
+#    Obsidian → Settings → Appearance → CSS snippets → enable "board"
 ```
+
+`.obsidian/` is gitignored in the vault, so the snippet's versioned copy lives
+at `src/openaugi/templates/board.css` in this repo — edit there, copy across.
 
 - **Logs:** `/tmp/openaugi-board.log` and `/tmp/openaugi-board.err` for the
   schedule; the agent run itself lands in the task file's `## Results` and in
