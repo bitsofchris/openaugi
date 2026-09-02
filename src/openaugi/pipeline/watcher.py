@@ -158,6 +158,14 @@ def _run_ingest_cycle(
             process_changed(changed_paths, vault_path)
         except Exception as e:
             logger.error(f"Echo janitor failed: {e}", exc_info=True)
+
+        # Janitor: act on any checkbox ticked on a currency board
+        try:
+            from openaugi.pipeline.board_janitor import process_changed as process_boards
+
+            process_boards(changed_paths, vault_path)
+        except Exception as e:
+            logger.error(f"Board janitor failed: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Ingest cycle failed: {e}", exc_info=True)
     finally:

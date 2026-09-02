@@ -63,6 +63,7 @@ src/openaugi/
 │   ├── dispatch.py        # Post-ingest: zzz instructions → task files in OpenAugi/Tasks/
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
 │   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar + lens list (docs/reference/lenses.md)
+│   ├── board_janitor.py   # Currency board write-back — checkboxes → .board-state.json (docs/reference/currency-board.md)
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
 │   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch
 ├── render/                # M6 — static HTML surfaces from the DB (no server)
@@ -197,6 +198,7 @@ See [docs/plans/m0.md](docs/plans/m0.md) § Key Design Decisions for full ration
 - **Default local embeddings**: sentence-transformers, no API key. Users upgrade via config.
 - **Proactive echo**: the one pass that runs unasked — new daily-note blocks are matched against the user's own prior writing and, when it would genuinely help, appended to a dated Augi Log with promote/feedback checkboxes. Post-ingest hook in the watcher, sibling of zzz dispatch. See [docs/reference/proactive-echo.md](docs/reference/proactive-echo.md).
 - **`get_context` dedup + MMR**: Over-fetches 3× candidates, collapses near-duplicates via cosine grouping, re-ranks for diversity before returning. See [docs/reference/MCP_SERVER.md](docs/reference/MCP_SERVER.md) for tuning.
+- **Currency board**: the one surface that promises to be current — everything else stays append-only truth. A scheduled daily board (left off → next moves → ≤3 judgment items → drift), answered with done/not-doing/someday checkboxes that `board_janitor.py` turns into state the next board must honor. See [docs/reference/currency-board.md](docs/reference/currency-board.md).
 
 ## Running
 
@@ -268,6 +270,7 @@ format (`name:`/`description:` frontmatter) so they're scannable.
 - [docs/reference/user-guide.md](docs/reference/user-guide.md) — Day-to-day manual: entry points, the loop, trust rules, triggering a pass, lens system in brief. Chronological build history stays in this file's STATUS header, not there.
 - [docs/reference/review-pass.md](docs/reference/review-pass.md) — **The write-back loop (active):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass. Per-container view FILES were retired 2026-08-17 — recaps are `write_recap` rows. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
 - [docs/reference/records.md](docs/reference/records.md) — **The collection store + the test for a new MCP tool:** three generic tools for agent workflow state. Schemas live in the caller's prompt, policy in the caller's config, only mechanism in a tool. Read before adding any tool.
+- [docs/reference/currency-board.md](docs/reference/currency-board.md) — **The one surface that promises currency:** scheduled unprompted board (left off → next moves → ≤3 judgment items → drift), the done/not-doing/someday checkbox contract, and the janitor that makes the next board honor the answers.
 - [docs/reference/recap-spec.md](docs/reference/recap-spec.md) — **What a recap contains:** only what scrolling can't give you — cross-month patterns, contradictions, unanswered questions, what's gone quiet. Not what-moved, not member lists.
 - [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
 - [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)

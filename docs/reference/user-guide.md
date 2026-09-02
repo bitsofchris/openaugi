@@ -21,6 +21,7 @@ you're designing or changing the system rather than just using it.
 
 | Context | Start here | What it gives you |
 |---|---|---|
+| Re-entry — morning, or sitting back down | `View - Board` | Where each thread left off · 1–2 next moves per lane · ≤3 things needing your judgment · what drifted. Built unprompted at 06:00; answered with checkboxes ([currency-board.md](currency-board.md)) |
 | Daily life (vault) | `View - Dashboard` | What moved per area · task rollup · **Pending your answer** (the only review you owe) |
 | Any thread | The AMOC/PMOC/MOC note itself | Your head + your journal + the transcluded view (recap + remote-capture feed) |
 | On your phone | OpenAugi Mobile (augi app) | Capture → bridge writes to your real vault → ingest treats it like any note. `zzz:` in a block dispatches a task |
@@ -79,6 +80,17 @@ or drop an `aaa:` next time — corrections are the tuning signal.
 placement nominated on the Dashboard. Persist only what you'll reuse;
 in-chat synthesis stays free and unpersisted.
 
+**The one thing that arrives without being asked:** the currency board,
+built at 06:00 into `OpenAugi/Board/<date> - Board.md` and pointed at by
+`View - Board`. Read it at re-entry — start of day, or sitting back down
+after an interruption. Answering is three checkboxes per item — **done**
+/ **not doing** / **someday** — plus an optional `aaa: <why>` line.
+Ticking is the entire interaction: the janitor records it and the next
+board never re-proposes it, honoring a `not doing` reason literally.
+Untouched items stay open and get carried; on an item's third board you
+get one plain staleness line, never a repeated nag. Manual:
+[currency-board.md](currency-board.md).
+
 ## The lens system, in brief
 
 A **lens** = a saved question applied to your data: scope + intent →
@@ -98,7 +110,8 @@ Current lenses (canonical list: `OpenAugi/AGENT/lenses/` or
 
 | Lens | Answers |
 |---|---|
-| **morning-briefing** | "What matters today?" — yesterday distilled, open loops due, pending nominations, one resurfaced thought |
+| **currency-board** | "Where did I leave off, and what's the next concrete thing?" — per lane, plus ≤3 judgment items and what drifted. Scheduled daily; answered with checkboxes |
+| **morning-briefing** | *(superseded by currency-board — mirror-only, no answer channel)* "What matters today?" — yesterday distilled, open loops due, pending nominations, one resurfaced thought |
 | **open-loops** | "What did I say I'd do and never close?" — commitments and aging questions, checkbox to close |
 | **echoes** | "Have I thought this before?" — current thinking matched against older notes; recognition, not summary |
 | **idea-lineage** | "How did my thinking on X evolve?" — one topic's full biography: earliest mention → revisions → strongest form → dead branches |
@@ -126,6 +139,7 @@ header — read that first in any new session.
 - [core-principles.md](core-principles.md) — **the skeleton**: capture grammar, truth/index/cache/render, trust model, promotion — the four invariants under everything in this guide (read first when designing, not just using)
 - [master-plan.md](../plans/master-plan.md) — the sequence + STATUS header (start every session here)
 - [lenses.md](lenses.md) — lens spec format, apply/create mechanics, output modes
+- [currency-board.md](currency-board.md) — the scheduled board you read at re-entry, its checkbox contract, and the janitor that makes the next board honor your answers
 - [review-pass.md](review-pass.md) — the write-back loop manual
 - [data-model.md](data-model.md) — blocks, links, `routed_to`, taxonomy
 - [clustering.md](clustering.md) — clustering + cluster weather

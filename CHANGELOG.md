@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+**The currency board — the one surface that promises to be current.**
+Everything else in OpenAugi is append-only truth that never claims to be
+up to date; the board is the deliberate exception, which is what makes the
+promise keepable. Built unprompted at 06:00 into
+`OpenAugi/Board/<date> - Board.md`: where each thread left off, 1–2 concrete
+next moves per lane, at most three items needing human judgment, and what
+drifted — threads whose "active" status the user's own recent writing
+contradicts.
+
+The half that makes it survive is the answer channel. Every item carries
+three checkboxes (`done` / `not doing` / `someday`) and an optional
+`aaa: <why>` comment line. `pipeline/board_janitor.py` — a sibling of
+`echo_janitor.py`, wired into the same watcher cycle — turns those ticks
+into `OpenAugi/Board/.board-state.json`, appends signals to the shared
+`feedback-log.ndjson` stream, and rewrites answered lines into
+confirmations. The next board reads that state and **never re-proposes a
+retired item**, honoring a `not doing` reason literally. Untouched items
+are carried with an `appearances` counter, so an item on its third board
+earns one plain staleness line instead of a repeated nag.
+
+Scheduling adds no daemon: a launchd job runs `scripts/write-board-task.sh`,
+which writes a task file the existing `task_watcher` picks up — so this does
+not wait on the dormant `every <period>` lens-trigger gate. The intent lives
+in a vault lens (`OpenAugi/AGENT/lenses/currency-board.md`), not in code.
+Supersedes the mirror-only `morning-briefing` lens. See
+[docs/reference/currency-board.md](docs/reference/currency-board.md).
+
+## Unreleased
+
 **Blocks know who wrote them.** Every data block now carries
 `metadata.provenance`: `human`, `ai`, or `reference`, resolved at ingest from an
 explicit `provenance/*` tag, then `[vault.provenance_rules]` path globs, then the
