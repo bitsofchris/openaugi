@@ -154,4 +154,25 @@ notes under a scope, run on a cheap model. Not before.
 
 ## Left off / next
 
-See git log on the branch.
+**2026-09-02.** Items 1 through 4 are on the branch as four commits: creation
+time, ingest-side provenance plus `backfill-provenance`, the query-side
+provenance filter and `get_context` filters, and a normalizer fix. Suite
+green (722), pyright clean, golden corpus untouched. Chris's config carries
+`[vault.provenance_rules]` and `provenance_title_patterns`; the live DB was
+backed up to `backups/openaugi-2026-09-02-pre-provenance.db` and backfilled:
+15,707 human, 5,659 ai, 5,530 reference. 618 human-labelled blocks match a
+title pattern and were reported, not relabelled; the `"Claude"` pattern is
+noisy (it catches posts *about* Claude) and can be dropped from config.
+
+**Next, in order:**
+1. Chris merges the branch and restarts `openaugi serve`; until then the live
+   server ignores the stamped field and has no `provenance` parameter.
+2. Chris tags the pasted-in AI reflections (the ` - Jung - ` and
+   ` - distilled - ` candidates) with `#provenance/ai`, or adds a folder for
+   them and a rule.
+3. Decide item 5 (derived tables from lens schemas) — the two open questions
+   above. Item 6 (activity tape) and item 7 (incremental extraction) wait on it.
+4. Decide whether dated bullets inside MOCs should set block dates (item 3,
+   second half).
+5. Follow-up: put `provenance` in the block summary wire row and regenerate
+   the golden corpus deliberately.
