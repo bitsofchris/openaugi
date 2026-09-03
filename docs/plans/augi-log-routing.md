@@ -113,10 +113,14 @@ processing, and chose it over the per-row timer for v1.
   the master box is ticked.
 - Ticking the master box applies the whole log at once: ticked rows as
   chosen; untouched rows resolve to the top suggestion when it is
-  *confident* (the block carries an `aaa:` hint naming the target, or an
-  explicit wikilink to it, or the target's score margin over the next
-  candidate clears a floor from `echo_rank`), otherwise to **memory**, which
-  writes nothing to any note. The section is then rewritten to `✓ …`
+  *confident*, otherwise to **memory**, which writes nothing to any note.
+  Confident means: the block carries an `aaa:` hint naming the target, or
+  an explicit wikilink to it (any verb); or the top candidate came from
+  retrieval, its z-margin over the runner-up clears `confident_margin`,
+  **and the verb only writes a DB link** (`file under`, `link`). Retrieval
+  alone never writes into one of his notes (`extend`) or mints one
+  (`new note`) — those need his tick or his hint. Implemented in
+  `route.is_confident` (step 3). The section is then rewritten to `✓ …`
   confirmations, each with a `- [ ] undo` box the janitor honors.
 - A log that is never ticked is left alone. Nothing runs. The board reports
   the count of unprocessed logs so the pile stays visible (see Q6).
@@ -253,7 +257,12 @@ search per cycle and cached.
    tests green.
 3. `feat(routing)`: `pipeline/route.py`: eligibility, candidates, judge,
    row rendering, `routing_queue` ledger. Wired in `watcher.py` after echo.
-   Tests with a fake store and a fake LLM.
+   Tests with a fake store and a fake LLM. **Shipped 2026-09-03.** Registry
+   discovery: document blocks carry no tags or description, so the DB only
+   prefilters (titles containing "MOC", outside `OpenAugi/`) and the file
+   decides (container tag + filled description), cached by mtime. A daily
+   note is never a home, keyed on its date-shaped title rather than its
+   folder, because his concept notes also live in `0-Fleeting-Inbox`.
 4. `feat(routing)`: `pipeline/routing_janitor.py`: parse ticked boxes and
    `aaa:` lines, apply (shared apply helper lifted out of the `apply_routing`
    MCP tool into `pipeline/routing_apply.py`), extend-append with marker,

@@ -160,6 +160,22 @@ def _run_ingest_cycle(
             except Exception as e:
                 logger.error(f"Proactive echo failed: {e}", exc_info=True)
 
+            # Routing: ask where each new human block lives. One row per
+            # block in the same log; nothing applies until the master box.
+            try:
+                from openaugi.models import get_embedding_model
+                from openaugi.pipeline.route import run_routing
+
+                run_routing(
+                    new_blocks,
+                    vault_path,
+                    store,
+                    get_embedding_model(config.get("models", {}).get("embedding")),
+                    config,
+                )
+            except Exception as e:
+                logger.error(f"Routing pass failed: {e}", exc_info=True)
+
         # Janitor: act on any checkbox ticked in an Augi Log
         try:
             from openaugi.pipeline.echo_janitor import process_changed
