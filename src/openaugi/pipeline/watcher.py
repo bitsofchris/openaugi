@@ -125,16 +125,25 @@ def _run_ingest_cycle(
             logger.warning(f"Embedding skipped: {e}")
             logger.info("Blocks saved without embeddings — will retry on next cycle")
 
-        # Post-ingest: dispatch zzz instructions as task files
+        # Post-ingest: queue zzz instructions, superseding any they replace.
+        # Nothing dispatches here — the queue drains once a block has settled,
+        # so a half-typed instruction never becomes a task. See dispatch.py.
         new_blocks = result.get("new_data_blocks", [])
+        try:
+            from openaugi.pipeline.dispatch import record_zzz_changes
+
+            record_zzz_changes(
+                new_blocks,
+                result.get("removed_data_blocks", []),
+                store,
+                vault_path,
+            )
+        except Exception as e:
+            logger.error(f"ZZZ queueing failed: {e}", exc_info=True)
+
+        drain_zzz_queue(vault_path, store, config)
+
         if new_blocks:
-            try:
-                from openaugi.pipeline.dispatch import dispatch_zzz_blocks
-
-                dispatch_zzz_blocks(new_blocks, vault_path)
-            except Exception as e:
-                logger.error(f"ZZZ dispatch failed: {e}", exc_info=True)
-
             # Proactive echo: surface older thinking that bears on what was
             # just written. Never fails the cycle — it is an extra, not a step.
             try:
@@ -158,8 +167,49 @@ def _run_ingest_cycle(
             process_changed(changed_paths, vault_path)
         except Exception as e:
             logger.error(f"Echo janitor failed: {e}", exc_info=True)
+
+        # Janitor: act on any checkbox ticked on a currency board
+        try:
+            from openaugi.pipeline.board_janitor import process_changed as process_boards
+
+            process_boards(changed_paths, vault_path)
+        except Exception as e:
+            logger.error(f"Board janitor failed: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Ingest cycle failed: {e}", exc_info=True)
+    finally:
+        store.close()
+
+
+def _zzz_settle(config: dict[str, Any]) -> float:
+    """Seconds a zzz block must sit unchanged before it becomes a task."""
+    from openaugi.pipeline.dispatch import DEFAULT_ZZZ_SETTLE
+
+    return float(config.get("tasks", {}).get("zzz_settle_seconds", DEFAULT_ZZZ_SETTLE))
+
+
+def drain_zzz_queue(vault_path: Path, store: Any, config: dict[str, Any]) -> None:
+    """Turn settled zzz blocks into task files. Never fails the caller."""
+    try:
+        from openaugi.pipeline.dispatch import drain_zzz_queue as _drain
+
+        _drain(store, vault_path, settle_seconds=_zzz_settle(config))
+    except Exception as e:
+        logger.error(f"ZZZ dispatch failed: {e}", exc_info=True)
+
+
+def _drain_tick(vault_path: Path, db_path: str, config: dict[str, Any]) -> None:
+    """Drain the zzz queue outside an ingest cycle.
+
+    Without this, an instruction written just before the vault goes quiet
+    would sit queued until the next file change — the settle window would
+    become "wait for the next edit", which is not a window at all.
+    """
+    from openaugi.store.sqlite import SQLiteStore
+
+    store = SQLiteStore(db_path)
+    try:
+        drain_zzz_queue(vault_path, store, config)
     finally:
         store.close()
 
@@ -172,8 +222,16 @@ def _watch_loop(
     debounce_seconds: float,
 ) -> None:
     """Internal watch loop — runs until handler.stop() is called."""
+    import time
+
+    drain_every = max(5.0, _zzz_settle(config) / 4)
+    last_drain = time.monotonic()
+
     while not handler.stopped:
         if not handler.wait_for_change(timeout=1.0):
+            if time.monotonic() - last_drain >= drain_every:
+                last_drain = time.monotonic()
+                _drain_tick(vault_path, db_path, config)
             continue
 
         # Debounce: wait for quiet period after last change
@@ -190,6 +248,7 @@ def _watch_loop(
         changed = handler.drain()
         if changed:
             _run_ingest_cycle(vault_path, db_path, config, changed)
+        last_drain = time.monotonic()
 
 
 def watch_vault(

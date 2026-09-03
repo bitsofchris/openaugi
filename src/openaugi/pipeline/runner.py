@@ -80,6 +80,11 @@ def run_layer0(
 
     # Block-level incremental: diff entries within each changed file
     blocks_to_insert: list[Block] = []
+    # Entries deleted this cycle. An edit is a delete + an insert, so this is
+    # the only place the pipeline can still see a block's predecessor — the
+    # zzz dispatch hook needs it to tell "instruction was edited" apart from
+    # "new instruction written". See pipeline/dispatch.py.
+    removed_entries: list[Block] = []
     blocks_kept = 0
     blocks_removed = 0
     blocks_added = 0
@@ -115,6 +120,7 @@ def run_layer0(
                         (old_entry.id,),
                     ).fetchone()[0]
                     store.delete_block(old_entry.id)
+                    removed_entries.append(old_entry)
                     blocks_removed += 1
             if dropped_routes:
                 logger.info(
@@ -187,6 +193,7 @@ def run_layer0(
         "files_deleted": len(deleted_paths),
         "stats": stats,
         "new_data_blocks": new_data_blocks,
+        "removed_data_blocks": [b for b in removed_entries if b.kind == "data_block"],
     }
 
 

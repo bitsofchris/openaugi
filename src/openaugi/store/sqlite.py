@@ -721,6 +721,19 @@ class SQLiteStore:
         self.conn.commit()
         return True
 
+    def delete_record(self, collection: str, record_id: str) -> bool:
+        """Drop one record. Returns False if it was already gone.
+
+        Records are workflow state, not knowledge (docs/reference/records.md) —
+        a long-lived collection that only ever grows is a leak, so the callers
+        that keep queues prune their own settled rows.
+        """
+        cur = self.conn.execute(
+            "DELETE FROM records WHERE collection = ? AND id = ?", (collection, record_id)
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
     def get_links_from(self, block_id: str, kind: str | None = None) -> list[Link]:
         """Get outgoing links from a block, optionally filtered by kind."""
         if kind:

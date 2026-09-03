@@ -12,12 +12,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from openaugi.model.block import Block
 from openaugi.pipeline.dispatch import (
+    DISPATCHED,
+    QUEUED,
+    SUPERSEDED,
+    ZZZ_QUEUE_COLLECTION,
     build_task_file,
     dispatch_zzz_blocks,
+    drain_zzz_queue,
+    record_zzz_changes,
     resolve_anchor_refs,
 )
+from openaugi.store.sqlite import SQLiteStore
 
 
 def _make_block(
@@ -279,3 +288,150 @@ class TestReviewCLI:
         assert result.exit_code == 0
         tasks = list((tmp_path / "OpenAugi" / "Tasks").glob("process-the-dashboard-*.md"))
         assert len(tasks) == 1
+
+
+# ── The zzz queue ──────────────────────────────────────────────────────────
+#
+# Regression cover for the 2026-09-01 double dispatch: one instruction, typed
+# in two passes, produced two tasks. See dispatch.py's module docstring.
+
+
+@pytest.fixture
+def store(tmp_path: Path) -> SQLiteStore:
+    s = SQLiteStore(str(tmp_path / "test.db"))
+    yield s
+    s.close()
+
+
+def _ledger(store: SQLiteStore, block_id: str) -> dict:
+    rows = store.list_records(ZZZ_QUEUE_COLLECTION, limit=100)
+    return next(r for r in rows if r["id"] == block_id)
+
+
+def _tasks(vault: Path) -> list[Path]:
+    return sorted((vault / "OpenAugi" / "Tasks").glob("*.md"))
+
+
+def test_zzz_does_not_dispatch_before_it_settles(tmp_path: Path, store: SQLiteStore):
+    block = _make_block("aaa1", "note", zzz=["read this voice"])
+    store.insert_blocks([block])
+
+    record_zzz_changes([block], [], store, tmp_path)
+    assert _ledger(store, "aaa1")["status"] == QUEUED
+
+    # Settle window still open — nothing written.
+    assert drain_zzz_queue(store, tmp_path, settle_seconds=3600) == []
+    assert _tasks(tmp_path) == []
+
+    # Window elapsed — one task, once.
+    assert len(drain_zzz_queue(store, tmp_path, settle_seconds=0)) == 1
+    assert _ledger(store, "aaa1")["status"] == DISPATCHED
+    assert drain_zzz_queue(store, tmp_path, settle_seconds=0) == []
+    assert len(_tasks(tmp_path)) == 1
+
+
+def test_instruction_edited_while_settling_dispatches_once(tmp_path: Path, store: SQLiteStore):
+    """The 2026-09-01 bug, caught inside the settle window."""
+    draft = _make_block("aaa1", "note", zzz=["read this voice"])
+    store.insert_blocks([draft])
+    record_zzz_changes([draft], [], store, tmp_path)
+
+    # Sentence finished: the old block is deleted, a new one inserted.
+    final = _make_block("aaa2", "note", zzz=["read this voice note, then invert"])
+    store.delete_block("aaa1")
+    store.insert_blocks([final])
+    record_zzz_changes([final], [draft], store, tmp_path)
+
+    assert _ledger(store, "aaa1")["status"] == SUPERSEDED
+    written = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+    assert len(written) == 1
+    assert "then invert" in written[0].read_text()
+
+
+def test_edit_after_dispatch_supersedes_the_launched_task(tmp_path: Path, store: SQLiteStore):
+    """The 2026-09-01 bug as it actually happened — 11 minutes apart, so the
+    draft had already become a task. The successor retires it."""
+    draft = _make_block("aaa1", "note", zzz=["read this voice"])
+    store.insert_blocks([draft])
+    record_zzz_changes([draft], [], store, tmp_path)
+    (first,) = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+
+    final = _make_block("aaa2", "note", zzz=["read this voice note, then invert"])
+    store.delete_block("aaa1")
+    store.insert_blocks([final])
+    record_zzz_changes([final], [draft], store, tmp_path)
+
+    assert "status: superseded" in first.read_text()
+    assert "Superseded:" in first.read_text()
+
+    (second,) = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+    assert "then invert" in second.read_text()
+    # Two files on disk, but only one live task — the draft is retired.
+    assert len(_tasks(tmp_path)) == 2
+
+
+def test_deleting_a_zzz_line_before_dispatch_writes_no_task(tmp_path: Path, store: SQLiteStore):
+    block = _make_block("aaa1", "note", zzz=["never mind"])
+    store.insert_blocks([block])
+    record_zzz_changes([block], [], store, tmp_path)
+
+    store.delete_block("aaa1")
+    record_zzz_changes([], [block], store, tmp_path)
+
+    assert _ledger(store, "aaa1")["status"] == SUPERSEDED
+    assert drain_zzz_queue(store, tmp_path, settle_seconds=0) == []
+    assert _tasks(tmp_path) == []
+
+
+def test_block_that_vanishes_between_cycles_is_dropped(tmp_path: Path, store: SQLiteStore):
+    """Belt and braces: if the removal is never reported, the drain still
+    refuses to dispatch an instruction that is no longer in the vault."""
+    block = _make_block("aaa1", "note", zzz=["read this voice"])
+    store.insert_blocks([block])
+    record_zzz_changes([block], [], store, tmp_path)
+    store.delete_block("aaa1")
+
+    assert drain_zzz_queue(store, tmp_path, settle_seconds=0) == []
+    assert _ledger(store, "aaa1")["reason"] == "vanished"
+
+
+def test_two_separate_instructions_in_one_note_both_dispatch(tmp_path: Path, store: SQLiteStore):
+    a = _make_block("aaa1", "one", zzz=["first thing"])
+    b = _make_block("bbb1", "two", zzz=["second thing"])
+    store.insert_blocks([a, b])
+    record_zzz_changes([a, b], [], store, tmp_path)
+
+    assert len(drain_zzz_queue(store, tmp_path, settle_seconds=0)) == 2
+
+
+def test_unrelated_removal_does_not_supersede(tmp_path: Path, store: SQLiteStore):
+    """A block removed in the same cycle that never owed us a task must not
+    consume the pairing slot of a genuinely new instruction."""
+    plain = _make_block("old1", "some prose with no instruction")
+    fresh = _make_block("aaa1", "note", zzz=["do the thing"])
+    store.insert_blocks([fresh])
+    record_zzz_changes([fresh], [plain], store, tmp_path)
+
+    assert _ledger(store, "aaa1")["status"] == QUEUED
+    assert len(drain_zzz_queue(store, tmp_path, settle_seconds=0)) == 1
+
+
+def test_supersede_finds_the_task_after_the_watcher_renames_it(tmp_path: Path, store: SQLiteStore):
+    """Hydration renames the file to TASK-<id>.md, so the name in the ledger
+    goes stale. `source_block_id` is what we match on."""
+    from openaugi.agents.task_watcher import hydrate_note
+
+    draft = _make_block("aaa1", "note", zzz=["read this voice"])
+    store.insert_blocks([draft])
+    record_zzz_changes([draft], [], store, tmp_path)
+    (first,) = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+
+    _, _, renamed = hydrate_note(first)
+    assert renamed != first and renamed.name.startswith("TASK-")
+
+    final = _make_block("aaa2", "note", zzz=["read this voice note, then invert"])
+    store.delete_block("aaa1")
+    store.insert_blocks([final])
+    record_zzz_changes([final], [draft], store, tmp_path)
+
+    assert "status: superseded" in renamed.read_text()

@@ -9,20 +9,67 @@ launches Claude Code sessions in tmux. This module is the bridge between
 passive ingest and active agent work.
 
 No LLM calls. No classification. Just deterministic file creation.
+
+## Why dispatch is queued rather than immediate
+
+A block's identity is the hash of its raw text *including* the `zzz` line
+(adapters/splitter.py). So finishing a half-written instruction is not an
+update — it deletes one block and inserts another, and a hook that fires on
+"new block with a zzz" fires twice for one instruction. That is exactly what
+happened on 2026-09-01: `read this voice` dispatched at 20:41 while the
+sentence was still being typed, and the finished sentence dispatched again at
+20:52, giving two agents the same voice note with different instructions.
+
+Two mechanisms fix it, and both are needed because they cover different gaps:
+
+1. **Settle window.** A zzz block is queued, not dispatched. It only becomes a
+   task once it has survived `settle` seconds unchanged. This absorbs typing
+   and dictation pauses, where the discarded draft never becomes a task at all.
+2. **Supersession.** Past the settle window the draft has already launched, so
+   waiting cannot help. `run_layer0` reports the entries it deleted this cycle,
+   which is the one place a block's predecessor is still visible: a document
+   that drops a queued/dispatched zzz block and adds a new one in the same
+   cycle has *edited* an instruction, not written a second one. The successor
+   supersedes it — the old task is marked and its tmux session killed, so the
+   instruction you finished writing is the one that runs.
+
+The ledger lives in the `records` table under the `zzz_queue` collection
+(docs/reference/records.md) — workflow state, droppable, pruned once settled.
+It also makes dispatch idempotent across restarts and re-ingests: a block id
+that has been dispatched once never dispatches again.
 """
 
 from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime
+import subprocess
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from openaugi.model.block import Block
+
+if TYPE_CHECKING:
+    from openaugi.store.sqlite import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TASKS_FOLDER = "OpenAugi/Tasks"
+
+# Ledger of every zzz instruction this pipeline has seen, keyed by block id.
+ZZZ_QUEUE_COLLECTION = "zzz_queue"
+# Seconds a zzz block must sit unchanged before it becomes a task. Long enough
+# to cover a dictation pause mid-sentence, short enough that a deliberate zzz
+# still feels immediate.
+DEFAULT_ZZZ_SETTLE = 120.0
+# Settled ledger rows are kept this long for auditing, then pruned.
+LEDGER_RETENTION_DAYS = 30
+
+# Ledger statuses.
+QUEUED = "queued"  # seen, waiting out the settle window
+DISPATCHED = "dispatched"  # task file written
+SUPERSEDED = "superseded"  # the instruction was edited or deleted before/after dispatch
 DEFAULT_CAPTURE_FOLDER = "OpenAugi/Capture"  # mobile daily-note writer (server/dailyNote.ts)
 
 # Obsidian block link into a capture daily note: [[YYYY-MM-DD#^augi-<id8>]].
@@ -204,21 +251,9 @@ def dispatch_zzz_blocks(
 
     written: list[Path] = []
 
-    for block in blocks:
-        if block.kind != "data_block":
-            continue
-        zzz = block.metadata.get("zzz_instructions")
-        if not zzz:
-            continue
-
-        title = _derive_title(block)
-        slug = _slugify(title) or "zzz-task"
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = f"{slug}-{timestamp}.md"
-        filepath = tasks_dir / filename
-
+    for block in zzz_blocks(blocks):
         task_content = build_task_file(block, vault_path=vault)
-        filepath.write_text(task_content, encoding="utf-8")
+        filepath = _write_task_file(tasks_dir, _derive_title(block), task_content)
         logger.info("Dispatched zzz task: %s → %s", block.id[:12], filepath.name)
         written.append(filepath)
 
@@ -226,3 +261,281 @@ def dispatch_zzz_blocks(
         logger.info("Dispatched %d zzz task(s)", len(written))
 
     return written
+
+
+def zzz_blocks(blocks: list[Block]) -> list[Block]:
+    """The data blocks in `blocks` that carry zzz instructions, in order."""
+    return [b for b in blocks if b.kind == "data_block" and b.metadata.get("zzz_instructions")]
+
+
+def _write_task_file(tasks_dir: Path, title: str, task_content: str) -> Path:
+    """Write one pending task file, named from its title plus a timestamp."""
+    slug = _slugify(title) or "zzz-task"
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    filepath = tasks_dir / f"{slug}-{timestamp}.md"
+    filepath.write_text(task_content, encoding="utf-8")
+    return filepath
+
+
+# ── The zzz queue ──────────────────────────────────────────────────────────
+#
+# See the module docstring for why dispatch is queued instead of immediate.
+
+
+def _now() -> datetime:
+    return datetime.now()
+
+
+def _load_ledger(store: SQLiteStore) -> dict[str, dict]:
+    """Every zzz ledger row, keyed by block id."""
+    rows = store.list_records(ZZZ_QUEUE_COLLECTION, limit=100_000)
+    return {r["id"]: r for r in rows}
+
+
+def record_zzz_changes(
+    new_blocks: list[Block],
+    removed_blocks: list[Block],
+    store: SQLiteStore,
+    vault_path: str | Path,
+    tasks_folder: str = DEFAULT_TASKS_FOLDER,
+) -> None:
+    """Queue this cycle's new zzz instructions, superseding the ones they replace.
+
+    `removed_blocks` are the entries `run_layer0` deleted in the same cycle.
+    Within one document, a dropped zzz block paired with a fresh one is an
+    *edit* of a single instruction — the pair is matched in document order, so
+    the common case (one instruction, edited) matches exactly. Unpaired blocks
+    on either side are genuinely new or genuinely deleted.
+    """
+    vault = Path(vault_path)
+    tasks_dir = vault / tasks_folder
+    ledger = _load_ledger(store)
+    now = _now()
+    stamp = now.isoformat(timespec="seconds")
+
+    def _by_doc(blocks: list[Block]) -> dict[str, list[Block]]:
+        out: dict[str, list[Block]] = {}
+        for b in blocks:
+            out.setdefault(b.metadata.get("source_path", ""), []).append(b)
+        return out
+
+    fresh = _by_doc(zzz_blocks(new_blocks))
+    # A removed block was a zzz block iff we have a ledger row for it. That
+    # avoids depending on metadata surviving the store round-trip, and it is
+    # the same question we actually care about: did this block owe us a task?
+    gone = _by_doc([b for b in removed_blocks if b.id in ledger])
+
+    superseded: set[str] = set()
+    for source_path, olds in gone.items():
+        news = fresh.get(source_path, [])
+        for old, new in zip(olds, news, strict=False):
+            _supersede(store, ledger, tasks_dir, old.id, new.id, stamp)
+            superseded.add(old.id)
+        for old in olds[len(news) :]:
+            # The zzz line was deleted outright, not rewritten.
+            row = ledger[old.id]
+            if row.get("status") == QUEUED:
+                # Never became a task — drop it silently.
+                store.update_record(
+                    ZZZ_QUEUE_COLLECTION,
+                    old.id,
+                    {"status": SUPERSEDED, "reason": "deleted"},
+                    stamp,
+                )
+                logger.info("zzz %s dropped before dispatch — instruction deleted", old.id[:12])
+            else:
+                # Already running. Deleting the line after the fact is not a
+                # cancel signal, so the task is left alone.
+                logger.info(
+                    "zzz %s deleted after dispatch — leaving its task running", old.id[:12]
+                )
+            superseded.add(old.id)
+
+    for source_path, news in fresh.items():
+        for block in news:
+            if block.id in ledger:
+                continue  # already seen — never re-dispatch the same block
+            store.write_record(
+                ZZZ_QUEUE_COLLECTION,
+                block.id,
+                {
+                    "status": QUEUED,
+                    "source_path": source_path,
+                    "title": _derive_title(block),
+                    "task_content": build_task_file(block, vault_path=vault),
+                },
+                stamp,
+            )
+            logger.info(
+                "zzz %s queued from %s (settling)", block.id[:12], source_path or "unknown"
+            )
+
+
+def _supersede(
+    store: SQLiteStore,
+    ledger: dict[str, dict],
+    tasks_dir: Path,
+    old_id: str,
+    new_id: str,
+    stamp: str,
+) -> None:
+    """Retire the ledger row and task for `old_id`, replaced by `new_id`."""
+    row = ledger.get(old_id, {})
+    store.update_record(
+        ZZZ_QUEUE_COLLECTION,
+        old_id,
+        {"status": SUPERSEDED, "reason": "edited", "superseded_by": new_id},
+        stamp,
+    )
+    if row.get("status") != DISPATCHED:
+        logger.info(
+            "zzz %s superseded by %s before dispatch — no task was written",
+            old_id[:12],
+            new_id[:12],
+        )
+        return
+    path = _find_task_file(tasks_dir, row.get("task_file"), old_id)
+    if path is None:
+        logger.warning("No task file found for superseded zzz %s", old_id[:12])
+        return
+    _retire_task_file(path, new_id)
+
+
+def _find_task_file(tasks_dir: Path, filename: str | None, block_id: str) -> Path | None:
+    """Locate a dispatched task file.
+
+    The name it was written under is only a hint: the task watcher renames the
+    file to `TASK-<id>.md` when it hydrates it. `source_block_id` is the field
+    that survives, so that is what we match on when the name has moved.
+    """
+    from openaugi.agents.task_watcher import parse_note
+
+    if filename:
+        direct = tasks_dir / filename
+        if direct.exists():
+            return direct
+    if not tasks_dir.is_dir():
+        return None
+    for candidate in sorted(tasks_dir.glob("*.md")):
+        try:
+            fm, _ = parse_note(candidate.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if fm.get("source_block_id") == block_id:
+            return candidate
+    return None
+
+
+def _retire_task_file(path: Path, new_id: str) -> None:
+    """Mark a launched task superseded and kill its tmux session.
+
+    The Claude transcript stays on disk and the file records why it stopped —
+    only the live session is torn down, so the instruction that replaced this
+    one is the only one still running.
+    """
+    from openaugi.agents.task_watcher import detect_tmux, parse_note, rebuild_note
+
+    if not path.exists():
+        logger.warning("Superseded task file is gone: %s", path)
+        return
+    try:
+        fm, body = parse_note(path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.error("Could not read task file %s: %s", path, e)
+        return
+
+    if fm.get("status") == "done":
+        logger.info("Task %s already done — not retiring it", path.name)
+        return
+
+    session = fm.get("tmux_session")
+    fm["status"] = "superseded"
+    fm["superseded_by_block"] = new_id
+    body = body.rstrip() + (
+        f"\n\n> Superseded: the `zzz` instruction behind this task was edited "
+        f"before it finished. Block `{new_id[:12]}` carries the final wording and "
+        f"was dispatched as its own task.\n"
+    )
+    path.write_text(rebuild_note(fm, body), encoding="utf-8")
+
+    if session:
+        try:
+            tmux = detect_tmux()
+        except FileNotFoundError:
+            return
+        if (
+            subprocess.run([tmux, "has-session", "-t", session], capture_output=True).returncode
+            == 0
+        ):
+            subprocess.run([tmux, "kill-session", "-t", session], check=False)
+            logger.info("Killed superseded task session: %s", session)
+
+
+def drain_zzz_queue(
+    store: SQLiteStore,
+    vault_path: str | Path,
+    settle_seconds: float = DEFAULT_ZZZ_SETTLE,
+    tasks_folder: str = DEFAULT_TASKS_FOLDER,
+) -> list[Path]:
+    """Write task files for queued zzz blocks that have settled.
+
+    Safe to call on a timer with nothing new to do — an instruction written
+    just before the vault went quiet still matures without another file event.
+    """
+    vault = Path(vault_path)
+    tasks_dir = vault / tasks_folder
+    now = _now()
+    stamp = now.isoformat(timespec="seconds")
+    written: list[Path] = []
+
+    for row in store.list_records(ZZZ_QUEUE_COLLECTION, where={"status": QUEUED}, limit=1000):
+        block_id = row["id"]
+        if store.get_block(block_id) is None:
+            # Edited or deleted between cycles and we never saw the removal.
+            store.update_record(
+                ZZZ_QUEUE_COLLECTION, block_id, {"status": SUPERSEDED, "reason": "vanished"}, stamp
+            )
+            logger.info("zzz %s left the vault before settling — dropped", block_id[:12])
+            continue
+        if (now - _parse_stamp(row["created_at"])).total_seconds() < settle_seconds:
+            continue
+
+        tasks_dir.mkdir(parents=True, exist_ok=True)
+        filepath = _write_task_file(tasks_dir, row.get("title") or "zzz task", row["task_content"])
+        store.update_record(
+            ZZZ_QUEUE_COLLECTION,
+            block_id,
+            {"status": DISPATCHED, "task_file": filepath.name},
+            stamp,
+        )
+        logger.info("Dispatched zzz task: %s → %s", block_id[:12], filepath.name)
+        written.append(filepath)
+
+    if written:
+        logger.info("Dispatched %d zzz task(s)", len(written))
+    _prune_ledger(store, now)
+    return written
+
+
+def _parse_stamp(value: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        # Unreadable timestamp — treat as ancient so the row settles rather
+        # than sticking in the queue forever.
+        return datetime.min
+
+
+def _prune_ledger(store: SQLiteStore, now: datetime) -> int:
+    """Drop settled ledger rows past the retention window."""
+    cutoff = (now - timedelta(days=LEDGER_RETENTION_DAYS)).isoformat(timespec="seconds")
+    dropped = 0
+    for status in (DISPATCHED, SUPERSEDED):
+        for row in store.list_records(
+            ZZZ_QUEUE_COLLECTION, where={"status": status}, limit=100_000
+        ):
+            if row["updated_at"] < cutoff:
+                dropped += store.delete_record(ZZZ_QUEUE_COLLECTION, row["id"])
+    if dropped:
+        logger.debug("Pruned %d settled zzz ledger row(s)", dropped)
+    return dropped

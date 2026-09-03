@@ -63,6 +63,7 @@ src/openaugi/
 │   ├── dispatch.py        # Post-ingest: zzz instructions → task files in OpenAugi/Tasks/
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
 │   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar + lens list (docs/reference/lenses.md)
+│   ├── board_janitor.py   # Currency board write-back — checkboxes → .board-state.json (docs/reference/currency-board.md)
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
 │   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch
 ├── render/                # M6 — static HTML surfaces from the DB (no server)
@@ -154,6 +155,9 @@ you write `zzz: <instruction>` in a vault note
   → file watcher detects change (30s debounce)
   → ingest: parse, split, extract blocks + tags + links
   → pipeline/dispatch.py: blocks with zzz_instructions
+    → queue them in the `zzz_queue` ledger (records table)
+    → supersede any instruction this cycle's edit replaced
+    → drain: blocks unchanged for 120s become tasks
     → write task file to OpenAugi/Tasks/<slug>.md (status: pending)
   → agents/task_watcher.py picks it up (5s poll, 30s settle)
     → hydrate: assign task_id, flip status→active, inject ## Session
@@ -164,6 +168,30 @@ you write `zzz: <instruction>` in a vault note
   → writes output to OpenAugi/ tagged #human-review
   → marks task file status: done
 ```
+
+**Dispatch is queued, not immediate.** A block's identity is the hash of its
+raw text *including* the `zzz` line, so finishing a half-written instruction
+deletes one block and inserts another — and a hook that fires on "new block
+with a zzz" fires twice for one instruction. (It did, on 2026-09-01: a task
+launched on `read this voice` at 20:41 and another on the finished sentence at
+20:52.) Two mechanisms, covering different gaps:
+
+- **Settle window** (`tasks.zzz_settle_seconds`, default 120) — a zzz block is
+  queued and only becomes a task once it has survived unchanged. Drafts
+  abandoned inside the window never become tasks. The watcher also drains on a
+  timer, so an instruction written just before the vault goes quiet still fires.
+- **Supersession** — past the window the draft has already launched, so waiting
+  cannot help. `run_layer0` reports the entries it deleted, which is the one
+  place a block's predecessor is still visible; a document that drops a known
+  zzz block and adds a new one in the same cycle has *edited* an instruction.
+  The old task is marked `status: superseded` and its tmux session killed, so
+  the wording you finished is the only one still running. The transcript stays
+  on disk.
+
+The ledger is the `zzz_queue` collection in the `records` table
+([docs/reference/records.md](docs/reference/records.md)) — droppable workflow
+state, pruned 30 days after a row settles. It also makes dispatch idempotent
+across restarts: a block id dispatched once never dispatches again.
 
 Per-block `zzz:` lines are extracted by the vault adapter into
 `metadata["zzz_instructions"]` (a list, one item per line; stripped from
@@ -197,6 +225,7 @@ See [docs/plans/m0.md](docs/plans/m0.md) § Key Design Decisions for full ration
 - **Default local embeddings**: sentence-transformers, no API key. Users upgrade via config.
 - **Proactive echo**: the one pass that runs unasked — new daily-note blocks are matched against the user's own prior writing and, when it would genuinely help, appended to a dated Augi Log with promote/feedback checkboxes. Post-ingest hook in the watcher, sibling of zzz dispatch. See [docs/reference/proactive-echo.md](docs/reference/proactive-echo.md).
 - **`get_context` dedup + MMR**: Over-fetches 3× candidates, collapses near-duplicates via cosine grouping, re-ranks for diversity before returning. See [docs/reference/MCP_SERVER.md](docs/reference/MCP_SERVER.md) for tuning.
+- **Currency board**: the one surface that promises to be current — everything else stays append-only truth. A scheduled daily board (left off → next moves → ≤3 judgment items → drift), answered with done/not-doing/someday checkboxes that `board_janitor.py` turns into state the next board must honor. See [docs/reference/currency-board.md](docs/reference/currency-board.md).
 
 ## Running
 

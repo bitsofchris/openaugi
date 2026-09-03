@@ -23,6 +23,50 @@ call instead of a browse plus a grep.
 date fallback read `st_mtime`, which stamped every later edit of an undated MOC
 onto its blocks. `st_birthtime` is preferred where the OS has it.
 
+**The currency board — the one surface that promises to be current.**
+Everything else in OpenAugi is append-only truth that never claims to be
+up to date; the board is the deliberate exception, which is what makes the
+promise keepable. Built unprompted at 06:00 into
+`OpenAugi/Board/<date> - Board.md`: where each thread left off, 1–2 concrete
+next moves per lane, at most three items needing human judgment, and what
+drifted — threads whose "active" status the user's own recent writing
+contradicts.
+
+The half that makes it survive is the answer channel. Every item carries
+three checkboxes (`done` / `not doing` / `someday`) and an optional
+`aaa: <why>` comment line. `pipeline/board_janitor.py` — a sibling of
+`echo_janitor.py`, wired into the same watcher cycle — turns those ticks
+into `OpenAugi/Board/.board-state.json`, appends signals to the shared
+`feedback-log.ndjson` stream, and rewrites answered lines into
+confirmations. The next board reads that state and **never re-proposes a
+retired item**, honoring a `not doing` reason literally. Untouched items
+are carried with an `appearances` counter, so an item on its third board
+earns one plain staleness line instead of a repeated nag.
+
+Scheduling adds no daemon: a launchd job runs `scripts/write-board-task.sh`,
+which writes a task file the existing `task_watcher` picks up — so this does
+not wait on the dormant `every <period>` lens-trigger gate. The intent lives
+in a vault lens (`OpenAugi/AGENT/lenses/currency-board.md`), not in code.
+Supersedes the mirror-only `morning-briefing` lens. See
+[docs/reference/currency-board.md](docs/reference/currency-board.md).
+
+**One `zzz` instruction now dispatches one task.** Editing a `zzz` line used to
+fire it again: block identity is the hash of the raw text including that line,
+so finishing a half-typed instruction is a delete plus an insert, and the
+post-ingest hook saw a brand-new block with a brand-new instruction. Writing
+one sentence in two passes launched two agents on it.
+
+Dispatch is now queued through a `zzz_queue` ledger. A zzz block becomes a task
+only after it has sat unchanged for `tasks.zzz_settle_seconds` (default 120), so
+drafts abandoned inside that window never become tasks at all. Past the window
+the draft has already launched, so `run_layer0` now reports the entries it
+deleted and a rewritten instruction *supersedes* its predecessor — the old task
+file is marked `status: superseded` and its tmux session killed, leaving the
+final wording as the only one running. Dispatch is also idempotent across
+restarts now: a block id dispatched once never dispatches again.
+
+`SQLiteStore.delete_record` was added so the ledger prunes settled rows.
+
 ## 0.2.1 — 2026-08-21
 
 **Dependency pins so the package installs.** `mcp>=1.0` was an open range and
