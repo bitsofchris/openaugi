@@ -66,6 +66,7 @@ copy to change how the agent handles tasks — not this Python code.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -454,6 +455,93 @@ def launch_tmux(
     return True
 
 
+# ── Duplicate suppression ──────────────────────────────────────────────────
+
+# Durable record of every task fingerprint that has been launched. Lives
+# outside the vault on purpose: a re-index, a restore, or a stray second copy
+# of the notes must not be able to resurrect work that already ran.
+#
+# 2026-09-03: a Claude Code worktree checked out a second copy of the vault
+# under .claude/worktrees/. Ingest saw 6011 "new" files, every historical
+# `zzz:` marker resurfaced as a fresh pending task, and 104 headless agents
+# launched at once against notes that had already been processed. Filenames,
+# paths and block ids all differed between the two copies, so nothing upstream
+# caught it. The only thing stable across the duplicate was the instruction
+# text itself — so that is what we hash.
+LEDGER_PATH = Path.home() / ".openaugi" / "task-ledger.json"
+
+INSTRUCTION_RE = re.compile(r"^##\s+User instruction\s*$(.*?)(?=^##\s|\Z)", re.M | re.S)
+
+
+def _instruction_text(body: str) -> str:
+    """The user's own words from a task note, normalized for hashing.
+
+    Falls back to the whole body when the section is missing, so a malformed
+    note still gets a distinct identity rather than colliding with every other
+    malformed note on the empty string.
+    """
+    m = INSTRUCTION_RE.search(body)
+    raw = m.group(1) if m else body
+    # Drop blockquote markers and collapse whitespace — the same instruction
+    # re-rendered by a later ingest pass must hash identically.
+    raw = re.sub(r"^\s*>\s?", "", raw, flags=re.M)
+    return re.sub(r"\s+", " ", raw).strip()
+
+
+def task_fingerprint(fm: dict, body: str) -> str:
+    """Stable identity for a task: source note title + the instruction text.
+
+    Deliberately excludes source_block_id and filename. Re-ingesting the same
+    note from a different path assigns a new block id and a new filename —
+    precisely the case that flooded the watcher — so neither can be part of
+    the identity. What a human means by "the same task" is the same words
+    against the same note.
+    """
+    note = str(fm.get("source_note") or "").strip()
+    return hashlib.sha256(f"{note}\n{_instruction_text(body)}".encode()).hexdigest()
+
+
+def load_ledger() -> dict[str, dict]:
+    """Read the fingerprint ledger. Missing or corrupt reads as empty.
+
+    An unreadable ledger must not stop the watcher — it degrades to the old
+    behavior (may re-run a task) rather than halting dispatch entirely.
+    """
+    try:
+        return json.loads(LEDGER_PATH.read_text())
+    except FileNotFoundError:
+        return {}
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning("Task ledger unreadable (%s) — treating as empty", e)
+        return {}
+
+
+def record_fingerprint(fingerprint: str, task_id: str) -> None:
+    """Record that `fingerprint` has been dispatched."""
+    ledger = load_ledger()
+    ledger[fingerprint] = {
+        "task_id": task_id,
+        "launched": datetime.now().isoformat(timespec="seconds"),
+    }
+    try:
+        LEDGER_PATH.parent.mkdir(parents=True, exist_ok=True)
+        # Write-then-rename: a watcher killed mid-write never leaves a
+        # truncated ledger, which would silently un-remember every task.
+        tmp = LEDGER_PATH.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(ledger, indent=2, sort_keys=True))
+        tmp.replace(LEDGER_PATH)
+    except OSError as e:
+        logger.error("Could not write task ledger: %s", e)
+
+
+def mark_duplicate(filepath: Path, prior: dict) -> None:
+    """Flip a task note to `status: duplicate` so scan_pending stops seeing it."""
+    fm, body = parse_note(filepath.read_text())
+    fm["status"] = "duplicate"
+    fm["duplicate_of"] = prior.get("task_id", "unknown")
+    filepath.write_text(rebuild_note(fm, body))
+
+
 # ── Main loop ──────────────────────────────────────────────────────────────
 
 
@@ -502,6 +590,20 @@ def dispatch_task(
     """
     logger.info("Found pending task: %s", filepath.name)
 
+    # Check before hydrating: hydration renames the file and flips it to
+    # active, so a duplicate caught later would already look like real work.
+    fingerprint = task_fingerprint(*parse_note(filepath.read_text()))
+    prior = load_ledger().get(fingerprint)
+    if prior:
+        logger.warning(
+            "Skipping %s — same instruction already dispatched as %s on %s",
+            filepath.name,
+            prior.get("task_id"),
+            prior.get("launched"),
+        )
+        mark_duplicate(filepath, prior)
+        return None
+
     task_id, session_name, new_path = hydrate_note(filepath)
     logger.info("Hydrated → %s", task_id)
 
@@ -535,6 +637,7 @@ def dispatch_task(
     launched = launch_tmux(tmux, claude, session_name, prompt, working_dir=work_dir)
     if launched:
         logger.info("Launched tmux session: %s", session_name)
+        record_fingerprint(fingerprint, task_id)
         return task_id
     logger.warning("Skipped launch for %s", task_id)
     return None
