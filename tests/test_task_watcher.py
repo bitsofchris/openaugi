@@ -15,6 +15,19 @@ import pytest
 
 from openaugi.agents import task_watcher as tw
 
+
+@pytest.fixture(autouse=True)
+def _isolate_ledger(tmp_path, monkeypatch):
+    """Never let a test touch the real ~/.openaugi/task-ledger.json.
+
+    dispatch_task records a fingerprint on every successful launch, so any
+    test that dispatches — including ones written before dedup existed —
+    would otherwise write into the developer's own ledger and teach it to
+    skip real tasks.
+    """
+    monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "ledger.json")
+
+
 # ── Frontmatter parsing ────────────────────────────────────────────────────
 
 
@@ -644,3 +657,110 @@ class TestRepoNoteLocation:
         # notice — the message has to be actionable.
         assert "OpenAugi/AGENT/Repos.md" in caplog.text
         assert "OpenAugi/Repos.md" in caplog.text
+
+
+# ── Duplicate suppression ──────────────────────────────────────────────────
+
+
+BODY = """# a task
+
+## User instruction
+
+> chunk that note and split it
+
+## Task
+
+Process the user instruction above.
+"""
+
+
+class TestTaskFingerprint:
+    def test_same_instruction_same_note_hashes_equal(self):
+        fm = {"source_note": "[[2026-08-27 - High Note]]"}
+        assert tw.task_fingerprint(fm, BODY) == tw.task_fingerprint(dict(fm), BODY)
+
+    def test_block_id_and_filename_do_not_affect_identity(self):
+        """The worktree duplicate got fresh block ids — identity must ignore them."""
+        a = {"source_note": "[[n]]", "source_block_id": "aaa", "task_id": "TASK-1"}
+        b = {"source_note": "[[n]]", "source_block_id": "bbb", "task_id": "TASK-2"}
+        assert tw.task_fingerprint(a, BODY) == tw.task_fingerprint(b, BODY)
+
+    def test_whitespace_and_blockquote_rerender_hashes_equal(self):
+        loose = BODY.replace(
+            "> chunk that note and split it", ">   chunk that note\n>   and split it"
+        )
+        assert tw.task_fingerprint({}, BODY) == tw.task_fingerprint({}, loose)
+
+    def test_different_instruction_differs(self):
+        other = BODY.replace("chunk that note and split it", "do something else")
+        assert tw.task_fingerprint({}, BODY) != tw.task_fingerprint({}, other)
+
+    def test_different_source_note_differs(self):
+        a = {"source_note": "[[note A]]"}
+        b = {"source_note": "[[note B]]"}
+        assert tw.task_fingerprint(a, BODY) != tw.task_fingerprint(b, BODY)
+
+    def test_missing_instruction_section_falls_back_to_body(self):
+        """Two malformed notes must not collide on the empty string."""
+        assert tw.task_fingerprint({}, "one") != tw.task_fingerprint({}, "two")
+
+
+class TestLedger:
+    def test_missing_ledger_reads_empty(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "nope.json")
+        assert tw.load_ledger() == {}
+
+    def test_corrupt_ledger_reads_empty(self, tmp_path, monkeypatch):
+        p = tmp_path / "ledger.json"
+        p.write_text("{not json")
+        monkeypatch.setattr(tw, "LEDGER_PATH", p)
+        assert tw.load_ledger() == {}
+
+    def test_record_then_load_roundtrip(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "sub" / "ledger.json")
+        tw.record_fingerprint("abc123", "TASK-2026-09-03-thing")
+        assert tw.load_ledger()["abc123"]["task_id"] == "TASK-2026-09-03-thing"
+
+    def test_record_leaves_no_temp_file(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "ledger.json")
+        tw.record_fingerprint("abc", "TASK-1")
+        assert list(tmp_path.iterdir()) == [tmp_path / "ledger.json"]
+
+
+class TestDispatchSkipsDuplicates:
+    def _task(self, tmp_path):
+        d = tmp_path / "Tasks"
+        d.mkdir()
+        f = d / "a-task.md"
+        f.write_text("---\nstatus: pending\nsource_note: '[[n]]'\n---\n" + BODY)
+        return f
+
+    def test_second_dispatch_of_same_instruction_is_skipped(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "ledger.json")
+        monkeypatch.setattr(tw, "launch_tmux", lambda *a, **k: True)
+        monkeypatch.setattr(tw, "write_context_file", lambda *a, **k: Path("/dev/null"))
+
+        first = self._task(tmp_path)
+        assert tw.dispatch_task(first, "tmux", "claude", {}, vault_path=tmp_path)
+
+        # Same instruction arriving again under a different filename — the
+        # worktree-duplicate case.
+        second = tmp_path / "Tasks" / "a-task-copy.md"
+        second.write_text("---\nstatus: pending\nsource_note: '[[n]]'\n---\n" + BODY)
+        assert tw.dispatch_task(second, "tmux", "claude", {}, vault_path=tmp_path) is None
+
+        fm, _ = tw.parse_note(second.read_text())
+        assert fm["status"] == "duplicate"
+        assert fm["duplicate_of"].startswith("TASK-")
+
+    def test_duplicate_is_no_longer_pending(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "ledger.json")
+        monkeypatch.setattr(tw, "launch_tmux", lambda *a, **k: True)
+        monkeypatch.setattr(tw, "write_context_file", lambda *a, **k: Path("/dev/null"))
+
+        tw.dispatch_task(self._task(tmp_path), "tmux", "claude", {}, vault_path=tmp_path)
+        dup = tmp_path / "Tasks" / "dup.md"
+        dup.write_text("---\nstatus: pending\nsource_note: '[[n]]'\n---\n" + BODY)
+        tw.dispatch_task(dup, "tmux", "claude", {}, vault_path=tmp_path)
+
+        assert dup not in tw.scan_pending(tmp_path / "Tasks", settle=0)
