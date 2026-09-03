@@ -134,6 +134,18 @@ deletes a file. The master box becomes `- ✓ processed <time>`.
   the block's features (folder, tags, nearest notes, whether it had an
   `aaa:`). This is the history later proposals are biased by.
 
+### 8. Priors — how it learns
+
+`route.load_priors` reads every `source: routing` line of the feedback log
+and tallies, per target and per (folder, verb), how often that candidate was
+on the table and how often it was chosen (an `undo` reverses the choice it
+undoes). `Priors.bonus` turns that into a nudge: `(rate − 0.5)`, weighted by
+how many decisions back it (full trust at 5), capped at ±0.1. The nudge is
+applied **only to retrieval-sourced suggestions**, so it can reorder what
+augi guessed but never lift a guess above his own link or `aaa:` hint. No
+model, no training; `openaugi routing stats` prints the tallies and the logs
+still waiting.
+
 ## Configuration
 
 | Key | Default | Effect |
@@ -142,6 +154,8 @@ deletes a file. The master box becomes `- ✓ processed <time>`.
 | `[routing] extend_writes_note` | `true` | `false` makes extend a plain link |
 | `[routing] confident_margin` | `1.0` | z-margin a retrieval-only `file under` needs to auto-apply |
 | `[models.llm]` | unset | The judge; without it proposals are purely deterministic |
+
+CLI: `openaugi routing stats [--path VAULT] [--db DB]`.
 
 ## Known limits
 
@@ -152,7 +166,6 @@ deletes a file. The master box becomes `- ✓ processed <time>`.
 - Extend copies text; a later edit in the daily note does not propagate.
 - The registry prefilter needs "MOC" in the note title. A registered
   container named otherwise is still reachable by `aaa:` and wikilinks.
-- Priors from the feedback log are not yet applied (plan step 7).
 
 ## Files
 

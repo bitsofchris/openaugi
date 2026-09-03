@@ -113,6 +113,90 @@ class Proposal:
         return self.suggestions[0] if self.suggestions else None
 
 
+# ── Priors: what his history says about where things go ───────────
+
+FEEDBACK_LOG = "OpenAugi/Capture/feedback-log.ndjson"
+#: Largest bonus or penalty a prior may add. Priors only ever reorder
+#: retrieval-sourced suggestions (scores 0..0.7); they never lift one above
+#: his own link (0.7+) or hint (1.0).
+PRIOR_WEIGHT = 0.1
+#: A rate is trusted in proportion to how many decisions back it, up to this many.
+PRIOR_FULL_TRUST_AT = 5
+
+
+@dataclass
+class Priors:
+    """Acceptance rates from the routing feedback log. Deterministic, dumpable."""
+
+    targets: dict[str, tuple[int, int]] = field(default_factory=dict)  # title → (chosen, seen)
+    verbs: dict[tuple[str, str], tuple[int, int]] = field(default_factory=dict)  # (folder, verb)
+    signals: dict[str, int] = field(default_factory=dict)
+    decisions: int = 0
+
+    @staticmethod
+    def _rate(chosen: int, seen: int) -> float | None:
+        return None if seen == 0 else chosen / seen
+
+    def target_rate(self, title: str) -> tuple[float | None, int]:
+        chosen, seen = self.targets.get(title, (0, 0))
+        return self._rate(chosen, seen), seen
+
+    def verb_rate(self, folder: str, verb: str) -> tuple[float | None, int]:
+        chosen, seen = self.verbs.get((folder, verb), (0, 0))
+        return self._rate(chosen, seen), seen
+
+    def bonus(self, folder: str, s: Suggestion) -> float:
+        """Bounded, evidence-weighted nudge for one suggestion."""
+        total = 0.0
+        for rate, seen in (
+            self.target_rate(s.target) if s.target else (None, 0),
+            self.verb_rate(folder, s.verb),
+        ):
+            if rate is None:
+                continue
+            trust = min(seen, PRIOR_FULL_TRUST_AT) / PRIOR_FULL_TRUST_AT
+            total += (rate - 0.5) * trust
+        return max(-PRIOR_WEIGHT, min(PRIOR_WEIGHT, total * PRIOR_WEIGHT))
+
+
+def _tally(table: dict, key, chosen_key, sign: int = 1) -> None:
+    if key is None or (isinstance(key, tuple) and key[1] is None):
+        return
+    c, n = table.get(key, (0, 0))
+    table[key] = (c + (sign if key == chosen_key else 0), n + sign)
+
+
+def load_priors(vault_path: Path) -> Priors:
+    """Read every routing decision he has made. Undo reverses the one it undoes."""
+    priors = Priors()
+    path = vault_path / FEEDBACK_LOG
+    if not path.exists():
+        return priors
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if rec.get("source") != "routing":
+            continue
+        signal = rec.get("signal", "")
+        priors.signals[signal] = priors.signals.get(signal, 0) + 1
+        proposed, chosen = rec.get("proposed") or {}, rec.get("chosen") or {}
+        folder = (rec.get("features") or {}).get("folder", "")
+        if signal == "undo":
+            # reverse the choice it undoes: that target/verb was not, after all, chosen
+            _tally(priors.targets, chosen.get("target"), chosen.get("target"), -1)
+            _tally(priors.verbs, (folder, chosen.get("verb")), (folder, chosen.get("verb")), -1)
+            continue
+        priors.decisions += 1
+        # every candidate that was on the table counts as seen once; the chosen one as chosen
+        for title in {proposed.get("target"), chosen.get("target")} - {None}:
+            _tally(priors.targets, title, chosen.get("target"))
+        for verb in {proposed.get("verb"), chosen.get("verb")} - {None}:
+            _tally(priors.verbs, (folder, verb), (folder, chosen.get("verb")))
+    return priors
+
+
 # ── Eligibility ────────────────────────────────────────────────────
 
 
@@ -327,8 +411,13 @@ def propose(
     registry: dict[str, Container],
     llm=None,
     nearest: list[tuple[Block, float]] | None = None,
+    priors: Priors | None = None,
 ) -> Proposal:
-    """Rank the candidate homes for one block. Deterministic unless `llm` is given."""
+    """Rank the candidate homes for one block. Deterministic unless `llm` is given.
+
+    `priors` may nudge retrieval-sourced suggestions by his history; it never
+    touches an aaa: or link suggestion, so his own words always rank first.
+    """
     proposal = Proposal(had_aaa=bool(_AAA_RE.search(block.content or "")))
     found = _from_aaa(block, store, registry) + _from_links(block, store, registry)
     if nearest is None:
@@ -338,6 +427,10 @@ def propose(
             logger.warning(f"Routing retrieval failed: {e}")
             nearest = []
     from_nearest, proposal.nearest = _from_nearest(nearest, store, registry)
+    if priors is not None:
+        folder = str(Path((block.metadata or {}).get("source_path", "")).parent)
+        for s in from_nearest:
+            s.score = max(0.0, min(SCORE_LINK_NOTE, s.score + priors.bonus(folder, s)))
     found += from_nearest
     best: dict[tuple[str, str | None], Suggestion] = {}
     for s in found:
@@ -483,6 +576,7 @@ def run_routing(
     llm = get_llm_model(config.get("models", {}).get("llm"))
     margin = float(settings.get("confident_margin", DEFAULT_CONFIDENT_MARGIN))
     registry = load_registry(store, vault_path)
+    priors = load_priors(vault_path)
 
     for block in eligible:
         day = (block.block_time or "")[:10] or date.today().isoformat()
@@ -490,7 +584,7 @@ def run_routing(
         existing = augi_log.ensure_log(path, day)
         if f"<!-- route:{block.id} -->" in existing:
             continue
-        proposal = propose(block, store, model, config, registry, llm=llm)
+        proposal = propose(block, store, model, config, registry, llm=llm, priors=priors)
         augi_log.append_to_section(
             path, augi_log.ROUTING_HEADING, render_row(block, proposal), intro=ROUTING_INTRO
         )

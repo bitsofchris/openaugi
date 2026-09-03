@@ -15,8 +15,11 @@ link; retrieval only for DB-only verbs), otherwise `memory`, which writes
 nothing. `extend` inserts the block into the target newest-first under a
 dated heading, wrapped so `undo` removes exactly that. Every resolution lands
 in `feedback-log.ndjson` with the proposal, the choice and the block's
-features. This is the answer to "blocks getting lost" that the review pass
-and the view notes never became (docs/reference/augi-log-routing.md).
+features, and `route.load_priors` turns that history into a bounded nudge on
+later proposals — only ever reordering augi's own guesses, never his links or
+hints. `openaugi routing stats` shows the tallies and the logs still waiting.
+This is the answer to "blocks getting lost" that the review pass and the view
+notes never became (docs/reference/augi-log-routing.md).
 
 **Board state is a projection, not a mutable file.**
 `OpenAugi/Board/.board-state.json` had two writers — `board_janitor.py` and the

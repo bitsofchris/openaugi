@@ -335,3 +335,120 @@ class TestRunRouting:
         text = path.read_text()
         assert text.index("<!-- route:r1 -->") < text.index("<!-- echo:e1 -->")
         assert json.loads(json.dumps(augi_log.split(text)[1]))  # both sections parse
+
+
+def _feedback_line(proposed, chosen, signal="accepted", folder="_private/0-Fleeting-Inbox"):
+    return json.dumps(
+        {
+            "source": "routing",
+            "signal": signal,
+            "proposed": proposed,
+            "chosen": chosen,
+            "features": {"folder": folder},
+        }
+    )
+
+
+class TestPriors:
+    def _write(self, vault: Path, lines: list[str]) -> None:
+        path = vault / route.FEEDBACK_LOG
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_rates_count_seen_and_chosen(self, tmp_path):
+        ext = {"verb": "extend", "target": PMOC_TITLE}
+        fil = {"verb": "file under", "target": AMOC_TITLE}
+        self._write(
+            tmp_path,
+            [
+                _feedback_line(ext, ext),  # accepted
+                _feedback_line(ext, fil, "corrected"),  # corrected to AMOC
+                _feedback_line(fil, {"verb": "memory", "target": None}, "memory"),
+                '{"source": "proactive-echo", "signal": "liked"}',  # ignored
+                "not json",
+            ],
+        )
+        priors = route.load_priors(tmp_path)
+        assert priors.decisions == 3
+        assert priors.signals == {"accepted": 1, "corrected": 1, "memory": 1}
+        assert priors.targets[PMOC_TITLE] == (1, 2)
+        assert priors.targets[AMOC_TITLE] == (1, 2)
+        assert priors.verbs[("_private/0-Fleeting-Inbox", "extend")] == (1, 2)
+        assert priors.verbs[("_private/0-Fleeting-Inbox", "memory")] == (1, 1)
+
+    def test_undo_reverses_a_choice(self, tmp_path):
+        fil = {"verb": "file under", "target": AMOC_TITLE}
+        self._write(tmp_path, [_feedback_line(fil, fil), _feedback_line(fil, fil, "undo")])
+        priors = route.load_priors(tmp_path)
+        assert priors.targets[AMOC_TITLE] == (0, 0) and priors.decisions == 1
+
+    def test_bonus_is_bounded_and_evidence_weighted(self, tmp_path):
+        fil = {"verb": "file under", "target": AMOC_TITLE}
+        self._write(tmp_path, [_feedback_line(fil, fil)] * 10)
+        priors = route.load_priors(tmp_path)
+        s = Suggestion("file under", AMOC_TITLE, "w", 0.3, "nearest")
+        assert priors.bonus("_private/0-Fleeting-Inbox", s) == pytest.approx(route.PRIOR_WEIGHT)
+        one = route.Priors(targets={AMOC_TITLE: (1, 1)})
+        assert 0 < one.bonus("x", s) < route.PRIOR_WEIGHT
+        assert route.Priors().bonus("x", s) == 0.0
+
+    def test_priors_reorder_retrieval_but_never_beat_his_link(self, seeded, vault, tmp_path):
+        rejected = {"verb": "file under", "target": PMOC_TITLE}
+        self._write(
+            vault,
+            [_feedback_line(rejected, {"verb": "memory", "target": None}, "memory")] * 6,
+        )
+        priors = route.load_priors(vault)
+        older_p = _block("season", path=PMOC_PATH, bid="o1")
+        older_a = _block("product", path=AMOC_PATH, bid="o2")
+        registry = load_registry(seeded, vault)
+        block = _block(f"A thought, and I also mention [[{NOTE_TITLE}]] in passing.")
+        without = propose(
+            block, seeded, None, {}, registry, nearest=[(older_p, 2.0), (older_a, 1.9)]
+        )
+        with_priors = propose(
+            block,
+            seeded,
+            None,
+            {},
+            registry,
+            nearest=[(older_p, 2.0), (older_a, 1.9)],
+            priors=priors,
+        )
+        # his link stays on top either way
+        assert without.top is not None and without.top.target == NOTE_TITLE
+        assert with_priors.top is not None and with_priors.top.target == NOTE_TITLE
+        # but the rejected-six-times PMOC drops below the AMOC
+        assert [s.target for s in without.suggestions[1:]] == [PMOC_TITLE, AMOC_TITLE]
+        assert [s.target for s in with_priors.suggestions[1:]] == [AMOC_TITLE, PMOC_TITLE]
+
+
+class TestStatsCli:
+    def test_stats_prints_priors_and_waiting_logs(self, seeded, vault, monkeypatch):
+        from typer.testing import CliRunner
+
+        from openaugi.cli.main import app
+
+        monkeypatch.setattr(route, "_nearest", lambda *a, **k: [])
+        run_routing(
+            [_block("A thought long enough to be routed somewhere useful.", bid="r1")],
+            vault,
+            seeded,
+            None,
+            {},
+        )
+        (vault / route.FEEDBACK_LOG).parent.mkdir(parents=True, exist_ok=True)
+        (vault / route.FEEDBACK_LOG).write_text(
+            _feedback_line(
+                {"verb": "file under", "target": AMOC_TITLE},
+                {"verb": "file under", "target": AMOC_TITLE},
+            )
+            + "\n"
+        )
+        result = CliRunner().invoke(
+            app, ["routing", "stats", "--path", str(vault), "--db", str(seeded.db_path)]
+        )
+        assert result.exit_code == 0, result.output
+        assert "1 routing decisions" in result.output
+        assert AMOC_TITLE in result.output
+        assert "1 log(s) waiting" in result.output and "2026-09-03" in result.output

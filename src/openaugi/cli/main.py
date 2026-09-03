@@ -303,6 +303,49 @@ def ingest(
         store.close()
 
 
+routing_app = typer.Typer(help="Augi Log routing — what waits, and what your history says.")
+app.add_typer(routing_app, name="routing")
+
+
+@routing_app.command(name="stats")
+def routing_stats(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+):
+    """Show the routing priors (per target, per folder+verb) and the logs still waiting."""
+    from openaugi.config import load_config, resolve_vault_path
+    from openaugi.pipeline.route import load_priors, waiting_logs
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    vault_path = resolve_vault_path(path, config)
+    if not vault_path:
+        console.print("[red]No vault path specified.[/red]")
+        raise typer.Exit(1)
+
+    priors = load_priors(Path(vault_path))
+    console.print(f"[bold]{priors.decisions} routing decisions[/bold]")
+    for signal, n in sorted(priors.signals.items(), key=lambda kv: -kv[1]):
+        console.print(f"  {signal:<10} {n}")
+    if priors.targets:
+        console.print("\n[bold]Targets[/bold]  chosen / seen")
+        for title, (chosen, seen) in sorted(priors.targets.items(), key=lambda kv: -kv[1][1]):
+            console.print(f"  {chosen:>3} / {seen:<3}  {title}")
+    if priors.verbs:
+        console.print("\n[bold]Verbs by folder[/bold]  chosen / seen")
+        for (folder, verb), (chosen, seen) in sorted(priors.verbs.items()):
+            console.print(f"  {chosen:>3} / {seen:<3}  {verb:<10} {folder}")
+
+    store = SQLiteStore(db or str(_default_db()))
+    try:
+        waiting = waiting_logs(store)
+    finally:
+        store.close()
+    console.print(f"\n[bold]{len(waiting)} log(s) waiting[/bold] for 'process this log'")
+    for log in waiting:
+        console.print(f"  {log.get('day')}  {log.get('path')}")
+
+
 @app.command(name="context-pack")
 def context_pack(
     path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),

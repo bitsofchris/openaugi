@@ -271,10 +271,15 @@ search per cycle and cached.
    The link helper stayed local to the janitor rather than being lifted out
    of the `apply_routing` MCP tool; sharing it is a follow-up refactor.
 5. (folded into 4)
-6. `feat(board)`: lens rule + template change for the waiting-rows line;
-   vault copy of `currency-board.md` updated.
+6. `feat(board)`: lens rule for the waiting-logs line. **Deferred
+   2026-09-03**: the vault lens and `board_janitor.py` were mid-edit by
+   another session (state-projection rewrite) when this step came up; the
+   rule is written in the routing reference doc and goes into the lens once
+   that work lands. The count is already available:
+   `list_records("routing_queue", where={"kind": "log", "status": "waiting"})`.
 7. `feat(routing)`: history priors from the feedback log; `openaugi routing
-   stats`. Tests.
+   stats`. Tests. **Shipped 2026-09-03.** Priors nudge only retrieval-sourced
+   suggestions (±0.1, trust ramps to 5 decisions), never his links or hints.
 8. `docs`: `docs/reference/augi-log-routing.md` (skill format), links from
    ARCHITECTURE.md, review-pass docs marked superseded, changelog entry.
 
