@@ -263,13 +263,14 @@ search per cycle and cached.
    decides (container tag + filled description), cached by mtime. A daily
    note is never a home, keyed on its date-shaped title rather than its
    folder, because his concept notes also live in `0-Fleeting-Inbox`.
-4. `feat(routing)`: `pipeline/routing_janitor.py`: parse ticked boxes and
-   `aaa:` lines, apply (shared apply helper lifted out of the `apply_routing`
-   MCP tool into `pipeline/routing_apply.py`), extend-append with marker,
-   feedback records, `✓` rewrites, `undo`. Tests.
-5. `feat(routing)`: the master box. Janitor applies a log only when it is
-   ticked; unanswered rows resolve by the confidence rule, else `memory`;
-   `undo` boxes. Tests.
+4. `feat(routing)`: `pipeline/routing_janitor.py`: the master box, ticked
+   boxes and `aaa:` overrides, apply (file under / link / extend / new note
+   / memory / hold), extend-insert newest-first with markers, `✓` rewrites,
+   `undo`, feedback records. Tests. **Shipped 2026-09-03**, folding step 5
+   in: the master box is the apply trigger, so it could not ship separately.
+   The link helper stayed local to the janitor rather than being lifted out
+   of the `apply_routing` MCP tool; sharing it is a follow-up refactor.
+5. (folded into 4)
 6. `feat(board)`: lens rule + template change for the waiting-rows line;
    vault copy of `currency-board.md` updated.
 7. `feat(routing)`: history priors from the feedback log; `openaugi routing

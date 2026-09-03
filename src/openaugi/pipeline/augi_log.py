@@ -86,11 +86,12 @@ def ensure_log(path: Path, day: str) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     header = (
         "---\ntype: document\n"
-        f"description: Proactive echoes augi surfaced while you wrote on {day}. "
-        "Ephemeral — delete freely, nothing depends on it.\n"
+        f"description: Routing rows and proactive echoes from what you wrote on {day}. "
+        "Answer with checkboxes; tick 'process this log' to apply. Safe to delete — "
+        "an unprocessed log is simply never applied.\n"
         f"created: {day}\n---\n\n"
         f"# Augi Log — {day}\n\n#human-review\n\n"
-        "*Appended as you write. Read when you want; ignoring it costs nothing.*\n"
+        "*Appended as you write. Read when you want; an unanswered log is never applied.*\n"
     )
     path.write_text(header, encoding="utf-8")
     return header

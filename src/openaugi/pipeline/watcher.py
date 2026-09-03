@@ -184,6 +184,14 @@ def _run_ingest_cycle(
         except Exception as e:
             logger.error(f"Echo janitor failed: {e}", exc_info=True)
 
+        # Janitor: apply a day's routing rows once its master box is ticked
+        try:
+            from openaugi.pipeline.routing_janitor import process_changed as process_routing
+
+            process_routing(changed_paths, vault_path, store, config)
+        except Exception as e:
+            logger.error(f"Routing janitor failed: {e}", exc_info=True)
+
         # Janitor: act on any checkbox ticked on a currency board
         try:
             from openaugi.pipeline.board_janitor import process_changed as process_boards
