@@ -29,22 +29,19 @@ from pathlib import Path
 from typing import Any
 
 from openaugi.model.block import Block
+from openaugi.pipeline import augi_log
+from openaugi.pipeline.augi_log import (  # noqa: F401 — re-exported for callers and tests
+    DAILY_PREFIX,
+    MIN_PROSE_CHARS,
+    QUIET_HEADING,
+)
 
 logger = logging.getLogger(__name__)
 
-DAILY_PREFIX = "_private/0-Fleeting-Inbox/"
-LOG_FOLDER_FMT = "OpenAugi/{y}/{m:02d}/{d:02d}"
-LOG_NAME = "Augi Log.md"
-
-# Deterministic filters (the replay's two mandatory additions)
-MIN_PROSE_CHARS = 40
 # A block reached by walking one link from a hit inherits its parent's score,
 # discounted. Graph proximity is real evidence — it is how "the note this
 # belongs to" surfaces — but it is weaker than being retrieved directly.
 LINK_HOP_DISCOUNT = 0.9
-_WIKILINK_RE = re.compile(r"\[\[[^\]]*\]\]")
-_MD_NOISE_RE = re.compile(r"[#>*_`\-\[\]()]|https?://\S+")
-_INSTRUCTION_RE = re.compile(r"^\s*zzz\s*:", re.IGNORECASE | re.MULTILINE)
 
 JUDGE_SYSTEM = """You decide whether a personal-knowledge agent should speak.
 
@@ -83,21 +80,12 @@ pattern across time is worth more than any single match."""
 
 
 def _prose_len(content: str) -> int:
-    """Length of real prose, ignoring wikilinks and markdown punctuation."""
-    stripped = _WIKILINK_RE.sub("", content or "")
-    return len(_MD_NOISE_RE.sub("", stripped).strip())
+    return augi_log.prose_len(content)
 
 
 def is_echo_eligible(block: Block) -> bool:
-    """Deterministic pre-filter — cheap checks before any retrieval or LLM."""
-    path = (block.metadata or {}).get("source_path") or ""
-    if not path.startswith(DAILY_PREFIX):
-        return False
-    content = block.content or ""
-    if _prose_len(content) < MIN_PROSE_CHARS:
-        return False  # link-only / stub blocks (a bare [[link]] scored 1.000 in replay)
-    # dispatch owns zzz blocks; they are asks, not thoughts
-    return not ((block.metadata or {}).get("zzz_instructions") or _INSTRUCTION_RE.search(content))
+    """Deterministic pre-filter — the shared capture gate; echo adds nothing yet."""
+    return augi_log.is_capture_block(block)
 
 
 def _candidates(block: Block, store, model, config: dict[str, Any], k: int = 6):
@@ -196,24 +184,11 @@ def _judge(block: Block, ranked, llm) -> list[dict]:
 
 
 def _log_path(vault_path: Path, day: str) -> Path:
-    y, m, d = int(day[:4]), int(day[5:7]), int(day[8:10])
-    return vault_path / LOG_FOLDER_FMT.format(y=y, m=m, d=d) / LOG_NAME
+    return augi_log.log_path(vault_path, day)
 
 
 def _ensure_log(path: Path, day: str) -> str:
-    if path.exists():
-        return path.read_text(encoding="utf-8")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    header = (
-        "---\ntype: document\n"
-        f"description: Proactive echoes augi surfaced while you wrote on {day}. "
-        "Ephemeral — delete freely, nothing depends on it.\n"
-        f"created: {day}\n---\n\n"
-        f"# Augi Log — {day}\n\n#human-review\n\n"
-        "*Appended as you write. Read when you want; ignoring it costs nothing.*\n"
-    )
-    path.write_text(header, encoding="utf-8")
-    return header
+    return augi_log.ensure_log(path, day)
 
 
 def _render(block: Block, lines: list[dict], by_title: dict[str, Block]) -> str:
@@ -232,10 +207,6 @@ def _render(block: Block, lines: list[dict], by_title: dict[str, Block]) -> str:
     out.append("- [ ] bad match")
     out.append("")
     return "\n".join(out)
-
-
-QUIET_HEADING = "## Quiet — closest match, not surfaced"
-_TAIL_RE = re.compile(r"\n## Quiet — closest match.*|\n<!-- heartbeat .*", re.DOTALL)
 
 
 def _render_quiet(block: Block, ranked) -> str:
@@ -260,36 +231,11 @@ def _render_quiet(block: Block, ranked) -> str:
 
 
 def _write_sections(path: Path, echo_md: str = "", quiet_md: str = "") -> None:
-    """Append into the right section, keeping Quiet and the heartbeat last.
-
-    The file is [header][echoes][## Quiet][heartbeat]; new content is spliced
-    in rather than appended blindly, so the tail keeps its meaning.
-    """
-    text = path.read_text(encoding="utf-8")
-    tail_match = _TAIL_RE.search(text)
-    if tail_match:
-        body, tail = text[: tail_match.start()], text[tail_match.start() :]
-    else:
-        body, tail = text, ""
-
+    """Splice into the shared log: echoes under `## Echoes`, quiet under `## Quiet`."""
     if echo_md:
-        body = body.rstrip("\n") + "\n" + echo_md
-
+        augi_log.append_to_section(path, augi_log.ECHO_HEADING, echo_md)
     if quiet_md:
-        if QUIET_HEADING in tail:
-            head, _, rest = tail.partition(QUIET_HEADING)
-            hb = re.search(r"\n<!-- heartbeat .*", rest, re.DOTALL)
-            quiet_body, hb_text = (rest[: hb.start()], rest[hb.start() :]) if hb else (rest, "")
-            tail = head + QUIET_HEADING + quiet_body.rstrip("\n") + "\n" + quiet_md + hb_text
-        else:
-            hb = re.search(r"\n<!-- heartbeat .*", tail, re.DOTALL)
-            hb_text = tail[hb.start() :] if hb else ""
-            tail = (
-                f"\n{QUIET_HEADING}\n\n*Debug view — what was closest when augi stayed "
-                "silent. Tick a box to teach it.*\n" + quiet_md + hb_text
-            )
-
-    path.write_text(body.rstrip("\n") + "\n" + tail.lstrip("\n"), encoding="utf-8")
+        augi_log.append_to_section(path, QUIET_HEADING, quiet_md, intro=augi_log.QUIET_INTRO)
 
 
 def run_echo(
@@ -336,25 +282,4 @@ def run_echo(
 
 
 def _write_heartbeat(vault_path: Path, stats: dict[str, int]) -> None:
-    """Keep a running per-day tally at the end of the log.
-
-    Silence has to be legible: the pain-points sweep found that a system which
-    never reports its own quiet is indistinguishable from one that is broken.
-    """
-    day = date.today().isoformat()
-    path = _log_path(vault_path, day)
-    if not path.exists():
-        return
-    text = path.read_text(encoding="utf-8")
-    prior = re.search(r"<!-- heartbeat (\d+) (\d+) (\d+) -->", text)
-    watched, spoke, quiet = stats["watched"], stats["spoke"], stats["quiet"]
-    if prior:
-        watched += int(prior.group(1))
-        spoke += int(prior.group(2))
-        quiet += int(prior.group(3))
-        text = re.sub(r"\n?<!-- heartbeat .*?-->\n.*?\n?$", "\n", text, flags=re.DOTALL)
-    text = text.rstrip("\n") + (
-        f"\n\n<!-- heartbeat {watched} {spoke} {quiet} -->\n"
-        f"*watched {watched} · spoke {spoke} · quiet {quiet}*\n"
-    )
-    path.write_text(text, encoding="utf-8")
+    augi_log.write_heartbeat(_log_path(vault_path, date.today().isoformat()), stats)

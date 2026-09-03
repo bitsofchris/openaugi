@@ -61,6 +61,7 @@ src/openaugi/
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
 │   ├── dispatch.py        # Post-ingest: zzz instructions → task files in OpenAugi/Tasks/
+│   ├── augi_log.py        # The shared per-day Augi Log: sections, eligibility gate, heartbeat
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
 │   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar + lens list (docs/reference/lenses.md)
 │   ├── board_janitor.py   # Currency board write-back — checkboxes → .board-state.json (docs/reference/currency-board.md)
