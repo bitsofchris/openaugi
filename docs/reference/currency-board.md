@@ -113,8 +113,12 @@ launchd 06:00 → scripts/write-board-task.sh → OpenAugi/Tasks/TASK-<date>-cur
               → OpenAugi/Board/<date> - Board.md  (+ View - Board.md embed)
 
 user ticks boxes → watcher sees the change → board_janitor.sync_board()
-              → .board-state.json + feedback-log.ndjson + line rewritten to "✓ done"
-              → next board reads state and never re-proposes what was answered
+              → feedback-log.ndjson (append) + line rewritten to "✓ done"
+              → rebuild_state() projects .board-state.json from board notes + log
+              → next board READS state and never re-proposes what was answered
+
+user ticks `do` on a proposal → board_janitor writes OpenAugi/Tasks/board-<date>-<key>.md
+              → task_watcher hydrates it → an agent runs the brief as written
 ```
 
 - **The lens** (`OpenAugi/AGENT/lenses/currency-board.md` in the vault) holds
@@ -126,14 +130,51 @@ user ticks boxes → watcher sees the change → board_janitor.sync_board()
   until scheduled-lens activation ships, and this deliberately does not wait
   for that gate.
 - **`pipeline/board_janitor.py`** is the write-back half, a sibling of
-  `echo_janitor.py` and wired into the same watcher cycle. It is idempotent
-  twice over: appearances increment once per board date however often it runs,
-  and an answered item is rewritten into a confirmation so it is never
-  processed again.
-- **State** lives in `OpenAugi/Board/.board-state.json`; signals append to the
-  shared `OpenAugi/Capture/feedback-log.ndjson` stream, so board answers
-  accumulate next to echo feedback as training data for what the board should
-  stop proposing.
+  `echo_janitor.py` and wired into the same watcher cycle. An answered item is
+  rewritten into a confirmation, so it is never processed again.
+- **Plain markdown, not callouts** (2026-09-04). The board was built from
+  `> [!board-lane]` callouts until it met the interaction it exists for: inside
+  a callout every line carries a `> ` prefix, so there is nowhere to tap and
+  type an `aaa:` line without fighting the editor — on a phone, effectively
+  nowhere at all. Lanes are now `##` headings and the janitor reads the lane
+  from the nearest heading above an item (`_HEADING_RE`). The callout shape is
+  still parsed (`_LANE_RE`), so every board already on disk still answers.
+- **Proposals are the outbound half of the channel.** Under `## Augi could run
+  these` sit two-button offers — `do` / `no` — for work *augi* would do. `do`
+  writes a pending task file into `OpenAugi/Tasks/` and the existing task
+  watcher launches an agent on it; the proposal's `↳` brief is handed over
+  verbatim, so what he read is what the agent gets, with nothing regenerated
+  in between. `no` retires the offer permanently, and `declined` proposals are
+  projected into state alongside items — the next board must never re-offer
+  one. Dispatch is idempotent on the task filename: a proposal cannot launch
+  the same agent twice.
+- **"How does today compare to yesterday?"** was unanswerable from the note
+  alone, so every board opens with a `## Since yesterday` section linking the
+  previous board. `previous_board_summary(vault, before=<today>)` computes the
+  split — what he answered, what is carried — from the previous note plus
+  state.
+- **State is a projection, not a source.** `OpenAugi/Board/.board-state.json`
+  is rebuilt in full by `rebuild_state()` from two append-only sources: the
+  dated board notes (who was proposed, when — `appearances` and `last_seen`
+  are *counted* from these, never incremented) and
+  `OpenAugi/Capture/feedback-log.ndjson` (every tick, with its reason). Delete
+  the file and it rebuilds exactly.
+
+  It was mutated in place until 2026-09-03, by this module *and* by board-build
+  agent sessions. With two writers and no owner the counters drifted to 3 on a
+  two-day-old board, falsely tripping the "third board" staleness flag on
+  thirteen of sixteen items. **`board_janitor` is now the only writer, and the
+  lens says the file is read-only to the board build.**
+- **Pruning is bounded but lossless.** A bare `done` / `not-doing` older than
+  `PRUNE_DAYS` (90) is dropped — the board reads a 72h window, so nothing that
+  old is reachable from fresh writing. Anything `someday`, and anything
+  carrying a `reason`, is durable and never pruned.
+- **Why not SQLite,** given `store/sqlite.py` exists: that store holds what is
+  *derived* from the vault (blocks, links, FTS, vectors) and is rebuilt by
+  re-ingesting. Decisions exist nowhere else — they are primary data, and they
+  stay greppable, diffable and repairable in git. The 2026-09-03 corruption was
+  diagnosed with `git show HEAD:.board-state.json`; a binary blob would not
+  have offered that.
 
 ## Setup and operation
 
@@ -165,9 +206,19 @@ at `src/openaugi/templates/board.css` in this repo — edit there, copy across.
 - **Turn it off:** `launchctl unload ~/Library/LaunchAgents/com.openaugi.board.plist`.
   Nothing else in the system depends on the board existing.
 - **Inspect or repair state:** `OpenAugi/Board/.board-state.json` is plain JSON,
-  hand-editable. `board_janitor.open_items(vault)` and `retired_items(vault)`
-  are the read helpers; an unreadable state file logs an error and starts fresh
-  rather than crashing the build.
+  but it is generated — hand-edits are discarded on the next tick. To repair it,
+  delete it and replay:
+
+  ```python
+  from pathlib import Path
+  from openaugi.pipeline.board_janitor import rebuild_state
+  rebuild_state(Path("<vault>"))
+  ```
+
+  `open_items(vault)` and `retired_items(vault)` are the read helpers. An
+  unreadable state file logs an error and starts fresh rather than crashing the
+  build, and an item whose `state` is outside the vocabulary is dropped on load
+  with a warning.
 
 ## Hard rules
 
@@ -179,16 +230,20 @@ at `src/openaugi/templates/board.css` in this repo — edit there, copy across.
 - Every left-off line links its source note, and every move carries a `↳`
   context line naming what to open. No unlinked claims, no unstartable moves.
 - Never invent precision the source doesn't have — name the gap instead.
-- Three judgment items maximum.
+- Three judgment items maximum; two or three proposals, and none rather than
+  padding.
+- Never re-offer a proposal he declined — same rule, same reason.
+- A proposal's brief is a prompt, not a summary: it is executed verbatim.
 - Mirror, not coach. Drift states evidence; the human rules.
 - Omit empty sections — an empty section is noise.
 
 ## Rendering
 
 The board note carries `cssclasses: [board]`. The vault snippet
-`.obsidian/snippets/board.css` styles the four callout types and — the part
-that matters — renders the three answer boxes inline, so an item costs three
-lines of markdown but one line of attention. A plugin `ItemView` that renders
+`.obsidian/snippets/board.css` styles the lane headings (and, for the older
+boards, the callout types) and — the part that matters — renders the answer
+boxes inline, so an item costs three lines of markdown but one line of
+attention. A plugin `ItemView` that renders
 the same markdown with real buttons and a lane/activity group-by toggle is the
 natural next step; the markdown stays the truth either way.
 
