@@ -5,6 +5,8 @@ description: The one thing that runs unasked. New daily-note blocks are matched 
 
 # Proactive Echo — "you thought this before"
 
+> **PAUSED 2026-09-04.** This feature is turned off in `~/.openaugi/config.toml` — matches were too coarse to be useful. See [docs/plans/augi-log-paused.md](../plans/augi-log-paused.md) for the state at pause, the reasons, and the resume plan. What is described below is how it works when enabled.
+
 Everything else in OpenAugi is pull: you type `zzz:`, you ask for a lens, you
 run the review pass. Echo is the exception. As you write in a daily note, it
 looks for older thinking of your own that bears on what you are writing and

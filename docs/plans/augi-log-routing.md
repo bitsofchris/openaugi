@@ -5,6 +5,8 @@ description: The Augi Log becomes the capture/routing surface. Every new human d
 
 # Augi Log routing
 
+> **PAUSED 2026-09-04.** This feature is turned off in `~/.openaugi/config.toml` — matches were too coarse to be useful. See [docs/plans/augi-log-paused.md](augi-log-paused.md) for the state at pause, the reasons, and the resume plan. What is described below is how it works when enabled.
+
 **Status: DECIDED 2026-09-03, implementation starting.** Branch `feat/augi-log-routing`. Decisions are recorded inline as **Decided:** lines.
 
 ## Where this came from

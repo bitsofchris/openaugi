@@ -5,6 +5,8 @@ description: The Augi Log as the capture/routing surface. Every new human daily-
 
 # Augi Log routing — "where does this block live?"
 
+> **PAUSED 2026-09-04.** This feature is turned off in `~/.openaugi/config.toml` — matches were too coarse to be useful. See [docs/plans/augi-log-paused.md](../plans/augi-log-paused.md) for the state at pause, the reasons, and the resume plan. What is described below is how it works when enabled.
+
 ## When to use this doc
 
 - You want to know what the rows under `## Routing` in an Augi Log mean and
