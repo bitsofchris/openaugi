@@ -106,3 +106,34 @@
   color: var(--board-faint);
   font-size: 0.85em;
 }
+
+/* --- the plain-markdown format (2026-09-04 onward) --------------------- */
+/* Lanes became `## headings` instead of callouts. Inside a callout every
+   line carries a `> ` prefix, so there is nowhere to tap and type an `aaa:`
+   line without fighting the editor. The callout rules above stay for the
+   boards already on disk. */
+.board h2 {
+  font-size: 0.86em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--board-accent);
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 0.7em;
+  margin-top: 1.6em;
+}
+/* the left-off line under a lane heading: quiet, italic, the evidence */
+.board h2 + p > em:only-child {
+  color: var(--board-faint);
+  font-size: 0.92em;
+}
+/* the ↳ context line under a move — indented, dimmed, always readable */
+.board li > p:has(> br),
+.board li li:not(.task-list-item) {
+  color: var(--board-faint);
+  font-size: 0.92em;
+}
+/* proposals answer `do` / `no` rather than done / not doing / someday, and
+   sit under their own heading; same one-row treatment as the answer boxes. */
+.board h2 + ul .contains-task-list > li.task-list-item {
+  font-size: 0.82em;
+}

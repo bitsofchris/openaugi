@@ -5,6 +5,8 @@ description: The one thing that runs unasked. New daily-note blocks are matched 
 
 # Proactive Echo — "you thought this before"
 
+> **PAUSED 2026-09-04.** This feature is turned off in `~/.openaugi/config.toml` — matches were too coarse to be useful. See [docs/plans/augi-log-paused.md](../plans/augi-log-paused.md) for the state at pause, the reasons, and the resume plan. What is described below is how it works when enabled.
+
 Everything else in OpenAugi is pull: you type `zzz:`, you ask for a lens, you
 run the review pass. Echo is the exception. As you write in a daily note, it
 looks for older thinking of your own that bears on what you are writing and
@@ -59,9 +61,11 @@ entirely.
 
 ### 5. Output — an ephemeral, read-optional log
 
-Each echo is appended under an `<!-- echo:<block_id> -->` marker (idempotent —
-a block is never echoed twice), with three checkboxes: promote → new note,
-good match, bad match. The day's last line is a heartbeat
+Each echo is appended under `## Echoes` with an `<!-- echo:<block_id> -->`
+marker (idempotent — a block is never echoed twice), with three checkboxes:
+promote → new note, good match, bad match. The log file itself is shared
+with routing (docs/plans/augi-log-routing.md); `pipeline/augi_log.py` owns
+the section order so each pass only writes its own section. The day's last line is a heartbeat
 (`watched 12 · spoke 3 · quiet 9`) so silence is legible rather than
 indistinguishable from breakage.
 
@@ -158,8 +162,11 @@ the machinery.
 
 ## Files
 
-- `pipeline/echo.py` — eligibility, retrieval, judgment, log writing, heartbeat
+- `pipeline/augi_log.py` — the shared log file: path, header, the capture
+  eligibility gate, section order (`## Routing`, `## Echoes`, `## Quiet`,
+  heartbeat) and the splicing writer. Echo and routing both write through it.
+- `pipeline/echo.py` — retrieval, judgment, row rendering
 - `pipeline/echo_rank.py` — stratify / relative-score / cluster
 - `pipeline/echo_janitor.py` — checkbox handling, promotion, feedback
 - `pipeline/watcher.py` — the post-ingest hook that calls all three
-- `tests/test_echo.py`, `tests/test_echo_rank.py` — 29 tests
+- `tests/test_augi_log.py`, `tests/test_echo.py`, `tests/test_echo_rank.py`

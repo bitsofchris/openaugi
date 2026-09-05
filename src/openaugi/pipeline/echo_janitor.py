@@ -24,7 +24,7 @@ PROMOTE_FOLDER = "OpenAugi/Notes"
 
 _ECHO_BLOCK_RE = re.compile(
     r"<!-- (?:echo|quiet):(?P<bid>[0-9a-f]+) -->\n(?P<body>.*?)"
-    r"(?=\n<!-- echo:|\n<!-- quiet:|\n## Quiet|\n<!-- heartbeat|\Z)",
+    r"(?=\n<!-- echo:|\n<!-- quiet:|\n## |\n<!-- heartbeat|\Z)",
     re.DOTALL,
 )
 _CHECKED_RE = re.compile(

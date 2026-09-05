@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+**The Augi Log is the routing surface.** Every new human daily-note block
+gets one row under `## Routing`: up to three proposed homes (`extend [[X]]`,
+`link [[X]]`, `file under [[X]]`, `new note`), each with a one-clause why,
+plus the fixed `memory` and `hold` boxes and an `aaa:` line for anything the
+boxes can't say. Proposals come from the block's own `aaa:` hint, its
+wikilinks, and where the nearest older writing lives, with an optional
+temperature-0 judge. Nothing is applied until the day's master box
+(`- [ ] process this log`) is ticked; then ticked rows apply as chosen,
+untouched rows take the bold suggestion when augi is confident (his hint or
+link; retrieval only for DB-only verbs), otherwise `memory`, which writes
+nothing. `extend` inserts the block into the target newest-first under a
+dated heading, wrapped so `undo` removes exactly that. Every resolution lands
+in `feedback-log.ndjson` with the proposal, the choice and the block's
+features, and `route.load_priors` turns that history into a bounded nudge on
+later proposals — only ever reordering augi's own guesses, never his links or
+hints. `openaugi routing stats` shows the tallies and the logs still waiting.
+This is the answer to "blocks getting lost" that the review pass and the view
+notes never became (docs/reference/augi-log-routing.md).
+
+**Board state is a projection, not a mutable file.**
+`OpenAugi/Board/.board-state.json` had two writers — `board_janitor.py` and the
+board-build agent session the lens invited to read it. On 2026-09-03 the
+counters drifted: `appearances` jumped 1 → 3 on thirteen of sixteen items while
+`last_seen` stayed put, which is arithmetically impossible for a two-day-old
+board with two board notes, and it falsely tripped the "third board — do it or
+say not doing" staleness flag on nearly every item. A state named `withdrawn`,
+outside the janitor's vocabulary, showed which writer did it.
+
+`rebuild_state()` now regenerates the whole file from two append-only sources
+that already existed: the dated board notes (`appearances` and `last_seen` are
+*counted* from these) and `feedback-log.ndjson` (every tick, with its reason).
+`sync_board` appends and rebuilds; it never edits state in place. Delete the
+file and it replays exactly — the corruption above would have been a non-event.
+Unknown states are dropped on load with a warning, bare `done`/`not-doing`
+retirements older than 90 days are pruned (the window is 72h, so nothing that
+old is reachable), and anything `someday` or carrying a `reason` is durable.
+The lens now states the file is read-only to the board build, and that a
+withdrawn drift flag is prose rather than a state. Nine new tests, including a
+regression for the exact counter corruption.
+
 **Blocks know who wrote them.** Every data block now carries
 `metadata.provenance`: `human`, `ai`, or `reference`, resolved at ingest from an
 explicit `provenance/*` tag, then `[vault.provenance_rules]` path globs, then the
