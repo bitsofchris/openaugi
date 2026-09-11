@@ -12,10 +12,9 @@ target: >-
 
 ## Intent
 
-The biography of one idea, in Chris's own artifact shape (his 2026-06-06
-"Persistent Memory Artifact System" note): *show how an idea evolved
-instead of re-discovering it.* Not a summary of a topic — the story of
-how HIS thinking on it moved.
+The biography of one idea, in the Persistent Memory Artifact shape:
+*show how an idea evolved instead of re-discovering it.* Not a summary
+of a topic — the story of how YOUR thinking on it moved.
 
 Sibling lens: **echoes** answers "have I thought this before?" for
 *current* thinking — small, disposable, recognition. Idea-lineage is the
@@ -48,17 +47,17 @@ X for me," this lens.
 **Major revisions:** (one line per real shift, dated, quoted)
 - YYYY-MM-DD — reframed as … ([[source]])
 
-**Repeated language:** phrases he returns to verbatim across eras
+**Repeated language:** phrases you return to verbatim across eras
 
-**Current strongest form:** YYYY-MM-DD — "<his best articulation, quoted>" ([[source]])
+**Current strongest form:** YYYY-MM-DD — "<your best articulation, quoted>" ([[source]])
 
 **Dead branches:** directions tried and abandoned; dormant gaps from the
 pre-compute ("quiet 2025-Q2→Q3, returned changed")
 
 **Influences:** third-party blocks (books, podcasts, AI chats) that fed
-the idea — cited as influences, NEVER counted as his voice
+the idea — cited as influences, NEVER counted as your voice
 
-**Next concrete test:** ONLY if he named one in his notes — quote it.
+**Next concrete test:** ONLY if you named one in your notes — quote it.
 Never invent a next step.
 
 #human-review · *Lineage run YYYY-MM-DD over N blocks (YYYY-MM-DD → YYYY-MM-DD). Sidecar: OpenAugi/lineage/<slug>.json*
@@ -66,10 +65,10 @@ Never invent a next step.
 
 ## Hard rules
 
-- His words carry the artifact — quote verbatim, link every quote.
-- `third_party` blocks are influences, never his voice; keep the
+- Your words carry the artifact — quote verbatim, link every quote.
+- `third_party` blocks are influences, never your voice; keep the
   sections separate.
-- Revisions are shifts in HIS framing, not activity spikes. A busy
+- Revisions are shifts in YOUR framing, not activity spikes. A busy
   quarter with no new framing is not a revision.
 - No judgment, no advice, no invented next steps. Dead branches are
   reported as history, not failure.

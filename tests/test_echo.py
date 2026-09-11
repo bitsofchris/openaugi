@@ -5,6 +5,7 @@ from pathlib import Path
 
 from openaugi.model.block import Block
 from openaugi.pipeline import echo, echo_janitor
+from openaugi.pipeline.writeback import FEEDBACK_LOG
 
 
 def _block(content: str, path: str = "_private/0-Fleeting-Inbox/2026-08-29.md", **meta) -> Block:
@@ -96,7 +97,7 @@ class TestJanitor:
     def test_good_match_writes_feedback_and_confirms(self, tmp_path: Path):
         path = self._log_with(tmp_path, "good")
         assert echo_janitor.process_log(path, tmp_path) == 1
-        record = json.loads((tmp_path / echo_janitor.FEEDBACK_LOG).read_text().strip())
+        record = json.loads((tmp_path / FEEDBACK_LOG).read_text().strip())
         assert record["signal"] == "liked"
         assert record["source"] == "proactive-echo"
         assert record["block_id"] == "abc123"
@@ -108,9 +109,7 @@ class TestJanitor:
     def test_bad_match_records_dislike(self, tmp_path: Path):
         path = self._log_with(tmp_path, "bad")
         echo_janitor.process_log(path, tmp_path)
-        assert (
-            json.loads((tmp_path / echo_janitor.FEEDBACK_LOG).read_text())["signal"] == "disliked"
-        )
+        assert json.loads((tmp_path / FEEDBACK_LOG).read_text())["signal"] == "disliked"
 
     def test_promote_writes_note_with_context_and_log(self, tmp_path: Path):
         path = self._log_with(tmp_path, "promote")
@@ -127,12 +126,12 @@ class TestJanitor:
         path = self._log_with(tmp_path, "good")
         assert echo_janitor.process_log(path, tmp_path) == 1
         assert echo_janitor.process_log(path, tmp_path) == 0  # nothing left to do
-        assert len((tmp_path / echo_janitor.FEEDBACK_LOG).read_text().strip().splitlines()) == 1
+        assert len((tmp_path / FEEDBACK_LOG).read_text().strip().splitlines()) == 1
 
     def test_untouched_log_does_nothing(self, tmp_path: Path):
         path = self._log_with(tmp_path, "none")
         assert echo_janitor.process_log(path, tmp_path) == 0
-        assert not (tmp_path / echo_janitor.FEEDBACK_LOG).exists()
+        assert not (tmp_path / FEEDBACK_LOG).exists()
 
     def test_process_changed_only_targets_augi_logs(self, tmp_path: Path):
         path = self._log_with(tmp_path, "good")
@@ -212,7 +211,7 @@ class TestQuietFeedback:
             encoding="utf-8",
         )
         assert echo_janitor.process_log(path, tmp_path) == 1
-        record = json.loads((tmp_path / echo_janitor.FEEDBACK_LOG).read_text().strip())
+        record = json.loads((tmp_path / FEEDBACK_LOG).read_text().strip())
         assert record["signal"] == "missed"
         assert record["links"] == ["Older Note"]
         assert "✓ feedback recorded" in path.read_text()

@@ -22,6 +22,7 @@ from openaugi.pipeline.route import (
     run_routing,
     waiting_logs,
 )
+from openaugi.pipeline.writeback import FEEDBACK_LOG
 
 DAILY = "_private/0-Fleeting-Inbox/2026-09-03.md"
 PMOC_TITLE = "PMOC - Audacity to take Action - Season 2 - Q2 2026"
@@ -351,7 +352,7 @@ def _feedback_line(proposed, chosen, signal="accepted", folder="_private/0-Fleet
 
 class TestPriors:
     def _write(self, vault: Path, lines: list[str]) -> None:
-        path = vault / route.FEEDBACK_LOG
+        path = vault / FEEDBACK_LOG
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -437,8 +438,8 @@ class TestStatsCli:
             None,
             {},
         )
-        (vault / route.FEEDBACK_LOG).parent.mkdir(parents=True, exist_ok=True)
-        (vault / route.FEEDBACK_LOG).write_text(
+        (vault / FEEDBACK_LOG).parent.mkdir(parents=True, exist_ok=True)
+        (vault / FEEDBACK_LOG).write_text(
             _feedback_line(
                 {"verb": "file under", "target": AMOC_TITLE},
                 {"verb": "file under", "target": AMOC_TITLE},

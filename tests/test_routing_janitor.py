@@ -10,11 +10,11 @@ import pytest
 from openaugi.model.block import Block
 from openaugi.pipeline import augi_log, route, routing_janitor
 from openaugi.pipeline.routing_janitor import (
-    FEEDBACK_LOG,
     insert_extend,
     process_log,
     remove_extend,
 )
+from openaugi.pipeline.writeback import FEEDBACK_LOG
 
 DAY = "2026-09-03"
 DAILY = f"_private/0-Fleeting-Inbox/{DAY}.md"

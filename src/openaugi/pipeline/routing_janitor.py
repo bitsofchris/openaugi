@@ -1,11 +1,11 @@
 """Routing janitor — applies a day's routing rows once the master box is ticked.
 
 The Augi Log's `## Routing` section (see `route.py`) is answered with
-checkboxes and `aaa:` lines, but nothing happens until Chris ticks the
+checkboxes and `aaa:` lines, but nothing happens until the user ticks the
 section's master box, `- [ ] process this log`. That tick IS the command
 (the echo and board janitors' precedent). Then, for every row in the log:
 
-- a ticked box is his answer; a non-empty `aaa:` line overrides it;
+- a ticked box is the answer; a non-empty `aaa:` line overrides it;
 - an untouched row takes the bold suggestion when the ledger marked the
   proposal confident, otherwise `memory`, which writes nothing.
 
@@ -21,7 +21,7 @@ nothing is processed twice and every apply can be reversed. Every resolution
 lands in `OpenAugi/Capture/feedback-log.ndjson` with the proposal, the choice
 and the block's features — the history later proposals are biased by.
 
-Extend is the only verb that touches one of Chris's own notes. It is
+Extend is the only verb that touches one of the user's own notes. It is
 append-only (an insert under a dated heading, wrapped in markers so undo
 removes exactly what was inserted) and can be disabled with
 `[routing] extend_writes_note = false`, which falls back to the link.
@@ -39,10 +39,10 @@ from typing import Any
 
 from openaugi.model.link import Link
 from openaugi.pipeline import augi_log, route
+from openaugi.pipeline.writeback import aaa_re, append_feedback, box_re, now
 
 logger = logging.getLogger(__name__)
 
-FEEDBACK_LOG = "OpenAugi/Capture/feedback-log.ndjson"
 NOTES_FOLDER = "OpenAugi/Notes"
 
 _MASTER_RE = re.compile(r"^- \[(?P<mark>[ xX])\] process this log\s*$", re.MULTILINE)
@@ -50,9 +50,9 @@ _ROW_RE = re.compile(
     r"<!-- route:(?P<bid>[0-9a-f]+) -->\n(?P<body>.*?)(?=\n<!-- route:|\n## |\n<!-- heartbeat|\Z)",
     re.DOTALL,
 )
-_BOX_RE = re.compile(r"^- \[(?P<mark>[ xX])\] (?P<label>.+?)(?: — .*)?\s*$", re.MULTILINE)
+_BOX_RE = box_re(suffix=True, multiline=True)
 _UNDO_RE = re.compile(r"^- \[[xX]\] undo\s*$", re.MULTILINE)
-_AAA_RE = re.compile(r"^aaa:\s*(?P<text>.*?)\s*$", re.MULTILINE)
+_AAA_RE = aaa_re(multiline=True)
 _LABEL_RE = re.compile(r"^(?P<verb>extend|link|file under) \[\[(?P<target>[^\]|]+)\]\]$")
 _DATED_H3_RE = re.compile(r"^### (\d{4}-\d{2}-\d{2})\b.*$", re.MULTILINE)
 _ANY_HEADING_RE = re.compile(r"^#{1,6} ", re.MULTILINE)
@@ -77,17 +77,6 @@ class Row:
     undo: bool = False
     daily_note: str = ""
     boxes: list[str] = field(default_factory=list)
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
-
-
-def _append_feedback(vault_path: Path, record: dict) -> None:
-    path = vault_path / FEEDBACK_LOG
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record) + "\n")
 
 
 # ── Parsing ────────────────────────────────────────────────────────
@@ -141,7 +130,7 @@ def parse_rows(text: str, registry: dict[str, route.Container], store) -> list[R
             if box.group("mark").lower() == "x" and row.ticked is None:
                 row.ticked = _parse_label(box.group("label"))
         if aaa := _AAA_RE.search(body):
-            row.aaa = aaa.group("text")
+            row.aaa = aaa.group("reason")
         rows.append(row)
     if rows and registry is not None:
         for row in rows:
@@ -203,7 +192,7 @@ def _wrapped(block_id: str, text: str, daily_note: str) -> str:
 def insert_extend(note_text: str, day: str, block_id: str, text: str, daily_note: str) -> str:
     """Insert under `### <day>`, newest-first, anchored on `# Journal` or the dated H3s.
 
-    Chris (2026-09-03): "look for the Journal H1 or the other H3s — I like the
+    The rule that set this (2026-09-03): "look for the Journal H1 or the other H3s — I like the
     most recent entry to be on top."
     """
     payload = _wrapped(block_id, text, daily_note)
@@ -347,7 +336,7 @@ def _rewrite_row(text: str, row: Row, confirmation: str, undo: bool = True) -> s
 
 
 def _signal(choice: Choice, top: dict | None) -> str:
-    """What the answer teaches. `by` in the record says whether he chose it."""
+    """What the answer teaches. `by` in the record says who chose it."""
     if choice.verb in ("memory", "hold"):
         return choice.verb
     if choice.by == "auto":
@@ -372,7 +361,7 @@ def process_log(log_path: Path, vault_path: Path, store, config: dict[str, Any])
     day_match = re.search(r"# Augi Log — (\d{4}-\d{2}-\d{2})", day)
     day = day_match.group(1) if day_match else datetime.now(UTC).date().isoformat()
     actions = 0
-    stamp = _now()
+    stamp = now()
 
     # Undo boxes work whether or not the log was processed already.
     for row in rows:
@@ -383,7 +372,7 @@ def process_log(log_path: Path, vault_path: Path, store, config: dict[str, Any])
         store.update_record(
             route.ROUTING_COLLECTION, row.block_id, {"status": "undone", "undone_at": stamp}, stamp
         )
-        _append_feedback(
+        append_feedback(
             vault_path,
             {
                 "ts": stamp,
@@ -426,7 +415,7 @@ def process_log(log_path: Path, vault_path: Path, store, config: dict[str, Any])
             {"status": status, "chosen": chosen, "by": choice.by, "resolved_at": stamp},
             stamp,
         )
-        _append_feedback(
+        append_feedback(
             vault_path,
             {
                 "ts": stamp,

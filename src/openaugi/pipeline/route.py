@@ -2,11 +2,11 @@
 
 Post-ingest hook, sibling of `echo.py`. For every new human daily-note block
 it proposes where the block belongs and appends one routing row to the
-day's Augi Log under `## Routing`. Chris answers with checkboxes and `aaa:`
-lines; nothing is applied until he ticks the day's master box
+day's Augi Log under `## Routing`. The user answers with checkboxes and
+`aaa:` lines; nothing is applied until they tick the day's master box
 (`- [ ] process this log`), which `routing_janitor.py` acts on.
 
-Design: docs/plans/augi-log-routing.md. Chris's framing (2026-09-02): "the
+Design: docs/plans/augi-log-routing.md. The framing that drove it (2026-09-02): "the
 augi log — it's the routing decisions as I go ... you can just suggest where
 to stick things or what to merge with based on my hints and I confirm it
 there. Here's how you learn me."
@@ -32,12 +32,13 @@ import json
 import logging
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from openaugi.model.block import Block
 from openaugi.pipeline import augi_log
+from openaugi.pipeline.writeback import aaa_re, now, read_feedback
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ PROJECT_TAG = "note-type/pmoc"
 ACTIVE_TAG = "status/active"
 MAX_SUGGESTIONS = 3
 
-_AAA_RE = re.compile(r"^\s*aaa\s*:\s*(?P<hint>.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+_AAA_RE = aaa_re(indent=True, multiline=True, require_text=True, spaced_colon=True)
 _WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]")
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---", re.DOTALL)
 _DESCRIPTION_RE = re.compile(r"^description:\s*(?P<d>.+?)\s*$", re.MULTILINE)
@@ -113,12 +114,11 @@ class Proposal:
         return self.suggestions[0] if self.suggestions else None
 
 
-# ── Priors: what his history says about where things go ───────────
+# ── Priors: what the history says about where things go ──────────
 
-FEEDBACK_LOG = "OpenAugi/Capture/feedback-log.ndjson"
 #: Largest bonus or penalty a prior may add. Priors only ever reorder
 #: retrieval-sourced suggestions (scores 0..0.7); they never lift one above
-#: his own link (0.7+) or hint (1.0).
+#: the user's own link (0.7+) or hint (1.0).
 PRIOR_WEIGHT = 0.1
 #: A rate is trusted in proportion to how many decisions back it, up to this many.
 PRIOR_FULL_TRUST_AT = 5
@@ -167,18 +167,9 @@ def _tally(table: dict, key, chosen_key, sign: int = 1) -> None:
 
 
 def load_priors(vault_path: Path) -> Priors:
-    """Read every routing decision he has made. Undo reverses the one it undoes."""
+    """Read every routing decision on record. Undo reverses the one it undoes."""
     priors = Priors()
-    path = vault_path / FEEDBACK_LOG
-    if not path.exists():
-        return priors
-    for line in path.read_text(encoding="utf-8").splitlines():
-        try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if rec.get("source") != "routing":
-            continue
+    for rec in read_feedback(vault_path, source="routing"):
         signal = rec.get("signal", "")
         priors.signals[signal] = priors.signals.get(signal, 0) + 1
         proposed, chosen = rec.get("proposed") or {}, rec.get("chosen") or {}
@@ -282,7 +273,7 @@ def _note_title_exists(store, title: str) -> bool:
 def _from_aaa(block: Block, store, registry: dict[str, Container]) -> list[Suggestion]:
     out: list[Suggestion] = []
     for match in _AAA_RE.finditer(block.content or ""):
-        hint = match.group("hint")
+        hint = match.group("reason")
         targets = _WIKILINK_RE.findall(hint)
         if not targets:
             # a bare title mentioned in the hint, longest registered match wins
@@ -415,8 +406,9 @@ def propose(
 ) -> Proposal:
     """Rank the candidate homes for one block. Deterministic unless `llm` is given.
 
-    `priors` may nudge retrieval-sourced suggestions by his history; it never
-    touches an aaa: or link suggestion, so his own words always rank first.
+    `priors` may nudge retrieval-sourced suggestions by past decisions; it
+    never touches an aaa: or link suggestion, so the user's own words always
+    rank first.
     """
     proposal = Proposal(had_aaa=bool(_AAA_RE.search(block.content or "")))
     found = _from_aaa(block, store, registry) + _from_links(block, store, registry)
@@ -446,14 +438,14 @@ def propose(
 
 
 #: Verbs that only write a DB link. Retrieval evidence alone may apply these;
-#: it may never write into one of Chris's notes (extend) or mint one (new note).
+#: it may never write into one of the user's notes (extend) or mint one (new note).
 DB_ONLY_VERBS = ("file under", "link")
 
 
 def is_confident(proposal: Proposal, margin: float = DEFAULT_CONFIDENT_MARGIN) -> bool:
     """May the top suggestion apply without a tick? Only on strong evidence.
 
-    His own hint or link: yes, whatever the verb. Retrieval (or the judge
+    The user's own hint or link: yes, whatever the verb. Retrieval (or the judge
     picking among retrieval hits): only for DB-only verbs, and only when the
     top candidate's z-margin over the runner-up clears `margin`.
     """
@@ -501,10 +493,6 @@ def render_row(block: Block, proposal: Proposal) -> str:
 # ── Ledger ─────────────────────────────────────────────────────────
 
 
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
-
-
 def log_record_id(day: str) -> str:
     return f"log:{day}"
 
@@ -527,9 +515,9 @@ def _record_row(store, block: Block, proposal: Proposal, day: str, confident: bo
                 "nearest": proposal.nearest[:5],
                 "had_aaa": proposal.had_aaa,
             },
-            "proposed_at": _now(),
+            "proposed_at": now(),
         },
-        _now(),
+        now(),
     )
 
 
@@ -540,8 +528,8 @@ def _record_log(store, day: str, rel_log: str) -> None:
     store.write_record(
         ROUTING_COLLECTION,
         log_record_id(day),
-        {"kind": "log", "status": "waiting", "day": day, "path": rel_log, "opened_at": _now()},
-        _now(),
+        {"kind": "log", "status": "waiting", "day": day, "path": rel_log, "opened_at": now()},
+        now(),
     )
 
 

@@ -62,6 +62,7 @@ src/openaugi/
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
 │   ├── dispatch.py        # Post-ingest: zzz instructions → task files in OpenAugi/Tasks/
 │   ├── augi_log.py        # The shared per-day Augi Log: sections, eligibility gate, heartbeat
+│   ├── writeback.py       # Shared write-back: the feedback log path/read/append, and the box + `aaa:` grammar
 │   ├── route.py           # Post-ingest: one routing row per new human block in the Augi Log (docs/reference/augi-log-routing.md)
 │   ├── routing_janitor.py # Applies a log's routing rows once its master box is ticked; undo; feedback
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context

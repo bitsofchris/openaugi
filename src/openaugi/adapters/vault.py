@@ -533,8 +533,8 @@ def _apply_source_rules(
 # imported. A derived field, not a tag, because it is a property every block
 # has exactly one value of and every read tool needs to filter on. The
 # 2026-09-01 high-note analysis quoted forty AI-written reflection sessions
-# back to the user as "your vault" because nothing distinguished them from his
-# own writing at the query layer — docs/plans/query-provenance-and-dates.md.
+# back to the user as "your vault" because nothing distinguished them from
+# their own writing at the query layer — docs/plans/query-provenance-and-dates.md.
 
 PROVENANCE_HUMAN = "human"
 PROVENANCE_AI = "ai"

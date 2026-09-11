@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+**One write-back module for every janitor.** `pipeline/writeback.py` now owns
+what the board, the echo log and the routing rows each used to define for
+themselves: the `feedback-log.ndjson` path (spelled out in four modules), the
+append and the tolerant ndjson read, the UTC timestamp, and builders for the
+shared `- [x] label` / `aaa:` grammar. The vocabulary stays per-surface —
+`done / not doing / someday` is the board's, the routing verbs are routing's —
+so the builders take strictness as arguments instead of imposing one regex on
+surfaces that genuinely differ (a board line is inside a callout; a routing row
+is not). Behavior is unchanged; the existing janitor tests are the proof.
+Alongside it, the prose the engine generates and the docstrings it ships no
+longer name or gender their user, and `tests/test_impersonal_engine.py` keeps
+it that way — the first commit of the decision brief *Where a Personal
+Surface's Code Lives*, whose criterion is that the engine knows nothing about
+whose vault it is.
+
 **The Augi Log is the routing surface.** Every new human daily-note block
 gets one row under `## Routing`: up to three proposed homes (`extend [[X]]`,
 `link [[X]]`, `file under [[X]]`, `new note`), each with a one-clause why,

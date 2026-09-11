@@ -1,4 +1,4 @@
-"""Echo janitor — processes the checkboxes Chris ticks in an Augi Log.
+"""Echo janitor — processes the checkboxes ticked in an Augi Log.
 
 The log offers three boxes under every echo: promote / good match / bad match.
 Ticking one IS the command (the review-pass precedent, 2026-07-15): the janitor
@@ -11,15 +11,15 @@ accumulating it.
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from openaugi.pipeline.writeback import append_feedback
+
 logger = logging.getLogger(__name__)
 
-FEEDBACK_LOG = "OpenAugi/Capture/feedback-log.ndjson"
 PROMOTE_FOLDER = "OpenAugi/Notes"
 
 _ECHO_BLOCK_RE = re.compile(
@@ -42,13 +42,6 @@ _SIGNALS = {
     "correctly quiet": "correct-silence",
 }
 _LINK_RE = re.compile(r"^- (?:closest: )?\[\[([^\]|]+)\]\]", re.MULTILINE)
-
-
-def _append_feedback(vault_path: Path, record: dict) -> None:
-    path = vault_path / FEEDBACK_LOG
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record) + "\n")
 
 
 def _promote(vault_path: Path, block_id: str, body: str, day: str) -> str | None:
@@ -107,7 +100,7 @@ def process_log(log_path: Path, vault_path: Path) -> int:
                     f"- ✓ promoted → [[{name}]]" if name else "- ✓ promote skipped (no links)"
                 )
             else:
-                _append_feedback(
+                append_feedback(
                     vault_path,
                     {
                         "ts": stamp,
