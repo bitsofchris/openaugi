@@ -144,7 +144,7 @@ Two lens families exist, with different trust levels:
 |---|---|---|
 | Trigger | Scheduled / "run the review pass" | On command: "distill X" |
 | Scope | Container's routed blocks since last run | Topic (agentic search + links) or user-selected context |
-| Output | `OpenAugi/Views/` — regenerable cache, no review | One note in `OpenAugi/Notes|Research/`, `#human-review`, wikilinked provenance |
+| Output | `OpenAugi/Views/` — regenerable cache, no review | One note in `OpenAugi/Notes|Research/`, opening with `- [ ] seen`, wikilinked provenance |
 | Lifecycle | Overwritten every run | Created once, user reviews, graduates toward their curated notes |
 
 Default is neither: **just-in-time distillation in chat** (retrieve + answer,

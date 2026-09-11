@@ -240,7 +240,7 @@ def _new_note(vault_path: Path, store, block_id: str, text: str, daily_note: str
             "---\ntype: document\n"
             f"description: Routed from the Augi Log on {day} as a new note.\n"
             f"created: {day}\n---\n\n"
-            f"# {title}\n\n#human-review\n\n"
+            f"# {title}\n\n- [ ] seen\n\n"
             f"### {day}\n\n{_wrapped(block_id, text, daily_note)}",
             encoding="utf-8",
         )

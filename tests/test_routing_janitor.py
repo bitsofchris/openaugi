@@ -272,7 +272,7 @@ class TestNewNote:
         notes = list((vault / "OpenAugi/Notes").glob("*.md"))
         assert len(notes) == 1 and notes[0].stem.startswith("Kids-first-day-at-school")
         body = notes[0].read_text()
-        assert "#human-review" in body and "<!-- augi:routed b2 -->" in body
+        assert "- [ ] seen" in body and "<!-- augi:routed b2 -->" in body
         assert f"- ✓ new note → [[{notes[0].stem}]] (you)" in log.read_text()
 
 

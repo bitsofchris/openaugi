@@ -16,6 +16,18 @@ longer name or gender their user, and `tests/test_impersonal_engine.py` keeps
 it that way — the first commit of the decision brief *Where a Personal
 Surface's Code Lives*, whose criterion is that the engine knows nothing about
 whose vault it is.
+**The review signal is a checkbox now, not a tag.** Every agent-written note
+used to carry `#human-review`, and accepting it meant opening the note and
+deleting the tag — enough friction that the queue grew to 263 notes. Notes now
+open with `- [ ] seen`, and the review surfaces
+(`OpenAugi/Inbox - Agent Review.md`, the Dashboard's `## Review queue`) run a
+Dataview `TASK` query, so ticking the box **from the queue page** writes the
+`[x]` back into the source note. One click, no file opened. `augi_log`,
+`echo_janitor` and `routing_janitor` write the box instead of the tag, and the
+agent templates say never to write the tag again. Existing tagged notes keep
+their tag: a second, legacy `FROM #human-review` query runs alongside the new
+one until that backlog drains.
+
 **Two board bugs, both about respecting what he wrote.**
 
 *One instruction, one task.* A block's id is the hash of its whole raw text, so

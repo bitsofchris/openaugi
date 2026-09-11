@@ -6,7 +6,7 @@ scope: >-
   a named topic, required at apply time ("apply lens idea-lineage to dopamine"). Evidence = `openaugi lineage` pre-compute over ALL history, then targeted retrieval into the strongest eras.
 trigger: on-demand
 target: >-
-  note — OpenAugi/Notes/YYYY-MM-DD - Lineage - <topic>.md (durable, #human-review)
+  note — OpenAugi/Notes/YYYY-MM-DD - Lineage - <topic>.md (durable, opens with `- [ ] seen`)
 ---
 # Idea Lineage
 
@@ -60,7 +60,9 @@ the idea — cited as influences, NEVER counted as your voice
 **Next concrete test:** ONLY if you named one in your notes — quote it.
 Never invent a next step.
 
-#human-review · *Lineage run YYYY-MM-DD over N blocks (YYYY-MM-DD → YYYY-MM-DD). Sidecar: OpenAugi/lineage/<slug>.json*
+- [ ] seen
+
+*Lineage run YYYY-MM-DD over N blocks (YYYY-MM-DD → YYYY-MM-DD). Sidecar: OpenAugi/lineage/<slug>.json*
 ```
 
 ## Hard rules

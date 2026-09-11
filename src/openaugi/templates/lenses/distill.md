@@ -44,7 +44,7 @@ repetition: re-deriving the same synthesis a third time means save it once.
 4. **Write ONE note** via `write_document` to `OpenAugi/Notes/` (concepts)
    or `OpenAugi/Research/` (topic research):
    - frontmatter description = the intent it answers
-   - `#human-review` tag in the body
+   - `- [ ] seen` checkbox as the first line of the body
    - wikilinks to every source note (graph edges at ingest)
    - footer: `*Distilled YYYY-MM-DD from N blocks. Source block IDs: …*`
    - a **placement nomination** on the Dashboard (standard grammar):

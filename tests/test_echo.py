@@ -119,7 +119,7 @@ class TestJanitor:
         body = notes[0].read_text()
         assert "## Context" in body and "## Log" in body
         assert "[[PMOC - Audacity]]" in body
-        assert "#human-review" in body
+        assert "- [ ] seen" in body
         assert "✓ promoted →" in path.read_text()
 
     def test_janitor_is_idempotent(self, tmp_path: Path):

@@ -21,7 +21,7 @@ target: >-
   "dashboard" (MERGE — nominations upserted into View - Dashboard.md by
   ^nom-* anchor; no standalone file; same-anchor rule makes re-runs
   idempotent) · "note — <path pattern>" (ARTIFACT — a NEW dated
-  #human-review note per run; accumulates, never overwrites) · "view —
+  `- [ ] seen` note per run; accumulates, never overwrites) · "view —
   overwrite <View - X.md>" (CACHE — same file overwritten every run;
   only the latest run exists; the only legal overwrite=True). Prose
   after the keyword is welcome. Pick by the question's shape: recurring
@@ -53,7 +53,7 @@ BODY — the intent prose the agent follows. Recommended sections:
 ## Intent (the question + the bar), ## Process (numbered), ## Hard rules.
 
 EVERY lens inherits the augi-agent hard rules: never edit notes outside
-OpenAugi/ · dashboard/note output is nominate-or-#human-review · only
+OpenAugi/ · dashboard/note output is nominate-or-`seen` · only
 view targets regenerate silently · one artifact per apply.
 -->
 

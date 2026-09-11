@@ -62,7 +62,7 @@ def _promote(vault_path: Path, block_id: str, body: str, day: str) -> str | None
         "---\ntype: document\n"
         f"description: Promoted from a proactive echo on {day} — {topic}\n"
         f"created: {day}\n---\n\n"
-        f"# {topic}\n\n#human-review\n\n"
+        f"# {topic}\n\n- [ ] seen\n\n"
         "## Context\n\n"
         f"Promoted from the Augi Log on {day}. The echo connected what was being "
         "written that day to earlier thinking:\n\n"

@@ -105,7 +105,7 @@ class TestLegacyLogs:
     """Logs from before the sections existed: echoes sit right under the header."""
 
     LEGACY = (
-        "# Augi Log — 2026-09-02\n\n#human-review\n\n"
+        "# Augi Log — 2026-09-02\n\n- [ ] seen\n\n"
         '<!-- echo:old -->\n\n### echo on "something…"\n- [[Note]] — why\n\n'
         "- [ ] promote → new note\n- [ ] good match\n- [ ] bad match\n\n"
         "## Quiet — closest match, not surfaced\n\n*debug*\n\n"
