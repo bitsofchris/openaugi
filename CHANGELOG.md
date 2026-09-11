@@ -16,6 +16,22 @@ longer name or gender their user, and `tests/test_impersonal_engine.py` keeps
 it that way — the first commit of the decision brief *Where a Personal
 Surface's Code Lives*, whose criterion is that the engine knows nothing about
 whose vault it is.
+**The board harvests yesterday's chats.** Thinking that happens in a chat
+window used to die there. Step 10 of the currency-board build now applies a new
+**`chat-harvest`** lens over yesterday's Claude Code / Codex transcripts and
+merges one `## Worth keeping` section into the board: at most one candidate
+note, under 150 words, anchored on Chris's own prompts rather than the model's
+answers, with the coding layer excluded and the destination (new note, or an
+append to a named note) already decided. `scripts/session_harvest.py` does the
+extraction and no judging — one local calendar day, human turns only, harness
+noise and subagent sidechains and trivial acknowledgements and augi's own
+dispatched sessions dropped, the longest reply per turn attached as context
+(`--day`, `--days`, `--json`). The offer reuses the existing two-box proposal
+grammar, so the janitor and task watcher carry it with no new code: the full
+note text lives in the `↳` brief and ticking `do` saves exactly what he read.
+Zero candidates is the common answer, and the section is omitted when there
+are none. Sessions themselves stay off the board — content only, never a
+status line (docs/reference/currency-board.md § Chat harvest).
 
 **The Augi Log is the routing surface.** Every new human daily-note block
 gets one row under `## Routing`: up to three proposed homes (`extend [[X]]`,

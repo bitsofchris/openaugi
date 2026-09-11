@@ -7,6 +7,23 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-09-08: the board harvests yesterday's chats.** Claude sessions were
+dropped from the board that morning ("we don't need them" — no status lines,
+nothing to resume), but the *content* of those chats was still being lost. New
+`chat-harvest` lens, applied as step 10 of the currency-board build: read
+yesterday's human turns and offer **at most one** note worth keeping, drafted
+in full with its destination and links, as a two-box `do`/`no` proposal. The
+extractor is `scripts/session_harvest.py` (stdlib, one local calendar day,
+human turns only, harness noise / sidechains / trivial acks / augi's own
+dispatched sessions dropped, longest reply per turn as context). No new
+plumbing: the existing proposal grammar carries it, so ticking `do` dispatches
+an agent on the drafted note verbatim. Reference:
+`docs/reference/currency-board.md` § Chat harvest.
+
+Not yet observed in daily use — the first live run is the 06:00 board on
+2026-09-09. What to watch: whether the bar holds at zero-most-days, and
+whether the drafted note is good enough to save without editing.
+
 **2026-08-29: proactive echo — the first thing that runs unasked.** New
 daily-note blocks are matched against Chris's own prior writing; when the
 match would genuinely help, an echo is appended to
