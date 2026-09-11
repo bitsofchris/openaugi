@@ -161,6 +161,7 @@ you write `zzz: <instruction>` in a vault note
   → pipeline/dispatch.py: blocks with zzz_instructions
     → queue them in the `zzz_queue` ledger (records table)
     → supersede any instruction this cycle's edit replaced
+    → carry a dispatched row forward when only the prose around it changed
     → drain: blocks unchanged for 120s become tasks
     → write task file to OpenAugi/Tasks/<slug>.md (status: pending)
   → agents/task_watcher.py picks it up (5s poll, 30s settle)
@@ -178,7 +179,7 @@ raw text *including* the `zzz` line, so finishing a half-written instruction
 deletes one block and inserts another — and a hook that fires on "new block
 with a zzz" fires twice for one instruction. (It did, on 2026-09-01: a task
 launched on `read this voice` at 20:41 and another on the finished sentence at
-20:52.) Two mechanisms, covering different gaps:
+20:52.) Three mechanisms, covering different gaps:
 
 - **Settle window** (`tasks.zzz_settle_seconds`, default 120) — a zzz block is
   queued and only becomes a task once it has survived unchanged. Drafts
@@ -191,6 +192,15 @@ launched on `read this voice` at 20:41 and another on the finished sentence at
   The old task is marked `status: superseded` and its tmux session killed, so
   the wording you finished is the only one still running. The transcript stays
   on disk.
+- **Carry-forward** — supersession alone still re-dispatches, because the
+  successor is a new block. But editing the *prose* around a `zzz` line
+  rewrites the block with the instruction untouched. When the successor's zzz
+  text is byte-identical and its predecessor already dispatched, it inherits
+  that ledger row and task file: no second task, no retirement notice, no
+  session killed. That is what makes dispatch idempotent per source block —
+  one instruction, one task, however many times the paragraph is edited. (On
+  2026-09-09 one research `zzz` dispatched three times over five hours this
+  way.) A *changed* instruction is a real edit and still supersedes.
 
 The ledger is the `zzz_queue` collection in the `records` table
 ([docs/reference/records.md](docs/reference/records.md)) — droppable workflow

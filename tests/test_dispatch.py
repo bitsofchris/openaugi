@@ -435,3 +435,78 @@ def test_supersede_finds_the_task_after_the_watcher_renames_it(tmp_path: Path, s
     record_zzz_changes([final], [draft], store, tmp_path)
 
     assert "status: superseded" in renamed.read_text()
+
+
+def test_prose_edit_after_dispatch_does_not_dispatch_again(tmp_path: Path, store: SQLiteStore):
+    """The 2026-09-09 bug: one research zzz, three agents.
+
+    The instruction never changed — he kept writing the paragraph it sat in.
+    Each edit re-hashed the block, and each new block looked like a brand-new
+    instruction. The successor must inherit the dispatched row instead.
+    """
+    zzz = ["formulate the preliminary research from this angle"]
+    first = _make_block("aaa1", "black swan cyber prep", zzz=zzz)
+    store.insert_blocks([first])
+    record_zzz_changes([first], [], store, tmp_path)
+    (task,) = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+
+    # He appends a sentence to the same paragraph — twice.
+    previous = first
+    for i, prose in enumerate(("...a content idea like", "...a content idea like the book"), 2):
+        nxt = _make_block(f"aaa{i}", f"black swan cyber prep {prose}", zzz=zzz)
+        store.delete_block(previous.id)
+        store.insert_blocks([nxt])
+        record_zzz_changes([nxt], [previous], store, tmp_path)
+        previous = nxt
+
+    assert drain_zzz_queue(store, tmp_path, settle_seconds=0) == []
+    assert _tasks(tmp_path) == [task]
+    # The live task is untouched — no supersession notice, no retirement.
+    assert "status: pending" in task.read_text()
+    assert "Superseded:" not in task.read_text()
+    # The chain is intact: the newest block owns the dispatched row.
+    assert _ledger(store, "aaa1")["status"] == SUPERSEDED
+    assert _ledger(store, "aaa1")["reason"] == "text-edited"
+    assert _ledger(store, "aaa3")["status"] == DISPATCHED
+    assert _ledger(store, "aaa3")["task_file"] == task.name
+    assert _ledger(store, "aaa3")["carried_from"] == "aaa2"
+
+
+def test_editing_the_instruction_itself_still_dispatches_again(tmp_path: Path, store: SQLiteStore):
+    """Carry-forward is keyed on the zzz text, so a real edit still supersedes."""
+    first = _make_block("aaa1", "note", zzz=["look into this"])
+    store.insert_blocks([first])
+    record_zzz_changes([first], [], store, tmp_path)
+    (task,) = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+
+    final = _make_block("aaa2", "note", zzz=["look into this, and compare to last year"])
+    store.delete_block("aaa1")
+    store.insert_blocks([final])
+    record_zzz_changes([final], [first], store, tmp_path)
+
+    assert _ledger(store, "aaa1")["reason"] == "edited"
+    assert "status: superseded" in task.read_text()
+    (second,) = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+    assert "compare to last year" in second.read_text()
+
+
+def test_prose_edit_while_still_settling_keeps_the_settle_window(
+    tmp_path: Path, store: SQLiteStore
+):
+    """Carry-forward only applies past dispatch. A queued row has no task to
+    inherit, so an edit supersedes it and the successor settles on its own —
+    which is what keeps half-written context out of the task file."""
+    zzz = ["do the thing"]
+    draft = _make_block("aaa1", "half a thought", zzz=zzz)
+    store.insert_blocks([draft])
+    record_zzz_changes([draft], [], store, tmp_path)
+
+    final = _make_block("aaa2", "half a thought, now whole", zzz=zzz)
+    store.delete_block("aaa1")
+    store.insert_blocks([final])
+    record_zzz_changes([final], [draft], store, tmp_path)
+
+    assert _ledger(store, "aaa1")["status"] == SUPERSEDED
+    (written,) = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+    assert "now whole" in written.read_text()
+    assert len(_tasks(tmp_path)) == 1

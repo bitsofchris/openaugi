@@ -86,7 +86,7 @@ match / bad match).
 | Channel | For | Where it goes |
 |---|---|---|
 | `aaa: <why>` under an item | That item — why not, what's actually needed, a correction to carry forward | Stored on the item's key; future boards honor it literally |
-| The `Notes to augi` callout | The board itself — wrong, missing, too vague, noise | Logged as `currency-board-note`, marked `✓ noted`, read as an instruction by the next build |
+| The `Notes to augi` callout | The board itself — wrong, missing, too vague, noise | Logged as `currency-board-note`, read as an instruction by the next build. **The janitor never edits this section** — his text is his. The log is the read marker: a line already logged for that board is not logged again, and a line added later is logged on its own. (Until 2026-09-10 the janitor overwrote his first line with `✓ noted <day>` and blanked the rest, which also stopped everything he wrote afterwards from ever being logged.) |
 
 `aaa:` is already the review pass's instruction grammar, so neither needs a new
 parser or a trip outside Obsidian.

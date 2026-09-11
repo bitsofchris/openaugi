@@ -33,6 +33,17 @@ Two mechanisms fix it, and both are needed because they cover different gaps:
    supersedes it — the old task is marked and its tmux session killed, so the
    instruction you finished writing is the one that runs.
 
+3. **Carry-forward.** Supersession alone still re-dispatches, because a
+   successor block is a new block. But an edit to the *prose* around a `zzz`
+   line — finishing the thought the instruction is about — rewrites the block
+   without touching the instruction. When the successor's zzz text is
+   byte-identical to the predecessor's and that predecessor already
+   dispatched, the successor inherits its ledger row and task file instead of
+   getting its own. That is what makes dispatch idempotent per source block:
+   one instruction, one task, however many times the paragraph is edited.
+   (On 2026-09-09 one research `zzz` dispatched three times this way.) A
+   *changed* instruction is a real edit and still supersedes.
+
 The ledger lives in the `records` table under the `zzz_queue` collection
 (docs/reference/records.md) — workflow state, droppable, pruned once settled.
 It also makes dispatch idempotent across restarts and re-ingests: a block id
@@ -75,6 +86,11 @@ DEFAULT_CAPTURE_FOLDER = "OpenAugi/Capture"  # mobile daily-note writer (server/
 # Obsidian block link into a capture daily note: [[YYYY-MM-DD#^augi-<id8>]].
 # Written by mobile distill (curation.md) — provenance refs to gathered blocks.
 ANCHOR_REF_RE = re.compile(r"\[\[(\d{4}-\d{2}-\d{2})#\^(augi-[A-Za-z0-9]+)\]\]")
+
+
+def _instructions_of(block: Block) -> list[str]:
+    """The block's zzz instructions, normalised for comparison."""
+    return [str(z).strip() for z in block.metadata.get("zzz_instructions", [])]
 
 
 def _slugify(text: str, max_len: int = 50) -> str:
@@ -329,6 +345,9 @@ def record_zzz_changes(
     for source_path, olds in gone.items():
         news = fresh.get(source_path, [])
         for old, new in zip(olds, news, strict=False):
+            if _carry_forward(store, ledger, old.id, new, stamp):
+                superseded.add(old.id)
+                continue
             _supersede(store, ledger, tasks_dir, old.id, new.id, stamp)
             superseded.add(old.id)
         for old in olds[len(news) :]:
@@ -362,6 +381,7 @@ def record_zzz_changes(
                     "status": QUEUED,
                     "source_path": source_path,
                     "title": _derive_title(block),
+                    "instructions": _instructions_of(block),
                     "task_content": build_task_file(block, vault_path=vault),
                 },
                 stamp,
@@ -369,6 +389,62 @@ def record_zzz_changes(
             logger.info(
                 "zzz %s queued from %s (settling)", block.id[:12], source_path or "unknown"
             )
+
+
+def _carry_forward(
+    store: SQLiteStore,
+    ledger: dict[str, dict],
+    old_id: str,
+    new: Block,
+    stamp: str,
+) -> bool:
+    """Inherit a dispatched row when only the prose around the zzz changed.
+
+    A block's identity is the hash of its whole raw text, so appending a
+    sentence to the paragraph that carries a `zzz` line deletes the block and
+    inserts a new one — with the instruction byte-for-byte unchanged. Without
+    this, every such edit looked like a brand-new instruction and dispatched
+    the same task again (2026-09-09: one research zzz, three agents).
+
+    So: same instruction, already dispatched → the successor inherits the row
+    and the task file. Nothing new is written, the running session is left
+    alone, and the chain stays intact for the next edit. A *changed*
+    instruction is a real edit and falls through to supersession.
+
+    Returns True when the row was carried forward.
+    """
+    row = ledger.get(old_id, {})
+    if row.get("status") != DISPATCHED:
+        return False
+    previous = row.get("instructions")
+    if not isinstance(previous, list) or [str(z) for z in previous] != _instructions_of(new):
+        # Either the instruction really changed, or this row predates the
+        # `instructions` field and we cannot tell — supersede, as before.
+        return False
+
+    store.update_record(
+        ZZZ_QUEUE_COLLECTION,
+        old_id,
+        {"status": SUPERSEDED, "reason": "text-edited", "superseded_by": new.id},
+        stamp,
+    )
+    carried = {
+        **row,
+        "status": DISPATCHED,
+        "carried_from": old_id,
+        "instructions": _instructions_of(new),
+    }
+    carried.pop("id", None)
+    carried.pop("created_at", None)
+    carried.pop("updated_at", None)
+    store.write_record(ZZZ_QUEUE_COLLECTION, new.id, carried, stamp)
+    ledger[new.id] = {"id": new.id, **carried}
+    logger.info(
+        "zzz %s re-hashed as %s with the same instruction — not dispatching again",
+        old_id[:12],
+        new.id[:12],
+    )
+    return True
 
 
 def _supersede(

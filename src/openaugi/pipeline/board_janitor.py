@@ -102,6 +102,9 @@ _VALID_PROPOSAL_STATES = {"open", "dispatched", "declined"}
 #: Log sources. Item ticks and proposal ticks share the stream but not the
 #: vocabulary, so they are projected separately.
 BOARD_SOURCE = "currency-board"
+# Free text left in the `Notes to augi` section — feedback about the board
+# itself. Logged under its own source so it never mixes with item ticks.
+NOTE_SOURCE = "currency-board-note"
 PROPOSAL_SOURCE = "currency-board-proposal"
 #: Where a dispatched proposal lands. The task watcher hydrates and renames it.
 TASKS_FOLDER = "OpenAugi/Tasks"
@@ -215,59 +218,89 @@ def parse_items(text: str) -> dict[str, dict]:
     return items
 
 
-def _process_board_note(lines: list[str | None], vault_path: Path, day: str) -> bool:
-    """Log free text left in the `Notes to augi` callout, then mark it read.
+def _note_lines(text: str) -> list[str]:
+    """The free-text lines left in the `Notes to augi` section.
 
-    This is the channel for feedback about the *board* rather than about one
-    item: what was wrong, missing, too vague, or noise. Returns True when
-    something was found, so the caller knows to rewrite the file.
+    Reads the board as written — the section is never rewritten, so this is a
+    pure read. Legacy `✓ noted` receipt lines (written by an older janitor
+    that overwrote the first line) are skipped, not treated as a terminator:
+    a receipt above the text must not hide the text below it.
     """
-    # Answered items leave None tombstones behind; skip them.
-    start = next(
-        (i for i, line in enumerate(lines) if line is not None and _NOTE_MARKER_RE.match(line)),
-        None,
-    )
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if _NOTE_MARKER_RE.match(line)), None)
     if start is None:
-        return False
+        return []
 
     # A quoted marker means this board still uses the callout format, where the
     # section ends at the first unquoted line. A plain one runs until the next
     # heading, rule or checkbox.
-    quoted = (lines[start] or "").lstrip().startswith(">")
+    quoted = lines[start].lstrip().startswith(">")
 
-    body: list[tuple[int, str]] = []
+    body: list[str] = []
     for pos in range(start + 1, len(lines)):
         line = lines[pos]
-        if line is None:
-            continue
         if quoted and not line.lstrip().startswith(">"):
             break  # the callout ended
         if _NOTE_END_RE.match(line) or _BOX_RE.match(line) or _ITEM_RE.match(line):
             break  # the next section started
-        text = _NOTE_LINE_RE.match(line).group("text")  # type: ignore[union-attr]
-        if text.startswith("✓ noted"):  # already processed
-            return False
-        if text:
-            body.append((pos, text))
+        entry = _NOTE_LINE_RE.match(line).group("text")  # type: ignore[union-attr]
+        if not entry or entry.startswith("✓ noted"):
+            continue
+        body.append(entry)
+    return body
 
+
+def _logged_note_lines(vault_path: Path, day: str) -> set[str]:
+    """Note lines already logged for this board — the read marker.
+
+    The append-only log is where "we have seen this" lives, so the board note
+    itself needs no receipt and never gets edited. Rows written before the
+    `lines` field existed fall back to their joined `reason`.
+    """
+    seen: set[str] = set()
+    for row in read_feedback(vault_path, source=NOTE_SOURCE):
+        if row.get("board") != day:
+            continue
+        logged = row.get("lines")
+        if isinstance(logged, list):
+            seen.update(str(entry) for entry in logged)
+        elif row.get("reason"):
+            seen.add(str(row["reason"]))
+    return seen
+
+
+def _log_board_note(text: str, vault_path: Path, day: str) -> int:
+    """Log free text left in the `Notes to augi` callout. Never edits it.
+
+    This is the channel for feedback about the *board* rather than about one
+    item: what was wrong, missing, too vague, or noise. The text belongs to
+    whoever wrote it — the janitor reads it and remembers that it read it, and
+    that is all. Adding a
+    line later logs the new line only; nothing already logged repeats.
+
+    Returns the number of lines newly logged.
+    """
+    body = _note_lines(text)
     if not body:
-        return False
+        return 0
+    seen = _logged_note_lines(vault_path, day)
+    fresh = [entry for entry in body if entry not in seen]
+    if not fresh:
+        return 0
 
     append_feedback(
         vault_path,
         {
             "ts": now(),
-            "source": "currency-board-note",
+            "source": NOTE_SOURCE,
             "board": day,
             "signal": "note",
-            "reason": " ".join(text for _, text in body),
+            "lines": fresh,
+            "reason": " ".join(fresh),
         },
     )
-    for pos, _ in body[1:]:
-        lines[pos] = None
-    lines[body[0][0]] = f"> ✓ noted {day}" if quoted else f"✓ noted {day}"
-    logger.info(f"Board janitor: board note recorded for {day}")
-    return True
+    logger.info(f"Board janitor: {len(fresh)} board-note line(s) recorded for {day}")
+    return len(fresh)
 
 
 def _unquote(line: str) -> str:
@@ -684,9 +717,11 @@ def sync_board(board_path: Path, vault_path: Path) -> int:
         answered += 1
 
     answered += _process_proposals(lines, text, board_path, vault_path, day)
-    noted = _process_board_note(lines, vault_path, day)
+    # Read-only: the note is logged, never rewritten, so it never contributes
+    # a reason to touch the file.
+    _log_board_note(text, vault_path, day)
 
-    if answered or noted:
+    if answered:
         board_path.write_text(
             "\n".join(line for line in lines if line is not None) + "\n", encoding="utf-8"
         )

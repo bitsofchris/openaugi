@@ -16,6 +16,29 @@ longer name or gender their user, and `tests/test_impersonal_engine.py` keeps
 it that way — the first commit of the decision brief *Where a Personal
 Surface's Code Lives*, whose criterion is that the engine knows nothing about
 whose vault it is.
+**Two board bugs, both about respecting what he wrote.**
+
+*One instruction, one task.* A block's id is the hash of its whole raw text, so
+appending a sentence to the paragraph a `zzz` line sits in deletes the block
+and inserts a new one — with the instruction byte-for-byte unchanged. Dispatch
+read that as a brand-new instruction and fired again: on 2026-09-09 one
+research `zzz` launched three agents over five hours. Dispatch now **carries
+the ledger row forward** when a successor's zzz text is identical to a
+predecessor that already dispatched — it inherits the row and the task file, so
+nothing new is written, the running session is left alone, and the chain stays
+intact for the next edit. A *changed* instruction is still a real edit and
+still supersedes (ARCHITECTURE.md § ZZZ Dispatch).
+
+*His note is not a receipt slot.* The board janitor used to overwrite the first
+line of the `Notes to augi` section with `✓ noted <day>` and blank the rest —
+destroying what he wrote, and worse, the receipt then made every later note on
+that board look already-processed, so nothing he added afterwards was ever
+logged. The section is now **read-only**: the janitor logs it and never edits
+it, and the append-only feedback log is the read marker — a line already logged
+for that board is not logged again, a line added later is logged on its own,
+and legacy `✓ noted` receipts already on disk are skipped rather than treated
+as a terminator (docs/reference/currency-board.md).
+
 **One reading queue, and it is Readwise Reader.** `openaugi reading push` ships
 notes carrying `reading_queue: true` in their frontmatter to Reader as
 documents authored by augi — rendered to HTML, `location: later` so they never
