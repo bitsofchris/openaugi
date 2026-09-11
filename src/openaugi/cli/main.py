@@ -1453,6 +1453,163 @@ def status(
         store.close()
 
 
+# ── Reading queue ──────────────────────────────────────────────────
+
+reading_app = typer.Typer(
+    help="Reading queue — flagged notes out to Readwise Reader, highlights back."
+)
+app.add_typer(reading_app, name="reading")
+
+
+def _reading_vault(path: str | None) -> str:
+    from openaugi.config import load_config, resolve_vault_path
+
+    vault_path = resolve_vault_path(path, load_config())
+    if not vault_path:
+        console.print("[red]No vault path specified.[/red] Use --path or set it in config.")
+        raise typer.Exit(1)
+    return vault_path
+
+
+@reading_app.command(name="push")
+def reading_push(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    cap: int = typer.Option(2, "--cap", help="Maximum documents to push in one run"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would ship; send nothing, record nothing"
+    ),
+    show_html: bool = typer.Option(
+        False, "--show-html", help="With --dry-run, print the rendered HTML of each note"
+    ),
+):
+    """Push notes flagged `reading_queue: true` into Readwise Reader.
+
+    Nothing ships unless a note carries the flag, and never more than --cap in
+    one run. Re-running is safe: an unchanged note is skipped, an edited one
+    updates its Reader document in place.
+    """
+    from openaugi.reading.note import to_html
+    from openaugi.reading.push import build_payload, find_flagged_notes, push_notes
+    from openaugi.reading.reader_api import MissingTokenError, ReaderClient
+    from openaugi.store.sqlite import SQLiteStore
+
+    vault_path = _reading_vault(path)
+
+    if dry_run and show_html:
+        for note in find_flagged_notes(vault_path):
+            console.print(f"\n[bold]{note.rel_path}[/bold]  ({note.word_count()} words)")
+            console.print(f"[dim]{build_payload(note)['url']}[/dim]")
+            console.print(to_html(note.body))
+
+    client = None
+    if not dry_run:
+        try:
+            client = ReaderClient()
+        except MissingTokenError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(1) from exc
+
+    store = SQLiteStore(db or str(_default_db()))
+    try:
+        result = push_notes(vault_path, store, client, cap=cap, dry_run=dry_run)
+    finally:
+        store.close()
+        if client:
+            client.close()
+
+    label = "[yellow]would push[/yellow]" if dry_run else "[green]pushed[/green]"
+    for rel in result.pushed:
+        console.print(f"  {label} {rel}")
+    for rel in result.deferred_over_cap:
+        console.print(f"  [dim]over cap, waits for tomorrow[/dim] {rel}")
+    for rel in result.skipped_unchanged:
+        console.print(f"  [dim]unchanged[/dim] {rel}")
+    for rel, err in result.failed:
+        console.print(f"  [red]failed[/red] {rel}: {err}")
+    console.print(f"\n{result.summary}")
+
+
+@reading_app.command(name="harvest")
+def reading_harvest(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    since: str | None = typer.Option(
+        None, "--since", help="ISO timestamp; defaults to the last harvest"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Report what would be appended; write nothing"
+    ),
+):
+    """Append new Reader highlights to the augi notes that produced them.
+
+    Only documents augi pushed are touched — everything else in the Reader
+    queue is your own reading and is left alone.
+    """
+    from openaugi.reading.harvest import harvest
+    from openaugi.reading.reader_api import MissingTokenError, ReaderClient
+    from openaugi.store.sqlite import SQLiteStore
+
+    vault_path = _reading_vault(path)
+
+    try:
+        client = ReaderClient()
+    except MissingTokenError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+
+    store = SQLiteStore(db or str(_default_db()))
+    try:
+        result = harvest(vault_path, store, client, since=since, dry_run=dry_run)
+    finally:
+        store.close()
+        client.close()
+
+    verb = "would append to" if dry_run else "appended to"
+    for rel in result.notes_updated:
+        console.print(f"  [green]{verb}[/green] {rel}")
+    console.print(f"\n{result.summary}")
+
+
+@reading_app.command(name="status")
+def reading_status(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+):
+    """What is flagged, what has been pushed, and what came back."""
+    from openaugi.reading.harvest import last_run
+    from openaugi.reading.push import COLLECTION, find_flagged_notes
+    from openaugi.store.sqlite import SQLiteStore
+
+    vault_path = _reading_vault(path)
+    flagged = find_flagged_notes(vault_path)
+
+    store = SQLiteStore(db or str(_default_db()), read_only=True)
+    try:
+        ledger = store.list_records(COLLECTION, limit=10_000)
+        harvested_at = last_run(store)
+    finally:
+        store.close()
+
+    console.print(f"\n[bold]Reading queue[/bold]  ({vault_path})\n")
+    console.print(f"Flagged notes: [cyan]{len(flagged)}[/cyan]")
+    console.print(f"Pushed:        [cyan]{len(ledger)}[/cyan]")
+    console.print(f"Last harvest:  [cyan]{harvested_at or 'never'}[/cyan]")
+
+    if ledger:
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("pushed")
+        table.add_column("highlights", justify="right")
+        table.add_column("note")
+        for row in sorted(ledger, key=lambda r: str(r.get("pushed_at")), reverse=True):
+            table.add_row(
+                str(row.get("pushed_at", ""))[:10],
+                str(len(row.get("harvested_ids") or [])),
+                str(row.get("path", "")),
+            )
+        console.print(table)
+
+
 # ── Task dispatch ──────────────────────────────────────────────────
 
 

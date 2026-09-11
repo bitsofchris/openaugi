@@ -16,6 +16,21 @@ longer name or gender their user, and `tests/test_impersonal_engine.py` keeps
 it that way — the first commit of the decision brief *Where a Personal
 Surface's Code Lives*, whose criterion is that the engine knows nothing about
 whose vault it is.
+**One reading queue, and it is Readwise Reader.** `openaugi reading push` ships
+notes carrying `reading_queue: true` in their frontmatter to Reader as
+documents authored by augi — rendered to HTML, `location: later` so they never
+jump your own saves, at most two a day. The `url` is fabricated and stable
+(`https://augi.local/note/<sha8-of-vault-path>`), which is the whole trick: it
+makes a re-push an in-place update rather than a duplicate, and it comes back
+as `source_url` on every read, so `openaugi reading harvest` can take a
+highlight, walk to its parent document, and append it to the note that produced
+it under `## Read in Reader — <date>` — your marks on augi's text, next to the
+original, one artifact per idea instead of a detached mirror in a reference
+folder. `openaugi reading status` shows what is flagged, what has been pushed
+and what came back. Both commands are manual and both are safe to re-run;
+nothing is scheduled and no agent sets the flag automatically yet, because the
+open question is not technical (docs/reference/reading-queue.md).
+
 **The board harvests yesterday's chats.** Thinking that happens in a chat
 window used to die there. Step 10 of the currency-board build now applies a new
 **`chat-harvest`** lens over yesterday's Claude Code / Codex transcripts and

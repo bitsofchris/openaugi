@@ -7,6 +7,30 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-09-09: the reading queue — augi's prose in Reader, marks back in the
+vault.** Built the core of the round trip from
+`<vault>/OpenAugi/Plans/Plan - Reading Queue in Readwise.md`: `openaugi reading
+push` ships notes flagged `reading_queue: true` to Readwise Reader (rendered to
+HTML, `location: later`, capped at 2/day), and `openaugi reading harvest` walks
+each new highlight → its parent document → the fabricated `source_url`
+(`https://augi.local/note/<sha8-of-vault-path>`) → the note that produced it,
+appending `## Read in Reader — <date>`. The fabricated stable URL is the load-
+bearing trick: re-push updates in place, and the mapping table never has to
+exist. `reading status` shows flagged / pushed / came back. New module
+`src/openaugi/reading/` (note · reader_api · push · harvest), 27 tests against
+a fake Reader, no network. Reference: `docs/reference/reading-queue.md`.
+
+**Deliberately NOT built, and this is the gate:** no launchd job, no board
+line, and no rule in `augi-agent.md` that makes an agent set the flag. The
+plan's own instruction was to answer one question before automating anything —
+*does reading augi's prose in Reader feel like reading, or like doing inbox?*
+Next: flag one existing research note, `openaugi reading push`, read it on the
+phone, highlight two or three things, `openaugi reading harvest` the next day.
+If it feels like inbox, delete `src/openaugi/reading/` — nothing else depends
+on it. Also open from the plan: `later` vs `new`, auto-gate vs a board tick,
+and whether highlights should also append to `Capture/feedback-log.ndjson`
+(they are the sharpest signal we have about what is worth writing).
+
 **2026-09-08: the board harvests yesterday's chats.** Claude sessions were
 dropped from the board that morning ("we don't need them" — no status lines,
 nothing to resume), but the *content* of those chats was still being lost. New
