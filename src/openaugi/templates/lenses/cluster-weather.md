@@ -61,7 +61,7 @@ each other; cluster weather watches the whole sky.
    `*Cluster weather last run: YYYY-MM-DD, window 14d, baseline YYYY-MM-DD (or "first run — activity only").*`
 
 5. **On an answered nomination:** promote = assemble ONE note via
-   `write_document` to `OpenAugi/Notes/` with `#human-review` — the
+   `write_document` to `OpenAugi/Notes/` opening with `- [ ] seen` — the
    theme in a paragraph, the strongest member blocks linked as
    provenance (new members first, then the best older ones — that's the
    resurfacing feature). Fading answered "park" = note it in the area's

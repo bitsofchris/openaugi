@@ -10,11 +10,11 @@ import pytest
 from openaugi.model.block import Block
 from openaugi.pipeline import augi_log, route, routing_janitor
 from openaugi.pipeline.routing_janitor import (
-    FEEDBACK_LOG,
     insert_extend,
     process_log,
     remove_extend,
 )
+from openaugi.pipeline.writeback import FEEDBACK_LOG
 
 DAY = "2026-09-03"
 DAILY = f"_private/0-Fleeting-Inbox/{DAY}.md"
@@ -272,7 +272,7 @@ class TestNewNote:
         notes = list((vault / "OpenAugi/Notes").glob("*.md"))
         assert len(notes) == 1 and notes[0].stem.startswith("Kids-first-day-at-school")
         body = notes[0].read_text()
-        assert "#human-review" in body and "<!-- augi:routed b2 -->" in body
+        assert "- [ ] seen" in body and "<!-- augi:routed b2 -->" in body
         assert f"- ✓ new note → [[{notes[0].stem}]] (you)" in log.read_text()
 
 

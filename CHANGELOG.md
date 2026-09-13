@@ -2,6 +2,87 @@
 
 ## Unreleased
 
+**One write-back module for every janitor.** `pipeline/writeback.py` now owns
+what the board, the echo log and the routing rows each used to define for
+themselves: the `feedback-log.ndjson` path (spelled out in four modules), the
+append and the tolerant ndjson read, the UTC timestamp, and builders for the
+shared `- [x] label` / `aaa:` grammar. The vocabulary stays per-surface —
+`done / not doing / someday` is the board's, the routing verbs are routing's —
+so the builders take strictness as arguments instead of imposing one regex on
+surfaces that genuinely differ (a board line is inside a callout; a routing row
+is not). Behavior is unchanged; the existing janitor tests are the proof.
+Alongside it, the prose the engine generates and the docstrings it ships no
+longer name or gender their user, and `tests/test_impersonal_engine.py` keeps
+it that way — the first commit of the decision brief *Where a Personal
+Surface's Code Lives*, whose criterion is that the engine knows nothing about
+whose vault it is.
+**The review signal is a checkbox now, not a tag.** Every agent-written note
+used to carry `#human-review`, and accepting it meant opening the note and
+deleting the tag — enough friction that the queue grew to 263 notes. Notes now
+open with `- [ ] seen`, and the review surfaces
+(`OpenAugi/Inbox - Agent Review.md`, the Dashboard's `## Review queue`) run a
+Dataview `TASK` query, so ticking the box **from the queue page** writes the
+`[x]` back into the source note. One click, no file opened. `augi_log`,
+`echo_janitor` and `routing_janitor` write the box instead of the tag, and the
+agent templates say never to write the tag again. Existing tagged notes keep
+their tag: a second, legacy `FROM #human-review` query runs alongside the new
+one until that backlog drains.
+
+**Two board bugs, both about respecting what he wrote.**
+
+*One instruction, one task.* A block's id is the hash of its whole raw text, so
+appending a sentence to the paragraph a `zzz` line sits in deletes the block
+and inserts a new one — with the instruction byte-for-byte unchanged. Dispatch
+read that as a brand-new instruction and fired again: on 2026-09-09 one
+research `zzz` launched three agents over five hours. Dispatch now **carries
+the ledger row forward** when a successor's zzz text is identical to a
+predecessor that already dispatched — it inherits the row and the task file, so
+nothing new is written, the running session is left alone, and the chain stays
+intact for the next edit. A *changed* instruction is still a real edit and
+still supersedes (ARCHITECTURE.md § ZZZ Dispatch).
+
+*His note is not a receipt slot.* The board janitor used to overwrite the first
+line of the `Notes to augi` section with `✓ noted <day>` and blank the rest —
+destroying what he wrote, and worse, the receipt then made every later note on
+that board look already-processed, so nothing he added afterwards was ever
+logged. The section is now **read-only**: the janitor logs it and never edits
+it, and the append-only feedback log is the read marker — a line already logged
+for that board is not logged again, a line added later is logged on its own,
+and legacy `✓ noted` receipts already on disk are skipped rather than treated
+as a terminator (docs/reference/currency-board.md).
+
+**One reading queue, and it is Readwise Reader.** `openaugi reading push` ships
+notes carrying `reading_queue: true` in their frontmatter to Reader as
+documents authored by augi — rendered to HTML, `location: later` so they never
+jump your own saves, at most two a day. The `url` is fabricated and stable
+(`https://augi.local/note/<sha8-of-vault-path>`), which is the whole trick: it
+makes a re-push an in-place update rather than a duplicate, and it comes back
+as `source_url` on every read, so `openaugi reading harvest` can take a
+highlight, walk to its parent document, and append it to the note that produced
+it under `## Read in Reader — <date>` — your marks on augi's text, next to the
+original, one artifact per idea instead of a detached mirror in a reference
+folder. `openaugi reading status` shows what is flagged, what has been pushed
+and what came back. Both commands are manual and both are safe to re-run;
+nothing is scheduled and no agent sets the flag automatically yet, because the
+open question is not technical (docs/reference/reading-queue.md).
+
+**The board harvests yesterday's chats.** Thinking that happens in a chat
+window used to die there. Step 10 of the currency-board build now applies a new
+**`chat-harvest`** lens over yesterday's Claude Code / Codex transcripts and
+merges one `## Worth keeping` section into the board: at most one candidate
+note, under 150 words, anchored on Chris's own prompts rather than the model's
+answers, with the coding layer excluded and the destination (new note, or an
+append to a named note) already decided. `scripts/session_harvest.py` does the
+extraction and no judging — one local calendar day, human turns only, harness
+noise and subagent sidechains and trivial acknowledgements and augi's own
+dispatched sessions dropped, the longest reply per turn attached as context
+(`--day`, `--days`, `--json`). The offer reuses the existing two-box proposal
+grammar, so the janitor and task watcher carry it with no new code: the full
+note text lives in the `↳` brief and ticking `do` saves exactly what he read.
+Zero candidates is the common answer, and the section is omitted when there
+are none. Sessions themselves stay off the board — content only, never a
+status line (docs/reference/currency-board.md § Chat harvest).
+
 **The Augi Log is the routing surface.** Every new human daily-note block
 gets one row under `## Routing`: up to three proposed homes (`extend [[X]]`,
 `link [[X]]`, `file under [[X]]`, `new note`), each with a one-clause why,

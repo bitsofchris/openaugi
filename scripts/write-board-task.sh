@@ -41,6 +41,12 @@ item whose state is \`done\`, \`not-doing\` or \`someday\`, honor every \`reason
 literally, and use \`appearances\` for the staleness flag (an item on its third
 board gets one plain line, never a repeated nag).
 
+Step 10 of that lens applies the \`chat-harvest\` lens
+(\`OpenAugi/AGENT/lenses/chat-harvest.md\`) over yesterday's AI chat transcripts
+and merges its \`## Worth keeping\` section into the board — at most one concise
+note proposal, ideas and learning only, never the coding. Zero candidates is the
+common answer; omit the section when there are none.
+
 Write \`OpenAugi/Board/$DAY - Board.md\`, then overwrite
 \`OpenAugi/Views/View - Board.md\` with a link and embed of it.
 

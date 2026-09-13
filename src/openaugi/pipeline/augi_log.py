@@ -90,7 +90,7 @@ def ensure_log(path: Path, day: str) -> str:
         "Answer with checkboxes; tick 'process this log' to apply. Safe to delete — "
         "an unprocessed log is simply never applied.\n"
         f"created: {day}\n---\n\n"
-        f"# Augi Log — {day}\n\n#human-review\n\n"
+        f"# Augi Log — {day}\n\n- [ ] seen\n\n"
         "*Appended as you write. Read when you want; an unanswered log is never applied.*\n"
     )
     path.write_text(header, encoding="utf-8")

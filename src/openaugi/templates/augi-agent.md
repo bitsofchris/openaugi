@@ -72,7 +72,7 @@ any new lens; don't freestyle the frontmatter.
 4. Write to the target: `dashboard` → a section on `View - Dashboard.md`
    using the standard nomination grammar (checkbox + `^nom-*` anchor +
    answer slot) · `note` → ONE note via `write_document` with
-   `#human-review` and provenance · `view:<container>` → regenerate that
+   a `- [ ] seen` box and provenance · `view:<container>` → regenerate that
    view file (`overwrite=True` is legal only for Views).
    **When you call `write_document` for a `note` or `view` output, pass
    `extra_frontmatter={"lens": "<name>"}`** — this stamps provenance so
@@ -100,7 +100,7 @@ is.
 (from any surface, including mobile zzz). Write the spec file directly to
 `OpenAugi/AGENT/lenses/<slug>.md` (kebab-case slug; agent-space, so no
 nomination needed): draft sensible `scope`/`trigger`/`target` defaults
-from the intent and tag the body `#human-review`. Add its row to the
+from the intent and open the body with `- [ ] seen`. Add its row to the
 Dashboard's `## Lenses` section (last run = "never") — the row doubles as
 the Dashboard notice that the lens exists. The user edits or deletes the
 file to tune it — the file is the interface.
@@ -124,7 +124,7 @@ wants to write many things should nominate instead.
 2. **Check for sub-agent instructions.** If the task matches a specialized type above, read that doc before proceeding.
 3. **Use the knowledge graph.** Search for related blocks, follow links, build context before acting. The graph often has relevant prior work.
 4. **Write output to `OpenAugi/`.** All agent-generated content goes under `OpenAugi/` in the vault. Never modify the user's raw notes outside of `OpenAugi/`.
-5. **Tag output with `#human-review`.** Every file you create or substantially modify should include `#human-review` so the user can find and verify your work.
+5. **Mark output with `- [ ] seen`.** Every file you create or substantially modify opens its body with a `- [ ] seen` checkbox — one line, nothing else on it — so the user can find and accept your work. Ticking that box is the "reviewed and accepted" signal, and it is tickable straight from the review queue, so accepting never means opening the note.
 6. **When done, update the task file.** Fill in `## Results` with what you did and set `status: done` in frontmatter.
 
 ## Common task types
@@ -159,6 +159,7 @@ Use your best judgment. The user's instruction is the guide. Write what you did 
 
 - **Never modify raw notes.** The user's vault root, daily notes, and area folders are read-only. Only write under `OpenAugi/`.
 - **Use MCP tools for vault lookups.** Don't grep the filesystem when `search` / `get_context` are available — they use the indexed graph and embeddings.
-- **Tag everything with `#human-review`.** The user checks agent output before trusting it.
+- **Open every note with `- [ ] seen`.** The user checks agent output before trusting it; they accept it by ticking that box.
+- **Never write `#human-review`.** The tag was the old form of this signal, retired 2026-09-10. The `seen` checkbox is the only review signal. Notes that already carry the tag keep it — don't strip tags from old notes, just don't write new ones.
 - **Update the task file when done.** Fill `## Results`, set `status: done`.
 - **If stuck, set `status: needs-input`.** Add what you need to `## Human Todo` and stop. Don't guess on ambiguous decisions.

@@ -62,6 +62,7 @@ src/openaugi/
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
 │   ├── dispatch.py        # Post-ingest: zzz instructions → task files in OpenAugi/Tasks/
 │   ├── augi_log.py        # The shared per-day Augi Log: sections, eligibility gate, heartbeat
+│   ├── writeback.py       # Shared write-back: the feedback log path/read/append, and the box + `aaa:` grammar
 │   ├── route.py           # Post-ingest: one routing row per new human block in the Augi Log (docs/reference/augi-log-routing.md)
 │   ├── routing_janitor.py # Applies a log's routing rows once its master box is ticked; undo; feedback
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
@@ -160,6 +161,7 @@ you write `zzz: <instruction>` in a vault note
   → pipeline/dispatch.py: blocks with zzz_instructions
     → queue them in the `zzz_queue` ledger (records table)
     → supersede any instruction this cycle's edit replaced
+    → carry a dispatched row forward when only the prose around it changed
     → drain: blocks unchanged for 120s become tasks
     → write task file to OpenAugi/Tasks/<slug>.md (status: pending)
   → agents/task_watcher.py picks it up (5s poll, 30s settle)
@@ -177,7 +179,7 @@ raw text *including* the `zzz` line, so finishing a half-written instruction
 deletes one block and inserts another — and a hook that fires on "new block
 with a zzz" fires twice for one instruction. (It did, on 2026-09-01: a task
 launched on `read this voice` at 20:41 and another on the finished sentence at
-20:52.) Two mechanisms, covering different gaps:
+20:52.) Three mechanisms, covering different gaps:
 
 - **Settle window** (`tasks.zzz_settle_seconds`, default 120) — a zzz block is
   queued and only becomes a task once it has survived unchanged. Drafts
@@ -190,6 +192,15 @@ launched on `read this voice` at 20:41 and another on the finished sentence at
   The old task is marked `status: superseded` and its tmux session killed, so
   the wording you finished is the only one still running. The transcript stays
   on disk.
+- **Carry-forward** — supersession alone still re-dispatches, because the
+  successor is a new block. But editing the *prose* around a `zzz` line
+  rewrites the block with the instruction untouched. When the successor's zzz
+  text is byte-identical and its predecessor already dispatched, it inherits
+  that ledger row and task file: no second task, no retirement notice, no
+  session killed. That is what makes dispatch idempotent per source block —
+  one instruction, one task, however many times the paragraph is edited. (On
+  2026-09-09 one research `zzz` dispatched three times over five hours this
+  way.) A *changed* instruction is a real edit and still supersedes.
 
 The ledger is the `zzz_queue` collection in the `records` table
 ([docs/reference/records.md](docs/reference/records.md)) — droppable workflow
@@ -299,6 +310,7 @@ format (`name:`/`description:` frontmatter) so they're scannable.
 
 - [docs/reference/core-principles.md](docs/reference/core-principles.md) — **The skeleton (read first when designing):** capture grammar, truth/index/cache/render layer model, trust model, promotion — the four invariants everything else hangs on.
 - [docs/reference/agentic-kb-field-guide.md](docs/reference/agentic-kb-field-guide.md) — The portable ruleset: what building this hardened or simplified from the "agent + janitor + flat folder" starting advice; transplantable to any agentic knowledge base.
+- [docs/reference/reading-queue.md](docs/reference/reading-queue.md) — Reading queue: notes flagged `reading_queue: true` pushed to Readwise Reader under a daily cap, highlights harvested back onto the note that produced them. Manual commands, nothing scheduled.
 - [docs/reference/pings.md](docs/reference/pings.md) — Pings: phone check-ins appended to the daily note as structured lines, `scripts/ping_stats.py` counts them, the `ping-read` lens reads them Sundays
 - [docs/reference/user-guide.md](docs/reference/user-guide.md) — Day-to-day manual: entry points, the loop, trust rules, triggering a pass, lens system in brief. Chronological build history stays in this file's STATUS header, not there.
 - [docs/reference/augi-log-routing.md](docs/reference/augi-log-routing.md) — **Routing rows in the Augi Log (PAUSED 2026-09-04; replaced the review pass for daily capture):** verbs, the master box, what each verb writes, undo, the feedback record. Design record: [docs/plans/augi-log-routing.md](docs/plans/augi-log-routing.md)

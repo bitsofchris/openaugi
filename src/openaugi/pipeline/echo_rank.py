@@ -3,10 +3,11 @@
 Global similarity does not work in a single-author vault. A 7-day replay
 (2026-08-29) found top-scores clustered at 0.53-0.68 whether the block was an
 architecture note or a journal entry about training wheels: cosine mostly
-measures "this is Chris writing" — his voice, his recurring nouns — not "this
+measures "this is the same person writing" — one voice, its recurring nouns —
+not "this
 is the same thought." No global threshold can separate those.
 
-So we apply Chris's own method (`2026-03-02 - Stratify then cluster`, already
+So we apply stratified sampling (`2026-03-02 - Stratify then cluster`, already
 the Contextgraph Rule in AGENT/routing.md): sort roughly first, then sort
 within the pile. Three steps, using only signal available for every block:
 
@@ -39,7 +40,7 @@ from openaugi.model.block import Block
 logger = logging.getLogger(__name__)
 
 # ── Facet: source (AGENT/My Taxonomy.md) ────────────────────────────
-# `source/capture` — Chris's own writing; assumed when no source tag is present.
+# `source/capture` — the user's own writing; assumed when no source tag is present.
 CAPTURE = "source/capture"
 EXTERNAL_SOURCES = {
     "source/ai-chat",
@@ -101,7 +102,7 @@ def note_type(block: Block) -> str:
 
 
 def is_own_writing(block: Block) -> bool:
-    """True when Chris wrote it — the only stratum an echo may draw from."""
+    """True when the user wrote it — the only stratum an echo may draw from."""
     return source_facet(block) == CAPTURE
 
 
@@ -156,7 +157,7 @@ def rank(
     if not scored:
         return result
 
-    # 1. Stratify — an echo can only come from Chris's own writing.
+    # 1. Stratify — an echo can only come from the user's own writing.
     if own_writing_only:
         kept = [(b, s) for b, s in scored if is_own_writing(b)]
         result.dropped_external = len(scored) - len(kept)

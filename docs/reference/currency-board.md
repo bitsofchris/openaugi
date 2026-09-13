@@ -49,8 +49,11 @@ It never argues a path, coaches, or offers life direction.
    new writing answers it — showing the reversal is how the board proves it is
    current.
 
-Plus a session roll-up (recent Claude sessions, one left-off line each) and at
-most three one-line flags.
+Plus standing reminders, at most three one-line flags, 2–3 tasks augi offers to
+run, and the chat harvest (below).
+
+Claude sessions themselves were **dropped from the board 2026-09-08** — no
+status lines, no "resume this" roll-up. Only their *content* still gets a pass.
 
 ## The checkbox contract
 
@@ -83,7 +86,7 @@ match / bad match).
 | Channel | For | Where it goes |
 |---|---|---|
 | `aaa: <why>` under an item | That item — why not, what's actually needed, a correction to carry forward | Stored on the item's key; future boards honor it literally |
-| The `Notes to augi` callout | The board itself — wrong, missing, too vague, noise | Logged as `currency-board-note`, marked `✓ noted`, read as an instruction by the next build |
+| The `Notes to augi` callout | The board itself — wrong, missing, too vague, noise | Logged as `currency-board-note`, read as an instruction by the next build. **The janitor never edits this section** — his text is his. The log is the read marker: a line already logged for that board is not logged again, and a line added later is logged on its own. (Until 2026-09-10 the janitor overwrote his first line with `✓ noted <day>` and blanked the rest, which also stopped everything he wrote afterwards from ever being logged.) |
 
 `aaa:` is already the review pass's instruction grammar, so neither needs a new
 parser or a trip outside Obsidian.
@@ -246,6 +249,38 @@ boxes inline, so an item costs three lines of markdown but one line of
 attention. A plugin `ItemView` that renders
 the same markdown with real buttons and a lane/activity group-by toggle is the
 natural next step; the markdown stays the truth either way.
+
+## Chat harvest — `## Worth keeping` (added 2026-09-08)
+
+A lot of thinking now happens in chat windows and dies there. Step 10 of the
+board build applies the **`chat-harvest`** lens
+(`<vault>/OpenAugi/AGENT/lenses/chat-harvest.md`) over *yesterday* and merges
+one section into the board:
+
+```
+transcripts ──▶ scripts/session_harvest.py ──▶ chat-harvest lens ──▶ ## Worth keeping
+(~/.claude/projects,   extraction, no judgment    judgment, routing,   one two-box
+ ~/.codex/sessions)                               the drafted note      proposal
+```
+
+- **`scripts/session_harvest.py`** is the extractor and knows nothing about
+  worth. It slices one local calendar day out of the transcript stores, keeps
+  only human turns inside the window, drops harness-injected turns, subagent
+  sidechains, trivial acknowledgements ("ok", "do it") and sessions augi
+  dispatched to itself, and attaches the *longest* assistant message before the
+  next human turn as context. Markdown by default, `--json` for machines.
+  `python3 scripts/session_harvest.py --day 2026-09-07`.
+- **The lens** does the judging: anchored on Chris's own prompts (his questions
+  are the record of what he was working out), the coding layer excluded,
+  **at most one** candidate note per day, under 150 words, routed per
+  `OpenAugi/AGENT/routing.md` to a new note or an append, with real links.
+  Zero candidates is the common and correct answer.
+- **The offer** uses the existing proposal grammar: `do` / `no` boxes and a
+  `<!-- propose:keep-<slug> -->` marker, so the janitor and task watcher carry
+  it with no new code. The full note text lives in the `↳` brief, which is
+  handed to the agent verbatim — ticking `do` saves exactly what he read.
+
+The lens never writes the note itself. The tick is what saves.
 
 ## Relationship to other passes
 

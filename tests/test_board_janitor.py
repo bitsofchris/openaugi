@@ -152,33 +152,71 @@ def test_feedback_is_appended_to_the_shared_stream(board, vault):
     assert record["board"] == "2026-09-02"
 
 
-def test_free_text_note_about_the_board_is_logged_and_marked_read(board, vault):
+def _write_note(board, *note_lines: str, quoted: bool = True) -> None:
+    """Put `note_lines` into the board's `Notes to augi` section."""
     text = board.read_text(encoding="utf-8")
     marker = text.index("<!-- board-note -->") + len("<!-- board-note -->")
-    board.write_text(
-        text[:marker]
-        + '\n> the "work doc" item was too vague — no idea which doc\n'
-        + text[marker:],
-        encoding="utf-8",
-    )
+    prefix = "> " if quoted else ""
+    added = "".join(f"\n{prefix}{line}" for line in note_lines) + "\n"
+    board.write_text(text[:marker] + added + text[marker:], encoding="utf-8")
+
+
+def _log_lines(vault) -> list[dict]:
+    path = vault / "OpenAugi" / "Capture" / "feedback-log.ndjson"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+
+
+def _note_records(vault) -> list[dict]:
+    return [row for row in _log_lines(vault) if row.get("source") == "currency-board-note"]
+
+
+def test_free_text_note_about_the_board_is_logged_without_touching_his_text(board, vault):
+    note = 'the "work doc" item was too vague — no idea which doc'
+    _write_note(board, note)
+    before = board.read_text(encoding="utf-8")
     sync_board(board, vault)
 
-    record = json.loads(
-        (vault / "OpenAugi" / "Capture" / "feedback-log.ndjson")
-        .read_text(encoding="utf-8")
-        .strip()
-        .splitlines()[-1]
-    )
+    record = _note_records(vault)[-1]
     assert record["source"] == "currency-board-note"
     assert "too vague" in record["reason"]
+    assert record["lines"] == [note]
 
-    # Marked read, and a second pass does not log it again.
-    assert "✓ noted 2026-09-02" in board.read_text(encoding="utf-8")
-    before = (vault / "OpenAugi" / "Capture" / "feedback-log.ndjson").read_text(encoding="utf-8")
+    # His text survives verbatim and no receipt is written under it.
+    after = board.read_text(encoding="utf-8")
+    assert after == before
+    assert note in after
+    assert "✓ noted" not in after
+
+    # A second pass logs nothing: the log is the read marker, not the note.
     sync_board(board, vault)
-    assert (vault / "OpenAugi" / "Capture" / "feedback-log.ndjson").read_text(
-        encoding="utf-8"
-    ) == before
+    assert len(_note_records(vault)) == 1
+
+
+def test_a_line_added_after_the_note_was_logged_is_logged_too(board, vault):
+    _write_note(board, "first thought")
+    sync_board(board, vault)
+    _write_note(board, "first thought", "a second thought, written later")
+    sync_board(board, vault)
+
+    records = _note_records(vault)
+    assert [r["lines"] for r in records] == [
+        ["first thought"],
+        ["a second thought, written later"],
+    ]
+    assert "first thought" in board.read_text(encoding="utf-8")
+
+
+def test_a_legacy_noted_receipt_does_not_hide_the_text_below_it(board, vault):
+    # Boards on disk still carry receipts an older janitor wrote over his
+    # first line. The receipt is skipped; everything under it still logs.
+    _write_note(board, "✓ noted 2026-09-02", "but I was still writing")
+    sync_board(board, vault)
+
+    records = _note_records(vault)
+    assert records[-1]["lines"] == ["but I was still writing"]
+    assert "✓ noted 2026-09-02" in board.read_text(encoding="utf-8")
 
 
 def test_empty_note_callout_logs_nothing(board, vault):
@@ -428,9 +466,10 @@ def test_plain_markdown_board_note_is_logged_without_quote_prefixes(plain, vault
     )
     assert record["source"] == "currency-board-note"
     assert record["reason"] == "the drift section was noise today"
-    # Marked read in place, and the closing line below it is untouched.
+    # Logged, not rewritten — the note and the closing line are both untouched.
     after = plain.read_text(encoding="utf-8")
-    assert "✓ noted 2026-09-05" in after
+    assert after == text
+    assert "✓ noted" not in after
     assert "*Everything else stays append-only truth underneath.*" in after
     assert sync_board(plain, vault) == 0
 
@@ -541,3 +580,128 @@ def test_previous_board_summary_splits_answered_from_carried(board, vault, plain
 def test_previous_board_summary_is_none_when_there_is_no_earlier_board(board, vault):
     sync_board(board, vault)
     assert previous_board_summary(vault, before="2026-09-02") is None
+
+
+# ── Chat harvest: `## Worth keeping` (the chat-harvest lens's board section) ──
+
+WORTH_KEEPING = """\
+## Worth keeping
+
+*From yesterday's chats. `do` saves it exactly as written below; `no` means never again.*
+
+- **A harness is context, state, tools and prompts** — new note `OpenAugi/Notes/Harness.md`
+    ↳ Save this, verbatim, to `OpenAugi/Notes/Harness.md`. Tag it `#human-review`.
+      Do not expand it — this text is the note:
+      ---
+      Chris, 2026-09-07: *"the harness is the context, the state, the tools, the prompts."*
+      Links: [[2026-09-07 - harness matters]] · [[AMOC - OpenAugi Main]]
+      ---
+      Source: Harness matters (`ZK Home`), 2026-09-07
+    - [ ] do
+    - [ ] no
+    <!-- propose:keep-harness-is-four-parts -->
+"""
+
+
+@pytest.fixture
+def harvest_board(vault):
+    path = vault / "OpenAugi" / "Board" / "2026-09-05 - Board.md"
+    path.write_text(PLAIN_BOARD.replace("## Notes to augi", WORTH_KEEPING + "\n## Notes to augi"))
+    return path
+
+
+def test_worth_keeping_proposal_keeps_the_whole_drafted_note(harvest_board):
+    """The lens writes the note into the brief; nothing may be lost on the way through."""
+    proposals = parse_proposals(harvest_board.read_text(encoding="utf-8"))
+    body = proposals["keep-harness-is-four-parts"]["body"]
+    assert "the harness is the context, the state, the tools, the prompts" in body
+    assert "[[2026-09-07 - harness matters]]" in body
+    assert body.count("---") == 2  # the fences around the note survive
+
+
+def test_ticking_do_on_a_kept_note_dispatches_the_note_as_written(harvest_board, vault):
+    _tick_proposal(harvest_board, "do", "keep-harness-is-four-parts")
+    assert sync_board(harvest_board, vault) == 1
+
+    task = vault / "OpenAugi" / "Tasks" / "board-2026-09-05-keep-harness-is-four-parts.md"
+    body = task.read_text(encoding="utf-8")
+    assert "status: pending" in body
+    assert "Save this, verbatim, to `OpenAugi/Notes/Harness.md`" in body
+    assert "the harness is the context, the state, the tools, the prompts" in body
+
+
+def test_declining_a_kept_note_retires_it_with_its_reason(harvest_board, vault):
+    text = harvest_board.read_text(encoding="utf-8").replace(
+        "    - [ ] no\n    <!-- propose:keep-harness-is-four-parts -->",
+        "    - [x] no\n    aaa: already in the harness note\n"
+        "    <!-- propose:keep-harness-is-four-parts -->",
+    )
+    harvest_board.write_text(text, encoding="utf-8")
+    assert sync_board(harvest_board, vault) == 1
+
+    record = load_state(vault)["proposals"]["keep-harness-is-four-parts"]
+    assert record["state"] == "declined"
+    assert record["reason"] == "already in the harness note"
+
+
+# A `Worth keeping` proposal whose drafted note pushes the title more than
+# `_LOOKBACK` lines above the marker. This is the 2026-09-11 board, trimmed:
+# it parsed with an empty title and an empty body, and dispatched a task with
+# no brief in it.
+LONG_WORTH_KEEPING = """\
+## Worth keeping
+
+*From yesterday's chats. `do` saves it exactly as written below; `no` means never again.*
+
+- **The first real field test of "just enough resistance"** — append to [[Just Enough Resistance]]
+    ↳ Append this dated block. Do not expand it — this text is the append:
+      ---
+      ### 2026-09-10 (augi)
+
+      The first field test. Chris set the resistance dial by hand, repeatedly.
+
+      It worked and it was expensive.
+
+      So the open question this note doesn't have yet: what does the right rung cost?
+
+      See [[Zero to Hero - Karpathy]].
+      ---
+      Source: "Zero to Hero" (`deep-learning`), 2026-09-10.
+    - [ ] do
+    - [ ] no
+    aaa:
+    <!-- propose:keep-resistance-field-test -->
+"""
+
+
+@pytest.fixture
+def long_harvest_board(vault):
+    path = vault / "OpenAugi" / "Board" / "2026-09-05 - Board.md"
+    path.write_text(
+        PLAIN_BOARD.replace("## Notes to augi", LONG_WORTH_KEEPING + "\n## Notes to augi")
+    )
+    return path
+
+
+def test_a_long_brief_does_not_outrun_the_title_lookback(long_harvest_board):
+    """Regression (2026-09-11): the brief IS the task, so it may be any length."""
+    proposal = parse_proposals(long_harvest_board.read_text(encoding="utf-8"))[
+        "keep-resistance-field-test"
+    ]
+    assert proposal["title"].startswith("The first real field test")
+    assert "### 2026-09-10 (augi)" in proposal["body"]
+    assert 'Source: "Zero to Hero"' in proposal["body"]
+    assert proposal["body"].count("---") == 2
+
+
+def test_ticking_do_on_a_long_brief_dispatches_it_whole(long_harvest_board, vault):
+    _tick_proposal(long_harvest_board, "do", "keep-resistance-field-test")
+    assert sync_board(long_harvest_board, vault) == 1
+
+    body = (
+        vault / "OpenAugi" / "Tasks" / "board-2026-09-05-keep-resistance-field-test.md"
+    ).read_text(encoding="utf-8")
+    # An empty title here is what handed the watcher a blank instruction.
+    assert "# The first real field test" in body
+    assert "> The first real field test" in body
+    assert "### 2026-09-10 (augi)" in body

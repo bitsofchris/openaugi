@@ -4,7 +4,7 @@ Given a topic query: semantic search across ALL history, order the hits by
 block_time, and bucket them into eras (quarters) — first mention, activity
 per era, dormant gaps, last mention. The output is deterministic evidence;
 the narrative (revisions, dead branches, current strongest form) belongs to
-the lens (an agent) following Chris's "Persistent Memory Artifact" shape.
+the lens (an agent) following the "Persistent Memory Artifact" shape.
 
 The JSON report is also the mobile timeline payload: `--write` drops it at
 `<vault>/OpenAugi/lineage/<slug>.json`, next to context-pack.json in the
@@ -70,7 +70,7 @@ def compute_lineage(
     Returns {query, first_mention, last_mention, total_matches, eras, gaps}.
     Eras are quarters with matched blocks: count + strongest blocks (by
     similarity), each with date/title/snippet/source_path and a third_party
-    flag (block carries a source/* tag — cited evidence, not Chris's voice).
+    flag (block carries a source/* tag — cited evidence, not the user's voice).
     Gaps are quarter runs with zero matches between first and last mention.
     """
     query_vec = embedding_model.embed_query(query)

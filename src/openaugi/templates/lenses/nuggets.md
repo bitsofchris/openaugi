@@ -54,7 +54,7 @@ search. When unsure, skip.
    section with `*Nugget lens last run: YYYY-MM-DD over N blocks.*`
 4. **On an answered nomination** (checked box = yes as proposed; filled
    answer = specific instruction): assemble — usually ONE small note via
-   `write_document` to `OpenAugi/Notes/` with `#human-review`, the
+   `write_document` to `OpenAugi/Notes/` opening with `- [ ] seen`, the
    verbatim nugget, a line of context, and a wikilink back to the source
    note. Post seeds get appended to the content-pipeline section instead.
 

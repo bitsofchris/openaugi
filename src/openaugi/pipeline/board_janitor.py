@@ -7,7 +7,7 @@ An optional `aaa:` line under the boxes is the comment channel: free text
 explaining *why*, which the next board must honor literally.
 
 A board also *proposes*: at the bottom sit two-button offers (`do` / `no`) for
-tasks augi would run for him. Ticking `do` writes a pending task file into
+tasks augi would run for the user. Ticking `do` writes a pending task file into
 `OpenAugi/Tasks/`, which the task watcher hydrates and launches like any zzz
 dispatch; ticking `no` retires the offer permanently. Nothing else about the
 board differs — the same `aaa:` line is the same comment channel.
@@ -50,20 +50,26 @@ import re
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+from openaugi.pipeline.writeback import (
+    aaa_re,
+    append_feedback,
+    box_re,
+    now,
+    read_feedback,
+    ticked,
+)
+
 logger = logging.getLogger(__name__)
 
 BOARD_FOLDER = "OpenAugi/Board"
 STATE_FILE = f"{BOARD_FOLDER}/.board-state.json"
-FEEDBACK_LOG = "OpenAugi/Capture/feedback-log.ndjson"
 
 #: `<!-- item:some-stable-key -->`, optionally inside a callout (`> ` prefix).
 _ITEM_RE = re.compile(r"^\s*>?\s*<!-- item:(?P<key>[a-z0-9][a-z0-9-]*) -->\s*$")
 #: `- [x] not doing` at any indent, optionally inside a callout.
-_BOX_RE = re.compile(
-    r"^(?P<pre>\s*>?\s*)- \[(?P<mark>[ xX])\] (?P<label>done|not doing|someday)\s*$"
-)
+_BOX_RE = box_re("done", "not doing", "someday", callout=True)
 #: `aaa: because it can wait until October`
-_AAA_RE = re.compile(r"^\s*>?\s*aaa:\s*(?P<reason>.*?)\s*$", re.IGNORECASE)
+_AAA_RE = aaa_re(callout=True)
 #: `- **Pull the three numbers from the benefits portal** \`quick · 5m\``
 _TITLE_RE = re.compile(r"^\s*>?\s*- \*\*(?P<title>.+?)\*\*")
 #: `> [!board-lane]+ Self · Money` — the old callout heading, still parsed so
@@ -83,10 +89,10 @@ _NOTE_LINE_RE = re.compile(r"^\s*(?:>\s?)?(?P<text>.*?)\s*$")
 #: board's closing line.
 _NOTE_END_RE = re.compile(r"^\s{0,3}(?:#{1,6}\s|---\s*$|\*Everything else)")
 
-#: `<!-- propose:sweep-stale-drift -->` — a task augi offers to run for him.
+#: `<!-- propose:sweep-stale-drift -->` — a task augi offers to run.
 _PROPOSE_RE = re.compile(r"^\s*>?\s*<!-- propose:(?P<key>[a-z0-9][a-z0-9-]*) -->\s*$")
 #: `- [x] do` / `- [ ] no` — the two buttons under a proposal.
-_PROPOSE_BOX_RE = re.compile(r"^(?P<pre>\s*>?\s*)- \[(?P<mark>[ xX])\] (?P<label>do|no)\s*$")
+_PROPOSE_BOX_RE = box_re("do", "no", callout=True)
 
 _STATES = {"done": "done", "not doing": "not-doing", "someday": "someday"}
 _PROPOSE_STATES = {"do": "dispatched", "no": "declined"}
@@ -96,6 +102,9 @@ _VALID_PROPOSAL_STATES = {"open", "dispatched", "declined"}
 #: Log sources. Item ticks and proposal ticks share the stream but not the
 #: vocabulary, so they are projected separately.
 BOARD_SOURCE = "currency-board"
+# Free text left in the `Notes to augi` section — feedback about the board
+# itself. Logged under its own source so it never mixes with item ticks.
+NOTE_SOURCE = "currency-board-note"
 PROPOSAL_SOURCE = "currency-board-proposal"
 #: Where a dispatched proposal lands. The task watcher hydrates and renames it.
 TASKS_FOLDER = "OpenAugi/Tasks"
@@ -107,10 +116,6 @@ _VALID_STATES = {"open", "done", "not-doing", "someday"}
 PRUNE_DAYS = 90
 #: How far back an item may be scanned for its title/lane before giving up.
 _LOOKBACK = 12
-
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def board_date(path: Path) -> str:
@@ -150,13 +155,6 @@ def save_state(vault_path: Path, state: dict) -> None:
     path = vault_path / STATE_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def _append_feedback(vault_path: Path, record: dict) -> None:
-    path = vault_path / FEEDBACK_LOG
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record) + "\n")
 
 
 def _context_for(lines: list[str], idx: int) -> tuple[str, str]:
@@ -207,7 +205,7 @@ def parse_items(text: str) -> dict[str, dict]:
             pos = idx - offset
             if box := _BOX_RE.match(lines[pos]):
                 item["box_lines"].append(pos)
-                if box.group("mark").lower() == "x" and item["answer"] is None:
+                if ticked(box) and item["answer"] is None:
                     item["answer"] = _STATES[box.group("label")]
                     item["answer_line"] = pos
                     # Captured here so the rewrite never re-matches the line.
@@ -220,59 +218,89 @@ def parse_items(text: str) -> dict[str, dict]:
     return items
 
 
-def _process_board_note(lines: list[str | None], vault_path: Path, day: str) -> bool:
-    """Log free text left in the `Notes to augi` callout, then mark it read.
+def _note_lines(text: str) -> list[str]:
+    """The free-text lines left in the `Notes to augi` section.
 
-    This is the channel for feedback about the *board* rather than about one
-    item: what was wrong, missing, too vague, or noise. Returns True when
-    something was found, so the caller knows to rewrite the file.
+    Reads the board as written — the section is never rewritten, so this is a
+    pure read. Legacy `✓ noted` receipt lines (written by an older janitor
+    that overwrote the first line) are skipped, not treated as a terminator:
+    a receipt above the text must not hide the text below it.
     """
-    # Answered items leave None tombstones behind; skip them.
-    start = next(
-        (i for i, line in enumerate(lines) if line is not None and _NOTE_MARKER_RE.match(line)),
-        None,
-    )
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if _NOTE_MARKER_RE.match(line)), None)
     if start is None:
-        return False
+        return []
 
     # A quoted marker means this board still uses the callout format, where the
     # section ends at the first unquoted line. A plain one runs until the next
     # heading, rule or checkbox.
-    quoted = (lines[start] or "").lstrip().startswith(">")
+    quoted = lines[start].lstrip().startswith(">")
 
-    body: list[tuple[int, str]] = []
+    body: list[str] = []
     for pos in range(start + 1, len(lines)):
         line = lines[pos]
-        if line is None:
-            continue
         if quoted and not line.lstrip().startswith(">"):
             break  # the callout ended
         if _NOTE_END_RE.match(line) or _BOX_RE.match(line) or _ITEM_RE.match(line):
             break  # the next section started
-        text = _NOTE_LINE_RE.match(line).group("text")  # type: ignore[union-attr]
-        if text.startswith("✓ noted"):  # already processed
-            return False
-        if text:
-            body.append((pos, text))
+        entry = _NOTE_LINE_RE.match(line).group("text")  # type: ignore[union-attr]
+        if not entry or entry.startswith("✓ noted"):
+            continue
+        body.append(entry)
+    return body
 
+
+def _logged_note_lines(vault_path: Path, day: str) -> set[str]:
+    """Note lines already logged for this board — the read marker.
+
+    The append-only log is where "we have seen this" lives, so the board note
+    itself needs no receipt and never gets edited. Rows written before the
+    `lines` field existed fall back to their joined `reason`.
+    """
+    seen: set[str] = set()
+    for row in read_feedback(vault_path, source=NOTE_SOURCE):
+        if row.get("board") != day:
+            continue
+        logged = row.get("lines")
+        if isinstance(logged, list):
+            seen.update(str(entry) for entry in logged)
+        elif row.get("reason"):
+            seen.add(str(row["reason"]))
+    return seen
+
+
+def _log_board_note(text: str, vault_path: Path, day: str) -> int:
+    """Log free text left in the `Notes to augi` callout. Never edits it.
+
+    This is the channel for feedback about the *board* rather than about one
+    item: what was wrong, missing, too vague, or noise. The text belongs to
+    whoever wrote it — the janitor reads it and remembers that it read it, and
+    that is all. Adding a
+    line later logs the new line only; nothing already logged repeats.
+
+    Returns the number of lines newly logged.
+    """
+    body = _note_lines(text)
     if not body:
-        return False
+        return 0
+    seen = _logged_note_lines(vault_path, day)
+    fresh = [entry for entry in body if entry not in seen]
+    if not fresh:
+        return 0
 
-    _append_feedback(
+    append_feedback(
         vault_path,
         {
-            "ts": _now(),
-            "source": "currency-board-note",
+            "ts": now(),
+            "source": NOTE_SOURCE,
             "board": day,
             "signal": "note",
-            "reason": " ".join(text for _, text in body),
+            "lines": fresh,
+            "reason": " ".join(fresh),
         },
     )
-    for pos, _ in body[1:]:
-        lines[pos] = None
-    lines[body[0][0]] = f"> ✓ noted {day}" if quoted else f"✓ noted {day}"
-    logger.info(f"Board janitor: board note recorded for {day}")
-    return True
+    logger.info(f"Board janitor: {len(fresh)} board-note line(s) recorded for {day}")
+    return len(fresh)
 
 
 def _unquote(line: str) -> str:
@@ -280,14 +308,36 @@ def _unquote(line: str) -> str:
     return re.sub(r"^\s*>\s?", "", line).strip()
 
 
-def parse_proposals(text: str) -> dict[str, dict]:
-    """Every proposed task on a board: what augi offered, and his answer.
+def _proposal_title(lines: list[str], idx: int) -> tuple[str, int | None]:
+    """The title line of the proposal whose marker sits at `idx`.
 
-    A proposal is a task augi would run *for* him, offered with two buttons
-    instead of three: `do` writes the task file, `no` retires the offer. The
-    lines between the title and the boxes are the proposal's own description,
-    and they become the task's context — so what he read is what the agent
-    gets, with nothing regenerated in between.
+    Unbounded, unlike an item's: a `Worth keeping` proposal carries a whole
+    drafted note between its title and its boxes, and a fixed lookback
+    silently truncates it. On 2026-09-11 a 14-line proposal parsed with an
+    empty title and an empty body, and dispatched a task with no brief in it.
+    The scan stops at the previous structural boundary instead — the lane
+    heading, or the marker of whatever was proposed before this one.
+    """
+    for pos in range(idx - 1, -1, -1):
+        if found := _TITLE_RE.match(lines[pos]):
+            return found.group("title"), pos
+        if (
+            _HEADING_RE.match(lines[pos])
+            or _ITEM_RE.match(lines[pos])
+            or _PROPOSE_RE.match(lines[pos])
+        ):
+            break
+    return "", None
+
+
+def parse_proposals(text: str) -> dict[str, dict]:
+    """Every proposed task on a board: what augi offered, and the answer.
+
+    A proposal is a task augi would run *for* the user, offered with two
+    buttons instead of three: `do` writes the task file, `no` retires the
+    offer. The lines between the title and the boxes are the proposal's own
+    description, and they become the task's context — so what was read is what
+    the agent gets, with nothing regenerated in between.
     """
     lines = text.splitlines()
     out: dict[str, dict] = {}
@@ -296,11 +346,7 @@ def parse_proposals(text: str) -> dict[str, dict]:
         if not match:
             continue
         key = match.group("key")
-        title, title_line = "", None
-        for offset in range(1, min(_LOOKBACK, idx) + 1):
-            if found := _TITLE_RE.match(lines[idx - offset]):
-                title, title_line = found.group("title"), idx - offset
-                break
+        title, title_line = _proposal_title(lines, idx)
         item = {
             "title": title,
             "body": "",
@@ -311,19 +357,24 @@ def parse_proposals(text: str) -> dict[str, dict]:
             "indent": "",
         }
         first_box = idx
-        for offset in range(1, min(_LOOKBACK, idx) + 1):
-            pos = idx - offset
+        # Everything belonging to this proposal lies between its title and its
+        # marker, so that is the scan range — falling back to the item lookback
+        # only when there is no title to bound it.
+        floor = title_line if title_line is not None else max(idx - _LOOKBACK - 1, -1)
+        seen_aaa = False
+        for pos in range(idx - 1, floor, -1):
             if box := _PROPOSE_BOX_RE.match(lines[pos]):
                 item["box_lines"].append(pos)
                 first_box = min(first_box, pos)
-                if box.group("mark").lower() == "x" and item["answer"] is None:
+                if ticked(box) and item["answer"] is None:
                     item["answer"] = _PROPOSE_STATES[box.group("label")]
                     item["answer_line"] = pos
                     item["indent"] = box.group("pre")
-            elif aaa := _AAA_RE.match(lines[pos]):
-                item["reason"] = aaa.group("reason")
-            elif _TITLE_RE.match(lines[pos]):
-                break
+            elif (aaa := _AAA_RE.match(lines[pos])) and not seen_aaa:
+                # The comment channel is the line between the boxes and the
+                # marker; a scan that now reaches the body must not be fooled
+                # by prose that happens to start `aaa:`.
+                item["reason"], seen_aaa = aaa.group("reason"), True
         if title_line is not None:
             body = [_unquote(raw) for raw in lines[title_line + 1 : first_box]]
             item["body"] = "\n".join(part for part in body if part).strip()
@@ -340,7 +391,7 @@ def build_proposal_task(
     the task watcher needs to know nothing about boards: it finds a pending
     file, hydrates it, and launches a session like any other.
     """
-    aaa = f"\n\nHis note on it: {proposal['reason']}" if proposal["reason"] else ""
+    aaa = f"\n\nNote on it: {proposal['reason']}" if proposal["reason"] else ""
     return f"""---
 status: pending
 working_dir: {vault_path}
@@ -363,9 +414,9 @@ Proposed by the currency board on {day} and accepted from [[{board_stem}]].
 
 ## Task
 
-Do the work described above. The proposal text is the brief — it is what he
-read before ticking `do`, so treat it as the instruction and do not widen the
-scope beyond it. If it turns out to be underspecified, say so in `## Results`
+Do the work described above. The proposal text is the brief — it is what the
+user read before ticking `do`, so treat it as the instruction and do not widen
+the scope beyond it. If it turns out to be underspecified, say so in `## Results`
 and set `status: needs-input` rather than guessing.
 
 ## Human Todo
@@ -392,7 +443,7 @@ def _process_proposals(
             task_path = tasks_dir / f"board-{day}-{key}.md"
             if task_path.exists():
                 # Already written and possibly already hydrated into a TASK-*
-                # file; writing again would give him the same agent twice.
+                # file; writing again would launch the same agent twice.
                 logger.info(f"Board janitor: proposal {key!r} already dispatched")
             else:
                 task_path.write_text(
@@ -407,10 +458,10 @@ def _process_proposals(
                 )
                 logger.info(f"Board janitor: proposal {key!r} dispatched → {task_path.name}")
             task_name = task_path.name
-        _append_feedback(
+        append_feedback(
             vault_path,
             {
-                "ts": _now(),
+                "ts": now(),
                 "source": PROPOSAL_SOURCE,
                 "board": day,
                 "item": key,
@@ -452,25 +503,14 @@ def decisions_from_log(
 ) -> dict[str, dict]:
     """The latest decision per item key, read from the append-only log.
 
-    The log is the record of what Chris actually ticked. A later entry for the
+    The log is the record of what was actually ticked. A later entry for the
     same key wins, so changing your mind is just another append. Item ticks and
     proposal ticks share the stream but not the vocabulary, so each is read
     with its own `source` and set of legal signals.
     """
-    path = vault_path / FEEDBACK_LOG
-    if not path.exists():
-        return {}
     vocabulary = vocabulary or _VALID_STATES
     decisions: dict[str, dict] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            continue  # a foreign or truncated line is not our business
-        if row.get("source") != source:
-            continue
+    for row in read_feedback(vault_path, source=source):
         key, signal = row.get("item"), row.get("signal")
         if not key or signal not in vocabulary:
             continue
@@ -502,7 +542,7 @@ def _project_proposals(notes: list[tuple[str, Path]], vault_path: Path) -> dict[
     """Proposal state, projected the same way item state is: notes plus log.
 
     A `declined` proposal is the one thing the next board must never repeat —
-    offering the same agent task twice after he said no is exactly the failure
+    offering the same agent task twice after a `no` is exactly the failure
     that costs a surface its trust.
     """
     answers = decisions_from_log(
@@ -552,11 +592,11 @@ def declined_proposals(vault_path: Path) -> dict[str, dict]:
 
 
 def previous_board_summary(vault_path: Path, *, before: str | None = None) -> dict | None:
-    """What the last board proposed, and what he did with it.
+    """What the last board proposed, and what became of it.
 
     The board is the one surface that promises currency, and "how does today
     compare to yesterday" was unanswerable from the note alone. This is the
-    cheap answer: the previous board's own items, split into what he answered
+    cheap answer: the previous board's own items, split into what was answered
     and what is still carried, so today's board can link back and say so.
 
     `before` limits the search to boards strictly older than that date — pass
@@ -623,7 +663,7 @@ def rebuild_state(vault_path: Path, *, save: bool = True) -> dict:
             record["answered_on"] = decision["answered_on"]
 
     # A decision whose board note has been deleted still binds us — otherwise
-    # tidying old boards would silently un-retire what he already ruled on.
+    # tidying old boards would silently un-retire what was already ruled on.
     for key, decision in decisions.items():
         if key not in items:
             items[key] = {
@@ -678,10 +718,10 @@ def sync_board(board_path: Path, vault_path: Path) -> int:
         # file is rebuilt from that log below, never written to here.
         if item["answer"] is None:
             continue
-        _append_feedback(
+        append_feedback(
             vault_path,
             {
-                "ts": _now(),
+                "ts": now(),
                 "source": "currency-board",
                 "board": day,
                 "item": key,
@@ -700,9 +740,11 @@ def sync_board(board_path: Path, vault_path: Path) -> int:
         answered += 1
 
     answered += _process_proposals(lines, text, board_path, vault_path, day)
-    noted = _process_board_note(lines, vault_path, day)
+    # Read-only: the note is logged, never rewritten, so it never contributes
+    # a reason to touch the file.
+    _log_board_note(text, vault_path, day)
 
-    if answered or noted:
+    if answered:
         board_path.write_text(
             "\n".join(line for line in lines if line is not None) + "\n", encoding="utf-8"
         )
