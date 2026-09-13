@@ -112,5 +112,5 @@ delete `src/openaugi/reading/` and nothing else is affected.
 - **Scheduling.** No launchd job; both commands are run by hand.
 - **The board line** (`## Reading queue — pushed 2 · read 1 · 3 highlights came back`).
 - **Highlights → `feedback-log.ndjson`.** Which paragraphs of a research note
-  Chris actually marked is the sharpest signal this system has about what is
+  the user actually marked is the sharpest signal this system has about what is
   worth writing; it should be logged alongside the board ticks.

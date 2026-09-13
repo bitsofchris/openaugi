@@ -125,7 +125,7 @@ Current lenses (canonical list: `OpenAugi/AGENT/lenses/` or
 ## Current system state
 
 M1–M3 shipped. **M4 (routing quality) and M5 (lens system) are CLOSED**
-(Chris's call, 2026-07-09) — no more usage gating on them. **Surface
+(decided 2026-07-09) — no more usage gating on them. **Surface
 decision: no web app.** The two owned surfaces are the mobile app and
 Obsidian (vault files are the API); the plugin stays a thin task-file
 writer. **M8 (data lake) is open**: the source-attribution firewall

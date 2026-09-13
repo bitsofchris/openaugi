@@ -234,7 +234,7 @@ These were inferred from sampling doc titles after clustering — update if vaul
 | 3 | Engineering / Health / Misc | Code snippets, health/fitness, misc reference |
 | 4 | Creator / Podcast / Trading | Content strategy, podcast, trading ideas |
 | 5 | Learning / Growth / Reading | Books, frameworks, career growth |
-| 6 | OpenAugi / Data Eng Work | Work tasks, Datadog, OpenAugi dev |
+| 6 | OpenAugi / Data Eng Work | Work tasks, day-job platform work, OpenAugi dev |
 | 7 | Inner Life / Psychology / Jung | Self-reflection, Jung, relationships |
 | 8 | Weekly Reflections / Big Picture | Weekly notes, energy/drain, direction |
 | 9 | ML Research / Trading Tech | Transformers, time series, quant |

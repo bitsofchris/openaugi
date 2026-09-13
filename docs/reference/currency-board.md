@@ -270,8 +270,8 @@ transcripts ──▶ scripts/session_harvest.py ──▶ chat-harvest lens ─
   dispatched to itself, and attaches the *longest* assistant message before the
   next human turn as context. Markdown by default, `--json` for machines.
   `python3 scripts/session_harvest.py --day 2026-09-07`.
-- **The lens** does the judging: anchored on Chris's own prompts (his questions
-  are the record of what he was working out), the coding layer excluded,
+- **The lens** does the judging: anchored on the user's own prompts (their
+  questions are the record of what they were working out), the coding layer excluded,
   **at most one** candidate note per day, under 150 words, routed per
   `OpenAugi/AGENT/routing.md` to a new note or an append, with real links.
   Zero candidates is the common and correct answer.

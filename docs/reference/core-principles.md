@@ -84,11 +84,10 @@ has already caused one naming collision (see below).
 | **Silver** | Nuggets aggregated across the vault into something canonical | context block | `#note-type/moc` + a filled `description` |
 | **Gold** | The big never-ending notes you append to; the map | container | `#note-type/amoc` / `#note-type/pmoc` + `description` |
 
-Chris, 2026-08-17: *"Most blocks should just be this bronze layer so they don't
-actually need a tag. And then when we promote it to a silver, that means we've
-aggregated a couple of nuggets across the vault into something more canonical,
-and that's where it gets that description metadata we can start using to
-browse. And then the map is the high level overview of our gold level notes."*
+Most blocks stay bronze and need no tag. Promotion to silver means a few
+nuggets from across the vault were aggregated into something canonical, and
+that is the layer where `description` metadata appears and becomes browsable.
+The map is the high-level overview of the gold notes.
 
 Three things follow, and they're the whole reason this axis is worth naming:
 
