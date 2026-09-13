@@ -115,6 +115,7 @@ def read_lens_specs(vault: Path) -> list[dict]:
                 raise ValueError("frontmatter is not a mapping")
             entry["name"] = str(fm.get("name") or f.stem)
             entry["description"] = str(fm.get("description") or "").strip()
+            entry["scope"] = str(fm.get("scope") or "").strip()
             entry["trigger"] = str(fm.get("trigger") or "").strip()
             entry["target"] = str(fm.get("target") or "").strip()
             problems = [
