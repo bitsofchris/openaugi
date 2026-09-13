@@ -20,6 +20,31 @@ vs personal". Still open from the vault note: `substack-batch.md`'s illegal
 `trigger: weekly` (fixed in cutover step 1), and the two `write-*-task.sh`
 scripts, which go with the plists.
 
+**2026-09-13: the trigger field became real.** Commits 2 and 3 of the decision
+brief *Where a Personal Surface's Code Lives*. `pipeline/schedule.py` reads
+each lens spec's `trigger:`, parses `every <period>`, consults the
+`lens_schedule` records collection, and writes a pending task file per due
+lens; `watcher._drain_tick` calls it on the timer it was already running. A
+scheduled run and a `zzz` are now the same mechanism — the only difference is
+who pulled the trigger. Gated on `tasks.schedule_lenses` (default off), and a
+malformed trigger is skipped and logged rather than guessed at. Dedupe is
+three-layered: the last-run record, the deterministic task filename, and the
+optional `## Run` section's `dedupe:` output path. 50 new tests.
+
+**Deliberately NOT done, and this is the cutover gate:** the vault half. The
+lens files still say `trigger: on-demand`, `tasks.schedule_lenses` is still
+off, and `scripts/write-board-task.sh`, `scripts/write-substack-task.sh` and
+the two launchd agents are all still in place and still working. Retiring them
+before a lens carries its own trigger would leave no schedule at all. Order:
+(1) `currency-board.md` → `every 1d` + `## Run`, `substack-batch.md` →
+`every 7d` (fixing its illegal `weekly`), `detector-coping.md`'s empty
+trigger; (2) turn the config key on and restart the watcher; (3) watch one
+day's board get built by the tick; (4) unload and delete the plists, delete
+the two scripts. Steps are in `docs/reference/currency-board.md` "Setup and
+operation". Also still open: a stopped watcher is invisible, and it is now the
+single point of failure for every scheduled lens — overdue lenses need a line
+on the Dashboard.
+
 **2026-09-09: the reading queue — augi's prose in Reader, marks back in the
 vault.** Built the core of the round trip from
 `<vault>/OpenAugi/Plans/Plan - Reading Queue in Readwise.md`: `openaugi reading
@@ -470,7 +495,9 @@ substrate and delivery. MVP shipped end-to-end as files + prose:
   spec file directly (agent-space), `#human-review`, Dashboard note.
 - **Mobile:** context pack now carries `lenses: [{name, description}]`
   → app renders apply-chips (tap → `zzz: apply lens X` in block text).
-- **Scheduling dormant** until M4 passes; specs already declare triggers.
+- **Scheduling is live** as of 2026-09-13 — `trigger: every <period>` runs
+  on the watcher's drain tick, gated on `tasks.schedule_lenses`. The M4
+  gate it was waiting on closed 2026-07-07; the block was stale, not real.
 Lenses shipped 2026-07-07 (vault-side, `OpenAugi/AGENT/lenses/`):
 distill · nuggets · **morning-briefing** (daily "what matters today" →
 `View - Morning Briefing.md`) · **open-loops** (unclosed commitments →

@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from openaugi.pipeline.watcher import _DebouncedHandler, _run_ingest_cycle
+from openaugi.pipeline.watcher import _DebouncedHandler, _drain_tick, _run_ingest_cycle
 
 
 class TestDebouncedHandler:
@@ -142,3 +142,52 @@ class TestRunIngestCycle:
         # Layer 0 still ran
         mock_run_layer0.assert_called_once()
         mock_store.close.assert_called_once()
+
+
+class TestDrainTick:
+    """The drain tick is now also the lens heartbeat — no cron, no daemon."""
+
+    LENS = (
+        "---\nname: currency-board\ndescription: >-\n  Where every thread left off.\n"
+        "scope: >-\n  every container head.\ntrigger: every 1d\ntarget: >-\n"
+        "  view — overwrite View - Board.md\n---\n\n# currency-board\n"
+    )
+
+    def _vault_with_a_due_lens(self, tmp_path: Path) -> Path:
+        lens_dir = tmp_path / "OpenAugi" / "AGENT" / "lenses"
+        lens_dir.mkdir(parents=True)
+        (lens_dir / "currency-board.md").write_text(self.LENS, encoding="utf-8")
+        return tmp_path
+
+    def test_an_open_gate_writes_the_due_task(self, tmp_path: Path):
+        vault = self._vault_with_a_due_lens(tmp_path)
+
+        _drain_tick(vault, str(tmp_path / "test.db"), {"tasks": {"schedule_lenses": True}})
+
+        (task,) = (vault / "OpenAugi" / "Tasks").glob("TASK-*-currency-board.md")
+        assert "apply lens currency-board" in task.read_text(encoding="utf-8")
+
+    def test_the_gate_is_off_by_default(self, tmp_path: Path):
+        vault = self._vault_with_a_due_lens(tmp_path)
+
+        _drain_tick(vault, str(tmp_path / "test.db"), {})
+
+        assert not (vault / "OpenAugi" / "Tasks").exists()
+
+    def test_a_second_tick_does_not_write_a_second_task(self, tmp_path: Path):
+        vault = self._vault_with_a_due_lens(tmp_path)
+        config = {"tasks": {"schedule_lenses": True}}
+        _drain_tick(vault, str(tmp_path / "test.db"), config)
+
+        _drain_tick(vault, str(tmp_path / "test.db"), config)
+
+        assert len(list((vault / "OpenAugi" / "Tasks").glob("TASK-*.md"))) == 1
+
+    def test_a_failing_scheduler_does_not_take_the_tick_down(self, tmp_path: Path):
+        vault = self._vault_with_a_due_lens(tmp_path)
+        with patch(
+            "openaugi.pipeline.schedule.run_due_lenses", side_effect=Exception("registry on fire")
+        ):
+            _drain_tick(vault, str(tmp_path / "test.db"), {"tasks": {"schedule_lenses": True}})
+
+        assert not (vault / "OpenAugi" / "Tasks").exists()

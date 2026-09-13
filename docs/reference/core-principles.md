@@ -139,6 +139,25 @@ daemon-independent.
 - This one rule structurally prevents the agent from flooding the vault:
   drafts are free, keeping is a decision.
 
+## 5. Where a surface's code lives — engine vs. vault
+
+The layer model (§2) says where *data* lives and said nothing about where a
+surface's *code* lives, which is how a daily board ended up scheduled by a
+shell script and a launchd agent inside the engine's own repo.
+
+> **Generic mechanism lives in the engine; a surface's trigger, scope and
+> prompt are the user's configuration and live in the vault as a lens file.**
+> If the engine contains a cadence, a folder name you chose, or a
+> second-person sentence, it is in the wrong place.
+
+The test is executable: `tests/test_impersonal_engine.py` fails if any file
+the package ships names or genders its user. What the engine keeps is the
+mechanism a surface needs and cannot express as prose — a janitor's box
+vocabulary and its write-back effect, the scheduler, the task file format.
+Turning those into config would be a worse Python.
+
+How a cadence is declared instead: [lenses.md](lenses.md) "Scheduling".
+
 ## Linked docs
 
 - [user-guide.md](user-guide.md) — the day-to-day manual built on these principles

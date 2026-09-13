@@ -222,18 +222,45 @@ def drain_zzz_queue(vault_path: Path, store: Any, config: dict[str, Any]) -> Non
         logger.error(f"ZZZ dispatch failed: {e}", exc_info=True)
 
 
-def _drain_tick(vault_path: Path, db_path: str, config: dict[str, Any]) -> None:
-    """Drain the zzz queue outside an ingest cycle.
+def run_due_lenses(vault_path: Path, store: Any, config: dict[str, Any]) -> None:
+    """Turn lenses whose cadence has come round into task files.
 
-    Without this, an instruction written just before the vault goes quiet
+    The heartbeat the lens registry has been waiting for since July. A lens
+    declares `trigger: every <period>`; this writes the pending task file and
+    the task watcher launches it like any other. Gated on
+    `tasks.schedule_lenses` (default off) inside `schedule.run_due_lenses`.
+
+    Never fails the caller — a scheduler that takes the watcher down with it
+    would cost more than the runs it missed.
+    """
+    try:
+        from openaugi.pipeline.schedule import run_due_lenses as _run
+
+        written = _run(vault_path, store, config)
+        if written:
+            logger.info("Scheduled %d due lens task(s)", len(written))
+    except Exception as e:
+        logger.error(f"Lens schedule failed: {e}", exc_info=True)
+
+
+def _drain_tick(vault_path: Path, db_path: str, config: dict[str, Any]) -> None:
+    """Drain the zzz queue, and run what the lens registry says is due.
+
+    Without the drain, an instruction written just before the vault goes quiet
     would sit queued until the next file change — the settle window would
     become "wait for the next edit", which is not a window at all.
+
+    The schedule rides the same tick because it needs exactly what the drain
+    needs: a timer that fires whether or not anything changed. This is the
+    "no cron, no daemon" the lens doc promised — with the reliability trade it
+    implies, since a stopped watcher now means no scheduled lens runs at all.
     """
     from openaugi.store.sqlite import SQLiteStore
 
     store = SQLiteStore(db_path)
     try:
         drain_zzz_queue(vault_path, store, config)
+        run_due_lenses(vault_path, store, config)
     finally:
         store.close()
 

@@ -69,7 +69,8 @@ src/openaugi/
 │   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar + lens list (docs/reference/lenses.md)
 │   ├── board_janitor.py   # Currency board write-back — checkboxes → feedback log → projected .board-state.json (docs/reference/currency-board.md)
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
-│   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch
+│   ├── schedule.py        # Lens triggers → due lenses → task files (docs/reference/lenses.md)
+│   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch + lens tick
 ├── render/                # M6 — static HTML surfaces from the DB (no server)
 │   └── lifestream.py      # Merged chronological stream + heat strip → OpenAugi/render/
 ├── agents/                # Agent plane — launches Claude Code sessions

@@ -42,8 +42,11 @@ FRONTMATTER — all five keys REQUIRED:
 - scope / target: see above.
 - trigger: `on-demand` | `on-pass` | `every <period>` (e.g. `every 7d` —
   note NO colon: `every: 7d` written bare is invalid YAML; quote it if
-  you must use the colon). Scheduled triggers stay DORMANT until the
-  review pass activates them. A trailing `# comment` is fine.
+  you must use the colon). `every <period>` FIRES on the watcher's tick
+  once `tasks.schedule_lenses` is on in config: units `s m h d w`, and a
+  period that will not parse is skipped and logged, never guessed at.
+  `on-demand` (the default) never auto-fires; `on-pass` is the review
+  pass's. A trailing `# comment` is fine.
 
 YAML SAFETY — description/scope/target MUST be folded scalars
 (`key: >-`, text indented on the next line) whenever the text contains
@@ -52,6 +55,12 @@ a colon+space or starts with a quote. When in doubt, always use `>-`.
 
 BODY — the intent prose the agent follows. Recommended sections:
 ## Intent (the question + the bar), ## Process (numbered), ## Hard rules.
+
+## Run — OPTIONAL, and only for a scheduled lens. The two things a
+run with nobody to ask needs: prose naming the state to read before
+starting (copied verbatim into the task file), and one line
+`dedupe: <path>` naming the output that proves today's run already
+happened (`{date}` expands to the run date). See docs/reference/lenses.md.
 
 EVERY lens inherits the augi-agent hard rules: never edit notes outside
 OpenAugi/ · dashboard/note output is nominate-or-`seen` · only

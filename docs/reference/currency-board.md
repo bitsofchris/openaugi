@@ -183,19 +183,56 @@ user ticks `do` on a proposal → board_janitor writes OpenAugi/Tasks/board-<dat
 
 Installed on the user's machine 2026-09-02. To reproduce elsewhere:
 
-```bash
-# 1. the schedule — writes one task file a day at 06:00
-cp ~/Library/LaunchAgents/com.openaugi.board.plist ~/Library/LaunchAgents/   # edit paths first
-launchctl load ~/Library/LaunchAgents/com.openaugi.board.plist
-launchctl list | grep com.openaugi.board                                     # "- 0 com.openaugi.board" = loaded, idle
+The board's cadence is a **lens field, not code**: `trigger: every 1d` in
+`<vault>/OpenAugi/AGENT/lenses/currency-board.md`, plus a `## Run` section
+naming the state to read first and the dedupe key. The watcher's drain tick
+reads it and writes the day's task file — see
+[lenses.md](lenses.md) "Scheduling".
 
-# 2. build one now, without waiting for 06:00
+```toml
+# 1. the schedule — ~/.openaugi/config.toml, then restart the watcher
+[tasks]
+schedule_lenses = true
+```
+
+```markdown
+# 2. the cadence — in the lens file, not in this repo
+trigger: every 1d
+
+## Run
+
+Read `OpenAugi/Board/.board-state.json` before building.
+
+dedupe: OpenAugi/Board/{date} - Board.md
+```
+
+```bash
+# 3. build one now, without waiting for the tick
 scripts/write-board-task.sh        # honors $OPENAUGI_VAULT; no-ops if today's board or task exists
 
-# 3. rendering — install and enable the snippet once
+# 4. rendering — install and enable the snippet once
 cp src/openaugi/templates/board.css "<vault>/.obsidian/snippets/board.css"
 #    Obsidian → Settings → Appearance → CSS snippets → enable "board"
 ```
+
+**Migrating off launchd (pending).** The original install scheduled the board
+with `~/Library/LaunchAgents/com.openaugi.board.plist` calling
+`scripts/write-board-task.sh` at 06:00. Both are still in place and still work;
+neither is needed once the lens carries its own trigger. The cutover, in order,
+because each step depends on the one before it:
+
+1. Give `currency-board.md` a `trigger: every 1d` and a `## Run` section.
+2. Turn on `tasks.schedule_lenses` and restart the watcher.
+3. Watch one day's board get built by the tick.
+4. `launchctl unload ~/Library/LaunchAgents/com.openaugi.board.plist` and
+   delete the plist; delete `scripts/write-board-task.sh`.
+
+Doing 4 before 3 leaves no schedule at all. `com.openaugi.substack.plist` and
+`scripts/write-substack-task.sh` migrate the same way, with `every 7d`.
+
+**What the trade costs.** `launchctl` fired at 06:00 whether or not anything
+else was up. The drain tick only fires while `com.openaugi.up` is running, so a
+stopped watcher means no board — and a stopped watcher is currently invisible.
 
 `.obsidian/` is gitignored in the vault, so the snippet's versioned copy lives
 at `src/openaugi/templates/board.css` in this repo — edit there, copy across.

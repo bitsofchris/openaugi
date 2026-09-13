@@ -45,7 +45,7 @@ description: >-
   What this lens answers, one line (surfaces display this).
 scope: >-
   Default retrieval recipe, plain prose (overridable at apply time).
-trigger: on-demand           # on-pass / every 7d (no colon!) — dormant until scheduling activates
+trigger: on-demand           # on-pass / every 7d (no colon!) — `every` is live, see Scheduling
 target: >-
   dashboard                  # dashboard | note — <path> | view — overwrite <View - X.md>
 ---
@@ -188,12 +188,72 @@ Invariant: the index lists exactly the lenses in
 `OpenAugi/AGENT/lenses/` — adding/removing a lens file adds/removes its
 row on the next regeneration.
 
-## Scheduling (dormant)
+## Scheduling — the trigger field, live
 
-Specs declare `trigger: on-pass` / `every <period>` now, but the review
-pass does NOT run them until the routing-quality gate (master plan M4)
-passes. Then the pass becomes the scheduler: list the folder, run what's
-due. No cron, no daemon — the pass is already the heartbeat.
+`trigger: every <period>` fires. The watcher's drain tick
+(`pipeline/watcher.py:_drain_tick`, already running on a timer) lists the
+registry, asks `pipeline/schedule.py` what is due, and writes a pending
+task file per due lens into `OpenAugi/Tasks/`. The task watcher hydrates
+and launches it exactly as it launches a `zzz` dispatch — so a scheduled
+run and a typed one are the same mechanism, and `zzz` is just the version
+where you are the trigger. No cron, no daemon, no per-surface shell script.
+
+**It is off until you turn it on.** In `~/.openaugi/config.toml`:
+
+```toml
+[tasks]
+schedule_lenses = true
+```
+
+With the gate closed nothing is read and nothing fires — a vault that has
+never heard of scheduling behaves exactly as before.
+
+**Periods:** `every 30m`, `every 12h`, `every 1d`, `every 7d`, `every 2w`
+(`s m h d w`). `on-demand` means "never auto-fires" and is the default;
+`on-pass` is reserved for the review pass and does not fire on the tick. A
+trigger that will not parse is **skipped and logged, never guessed at** —
+`trigger:` is load-bearing now, and a typo must not become an agent
+session. So is a lens whose spec already fails the contract.
+
+### `## Run` — what a scheduled run cannot ask you for
+
+An on-demand apply gets two things from the conversation that a 06:00 run
+has no one to ask. Put them in an optional `## Run` section in the lens
+body:
+
+```markdown
+## Run
+
+Read `OpenAugi/Board/.board-state.json` before building: never re-propose
+an item whose state is `done`, `not-doing` or `someday`.
+
+dedupe: OpenAugi/Board/{date} - Board.md
+```
+
+- **The prose** is copied verbatim into the task file — state to read
+  first, anything the run must know before it starts.
+- **`dedupe: <path>`** names the output that proves the run already
+  happened. `{date}` expands to the run's date. If that file exists, the
+  lens is not due, whatever the records say.
+
+Both are optional; most lenses need neither.
+
+### How "already ran" is decided
+
+Three guards, because the question has three failure modes:
+
+| Guard | Answers | Survives |
+|---|---|---|
+| `lens_schedule` record (last run per lens) | is the cadence up? | a restart |
+| `OpenAugi/Tasks/TASK-{date}-{lens}.md` exists | is it already queued? | a lost database |
+| the `dedupe:` output exists | did the work already land? | a re-import, a rebuilt vault |
+
+### The trade this makes
+
+`launchctl` fired whether or not anything else was running. The drain tick
+does not: **if the watcher is stopped, no scheduled lens runs**, and a
+stopped watcher is currently invisible. Until overdue lenses are surfaced
+on the Dashboard, `openaugi lenses` and the log are how you find out.
 
 ## Wiring notes (for surfaces)
 
