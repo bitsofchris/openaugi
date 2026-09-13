@@ -9,8 +9,8 @@ them. Delete the output folder to clean up completely.
 
 Stdlib only. Usage:
 
-    python3 scripts/session_cards.py --vault "~/Documents/ZK Home" --days 14
-    python3 scripts/session_cards.py --dry-run
+    python3 scripts/session_cards.py --days 14          # vault from openaugi config
+    python3 scripts/session_cards.py --vault ~/vault --dry-run
 """
 
 from __future__ import annotations
@@ -265,22 +265,45 @@ def collect(days: int, claude_dir: Path, codex_dir: Path) -> list[Session]:
     return sessions
 
 
+def resolve_vault(explicit: str | None) -> Path | None:
+    """The vault root: the flag if given, else the openaugi config's default_path.
+
+    The config lookup is optional so the script stays runnable as a plain
+    file; without the package installed, --vault is simply required.
+    """
+    if explicit:
+        return Path(explicit).expanduser()
+    try:
+        from openaugi.config import load_config, resolve_vault_path
+    except ImportError:
+        return None
+    resolved = resolve_vault_path(None, load_config())
+    return Path(resolved) if resolved else None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--vault", default="~/Documents/ZK Home")
+    ap.add_argument(
+        "--vault",
+        default=None,
+        help="vault root (default: [vault] default_path from the openaugi config)",
+    )
     ap.add_argument("--out", default="OpenAugi/Sessions", help="output folder, relative to vault")
     ap.add_argument("--days", type=int, default=14)
     ap.add_argument("--claude-dir", default="~/.claude/projects")
     ap.add_argument("--codex-dir", default="~/.codex/sessions")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+    vault = resolve_vault(args.vault)
+    if vault is None:
+        ap.error("no vault: pass --vault or set [vault] default_path in the openaugi config")
 
     sessions = collect(
         args.days,
         Path(args.claude_dir).expanduser(),
         Path(args.codex_dir).expanduser(),
     )
-    out_dir = Path(args.vault).expanduser() / args.out
+    out_dir = vault / args.out
     if args.dry_run:
         for s in sorted(sessions, key=lambda x: x.last_active, reverse=True):
             print(f"{s.last_active[:16]}  {s.tool:6}  {s.human_turns:3}h  {card_filename(s)}")
