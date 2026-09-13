@@ -1,4 +1,5 @@
 ---
+kind: engine
 name: idea-lineage
 description: >-
   "How did my thinking on X evolve?" — the full biography of one idea: earliest mention → major revisions → current strongest form → dead branches. Durable artifact per topic.
@@ -8,13 +9,14 @@ trigger: on-demand
 target: >-
   note — OpenAugi/Notes/YYYY-MM-DD - Lineage - <topic>.md (durable, opens with `- [ ] seen`)
 ---
+
 # Idea Lineage
 
 ## Intent
 
-The biography of one idea, in the Persistent Memory Artifact shape:
-*show how an idea evolved instead of re-discovering it.* Not a summary
-of a topic — the story of how YOUR thinking on it moved.
+The biography of one idea, in the user's own artifact shape: *show how an idea
+evolved instead of re-discovering it.* Not a summary of a topic — the story of
+how THEIR thinking on it moved.
 
 Sibling lens: **echoes** answers "have I thought this before?" for
 *current* thinking — small, disposable, recognition. Idea-lineage is the
@@ -47,17 +49,17 @@ X for me," this lens.
 **Major revisions:** (one line per real shift, dated, quoted)
 - YYYY-MM-DD — reframed as … ([[source]])
 
-**Repeated language:** phrases you return to verbatim across eras
+**Repeated language:** phrases they return to verbatim across eras
 
-**Current strongest form:** YYYY-MM-DD — "<your best articulation, quoted>" ([[source]])
+**Current strongest form:** YYYY-MM-DD — "<their best articulation, quoted>" ([[source]])
 
 **Dead branches:** directions tried and abandoned; dormant gaps from the
 pre-compute ("quiet 2025-Q2→Q3, returned changed")
 
 **Influences:** third-party blocks (books, podcasts, AI chats) that fed
-the idea — cited as influences, NEVER counted as your voice
+the idea — cited as influences, NEVER counted as their voice
 
-**Next concrete test:** ONLY if you named one in your notes — quote it.
+**Next concrete test:** ONLY if they named one in their notes — quote it.
 Never invent a next step.
 
 - [ ] seen
@@ -67,10 +69,10 @@ Never invent a next step.
 
 ## Hard rules
 
-- Your words carry the artifact — quote verbatim, link every quote.
-- `third_party` blocks are influences, never your voice; keep the
+- Their words carry the artifact — quote verbatim, link every quote.
+- `third_party` blocks are influences, never their voice; keep the
   sections separate.
-- Revisions are shifts in YOUR framing, not activity spikes. A busy
+- Revisions are shifts in THEIR framing, not activity spikes. A busy
   quarter with no new framing is not a revision.
 - No judgment, no advice, no invented next steps. Dead branches are
   reported as history, not failure.

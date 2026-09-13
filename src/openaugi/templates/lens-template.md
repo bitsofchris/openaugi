@@ -1,4 +1,5 @@
 ---
+kind: engine   # engine ships as a template on `openaugi init`; personal never does (repo AGENTS.md)
 name: lens-template
 description: >-
   THE LENS CONTRACT — the authoritative, annotated spec every lens file

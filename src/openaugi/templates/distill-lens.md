@@ -1,4 +1,5 @@
 ---
+kind: engine
 name: distill-lens
 description: MOVED — this lens now lives at OpenAugi/AGENT/lenses/distill.md (the lens registry). Read that file; this stub only preserves old references.
 ---

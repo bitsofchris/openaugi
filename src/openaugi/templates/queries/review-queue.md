@@ -1,4 +1,5 @@
 ---
+kind: engine
 description: Blocks ingested since the last review pass, excluding OpenAugi/ derived artifacts.
 query:
   after_ingested: "$review-mark"

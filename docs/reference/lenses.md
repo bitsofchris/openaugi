@@ -40,6 +40,7 @@ shipped lens or the reader drifts. In brief —
 ```yaml
 ---
 name: nuggets                # kebab-case, matches filename. REQUIRED (all five are)
+kind: engine                 # engine ships as a template | personal never does (AGENTS.md)
 description: >-
   What this lens answers, one line (surfaces display this).
 scope: >-
@@ -63,8 +64,11 @@ Dashboard nominations; backed by the deterministic pre-compute in
 full biography in the Persistent Memory Artifact shape; backed by
 `openaugi lineage "<topic>" --json --write`, whose
 `OpenAugi/lineage/<slug>.json` sidecar doubles as the mobile timeline
-payload), plus the vault-side JARVIS starter set (morning-briefing,
-open-loops, echoes, …). The old `distill-lens.md` / `nugget-lens.md`
+payload), and the rest of the engine set — `currency-board`,
+`weekly-reflection`, `open-loops`, `chat-harvest`, `echoes`, `emerging`,
+`decision-audit`, `create-note-from-block`, `morning-briefing` — every lens
+whose vault copy declares `kind: engine`, kept in sync by
+`scripts/sync_templates.py`. The old `distill-lens.md` / `nugget-lens.md`
 paths are pointer stubs.
 
 ## The two axes every lens sits on (formalized 2026-07-08)

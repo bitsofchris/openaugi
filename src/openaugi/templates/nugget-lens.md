@@ -1,4 +1,5 @@
 ---
+kind: engine
 name: nugget-lens
 description: MOVED — this lens now lives at OpenAugi/AGENT/lenses/nuggets.md (the lens registry). Read that file; this stub only preserves old references.
 ---

@@ -7,6 +7,19 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-09-13: the week's branches merged, and the engine / personal line.**
+`fix/keep-proposal-dispatch` (chat harvest, reading queue, carry-forward,
+checkbox review signal, writeback module, proposal-brief fix) merged to `main`
+and pushed; `feat/augi-log-routing` was already in main and is gone;
+`feat/writeback` (the two scheduler commits above) is untouched and still the
+cutover gate. Then the boundary: every vault `AGENT/` file declares `kind:
+engine | personal`, engine files no longer name their user, rulings sit in
+`%% personal %%` regions, and `scripts/sync_templates.py` writes the 23 engine
+files to `templates/` — `init` ships the system as run. See AGENTS.md "Engine
+vs personal". Still open from the vault note: `substack-batch.md`'s illegal
+`trigger: weekly` (fixed in cutover step 1), and the two `write-*-task.sh`
+scripts, which go with the plists.
+
 **2026-09-09: the reading queue — augi's prose in Reader, marks back in the
 vault.** Built the core of the round trip from
 `<vault>/OpenAugi/Plans/Plan - Reading Queue in Readwise.md`: `openaugi reading

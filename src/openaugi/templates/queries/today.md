@@ -1,4 +1,5 @@
 ---
+kind: engine
 description: Everything with today's content date.
 query:
   after: "today"

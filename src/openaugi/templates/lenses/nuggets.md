@@ -1,4 +1,5 @@
 ---
+kind: engine
 name: nuggets
 description: Find stand-alone insights buried in recent working notes and nominate the best few for promotion (bronze→silver). Post seeds included.
 scope: my own writing since the last nugget run (fallback ~2 weeks) — dailies, working notes, MOC journals. Exclude OpenAugi/-sourced blocks and third-party source/* material.
@@ -33,8 +34,7 @@ search. When unsure, skip.
 
 1. **Scope the window.** Check the Dashboard's Nuggets section for the
    last run's date (footer line); scan blocks since then via
-   `search(after_ingested=...)` / `recent`, applying the scope above
-   (ingest time, not `after=` — content dates miss same-day captures).
+   `search(after=...)` / `recent`, applying the scope above.
 2. **Harvest candidates.** Read for stand-alone value, not topical
    relevance. The test: would this sentence be worth reading with NO
    surrounding context? Check the block isn't already promoted (search

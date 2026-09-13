@@ -174,55 +174,24 @@ def init():
         env_path.chmod(0o600)  # owner-only read/write
         console.print(f"  Keys written to [cyan]{env_path}[/cyan] (chmod 600)")
 
-    # Copy agent templates to vault (only if files don't already exist)
-    import importlib.resources
+    # Copy the engine templates to the vault (only files that don't already exist).
+    # Which files ship is decided by the templates themselves: every markdown
+    # file under templates/ that declares `kind: engine` — see agent_files.py.
+    from openaugi.agent_files import engine_templates, template_description
 
     vault = Path(vault_path)
     agent_dir = vault / "OpenAugi" / "AGENT"
     agent_dir.mkdir(parents=True, exist_ok=True)
 
-    templates = importlib.resources.files("openaugi") / "templates"
-    agent_templates = {
-        "augi-agent.md": "Base agent skill — how the agent handles tasks",
-        "research-agent.md": "Research sub-agent — NotebookLM, source ingestion",
-        "review-pass.md": "Review pass — route blocks, regenerate derived views",
-        "distill-lens.md": "Pointer stub — distill lens moved to lenses/distill.md",
-        "nugget-lens.md": "Pointer stub — nugget lens moved to lenses/nuggets.md",
-        "lens-template.md": "THE lens contract — copy to start a new lens",
-        "lenses/distill.md": "Distill lens — on-command topic distillation with provenance",
-        "lenses/nuggets.md": "Nugget lens — nominate promotable insights from working notes",
-        "queries/dashboard-task-shelf.md": "Saved query — the Dashboard task shelf",
-        "queries/review-queue.md": "Saved query — blocks ingested since the last review pass",
-        "queries/today.md": "Saved query — today's blocks by content date",
-    }
-
     copied = 0
-    for filename, desc in agent_templates.items():
+    for filename, text in engine_templates():
         dest = agent_dir / filename
         dest.parent.mkdir(parents=True, exist_ok=True)
         if dest.exists():
             console.print(f"  [dim]Skipping {filename} (already exists)[/dim]")
             continue
-        source = templates / filename
-        dest.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-        # Strip the TEMPLATE marker from the vault copy's frontmatter
-        text = dest.read_text(encoding="utf-8")
-        text = text.replace(" (template)", "")
-        text = text.replace(
-            "  TEMPLATE — copied to <vault>/OpenAugi/AGENT/",
-            "  Live agent skill file at OpenAugi/AGENT/",
-        )
-        text = text.replace(
-            "  The vault copy is the live version the agent reads. Edit there, not here.\n"
-            "  This file is the factory default for new users.\n",
-            "  Edit this file to change agent behavior.\n",
-        )
-        text = text.replace(
-            "  The vault copy is the live version the agent reads. Edit there, not here.\n",
-            "  Edit this file to change agent behavior.\n",
-        )
         dest.write_text(text, encoding="utf-8")
-        console.print(f"  [green]Copied {filename}[/green] — {desc}")
+        console.print(f"  [green]Copied {filename}[/green] — {template_description(text)}")
         copied += 1
 
     if copied:

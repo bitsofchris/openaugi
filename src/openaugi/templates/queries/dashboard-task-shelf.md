@@ -1,4 +1,5 @@
 ---
+kind: engine
 description: Open tasks from the last two weeks — the Dashboard task-shelf query.
 query:
   has_task: true

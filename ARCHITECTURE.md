@@ -42,7 +42,7 @@ The codebase separates two fundamentally different kinds of work, run by `openau
 
 **Data plane (`pipeline/`)** — passive transforms on blocks. Ingest, embed, watch for file changes, dispatch zzz instructions as task files, re-rank search results. All in-process Python, no external processes.
 
-**Agent plane (`agents/`)** — task dispatch watches `OpenAugi/Tasks/` for pending task files and launches Claude Code sessions in tmux. The agent's behavior is governed by `templates/augi-agent.md` (copied to `<vault>/OpenAugi/AGENT/augi-agent.md` on init).
+**Agent plane (`agents/`)** — task dispatch watches `OpenAugi/Tasks/` for pending task files and launches Claude Code sessions in tmux. The agent's behavior is governed by the vault's `OpenAugi/AGENT/` files; `templates/` holds their shipped twins (`kind: engine`), copied on init.
 
 The two planes share the store and the block/link data model. The bridge between them is `pipeline/dispatch.py`: when ingest finds blocks with `zzz:` instructions, it writes task files that the agent plane picks up. The MCP server (`mcp/`) sits alongside both as the read/write API surface that Claude calls.
 
@@ -212,9 +212,13 @@ Per-block `zzz:` lines are extracted by the vault adapter into
 the clean content). Blocks are split on `###` headers and `qqq` markers
 (case-insensitive) — see [docs/plans/zzz-instructions.md](docs/plans/zzz-instructions.md).
 
-The agent's behavior is governed by `templates/augi-agent.md` (source of
-truth, copied to `<vault>/OpenAugi/AGENT/augi-agent.md`). Edit that file to
-change how the agent handles tasks — not the Python code.
+The agent's behavior is governed by the vault's `OpenAugi/AGENT/` files (the
+source of truth), not the Python code. `src/openaugi/templates/` holds the
+shipped twin of every `kind: engine` file, written by
+`scripts/sync_templates.py` and copied on `openaugi init`; `kind: personal`
+files never ship. The kind, the personal-region markers and the template walk
+live in `src/openaugi/agent_files.py`; the rule is in AGENTS.md "Engine vs
+personal".
 
 The **task file format is a single contract** defined in
 `src/openaugi/templates/task-template.md` and enforced by

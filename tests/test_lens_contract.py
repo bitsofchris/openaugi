@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from openaugi.agent_files import ENGINE, read_kind
 from openaugi.pipeline.context_pack import LENS_REQUIRED_KEYS, read_lens_specs
 
 TEMPLATES = Path(__file__).parent.parent / "src" / "openaugi" / "templates"
@@ -38,6 +39,12 @@ def test_shipped_lens_honors_contract(lens_file: Path, tmp_path: Path):
     assert "error" not in spec, f"{lens_file.name}: {spec.get('error')}"
     for key in ("name", "description", "trigger", "target"):
         assert spec[key], f"{lens_file.name}: empty `{key}`"
+
+
+@pytest.mark.parametrize("lens_file", SHIPPED_LENSES, ids=lambda f: f.name)
+def test_shipped_lens_is_an_engine_file(lens_file: Path):
+    """Only `kind: engine` files ship; a lens without it is on nobody's side of the line."""
+    assert read_kind(lens_file.read_text(encoding="utf-8")) == ENGINE, lens_file.name
 
 
 def test_lens_template_itself_validates(tmp_path: Path):

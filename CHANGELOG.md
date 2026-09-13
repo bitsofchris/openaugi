@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+**The engine / personal line, made executable.** Every file in the vault's
+`OpenAugi/AGENT/` folder now declares `kind: engine` or `kind: personal`.
+Engine files are the operating system anyone who installs OpenAugi runs; each
+has a template twin written by the new `scripts/sync_templates.py` (personal
+regions — `%% personal %%` … `%% /personal %%`, the user's own rulings — are
+stripped on the way out), and `openaugi init` copies every template that
+declares `kind: engine` instead of a hand-kept list. Personal files never ship.
+Twenty-three engine files ship now, up from fourteen: `kanban.md`, `pmoc.md`,
+`routing.md`, `snapshot-agent.md` and nine more lenses, and the shipped
+`augi-agent.md` and `review-pass.md` are current with the vault again (the old
+templates predated the checkbox review signal). `src/openaugi/agent_files.py`
+carries the kind, the region stripping and the template walk;
+`tests/test_agent_files.py` and `tests/test_sync_templates.py` cover it, and
+`test_lens_contract.py` now requires `kind: engine` on every shipped lens.
+`scripts/session_cards.py` takes its vault from the openaugi config instead of
+a literal path.
+
 **One write-back module for every janitor.** `pipeline/writeback.py` now owns
 what the board, the echo log and the routing rows each used to define for
 themselves: the `feedback-log.ndjson` path (spelled out in four modules), the

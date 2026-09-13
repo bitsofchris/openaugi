@@ -1,12 +1,13 @@
 ---
-name: review-pass (template)
+kind: engine
+name: review-pass
 description: >
-  TEMPLATE — copied to <vault>/OpenAugi/AGENT/review-pass.md on `openaugi init`.
-  The vault copy is the live version the agent reads. Edit there, not here.
   The recurring review/maintenance pass: route new blocks to containers
   (AMOCs/PMOCs), refresh their recap rows (write_recap — per-container view
   FILES were retired 2026-08-17), surface promotion nominations on the
-  Dashboard. Run manually or via zzz ("run the review pass").
+  Dashboard. Run manually or via zzz
+  ("run the review pass"). Supersedes mirror notes and one-off snapshots
+  for container heads.
 ---
 
 # Review Pass
@@ -36,13 +37,14 @@ facets and the container registry.
   They are DB rows, not files: the mobile explorer renders them via
   `get_view`. (Per-container `View - *.md` files were retired 2026-08-17.)
 - **Structure changes** (new tag/area, new silver/gold note, merging notes)
-  are NEVER done autonomously. You nominate on the Dashboard; the user
-  commands; only then do you assemble. **An approved nomination IS the
-  command:** apply the exact edit it drafted (registration tag +
-  description frontmatter, an embed/link line) directly to the target
-  note — nothing beyond what was drafted — and record the edit in the
-  Dashboard's Processed section. Approval-executed edits are the one
-  exception to "never edit outside OpenAugi/".
+  are NEVER done autonomously. You write a `proposals` record; the user answers
+  it in the app; only then do you assemble. **An accepted proposal IS the
+  command (ruled 2026-07-15):** apply the exact edit it drafted
+  (registration tag + description + `augi_id`, an embed/link line) directly
+  to the target note — nothing beyond what was drafted — and record the
+  outcome on the proposal (`state: "done"`, `executed: "…"`).
+  Approval-executed edits are the one exception to "never edit outside
+  OpenAugi/".
 
 ## Capture grammar
 
@@ -55,68 +57,72 @@ facets and the container registry.
 
 ## Container registry
 
-**One rule: a note is a registered routing target iff it has a container
-tag AND a filled `description` frontmatter.** Container tags:
+**One rule (2026-07-11): a note is a registered routing target iff it has a
+container tag AND a filled `description` frontmatter.** Container tags:
 
 - `#note-type/amoc` — areas (gold: current state of a never-ending area).
 - `#note-type/pmoc` + `#status/active` — projects (gold).
 - `#note-type/moc` — concept notes (silver: a facet of an area/project, an
   evolving idea; the permanent home for "I've said this before" captures).
 
-Discover the registry per run by tag search — there is no hand-maintained
-list. `OpenAugi/AGENT/My Taxonomy.md` defines the facet vocabulary the
-containers map to.
-
-**The `description` frontmatter is the routing map** — it tells you *when
-to route here* (skill-file style: name + description). A note with the tag
-but no description is NOT registered: don't route to it by inference
-(explicit signals still work); instead nominate on the Dashboard with a
-**drafted tag + description included verbatim** — filling the description
-IS registration. When the user approves, apply the drafted frontmatter to
-the note yourself (approval is the command); saying yes costs one checkbox.
-
-**Registering writes three things, not two: the tag, the `description`, and
-an `augi_id`** — an opaque unique token (a UUID is fine):
+**Registering a note writes three things, not two (2026-08-21).** Tag,
+`description`, and **`augi_id`** — a UUID that is the note's identity:
 
 ```yaml
 ---
 augi_id: 898c3199-596c-4154-8be2-b7b862ec12d7
+note-type: moc
 description: …
 ---
 ```
 
-A document's graph id derives from its `augi_id` when present and from its
-file path otherwise — and every edge into a container (`contains` and
-`routed_to` alike) is keyed on that id. Without one, renaming or moving the
-note orphans every edge into it, silently. Never change, remove, or reuse an
-`augi_id`; a registered container missing one gets it added as a repair, no
-approval needed. (Adding one to an already-ingested note re-keys it — run
-`scripts/migrate_container_augi_id.py` to carry the edges across.)
+Why: a container's id in the graph is derived from its **file path**
+(`sha256("doc:" + rel_path)`), and the title lookup is a plain string match on
+`blocks.title`. So renaming a note, or moving it to another folder, changes its
+id — and every `routed_to` edge pointing at the old one is orphaned. There is
+no error and no repair; the container simply looks emptier than it should. The
+`augi_id` is what survives a rename, because it travels in the note.
+
+**Never change or remove an `augi_id`, and never reuse one.** It is the only
+stable name the note has. If you find a registered container without one, add
+it — that is a repair, not a new registration, and it needs no approval.
+
+Discover the registry per run by tag search — the lists below are seed
+context (facet mappings, history), not the authority. A tagged note without
+a description is NOT registered: don't route to it by inference (explicit
+signals still work); write a `register` proposal with the **drafted tag +
+description included verbatim** — filling the description IS registration,
+and on acceptance YOU apply it to the note (acceptance is the command).
+
+**The registry notes' `description` frontmatter is the routing map** — it
+tells you *when to route here* (skill-file style: name + description).
 
 **Registry restraint — registration is for INFERENCE targets only.**
 Register a note when captures from *elsewhere* (dailies, mobile, random
-notes) should land in it automatically. A contained-and-clear note the
-user writes in directly — or routes to explicitly when needed — gains
-nothing from registration; nominating it just bloats the registry and
-the user's yes/no queue. Unregistered ≠ unroutable: `aaa:` and explicit
-links always work on any note. Precedents (both the user's calls):
-Dream Journal registered as routing-target-only because dreams captured
-in OTHER files must find it; Wind Turbine PMOC registration declined
-2026-07-12 — "contained and clear, I route there directly on my own;
-don't bloat the registry." Before nominating a registration, ask: does
-anything actually arrive here from elsewhere by inference?
+notes) should land in it automatically. A contained-and-clear note I
+write in directly — or route to explicitly when needed — gains nothing
+from registration; nominating it just bloats the registry and my yes/no
+queue. Unregistered ≠ unroutable: `aaa:` and explicit links always work
+on any note.
+
+Before nominating a registration, ask: does anything actually arrive
+here from elsewhere by inference?
+
+**Declined nominations — don't renominate without new signal.** Once the
+user drops a nomination (rather than answering yes/no/instruction), check
+this list before raising the same subject again on a later pass. Only
+renominate if new evidence changed the picture (new blocks, a new
+duplicate, a new instruction) — otherwise it's the same "no" repeating.
 
 ## Routing — you execute rules, you do not exercise judgment
 
-**This is the line the whole pass sits on.**
-
-> Do not guess. Most blocks do not need to be routed out of the daily note.
-> A block with a link in it, a block carrying a rule, or a block asking for a
-> new note — that is the whole job.
+**This is the line the whole pass sits on.** Most blocks do not need to
+leave the daily note. Things with a link in them, things a rule matches, or an
+explicit ask for a new note — that is all routing does; guess at nothing else.
 
 Routing is **autonomous** — you apply it without asking — and that is only
 acceptable because it is never a judgment call. You are executing instructions
-the user wrote. So the boundary has to be exact.
+The user wrote. So the boundary has to be exact.
 
 ### The three rules. There is no fourth.
 
@@ -149,7 +155,83 @@ real decisions sat under nineteen items of noise.
 
 If a block genuinely needs judgment — it looks like it wants a note of its own,
 or several blocks are circling one idea — that is not routing. Use
-a `proposals` record (below), which asks instead of acting.
+a `proposals` record (below), which asks instead of acting. **That step is not
+optional**, and the section below says exactly how to do it.
+
+### Emergence — the second read over the left-alone blocks
+
+Leaving a block alone is the right call for routing. It is **not** the end of
+the pass. After the routing loop, read the `left_alone` blocks' actual text
+once more and ask what is forming. This is judgment, so everything it produces
+is a proposal and nothing is applied.
+
+Why this exists: a block with no link may be asking for a note to be created;
+a block with a link may be asking for that note to be registered, so the next
+pass can append to it.
+
+**A `[[link]]` to an unregistered note is the strongest signal in the pass.**
+It is the user naming a home in their own words and the rules being unable to use
+it. Never leave one uncounted.
+
+```
+# n >= 1 when instructed; otherwise a cluster is 2+ blocks circling one idea.
+# There is NO temporal filter. "Make this a note" makes a note, today, alone.
+
+if a block asks for a note (aaa:, "this is a post", "note idea"):
+    propose promote           # one block is enough; an instruction is not a vote
+
+for each cluster in the left-alone blocks:
+    shared = a [[link]] the cluster's blocks have in common
+    if shared and that note EXISTS and is unregistered:
+        propose register(shared)      # nothing is emerging — they are appending
+    elif shared and that note DOES NOT exist:
+        propose promote(shared)       # an orphan link used twice IS the title
+    else:
+        propose promote(<title you draft>)   # only if it is genuinely one idea
+```
+
+**The middle branch is the one that was missing.** A repeated link to a note
+that already exists means the user is adding to a thing they have, not starting
+a new one — an append, not an emerging idea. The fix is to register it so the
+`link` rule can fire next pass. Proposing a new note there would split a
+journal they may have kept for months.
+
+**The `else` branch is not a licence to cluster loosely.** A cluster earns a
+note when several blocks state the same claim in the same words across the
+daily notes, the Kanban, and an `aaa:`. Two blocks that merely share a topic
+are not one idea. If you cannot quote the sentence they have in common, there
+is no cluster.
+
+Clusters are proposed **whole**: the whole set becomes the `block_ids`, and
+every one of them appears in `evidence`.
+
+**Before proposing a `promote`, check the note does not already exist —
+and search OUTSIDE the batch to do it.** The batch excludes `OpenAugi/`
+because it is agent output, which means **every note you have ever written
+is invisible to the emergence step unless you go looking**.
+
+This is not a vault-wide deduplication job. It is **two extra queries per
+proposed promote**, using the same `search` the batch uses, with the exclude
+simply left off:
+
+```
+search(title=<the title you are about to propose>)   # no exclude_path_prefix
+search(query=<the cluster's claim in one line>, k=5) # no exclude_path_prefix
+```
+
+If either turns up a note that already collects these blocks, you have your
+answer: don't propose the promote.
+
+**Never propose an adopt into a piece that has shipped.** A published draft is
+a source to link from the new note, not a container to append to — appending
+edits something that is already out in the world.
+
+**The vault may not be able to tell you this** — a shipped piece carries no
+marker unless the user adds one. Until a published note is marked as such,
+treat any `DRAFT - *` or `Post - *` note as **possibly shipped** and prefer a
+`promote` that links to it over an `adopt` into it. The user can settle this
+cheaply by adding `status: published` frontmatter or moving shipped pieces to
+the Kanban's `## Archive`; when they do, read that and the rule becomes exact.
 
 ### The record contract — collections this pass owns
 
@@ -159,8 +241,8 @@ contract, and the list of legitimate `rule` values is *this vault's* policy.
 A different vault would use different collections and different rules.
 
 ```
-collection "passes"     id: pass-<YYYY-MM-DD-HHMM>   ← the user's LOCAL time
-  { window_from, window_to, scanned, left_alone, reviewed_at? }
+collection "passes"     id: pass-<YYYY-MM-DD-HHMM>   ← LOCAL time, with minutes
+  { window_from, window_to, scanned, left_alone }
 
 collection "routings"   id: <pass_id>:<block_id>:<container>
   { pass_id, block_id, container, rule, undone_at? }
@@ -172,10 +254,10 @@ collection "proposals"  id: <kind>-<subject-slug>
 
 Three conventions that matter:
 
-- **The pass id is the user's local time, to the minute — never the UTC
-  date.** A pass run late in the evening otherwise names itself with
-  tomorrow's date, and two passes in one day collide on a date-only id, the
-  second silently upserting over the first.
+- **The pass id is local time to the minute, not the UTC date.** A pass that
+  ran at 22:25 on the 20th wrote itself `pass-2026-08-21`, a date the user had
+  not reached — and two passes in one day collide on a date-only id, so the
+  second silently upserts over the first. Use their clock, and include HHMM.
 - **Ids are derived from the subject, never random.** Writes upsert, so
   `promote-silver-notes` re-proposed next pass updates in place instead of
   stacking. Random ids turn the queue into a pile — that is exactly how the
@@ -226,8 +308,8 @@ inflate the numbers.
 ## Proposals — the judgment half
 
 Anything that is **not** one of the three rules goes through
-`write_record("proposals", ...)` and is not done until the user accepts it.
-Four kinds:
+`write_record("proposals", ...)` and is not done until the user accepts it in the
+app. Four kinds:
 
 | `kind` | Means | `target` |
 |---|---|---|
@@ -236,77 +318,47 @@ Four kinds:
 | `merge` | two notes should become one | the survivor |
 | `register` | apply a drafted `description:` so a note becomes a routing target | the note |
 
-Rules for proposing well, learned from the markdown nomination queue this
-replaces — where 24 open items contained **five** actual decisions:
+Rules for proposing well, learned from the Dashboard this replaces — where 24
+open nominations contained **five** actual decisions:
 
+- **A proposal goes in the `proposals` collection and NOWHERE else.** Do not
+  also write it as a Dashboard nomination. Two queues over one decision are
+  not a stale count; they are two records of what the user has decided,
+  disagreeing — answering one never touches the other. The Dashboard is a
+  **view to read**, not a second place to ask.
 - **Never propose a routing.** A rule fired or it didn't.
-- **Never propose engineering work.** Bugs in the tooling belong in its issue
-  tracker, not in someone's knowledge review. A queue that mixes "should this
-  become a note?" with "fix this SQL filter" gets abandoned, and the decisions
-  that mattered are what get lost.
+- **Never propose engineering work.** openaugi bugs belong in the repo, not in
+  the user's knowledge review.
 - **Derive the record id from the target** (`promote-silver-notes`) so
   re-proposing updates in place instead of stacking.
 - **`why` is evidence, not justification.** Name the blocks or the pattern —
-  *"5 blocks since January restate this"* — so the user can check you.
+  *"5 blocks since 2026-01 restate this"* — so the user can check you.
 - **A decline is durable.** Re-propose only on genuinely new evidence, never
   because another pass ran.
-- **Every proposal carries `evidence`** — the blocks themselves, as
-  `[{id, text, rule?}]` with the text trimmed to a line or two — so the
-  review surface can show the user's own words under the ask instead of a
-  count. `rule` (only on a `register`) names which routing rule would fire
-  once the registration lands.
-- **A register must earn its place in the queue.** Its `evidence` is the
-  blocks in *this* window the registration would catch — the reason to say
-  yes. Propose it only when that list is non-empty; otherwise keep the
-  drafted description in your own notes and stay quiet until a block reaches
-  for it. Carrying a proposal forward is a claim that the reason still
-  holds — re-check it each pass, and drop any register whose evidence is
-  empty this window. (Upserting ids make carry-forward silent, which is how
-  a queue of eleven asks with two real decisions builds itself.)
-- **Never propose an adopt into a piece that has shipped.** A published note
-  is a source the new note links to, not a container to append to. If the
-  vault has no published marker, treat drafts as possibly shipped and prefer
-  a linking `promote`.
-- **Before proposing a `promote`, check the note does not already exist —
-  outside the batch.** The batch excludes agent output (`OpenAugi/`), which
-  means every note the agent has ever written is invisible to it. Two
-  queries per proposed promote, exclude left off:
+- **Every proposal carries `evidence`** — the blocks themselves, so the app can
+  show them rather than a count. `[{id, text, rule?}]`, text trimmed to a line
+  or two. `rule` is which of the three would fire, and only for a `register`.
 
-  ```
-  search(title=<the title you are about to propose>)
-  search(query=<the cluster's claim in one line>, k=5)
-  ```
+### A register must earn its place in the queue
 
-  If either finds a note that already collects these blocks, do not propose.
+`evidence` on a `register` is **the blocks in this window that the registration
+would catch** — the reason to say yes.
 
-### Emergence — the second read over the left-alone blocks
+**Propose a register only when that list is non-empty.** If nothing this week
+links to it or tags it, keep the drafted `description` in your own pass notes
+and stay quiet. It comes back the week a block reaches for it.
 
-Leaving a block alone is the right call for routing. It is not the end of the
-pass. After the routing loop, read the left-alone blocks once more — for
-content this time — and ask what is forming. Everything this produces is a
-proposal; nothing is applied.
+This is a correction, and it is the reason this section exists. Because record
+ids are derived from the subject, a register drafted once is re-upserted
+untouched by every later pass — carrying forward was meant to stop decisions
+getting lost, and instead it can rebuild a long queue whose length is habit
+rather than evidence. Carrying a proposal forward is a claim that the reason
+still holds. Re-check it.
 
-A `[[link]]` in a left-alone block points at an *unregistered* note by
-definition — a registered one would have routed. Never leave one uncounted:
-
-```
-if a block asks for a note (aaa:, "make this a note"):
-    propose promote            # one block is enough; an instruction is not a vote
-
-for each cluster of left-alone blocks circling one idea:
-    shared = a [[link]] the cluster's blocks have in common
-    if shared and that note EXISTS:        propose register(shared)
-    elif shared and that note DOES NOT:    propose promote(shared)   # the orphan link IS the title
-    else:                                  propose promote(<drafted title>)
-```
-
-The middle-branch distinction is the one that gets missed: a repeated link to
-a note that already exists means the user is *appending* to a thing they
-have, not starting a new idea — registering it is what lets the `link` rule
-fire next pass. And the `else` branch is not a licence to cluster loosely:
-if you cannot quote the sentence the blocks have in common, there is no
-cluster. There is NO temporal filter — an instruction makes a note today,
-alone.
+**Registering is also what makes the `link` rule work at all.** The `tag` rule
+needs facets the blocks usually do not carry; `link` fires against wikilinks the
+blocks already hold. The gap is unregistered targets, and that is the gap a
+register closes.
 
 ## Views
 
@@ -361,8 +413,8 @@ the old recap row is orphaned and harmless.
 
 **Do not add `![[View - ...]]` transclusion lines to container notes** — the
 files they point at no longer exist. A newly promoted container gets its
-`description:` frontmatter and nothing else; its recap is read through the
-app, not from a file.
+`description:` frontmatter and nothing else; its recap reaches the user through
+the app.
 
 ### What goes in a recap
 
@@ -423,10 +475,19 @@ is served live by `get_members` instead of being copied into a file.
 
 Always regenerate `View - Dashboard.md` (same folder):
 
+- **`- [ ] seen` directly under the `# View - Dashboard` heading**, and a
+  **`## Review queue` section** carrying two Dataview blocks verbatim: the
+  live one (`TASK FROM "OpenAugi" WHERE !completed AND
+  regexmatch("\s*seen\s*", lower(text)) SORT file.mtime DESC LIMIT 50`) and
+  the draining legacy one (`TABLE ... FROM #human-review`). These are static
+  blocks, not synthesis — copy them forward every pass, unchanged. The
+  section sits between the task shelf and `## Lenses`. The legacy block
+  retires when the tagged backlog reaches zero.
 - One line per area: what moved, what's next.
 - One line per concept note (silver) that saw activity: "Positioning: +3
   this pass" — the gravity signal for where ideas are accumulating.
-- **Recent tasks (14-day shelf, rendered query).** Populate by running
+- **Recent tasks (14-day shelf, rendered query — ruled 2026-07-15).**
+  Populate by running
   `search(has_task=True, after=<14 days ago>, exclude_path_prefix="OpenAugi/")`
   and rendering the results **verbatim** — one plain bullet per block:
   `- <first task line or gist> — [[source note]] (M/D)`. No checkboxes, no
@@ -484,52 +545,70 @@ Always regenerate `View - Dashboard.md` (same folder):
   instruction and takes precedence. **Unchecked + empty = still pending:**
   carry the nomination forward verbatim, anchor and checkbox included.
 
-  There is no "park" state and no Parked section — a nomination is
-  answered (yes/no/instruction) or it pends with its age showing. An
-  unanswered nomination costs nothing; a "not now" is just a slow no.
-- **No honesty/appendix section.** Anything unroutable, confusing, or
-  anomalous is said in ONE line inside the report prose (usually "What
-  moved"), right where it's relevant — the Dashboard has no dumping
-  ground. Honesty is a property of the report, not a section of it.
-- Permanent footer: `*How this works: docs/reference/review-pass.md in the openaugi
+  There is no "park" state and no Parked section (removed 2026-07-15) — a
+  nomination is answered (yes/no/instruction) or it
+  pends with its age showing. An unanswered nomination costs nothing; a
+  "not now" is just a slow no. Existing parked ledger lines simply drop
+  on the next regeneration.
+- **No honesty/appendix section (removed 2026-07-15).** Anything
+  unroutable, confusing, or anomalous is said in ONE line inside the
+  report prose (usually "What moved"), right where it's relevant — the
+  Dashboard has no dumping ground. Honesty is a property of the report,
+  not a section of it.
+- Permanent footer: `*How this works: docs/review-pass.md in the openaugi
   repo · design record: docs/plans/review-pass-v1.md · agent instructions:
   OpenAugi/AGENT/review-pass.md*` — the Dashboard is the discovery surface;
   this line keeps the docs findable without remembering them.
 
 ## The pass, step by step
 
-0. **Process the user's answers first — the proposal records are canonical.**
-   Answers can arrive two ways, and the record is the truth in both:
+0. **Execute what the user accepted.**
 
-   - **Record states** (an app or API answered):
-     `list_records("proposals", where={"state": "accepted"})` — each is a
-     command. Apply exactly what it drafted (registration tag +
-     `description` + `augi_id`, embed/link lines, the note) and nothing
-     beyond it, then close it: `state: "done"`, `executed: "…"`.
-   - **Dashboard checkboxes** (the user answers in the editor): for records
-     still `proposed`, read `View - Dashboard.md` — checked (`- [x]`) with an
-     empty `answer:` is "yes, as proposed"; a filled `answer:` is a specific
-     instruction that beats the checkbox. **Write the outcome back to the
-     record**, then execute as above.
+   ```
+   list_records("proposals", where={"state": "accepted"})
+   ```
 
-   Reconcile before regenerating: a Dashboard bullet whose record is already
-   answered is dropped, never re-asked — two records of one decision that
-   can disagree is worse than either alone. Execute BEFORE regenerating
-   views, or the answers are lost to the overwrite. A `declined` record is
-   durable; never re-raise it without new evidence.
+   An accepted proposal is a command. Apply exactly what it drafted — the
+   registration tag + `description` + `augi_id`, the embed/link line, the
+   note — and nothing beyond it. Then close the record: `state: "done"` with
+   `executed:` saying what you actually wrote. A `declined` record is durable;
+   never re-raise it without new evidence.
 
-0b. **Answer the proposals the user sent back** —
-   `list_records("proposals", where={"state": "discuss"})`. Each carries an
-   `instruction`: what the user said to do instead, in their words. Treat it
-   exactly like an `aaa:`. Do what it says — a change to the proposal means
-   re-proposing with the change applied and the instruction kept on the
-   record; a request for work first ("check what else relates") means doing
-   that work, then re-proposing with what you found; "nothing to do" means
-   `state: "done"` with `why` saying so. **Never leave one in `discuss`
-   after a pass** — the review surface promises the next pass reads these.
+   **The Dashboard is no longer an input.** Answers used to arrive as
+   checkboxes in `View - Dashboard.md` and the pass read them here. That
+   ended 2026-08-21: proposals in the app are the one way to answer, and this
+   step reads the records. The reason is a real failure, not tidiness — the
+   pass wrote a registration to both places, the user accepted it in the app at
+   02:31, and the Dashboard went on showing it unanswered. Two records of one
+   decision disagreeing is worse than either alone. Do not read decisions out
+   of the Dashboard, and do not write a Nominations section into it.
+
+0b. **Answer the proposals the user sent back.**
+
+   ```
+   list_records("proposals", where={"state": "discuss"})
+   ```
+
+   Each carries an `instruction`: what they said to do instead, in their words.
+   These are **instructions, exactly like an `aaa:`**, and they take priority
+   over the scan — they have already looked at these and told you something.
+
+   For each one: do what the instruction says, then move it off `discuss`.
+   - It asks for a change to the proposal → re-`write_record` it with
+     `state: "proposed"`, the change applied, and the `instruction` kept on
+     the record so the next reader can see what shaped it.
+   - It asks for work first ("go through the rest of the vault for what's
+     related") → **do that work**, then re-propose with what you found.
+   - It says there is nothing to do → `state: "done"`, with `why` saying so.
+
+   **Never leave one in `discuss` after a pass.** The app tells them *"the next
+   pass reads this and comes back with a new proposal"*, and a pass that
+   scans blocks without reading this collection makes that a lie. That is
+   exactly what happened on 2026-08-21: they answered a proposal at 01:52, the
+   pass ran at 02:25, and nothing came back.
+
 1. `get_review_state()` → `since` = last_run. If null, this is the first
-   run: backfill from a sensible recent date (e.g. two weeks back, or the
-   date the user gives).
+   run: backfill from 2026-06-23 (or the date the user gives).
 2. **Pull the new-blocks batch — TWO queries, read by every step below.**
 
    ```
@@ -541,17 +620,14 @@ Always regenerate `View - Dashboard.md` (same folder):
 
    The first drops everything under `OpenAugi/` — agent-generated output.
    The second reaches back in for the one folder that isn't:
-   **`OpenAugi/Capture/` is the mobile capture stream** — voice notes,
-   `aaa:` instructions, and answers given from the phone. It is truth, and it
-   routes like any other capture.
+   **`OpenAugi/Capture/` is the mobile capture stream** — the user's voice
+   notes, their `aaa:` instructions, and the answers they give to Dashboard
+   nominations from their phone. It is truth, and it routes like any other
+   capture.
 
    Two queries rather than a list of excluded folders, deliberately: a new
    generated folder is then excluded automatically instead of leaking into
-   the queue unnoticed. Skipping query 2 is a silent failure worth naming:
-   the phone stream simply does not appear, so instructions captured there —
-   including answers to the pass's own proposals — are never seen, and the
-   pass looks healthy while ignoring them.
-
+   the queue unnoticed.
    `after_ingested` filters on when a block
    entered the DB; do NOT use `after=` here — it compares content dates
    (often date-only, and unchanged by edits), so it misses same-day
@@ -575,14 +651,17 @@ Always regenerate `View - Dashboard.md` (same folder):
    `remove` un-routes: when the user says a block was routed wrong, fix it
    with one decision carrying both `add` (right container) and `remove`
    (wrong one).
-3b. **Second read over the left-alone blocks — emergence.** Everything step
-   3 left in the daily notes gets read again, for content this time, per the
-   Emergence section above. Resolve every `[[link]]` in a left-alone block
-   (exists → `register` proposal; missing → `promote` under that title),
-   cluster what remains, and write each proposal with its `evidence`.
-   Re-check anything you are carrying forward and drop registers whose
-   evidence is empty this window. Nothing here is applied — this step only
-   writes proposal records.
+3b. **Second read over the left-alone blocks — emergence.** Everything
+   step 3 left in the daily note gets read again, for content this time,
+   per the Emergence section above. Every `[[link]]` in a left-alone block
+   points at an unregistered note by definition (a registered one would
+   have routed) — resolve each: the note exists → propose `register`; it
+   does not exist → propose `promote` under that title. Then cluster what
+   is left over and propose the notes that are forming. Write each with
+   `write_record("proposals", ...)`, carrying `evidence`. Re-check every
+   proposal you are about to carry forward and drop any register whose
+   evidence is empty this window. **Nothing here is applied** — this step
+   only ever writes proposal records.
 4. **Compute touched containers, then refresh their recaps
    (`write_recap` — no files).**
    `touched = {containers that appear as an "add" target in step 3's
@@ -615,24 +694,46 @@ Always regenerate `View - Dashboard.md` (same folder):
    `write_recap(container_title, recap_md)`. There is no second write and no
    file to keep in sync; the dual-write problem
    (`^nom-fix-recap-dual-write`) is dissolved rather than fixed.
-5. Regenerate `View - Dashboard.md`. Open proposals may be mirrored there as
-   nominations for editor answering (step 0 reconciles them back to the
-   records), but the records stay canonical — never a bullet that exists
-   only on the Dashboard.
+5. Regenerate `View - Dashboard.md` — **as a briefing, with no Nominations
+   section and no checkboxes.** It is a view to read: the week's narrative,
+   the per-area lines, the gravity signal, the task shelf. Anything that
+   needs an answer is a `proposals` record, never a bullet here.
 6. `write_context_pack()` — regenerates `OpenAugi/context-pack.json`, the
    sidecar the mobile app's tag/link suggestions are served from. One call,
    no arguments; the tool assembles it from the DB.
-7. `mark_review_complete(summary)` — one line, e.g.
-   "routed 42 blocks; regenerated 4 views + Dashboard; 2 nominations".
-   Only call this after views are written successfully.
+7. **Stop. Write no summary and mark nothing.**
+
+   **Do not narrate the pass.** The records already say what happened, and
+   they are checkable: the `passes` row carries scanned / routed / left_alone,
+   `routings` carries every routing with the rule that fired, `proposals`
+   carries every ask with the blocks behind it. A prose summary on top of that
+   is the agent grading its own work — unverifiable, and read by nothing
+   except the next pass, which then inherits last week's opinions as fact.
+
+   **Do NOT call `mark_review_complete`. Ever.** The mark comes from the
+   user, after they have actually reviewed things.
+
+   The high-water mark is not a record of the agent finishing. It is a record
+   of **the user having reviewed**, and only they can say that happened. A pass
+   that marks itself complete has declared its own work reviewed, and the
+   proposals it raised then age out of the window that produced them.
+
+   They mark it from the app, and the one line stored with the mark is built
+   from the counts at that moment — not written by you.
+
+   The consequence is deliberate: until they mark, every pass re-reads the same
+   window. That is safe — routings and proposals both upsert on ids derived
+   from their subject, so a re-read updates in place instead of stacking — and
+   it is the correct failure mode. An unreviewed pass should keep showing up.
 
 ## Lens scheduling (NOT ACTIVE YET)
 
 The lens registry (`OpenAugi/AGENT/lenses/`) declares per-lens triggers
 (`on-pass`, `every <period>`). **Do not run them yet.** Scheduled lens
-runs activate only after passes are boringly reliable; until then all
-lenses are on-demand. When activated, this section will say: after the
-Dashboard step, list the lens folder, run whatever is due, then continue.
+runs activate only after the routing-quality gate passes (M4 — two weeks
+of reliable passes); until then all lenses are on-demand. When activated,
+this section will say: after step 5, list the lens folder, run whatever
+is due, then continue.
 
 ## Hard rules
 

@@ -1,4 +1,5 @@
 ---
+kind: engine
 name: distill
 description: Gather everything about a topic (or user-selected context), apply a stated intent, write ONE curated note with full provenance. Created once, reviewed by the user, graduates toward silver/gold.
 scope: at apply time — a topic (agentic search + links + clusters) or context the user hands over (e.g. a selection from the plugin). Never expand a handed scope uninvited.

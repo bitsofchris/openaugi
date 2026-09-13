@@ -42,7 +42,7 @@ real data, it belongs in `docs/scratch/` (gitignored), not tracked.
 | Completed plans | `docs/plans/done/` | Move here when shipped |
 | Feature/system reference docs | `docs/reference/*.md` (e.g. `review-pass.md`, `clustering.md`, `lenses.md`) | Durable "how it works" manuals. **New reference docs go here, never `docs/` root.** Skill format: `name:`/`description:` frontmatter |
 | Agent skill files (runtime) | `<vault>/OpenAugi/AGENT/` | Vault copy is the source of truth, see below |
-| Agent skill templates (seed) | `src/openaugi/templates/` | Copied on `openaugi init`; not read at runtime |
+| Agent skill templates (seed) | `src/openaugi/templates/` | Written by `scripts/sync_templates.py` from the vault's `kind: engine` files; copied on `openaugi init`; not read at runtime |
 | **Scratch / drafts / session dumps** | `docs/scratch/` | **Gitignored — never commit.** Blog drafts, session handoffs, anything vault-derived |
 | Debug logs | `~/.openaugi/logs/openaugi.log` | Rotated, DEBUG level |
 
@@ -138,14 +138,51 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system map.
 Agent skill files live in the user's vault at `<vault>/OpenAugi/AGENT/`.
 Templates (factory defaults for new users) live in `src/openaugi/templates/`.
 
-- `augi-agent.md` — base skill, read by every agent session
-- `research-agent.md` — research sub-agent (NotebookLM, source ingestion)
-
 **The vault copy is the source of truth.** When improving agent instructions,
 edit the vault copy directly. The repo templates are seed files copied on
 `openaugi init` — they are NOT read at runtime.
 
-To update the factory defaults for new users, copy from vault → repo templates.
+## Engine vs personal — the line every agent file sits on
+
+Every file under the vault's `AGENT/` folder declares one of two kinds in its
+frontmatter, and `scripts/sync_templates.py --check` refuses to run until it
+does:
+
+- **`kind: engine`** — part of the operating system anyone who installs
+  OpenAugi runs (`augi-agent.md`, `review-pass.md`, `kanban.md`, `pmoc.md`,
+  `routing.md`, the generic lenses). It has a template twin at the same
+  relative path under `src/openaugi/templates/`, and it never names, genders,
+  or describes its user — `tests/test_impersonal_engine.py` enforces that on
+  every shipped file, `tests/test_agent_files.py` that every template declares
+  `kind: engine`.
+- **`kind: personal`** — the user's own configuration: their taxonomy, `Slowly
+  Changing Context`, `Repos.md`, and the lenses only their life needs. Never
+  shipped.
+
+An engine file may still carry the user's rulings — the dated quote that says
+why a rule exists, the table naming their areas. Those stay in the vault copy
+inside a **personal region**, which the sync strips from the template:
+
+```
+%% personal %%
+Ruling, 2026-08-20: *"…"*
+%% /personal %%
+```
+
+The markers are Obsidian comments (hidden in reading view, plain text to an
+agent). The engine sentence that the ruling justifies stays outside the region,
+reworded for whoever installs this ("the user", "they").
+
+**Workflow.** Edit the vault file → `python3 scripts/sync_templates.py --write`
+(vault path from the openaugi config, or `--vault`) → commit the template.
+`--check` reports drift and is the pre-push habit. Which files `init` copies is
+decided by the templates themselves: every `.md` under `templates/` that
+declares `kind: engine` (`src/openaugi/agent_files.py`). The one template
+without a kind is `task-template.md`, which the code hydrates and never copies.
+
+**Reference docs follow the same line.** `docs/reference/` describes the engine
+in its current state; dated rulings and vault-specific incidents stay in the
+vault's AGENT files (inside personal regions) or in `docs/scratch/`.
 
 # Document as you go
 Plans go in docs/plans folder. Move them to docs/plans/done/ when done.

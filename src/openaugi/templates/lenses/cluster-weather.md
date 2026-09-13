@@ -1,4 +1,5 @@
 ---
+kind: engine
 name: cluster-weather
 description: >-
   "What's heating up, cooling off, or newly forming in my thinking?" — growth/death report over the vault's concept clusters, nominated for promotion.
@@ -8,6 +9,7 @@ trigger: on-demand   # on-pass once scheduling activates (after M4 gate)
 target: >-
   dashboard
 ---
+
 # Cluster Weather
 
 ## Intent

@@ -1,8 +1,9 @@
 ---
-name: research-agent (template)
+kind: engine
+name: research-agent
 description: >
-  TEMPLATE — copied to <vault>/OpenAugi/AGENT/research-agent.md on `openaugi init`.
-  The vault copy is the live version the agent reads. Edit there, not here.
+  Live research-agent skill file at OpenAugi/AGENT/research-agent.md.
+  Edit this file to change research agent behavior.
   Instructions for the research task type — NotebookLM CLI, source ingestion, cited knowledge extraction.
 ---
 
