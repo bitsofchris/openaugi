@@ -476,20 +476,43 @@ INSTRUCTION_RE = re.compile(r"^##\s+User instruction\s*$(.*?)(?=^##\s|\Z)", re.M
 def _instruction_text(body: str) -> str:
     """The user's own words from a task note, normalized for hashing.
 
-    Falls back to the whole body when the section is missing, so a malformed
-    note still gets a distinct identity rather than colliding with every other
-    malformed note on the empty string.
+    Falls back to the whole body when the section is missing or empty, so a
+    malformed note still gets a distinct identity rather than colliding with
+    every other malformed note on the empty string.
     """
+
+    def normalize(chunk: str) -> str:
+        # Drop blockquote markers and collapse whitespace — the same
+        # instruction re-rendered by a later ingest pass must hash identically.
+        return re.sub(r"\s+", " ", re.sub(r"^\s*>\s?", "", chunk, flags=re.M)).strip()
+
     m = INSTRUCTION_RE.search(body)
-    raw = m.group(1) if m else body
-    # Drop blockquote markers and collapse whitespace — the same instruction
-    # re-rendered by a later ingest pass must hash identically.
-    raw = re.sub(r"^\s*>\s?", "", raw, flags=re.M)
-    return re.sub(r"\s+", " ", raw).strip()
+    # An empty section is as dangerous as a missing one: on 2026-09-11 the
+    # board janitor dispatched a proposal whose brief it had lost, and the
+    # blank instruction hashed to the same empty key as a prior blank one, so
+    # the task was suppressed as a duplicate instead of run.
+    section = normalize(m.group(1)) if m else ""
+    return section or normalize(body)
+
+
+def _source_identity(fm: dict) -> str:
+    """What the instruction was written against.
+
+    Normally the source note. A board proposal has no source note — it is
+    identified by the board it was offered on and its proposal key, and
+    without those two proposals from two different boards collapse onto the
+    same identity the moment their briefs go missing.
+    """
+    if note := str(fm.get("source_note") or "").strip():
+        return note
+    board = str(fm.get("board") or "").strip()
+    proposal = str(fm.get("proposal") or "").strip()
+    return f"board:{board}/{proposal}" if proposal else ""
 
 
 def task_fingerprint(fm: dict, body: str) -> str:
-    """Stable identity for a task: source note title + the instruction text.
+    """Stable identity for a task: its source (note, or board proposal) + the
+    instruction text.
 
     Deliberately excludes source_block_id and filename. Re-ingesting the same
     note from a different path assigns a new block id and a new filename —
@@ -497,8 +520,9 @@ def task_fingerprint(fm: dict, body: str) -> str:
     the identity. What a human means by "the same task" is the same words
     against the same note.
     """
-    note = str(fm.get("source_note") or "").strip()
-    return hashlib.sha256(f"{note}\n{_instruction_text(body)}".encode()).hexdigest()
+    return hashlib.sha256(
+        f"{_source_identity(fm)}\n{_instruction_text(body)}".encode()
+    ).hexdigest()
 
 
 def load_ledger() -> dict[str, dict]:

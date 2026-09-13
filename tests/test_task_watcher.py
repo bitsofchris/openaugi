@@ -704,6 +704,35 @@ class TestTaskFingerprint:
         """Two malformed notes must not collide on the empty string."""
         assert tw.task_fingerprint({}, "one") != tw.task_fingerprint({}, "two")
 
+    def test_empty_instruction_section_falls_back_to_body(self):
+        """Regression (2026-09-11): a blank brief is not an identity.
+
+        The board janitor lost a proposal's title, so the dispatched task
+        carried a `## User instruction` section with nothing under it. Every
+        such task hashed to the same empty key, and the second one was filed
+        as a duplicate of the first instead of being run.
+        """
+        blank = BODY.replace("> chunk that note and split it", "")
+        other = blank.replace("# a task", "# another task")
+        assert tw.task_fingerprint({}, blank) != tw.task_fingerprint({}, other)
+
+    def test_board_proposals_differ_even_with_no_instruction(self):
+        """Two boards, two proposal keys — two tasks, brief or no brief."""
+        blank = BODY.replace("> chunk that note and split it", "")
+        a = {"board": "2026-09-09", "proposal": "keep-just-enough-resistance"}
+        b = {"board": "2026-09-11", "proposal": "keep-resistance-field-test"}
+        assert tw.task_fingerprint(a, blank) != tw.task_fingerprint(b, blank)
+
+    def test_the_same_proposal_still_dedupes(self):
+        """The suppression itself must survive: one proposal, one launch."""
+        fm = {"board": "2026-09-11", "proposal": "keep-resistance-field-test"}
+        assert tw.task_fingerprint(fm, BODY) == tw.task_fingerprint(dict(fm), BODY)
+
+    def test_source_note_still_wins_over_board_identity(self):
+        """A zzz dispatch keeps the identity it has always had."""
+        fm = {"source_note": "[[n]]", "board": "2026-09-11", "proposal": "k"}
+        assert tw.task_fingerprint(fm, BODY) == tw.task_fingerprint({"source_note": "[[n]]"}, BODY)
+
 
 class TestLedger:
     def test_missing_ledger_reads_empty(self, tmp_path, monkeypatch):

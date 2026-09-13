@@ -642,3 +642,66 @@ def test_declining_a_kept_note_retires_it_with_its_reason(harvest_board, vault):
     record = load_state(vault)["proposals"]["keep-harness-is-four-parts"]
     assert record["state"] == "declined"
     assert record["reason"] == "already in the harness note"
+
+
+# A `Worth keeping` proposal whose drafted note pushes the title more than
+# `_LOOKBACK` lines above the marker. This is the 2026-09-11 board, trimmed:
+# it parsed with an empty title and an empty body, and dispatched a task with
+# no brief in it.
+LONG_WORTH_KEEPING = """\
+## Worth keeping
+
+*From yesterday's chats. `do` saves it exactly as written below; `no` means never again.*
+
+- **The first real field test of "just enough resistance"** — append to [[Just Enough Resistance]]
+    ↳ Append this dated block. Do not expand it — this text is the append:
+      ---
+      ### 2026-09-10 (augi)
+
+      The first field test. Chris set the resistance dial by hand, repeatedly.
+
+      It worked and it was expensive.
+
+      So the open question this note doesn't have yet: what does the right rung cost?
+
+      See [[Zero to Hero - Karpathy]].
+      ---
+      Source: "Zero to Hero" (`deep-learning`), 2026-09-10.
+    - [ ] do
+    - [ ] no
+    aaa:
+    <!-- propose:keep-resistance-field-test -->
+"""
+
+
+@pytest.fixture
+def long_harvest_board(vault):
+    path = vault / "OpenAugi" / "Board" / "2026-09-05 - Board.md"
+    path.write_text(
+        PLAIN_BOARD.replace("## Notes to augi", LONG_WORTH_KEEPING + "\n## Notes to augi")
+    )
+    return path
+
+
+def test_a_long_brief_does_not_outrun_the_title_lookback(long_harvest_board):
+    """Regression (2026-09-11): the brief IS the task, so it may be any length."""
+    proposal = parse_proposals(long_harvest_board.read_text(encoding="utf-8"))[
+        "keep-resistance-field-test"
+    ]
+    assert proposal["title"].startswith("The first real field test")
+    assert "### 2026-09-10 (augi)" in proposal["body"]
+    assert 'Source: "Zero to Hero"' in proposal["body"]
+    assert proposal["body"].count("---") == 2
+
+
+def test_ticking_do_on_a_long_brief_dispatches_it_whole(long_harvest_board, vault):
+    _tick_proposal(long_harvest_board, "do", "keep-resistance-field-test")
+    assert sync_board(long_harvest_board, vault) == 1
+
+    body = (
+        vault / "OpenAugi" / "Tasks" / "board-2026-09-05-keep-resistance-field-test.md"
+    ).read_text(encoding="utf-8")
+    # An empty title here is what handed the watcher a blank instruction.
+    assert "# The first real field test" in body
+    assert "> The first real field test" in body
+    assert "### 2026-09-10 (augi)" in body

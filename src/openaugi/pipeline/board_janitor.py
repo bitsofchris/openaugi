@@ -308,6 +308,28 @@ def _unquote(line: str) -> str:
     return re.sub(r"^\s*>\s?", "", line).strip()
 
 
+def _proposal_title(lines: list[str], idx: int) -> tuple[str, int | None]:
+    """The title line of the proposal whose marker sits at `idx`.
+
+    Unbounded, unlike an item's: a `Worth keeping` proposal carries a whole
+    drafted note between its title and its boxes, and a fixed lookback
+    silently truncates it. On 2026-09-11 a 14-line proposal parsed with an
+    empty title and an empty body, and dispatched a task with no brief in it.
+    The scan stops at the previous structural boundary instead — the lane
+    heading, or the marker of whatever was proposed before this one.
+    """
+    for pos in range(idx - 1, -1, -1):
+        if found := _TITLE_RE.match(lines[pos]):
+            return found.group("title"), pos
+        if (
+            _HEADING_RE.match(lines[pos])
+            or _ITEM_RE.match(lines[pos])
+            or _PROPOSE_RE.match(lines[pos])
+        ):
+            break
+    return "", None
+
+
 def parse_proposals(text: str) -> dict[str, dict]:
     """Every proposed task on a board: what augi offered, and the answer.
 
@@ -324,11 +346,7 @@ def parse_proposals(text: str) -> dict[str, dict]:
         if not match:
             continue
         key = match.group("key")
-        title, title_line = "", None
-        for offset in range(1, min(_LOOKBACK, idx) + 1):
-            if found := _TITLE_RE.match(lines[idx - offset]):
-                title, title_line = found.group("title"), idx - offset
-                break
+        title, title_line = _proposal_title(lines, idx)
         item = {
             "title": title,
             "body": "",
@@ -339,8 +357,12 @@ def parse_proposals(text: str) -> dict[str, dict]:
             "indent": "",
         }
         first_box = idx
-        for offset in range(1, min(_LOOKBACK, idx) + 1):
-            pos = idx - offset
+        # Everything belonging to this proposal lies between its title and its
+        # marker, so that is the scan range — falling back to the item lookback
+        # only when there is no title to bound it.
+        floor = title_line if title_line is not None else max(idx - _LOOKBACK - 1, -1)
+        seen_aaa = False
+        for pos in range(idx - 1, floor, -1):
             if box := _PROPOSE_BOX_RE.match(lines[pos]):
                 item["box_lines"].append(pos)
                 first_box = min(first_box, pos)
@@ -348,10 +370,11 @@ def parse_proposals(text: str) -> dict[str, dict]:
                     item["answer"] = _PROPOSE_STATES[box.group("label")]
                     item["answer_line"] = pos
                     item["indent"] = box.group("pre")
-            elif aaa := _AAA_RE.match(lines[pos]):
-                item["reason"] = aaa.group("reason")
-            elif _TITLE_RE.match(lines[pos]):
-                break
+            elif (aaa := _AAA_RE.match(lines[pos])) and not seen_aaa:
+                # The comment channel is the line between the boxes and the
+                # marker; a scan that now reaches the body must not be fooled
+                # by prose that happens to start `aaa:`.
+                item["reason"], seen_aaa = aaa.group("reason"), True
         if title_line is not None:
             body = [_unquote(raw) for raw in lines[title_line + 1 : first_box]]
             item["body"] = "\n".join(part for part in body if part).strip()
