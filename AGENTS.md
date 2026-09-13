@@ -34,6 +34,12 @@ is *output from* the second brain rather than a description *of* it. If a
 doc is reporting what specifically got routed/clustered/decided on Chris's
 real data, it belongs in `docs/scratch/` (gitignored), not tracked.
 
+**No personal vocabulary, field names, schedules, or note paths in code or
+docs** — those live in the vault's `OpenAugi/AGENT/` folder (lens files,
+plans). Mechanism in the repo, schema in the vault: a script takes its kinds,
+keys and targets as arguments and discovers values from the data. Tests and
+docs use neutral placeholders (`mood=`, `place=`), never real field names.
+
 | What | Lives in | Notes |
 |---|---|---|
 | System map / entry point | [ARCHITECTURE.md](ARCHITECTURE.md) | Keep current, links to everything else |

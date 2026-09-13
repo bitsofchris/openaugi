@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**`ping_stats.py` is generic.** The check-in counter no longer carries its
+author's field names and value lists as module constants. It parses any
+`- [HH:MM] <kind>: key=value …` line, takes the scheduled and on-demand kinds,
+the target key, the free-text key and the "absent" words as flags
+(`--scheduled`, `--ondemand`, `--target`, `--free`, `--absent`), and discovers
+keys and values from the data; the vault lens that invokes it names the
+vocabulary. `docs/reference/pings.md` is rewritten around the generic grammar,
+and AGENTS.md carries the rule: mechanism in the repo, vocabulary in the vault.
+
 **The engine / personal line, made executable.** Every file in the vault's
 `OpenAugi/AGENT/` folder now declares `kind: engine` or `kind: personal`.
 Engine files are the operating system anyone who installs OpenAugi runs; each
