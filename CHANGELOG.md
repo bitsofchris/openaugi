@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**Privacy guard.** `scripts/check_private_vocab.py` runs as a pre-commit
+hook at commit, commit-msg and push time. It refuses any file or commit
+message containing a word from `<vault>/OpenAugi/AGENT/private-vocabulary.txt`
+— the list lives in the vault so the guard itself can never be the leak — and
+any notebook with cell outputs, which is how vault text once reached the
+history. Matches are printed masked. `docs/reference/privacy-guard.md`.
+
 **`ping_stats.py` is generic.** The check-in counter no longer carries its
 author's field names and value lists as module constants. It parses any
 `- [HH:MM] <kind>: key=value …` line, takes the scheduled and on-demand kinds,

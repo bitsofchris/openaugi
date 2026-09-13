@@ -28,3 +28,11 @@ repos:
           - "numpy>=1.26"
           - "openai>=1.0"
           - "tiktoken>=0.7"
+
+  - repo: local
+    hooks:
+      - id: private-vocab
+        name: private vocabulary / notebook outputs (word list lives in the vault)
+        entry: python3 scripts/check_private_vocab.py
+        language: system
+        stages: [pre-commit, commit-msg, pre-push]

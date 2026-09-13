@@ -39,6 +39,13 @@ docs** — those live in the vault's `OpenAugi/AGENT/` folder (lens files,
 plans). Mechanism in the repo, schema in the vault: a script takes its kinds,
 keys and targets as arguments and discovers values from the data. Tests and
 docs use neutral placeholders (`mood=`, `place=`), never real field names.
+A pre-commit hook enforces the named cases: `scripts/check_private_vocab.py`
+refuses any file or commit message containing a word from
+`<vault>/OpenAugi/AGENT/private-vocabulary.txt` (the list is a vault file so
+the guard cannot itself leak) and any notebook with cell outputs. See
+[docs/reference/privacy-guard.md](docs/reference/privacy-guard.md). Install
+all three hook stages once per clone:
+`.venv/bin/pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push`.
 
 | What | Lives in | Notes |
 |---|---|---|
