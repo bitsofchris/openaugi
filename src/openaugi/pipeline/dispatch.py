@@ -285,10 +285,22 @@ def zzz_blocks(blocks: list[Block]) -> list[Block]:
 
 
 def _write_task_file(tasks_dir: Path, title: str, task_content: str) -> Path:
-    """Write one pending task file, named from its title plus a timestamp."""
+    """Write one pending task file, named from its title plus a timestamp.
+
+    The name is only unique to the second, so two tasks that share a title
+    and a second collide — and the second write silently replaced the first,
+    leaving two ledger rows pointing at one file and one instruction with no
+    task at all. `drain_zzz_queue` writes its whole batch inside a single
+    second, so this is the ordinary case for two notes carrying the same
+    standing command, not a race worth ignoring.
+    """
     slug = _slugify(title) or "zzz-task"
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     filepath = tasks_dir / f"{slug}-{timestamp}.md"
+    attempt = 2
+    while filepath.exists():
+        filepath = tasks_dir / f"{slug}-{timestamp}-{attempt}.md"
+        attempt += 1
     filepath.write_text(task_content, encoding="utf-8")
     return filepath
 

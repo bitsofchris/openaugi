@@ -510,3 +510,25 @@ def test_prose_edit_while_still_settling_keeps_the_settle_window(
     (written,) = drain_zzz_queue(store, tmp_path, settle_seconds=0)
     assert "now whole" in written.read_text()
     assert len(_tasks(tmp_path)) == 1
+
+
+def test_two_tasks_in_one_second_do_not_overwrite_each_other(tmp_path: Path, store: SQLiteStore):
+    """Task filenames are unique only to the second.
+
+    Two notes carrying the same standing command settle in the same drain,
+    so both task files are named in the same second. The second write used
+    to replace the first: one file on disk, two ledger rows pointing at it,
+    one instruction with no task.
+    """
+    zzz = ["run the review pass"]
+    monday = _make_block("aaa1", "monday", source_path="2026-09-14.md", zzz=zzz)
+    tuesday = _make_block("aaa2", "tuesday", source_path="2026-09-15.md", zzz=zzz)
+    store.insert_blocks([monday, tuesday])
+    record_zzz_changes([monday, tuesday], [], store, tmp_path)
+
+    written = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+
+    assert len(written) == 2
+    assert len(set(written)) == 2
+    assert len(_tasks(tmp_path)) == 2
+    assert _ledger(store, "aaa1")["task_file"] != _ledger(store, "aaa2")["task_file"]
