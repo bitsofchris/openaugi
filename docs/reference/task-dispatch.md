@@ -58,6 +58,32 @@ you write `zzz: research deep learning` in a note
   → marks task file status: done
 ```
 
+## The daemon runs the code it started with
+
+`openaugi up` is a long-lived process. It imports its modules once, so a fix
+committed after it started is **not running**, however green the tests are.
+With an editable install the checkout and the running process diverge the
+moment you commit.
+
+The rule: **after changing anything on the ingest or dispatch path, restart
+the daemon.**
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.openaugi.up
+```
+
+`up` stamps the SHA it started from into the `service_state` record, and
+`openaugi status` compares it against HEAD — a red banner above every other
+stat, because everything below it can look healthy while the daemon runs code
+from last week.
+
+> **Why this is a documented rule and not a footnote.** On 2026-09-13 the
+> service had been up since the 4th. A dispatch fix committed on the 11th had
+> never once executed — the ledger it writes to held 134 rows and not one
+> carried the field that fix introduced. The visible symptom was three phantom
+> task files, and the apparent cause was a logic bug in code that was already
+> correct. Nothing in the system was able to say "you are not running this."
+
 ## One instruction, one task
 
 A block's id is the hash of its raw text, so editing the paragraph around a

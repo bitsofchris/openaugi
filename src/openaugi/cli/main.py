@@ -1087,6 +1087,18 @@ def up(
     # Step 1: Incremental ingest
     err.print("\n[bold]Syncing vault...[/bold]")
     store = SQLiteStore(db_path)
+
+    # Stamp the code this process started from. A daemon that runs for weeks
+    # keeps executing whatever it imported at startup, so a fix committed
+    # since then is not running and nothing else would say so.
+    from datetime import datetime
+
+    from openaugi.service_version import head_sha, record_service_start
+
+    record_service_start(store, datetime.now().isoformat(timespec="seconds"), os.getpid())
+    running = head_sha()
+    err.print(f"[bold]Code:[/bold] {running[:12] if running else 'not a git checkout'}")
+
     try:
         exclude = config.get("vault", {}).get("exclude_patterns")
         workers = config.get("vault", {}).get("max_workers", 4)
@@ -1405,6 +1417,24 @@ def status(
         stats = store.get_stats()
 
         console.print(f"\n[bold]OpenAugi Status[/bold]  ({db_path})\n")
+
+        # Loudest line on the page when it fires: everything below can be
+        # healthy while the daemon runs code from a week ago.
+        from openaugi.service_version import version_drift
+
+        drift = version_drift(store)
+        if drift:
+            behind = drift["commits_behind"]
+            plural = "" if behind == 1 else "s"
+            trailer = f" ({behind} commit{plural} behind)" if behind else ""
+            console.print(
+                f"[red]⚠ `openaugi up` is running stale code{trailer}.[/red]\n"
+                f"  running: [yellow]{drift['running_sha'][:12]}[/yellow] "
+                f"(started {drift['started_at']})\n"
+                f"  HEAD:    [green]{drift['head_sha'][:12]}[/green]\n"
+                f"  Restart it: [bold]launchctl kickstart -k gui/$(id -u)/com.openaugi.up[/bold]\n"
+            )
+
         console.print(f"Total blocks: [cyan]{stats['total_blocks']}[/cyan]")
         console.print(f"Total links:  [cyan]{stats['total_links']}[/cyan]")
         console.print(f"Embedded:     [cyan]{stats['embedded_blocks']}[/cyan]")
