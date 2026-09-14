@@ -34,18 +34,46 @@ is *output from* the second brain rather than a description *of* it. If a
 doc is reporting what specifically got routed/clustered/decided on the user's
 real data, it belongs in `docs/scratch/` (gitignored), not tracked.
 
-**No personal vocabulary, field names, schedules, or note paths in code or
-docs** — those live in the vault's `OpenAugi/AGENT/` folder (lens files,
-plans). Mechanism in the repo, schema in the vault: a script takes its kinds,
-keys and targets as arguments and discovers values from the data. Tests and
-docs use neutral placeholders (`mood=`, `place=`), never real field names.
-A pre-commit hook enforces the named cases: `scripts/check_private_vocab.py`
-refuses any file or commit message containing a word from
-`<vault>/OpenAugi/AGENT/private-vocabulary.txt` (the list is a vault file so
-the guard cannot itself leak) and any notebook with cell outputs. See
-[docs/reference/privacy-guard.md](docs/reference/privacy-guard.md). Install
-all three hook stages once per clone:
-`.venv/bin/pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push`.
+**Privacy checklist — every file, every commit message, every time.** Each
+rule below exists because it was broken once and the history had to be
+rewritten to fix it. Mechanism lives in the repo; everything that is *yours*
+lives in the vault.
+
+1. **No names.** Not the maintainer's, not family, not friends, not the
+   therapist. Write "the user" / "they"; plans record rulings as *"the user,
+   2026-09-04: …"*. The public author identity appears only in LICENSE,
+   NOTICE and `pyproject.toml`.
+2. **No personal vocabulary or schema in code.** A script takes its kinds,
+   keys and targets as flags and discovers values from the data. Field names,
+   value lists and schedules belong in the vault's `OpenAugi/AGENT/` files
+   (lenses, plans) that invoke the script.
+3. **Examples are placeholders.** `mood=`, `place=`, `alice`,
+   `/Users/someone`, a 2022 date. Never paste a real line from a daily note
+   into a test, a docstring or a doc, not even "just to show the shape".
+4. **No paths that are yours.** `~/…` and `<vault>/…`, never
+   `/Users/<name>/…`. The vault's folder name comes from the openaugi config
+   or `$OPENAUGI_VAULT`, never a literal in a script.
+5. **No notebook outputs, no data dumps.** Clear outputs before committing.
+   Exports (chat history, Readwise, sqlite files) never enter the tree, not
+   even under `experiments/`.
+6. **No vault output.** Cluster contents, routing decisions, real note
+   titles, board items, session handoffs → `docs/scratch/` (gitignored).
+7. **The hook has the last word.** `scripts/check_private_vocab.py` runs at
+   commit, commit-msg and push against
+   `<vault>/OpenAugi/AGENT/private-vocabulary.txt` — a vault file, so the
+   guard itself can never leak — and refuses notebooks with outputs. When
+   you coin a private word, add it to that list *before* you write the code.
+   Never `--no-verify`. Install the three stages once per clone:
+   `.venv/bin/pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push`.
+   Details: [docs/reference/privacy-guard.md](docs/reference/privacy-guard.md).
+
+**When something leaks anyway:** deleting it in a new commit is not enough;
+history keeps it. Back up every ref to a bundle, rewrite with
+`git filter-repo` (replace-text for words, invert-paths for files), verify
+over `--branches --tags` (a fetch would bring the old remote history back into
+view), force-push, prune, re-clone every other copy, add the word to the
+list. The incident itself is vault or `docs/scratch/` material, not a commit
+message.
 
 | What | Lives in | Notes |
 |---|---|---|
