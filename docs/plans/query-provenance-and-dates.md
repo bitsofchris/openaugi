@@ -1,6 +1,6 @@
 ---
 name: query-provenance-and-dates
-description: Fixes surfaced by the 2026-09-01 high-note analysis run (34 sessions, 8 extraction agents, 8 lens agents over the MCP surface). Four small changes shipping now (get_context filters, block provenance, creation-time dates, reference exclusion by default) and three larger designs for Chris to decide on (derived tables from lens schemas, an activity tape, incremental extraction).
+description: Fixes surfaced by the 2026-09-01 high-note analysis run (34 sessions, 8 extraction agents, 8 lens agents over the MCP surface). Four small changes shipping now (get_context filters, block provenance, creation-time dates, reference exclusion by default) and three larger designs for the user to decide on (derived tables from lens schemas, an activity tape, incremental extraction).
 ---
 
 # Query provenance and dates
@@ -13,15 +13,15 @@ On 2026-09-01 Claude ran a multi-agent analysis over every "high note" in the
 vault: extract structured proposals from 47 notes, map the vault evidence in the
 10 days around each of 34 sessions, load it into SQLite, then run eight lenses.
 The run worked but exposed how the MCP surface fails an agent doing real
-analysis. This plan is the triage of that run. Chris's reactions are recorded
+analysis. This plan is the triage of that run. The user's reactions are recorded
 inline so the design does not drift from what he asked for.
 
 ## Triage
 
-| # | Finding from the run | Chris's call | Disposition |
+| # | Finding from the run | The user's call | Disposition |
 |---|---|---|---|
 | 1 | Agents fell back to filename grep and MOC scraping for "what was he doing between two dates." `search` has `after`/`before`; `get_context`, the tool the docs call primary, has no time or path filters at all. | "We do have time window queries. Why did you not see them?" | **Ship now.** Add `after`, `before`, `tags`, `exclude_path_prefix`, `include_path_prefix`, `provenance` to `get_context`. The gap was real but in the wrong tool. |
-| 2 | Forty AI-written Jung sessions in `_private/0-Inbox/` came back from search indistinguishable from Chris's own writing and were quoted back to him as "your vault." | "I do have a tag for AI generated, and the whole OpenAugi folder is AI generated. We need to encode that." | **Ship now.** A derived `provenance` field on every data block (`human`, `ai`, `reference`), set at ingest from path rules and tags, filterable in every read tool, backfillable. |
+| 2 | Forty AI-written Jung sessions in `_private/0-Inbox/` came back from search indistinguishable from the user's own writing and were quoted back to him as "your vault." | "I do have a tag for AI generated, and the whole OpenAugi folder is AI generated. We need to encode that." | **Ship now.** A derived `provenance` field on every data block (`human`, `ai`, `reference`), set at ingest from path rules and tags, filterable in every read tool, backfillable. |
 | 3 | Block dates inherit file mtime when nothing else is dated. Dated bullets inside MOCs carry the file's date. | "Block date should inherit the date from the note created." | **Ship now** for creation time: use `st_birthtime` where the OS has it, mtime as fallback. **Ask** before changing bullet-level date inheritance (it changes splitting semantics). |
 | 4 | Twenty near-identical Hollis quotes from Snipd came back in one search. | "As part of search you should be ignoring the reference folder." | **Ship now.** `[retrieval] exclude_provenance` config, default `["reference"]`, applied to `get_context` and semantic search unless the caller names a provenance explicitly. Browse mode already groups reference docs; unchanged. |
 | 5 | The run had to create three ad-hoc SQLite tables by hand because the records store is untyped JSON with equality-only filters. | "I like lenses being able to declare a schema and emit normalized rows. A really cool way to do data analysis on myself." | **Design below, needs a decision.** |
@@ -54,7 +54,7 @@ Resolution order, first match wins, mirrors `[vault.source_rules]`:
 3. Tag rules: `note-type/ai-summary`, `note-type/ai-response`, `source/ai-chat` give `ai`; any other `source/*` tag except `source/capture` gives `reference`.
 4. Default `human`.
 
-Chris's config will carry:
+The user's config will carry:
 
 ```toml
 [vault.provenance_rules]
@@ -127,7 +127,7 @@ human's words live.
 What this deliberately does not do: grow the records store a query language.
 Records stay untyped workflow state. Derived tables are typed analysis output.
 
-Open questions for Chris: (a) is `run_sql` acceptable on the MCP surface, given
+Open questions for the user: (a) is `run_sql` acceptable on the MCP surface, given
 the records boundary in `docs/reference/records.md`? (b) should a lens with
 `emits` be allowed to also write a note, or is the table its only artifact?
 
@@ -157,7 +157,7 @@ notes under a scope, run on a cheap model. Not before.
 **2026-09-02.** Items 1 through 4 are on the branch as four commits: creation
 time, ingest-side provenance plus `backfill-provenance`, the query-side
 provenance filter and `get_context` filters, and a normalizer fix. Suite
-green (722), pyright clean, golden corpus untouched. Chris's config carries
+green (722), pyright clean, golden corpus untouched. The user's config carries
 `[vault.provenance_rules]` and `provenance_title_patterns`; the live DB was
 backed up to `backups/openaugi-2026-09-02-pre-provenance.db` and backfilled:
 15,707 human, 5,659 ai, 5,530 reference. 618 human-labelled blocks match a
@@ -165,9 +165,9 @@ title pattern and were reported, not relabelled; the `"Claude"` pattern is
 noisy (it catches posts *about* Claude) and can be dropped from config.
 
 **Next, in order:**
-1. Chris merges the branch and restarts `openaugi serve`; until then the live
+1. The user merges the branch and restarts `openaugi serve`; until then the live
    server ignores the stamped field and has no `provenance` parameter.
-2. Chris tags the pasted-in AI reflections (the ` - Jung - ` and
+2. The user tags the pasted-in AI reflections (the ` - Jung - ` and
    ` - distilled - ` candidates) with `#provenance/ai`, or adds a folder for
    them and a rule.
 3. Decide item 5 (derived tables from lens schemas) — the two open questions

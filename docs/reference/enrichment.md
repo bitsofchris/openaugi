@@ -89,11 +89,11 @@ openaugi enrich --apply
     "area": ["health", "work", "openaugi", "content", "self"],
     "type": ["idea", "task", "insight", "journal", "reference"],
     "status": ["active", "done", "parked", "review"],
-    "topic": ["bits-of-chris", "augmented-engineer", "jung"]
+    "topic": ["newsletter", "augmented-engineer", "jung"]
   },
   "ignore_patterns": ["^\\d+$", "^\\d{4}-\\d{2}"],
   "merge": {
-    "idea/content/bits-of-chris": ["area/content", "type/idea", "topic/bits-of-chris"],
+    "idea/content/newsletter": ["area/content", "type/idea", "topic/newsletter"],
     "note-type/daily-journal": ["type/journal"],
     "active": ["status/active"]
   },

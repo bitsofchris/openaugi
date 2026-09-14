@@ -181,7 +181,7 @@ user ticks `do` on a proposal → board_janitor writes OpenAugi/Tasks/board-<dat
 
 ## Setup and operation
 
-Installed on Chris's machine 2026-09-02. To reproduce elsewhere:
+Installed on the user's machine 2026-09-02. To reproduce elsewhere:
 
 ```bash
 # 1. the schedule — writes one task file a day at 06:00

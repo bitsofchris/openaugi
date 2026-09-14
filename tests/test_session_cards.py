@@ -24,7 +24,7 @@ def _claude_user(text, ts, uuid="u1", **extra):
         "timestamp": ts,
         "uuid": uuid,
         "origin": {"kind": "human"},
-        "cwd": "/Users/chris/repos/demo",
+        "cwd": "/Users/someone/repos/demo",
         "gitBranch": "main",
         **extra,
     }
@@ -56,7 +56,7 @@ def test_parse_claude_session(tmp_path):
     assert s.agent_turns == 1
     assert s.first_human == "Please fix the widget"
     assert s.last_human == "Thanks, now add a test"
-    assert s.project == "/Users/chris/repos/demo"
+    assert s.project == "/Users/someone/repos/demo"
     assert s.started == "2026-08-28T10:00:00Z"
     assert s.last_active == "2026-08-28T10:03:00Z"
     assert "claude --resume abc12345" in s.resume_command
@@ -76,7 +76,7 @@ def test_parse_codex_session(tmp_path):
             {
                 "type": "session_meta",
                 "timestamp": "2026-08-28T09:00:00Z",
-                "payload": {"session_id": "cdx-1", "cwd": "/Users/chris/repos/demo"},
+                "payload": {"session_id": "cdx-1", "cwd": "/Users/someone/repos/demo"},
             },
             {
                 "type": "response_item",
@@ -112,7 +112,7 @@ def test_card_render_and_filename():
         tool="claude",
         session_id="abc12345-0000",
         source_path="/tmp/x.jsonl",
-        project="/Users/chris/repos/demo",
+        project="/Users/someone/repos/demo",
         title="Fix the widget",
         started="2026-08-28T10:00:00Z",
         last_active="2026-08-28T10:03:00Z",
@@ -124,7 +124,7 @@ def test_card_render_and_filename():
     card = sc.render_card(s)
     assert "session_id: abc12345-0000" in card
     assert "## Resume" in card
-    assert 'cd "/Users/chris/repos/demo" && claude --resume abc12345-0000' in card
+    assert 'cd "/Users/someone/repos/demo" && claude --resume abc12345-0000' in card
     assert sc.card_filename(s) == "2026-08-28 - claude - Fix-the-widget - abc12345.md"
     index = sc.render_index([s])
     assert "[[2026-08-28 - claude - Fix-the-widget - abc12345]]" in index

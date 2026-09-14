@@ -5,9 +5,9 @@ description: Design record — replace materialized view files with live-rendere
 
 # Views as Rendered Queries
 
-**Status: ADOPTED, in implementation (2026-07-11 — Chris: "get to work on
+**Status: ADOPTED, in implementation (2026-07-11 — the user: "get to work on
 this entire plan"). Open questions all resolved: 1/3/5 in the
-[Resolutions](#resolutions-2026-07-11-with-chris-from-the-mobile-side-design-session)
+[Resolutions](#resolutions-2026-07-11-with-the-user-from-the-mobile-side-design-session)
 below, 2/4 in [Decisions on the remaining open questions](#decisions-on-the-remaining-open-questions-2026-07-11-implementation-session).
 Shipped state lives in the [Implementation ledger](#implementation-ledger)
 at the bottom — update it as steps land.**
@@ -32,8 +32,8 @@ likely simplifies that task's answer too.
 
 **1. The redundant route.** The agent routed 3 dream blocks to
 `MOC - Dream Journal` — but their source file already *was* that note
-(Chris had pasted them there himself). The route added a DB edge pointing
-a block at the note it already lives in. Chris's reaction, verbatim:
+(the user had pasted them there himself). The route added a DB edge pointing
+a block at the note it already lives in. The user's reaction, verbatim:
 
 > "if the block is already on the note - it should automatically have the
 > same membership if you 'routed' it for me? those should be equivalent -
@@ -47,13 +47,13 @@ of containment.
 
 **2. The unwanted view.** Registering Dream Journal as a container caused
 the pass to generate `View - MOC - Dream Journal.md` — recap,
-interpretation, the works — for a note Chris curates entirely by hand.
+interpretation, the works — for a note the user curates entirely by hand.
 He never asked for it; the spec said "registered container → view," so the
 agent made one. The view was deleted; the incident stands as evidence that
 **per-container surface preferences are real** and the one-size view
 contract fights them.
 
-**3. (Chris, unprompted, same conversation):**
+**3. (the user, unprompted, same conversation):**
 
 > "this friction is because we have multiple surfaces - like obsidian is my
 > capture and my viewer - if we just had something render views on the
@@ -84,7 +84,7 @@ query results must be frozen into files to be seen at all. Datadog is the
 right counter-model: nobody exports a dashboard to a file on a cron; the
 dashboard is a saved query rendered at look-time.
 
-The same root cause produces the equivalence confusion. Chris's paste and
+The same root cause produces the equivalence confusion. The user's paste and
 the agent's route are the same intent ("this block belongs here") but
 produce different visible states — paste is visible in the note and
 invisible to the DB-as-membership; route is visible in the DB and invisible
@@ -105,7 +105,7 @@ ingest. The fix is a **rule, not a migration**:
 - View/lens/membership queries use the unified rule.
 - Multi-membership unchanged: containment gives one home for free,
   `routed_to` adds others.
-- This makes Chris-pastes-it and agent-routes-it literally the same row in
+- This makes the-user-pastes-it and agent-routes-it literally the same row in
   every query result — the equivalence he asked for.
 
 This piece is independent of everything below and should ship first
@@ -125,7 +125,7 @@ Define a view as: **membership query + recap synthesis + render template.**
   file. The review pass (or an on-open trigger) refreshes it when
   membership changed materially; the render shows `recap as of <date>`
   with staleness visible instead of silently stale.
-- **Render** — happens where Chris is looking (surfaces below). The
+- **Render** — happens where the user is looking (surfaces below). The
   markdown file in `OpenAugi/Views/` stops existing.
 
 Lenses converge with this for free: a lens is already "saved question →
@@ -139,7 +139,7 @@ files. The lens registry and the view registry become one kind of thing.
 1. **Obsidian plugin pane** (`openaugi-obsidian-plugin` exists) — open a
    registered container note → a side pane / bottom section renders its
    view live from the DB (local MCP/HTTP, same daemon the plugin already
-   talks to). Chris's notes and the agent's synthesis in one screen — his
+   talks to). The user's notes and the agent's synthesis in one screen — his
    stated ask — without the plugin writing anything into the note.
 2. **Mobile app** (`private-augi-mobile`) — already reads
    `context-pack.json`; containers-with-views is the obvious next screen.
@@ -147,7 +147,7 @@ files. The lens registry and the view registry become one kind of thing.
    natural mobile home — the nomination anchors (`^nom-*`) were designed
    for exactly this round trip.
 3. **Fallback: keep generating 2–3 markdown views** (Dashboard + the
-   containers Chris actually opens in Obsidian today) during transition,
+   containers the user actually opens in Obsidian today) during transition,
    from the same saved-query definitions — a render target, not the
    source of truth. Delete when surface 1 works.
 
@@ -157,7 +157,7 @@ files. The lens registry and the view registry become one kind of thing.
   the visible level (one rendered surface shows both).
 - **The per-container surface question** — there is no "does this
   container get a view file" decision anymore. Every registered container
-  *has* a view (it's just a query); whether anyone looks at it is Chris
+  *has* a view (it's just a query); whether anyone looks at it is the user
   opening the pane or not. Dream Journal needs zero configuration: he
   never opens its pane, nothing is generated, nothing intrudes.
   (The registry keeps a `recap: on|off` bit at most — Dream Journal
@@ -186,14 +186,14 @@ files. The lens registry and the view registry become one kind of thing.
 - **Loses greppability of views** — today `grep Views/` finds synthesis
   text. Mitigation: recaps are DB rows; `openaugi views --dump` covers it.
 - **The v2 "silver = permanent visible source of truth via transclusion"
-  decision** was made with Chris a day ago and this partially unwinds it.
+  decision** was made with the user a day ago and this partially unwinds it.
   That decision was solving "how do silver notes stay visible" *given
   file-views*; under rendered queries the visibility comes from the pane.
-  Needs an explicit re-decision with Chris, not a silent override.
+  Needs an explicit re-decision with the user, not a silent override.
 
 ## Open questions for the design session
 
-1. **Is the plugin pane acceptable as THE surface?** (If Chris mostly
+1. **Is the plugin pane acceptable as THE surface?** (If the user mostly
    reads on mobile, build order flips: mobile Dashboard first.)
 2. **Recap cache policy** — refresh on pass only (predictable cost) vs.
    on-open-if-stale (fresh but bursty)?
@@ -216,10 +216,10 @@ files. The lens registry and the view registry become one kind of thing.
    write recap rows *in addition to* files (dual-write, no behavior
    change visible).
 3. Plugin pane rendering membership log + cached recap (read-only v0).
-4. Cut file generation for containers Chris confirms he reads via pane;
+4. Cut file generation for containers the user confirms he reads via pane;
    keep Dashboard as file until answer-UI (open question 3).
 5. Converge lenses onto saved queries; revisit the silver-notes decision
-   with Chris (trade-off #5).
+   with the user (trade-off #5).
 
 *(Sequence amendment per the resolutions below: the first rendered-query
 surface is the **mobile Dashboard**, not the plugin pane — step 3's surface
@@ -227,9 +227,9 @@ changes, the rest of the order holds.)*
 
 ---
 
-## Resolutions (2026-07-11, with Chris, from the mobile-side design session)
+## Resolutions (2026-07-11, with the user, from the mobile-side design session)
 
-Chris agreed to the following framing explicitly ("I agree with that…
+The user agreed to the following framing explicitly ("I agree with that…
 the clarity around silver and those layers makes sense"). These settle
 trade-off #5 and open questions 1, 3, and 5.
 
@@ -247,7 +247,7 @@ delete with zero grief.** Views, recaps, dashboards pass that test.
 
 ### Silver notes are NOT views (resolves trade-off #5 and question 5)
 
-A synthesized note stops being a cache the moment Chris would edit it,
+A synthesized note stops being a cache the moment the user would edit it,
 link to it, or build on it — then it is **truth that happens to be
 machine-drafted** (the silver layer of the medallion he already thinks
 in). So:
@@ -268,7 +268,7 @@ in). So:
 
 ### Build order flips to mobile (resolves question 1)
 
-Chris's demonstrated behavior is capture + triage from the phone (first
+The user's demonstrated behavior is capture + triage from the phone (first
 real phone session 2026-07-11: nominations triaged from the couch). The
 mobile app already speaks a typed wire contract to its bridge
 (`private-augi-mobile` — `/views`, `/review-queue`, `/context-pack`), and
@@ -296,7 +296,7 @@ materialized file, as §3.3 / question 3 already suggested.
   This doc's inline copy is the design-time snapshot; if they ever
   disagree, the reference doc wins.
 - **Gap found processing pass #3 answers — nominations have no
-  deferred state.** Chris answered two cluster-weather nominations
+  deferred state.** the user answered two cluster-weather nominations
   "no not now" / "leave it alone for now." Under the current contract a
   filled answer = decided = closed, but the cluster-weather lens will
   happily re-nominate the same clusters on its next run. There is no
@@ -311,7 +311,7 @@ materialized file, as §3.3 / question 3 already suggested.
 
 ## Decisions on the remaining open questions (2026-07-11, implementation session)
 
-Chris delegated questions 2 and 4 ("you decide"); decided as follows:
+The user delegated questions 2 and 4 ("you decide"); decided as follows:
 
 - **Q2 — recap cache policy: refresh on pass only.** The pass is the only
   LLM-writing cadence today; staleness is displayed (`recap as of <date>`
@@ -340,5 +340,5 @@ noted).
 | §2b `list_views` (recap row = the render list / per-container view bit) | **shipped 2026-07-11** | `40cffa0` |
 | Step 3 phase 1: mobile bridge `/views` renders from daemon queries (Dashboard stays the file; fallback to file parser) | **shipped 2026-07-11** | `private-augi-mobile` `5bfe323` |
 | Step 3 phase 2: Dashboard-on-phone staleness UI, `/context-pack` absorption (Q4 cutover) | pending — needs phone verification of phase 1 first | — |
-| Step 4: cut view-file generation per container as Chris confirms rendered-surface usage; Dashboard stays a file until answer-UI | blocked on step 3 + usage | — |
+| Step 4: cut view-file generation per container as the user confirms rendered-surface usage; Dashboard stays a file until answer-UI | blocked on step 3 + usage | — |
 | Step 5: converge lenses onto saved queries; view-target lenses stop writing files | blocked on step 3 — **the saved-query format + engine landed 2026-07-16** ([query-layer.md](query-layer.md): `OpenAugi/AGENT/queries/*.md`, QuerySpec in frontmatter, relative-date tokens); this step converges lenses onto THAT format | — |

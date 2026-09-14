@@ -23,7 +23,7 @@ Related docs — read them, this note does not repeat them:
 
 ## Why it was paused
 
-Chris, 2026-09-04:
+The user, 2026-09-04:
 
 > I think we shut down the augi log? It's not working well at all. The blocks
 > need their intent or area clarified more — the matches are incorrect or too
@@ -51,7 +51,7 @@ Feedback in `OpenAugi/Capture/feedback-log.ndjson`: 3 `liked`, 4 `disliked`,
 
 The canonical failure, from 09-04's own log: a block reading *"Thunderstorm
 last night woke us all up. Morning plunge again today…"* was proposed as
-**file under [[Tornado Antidote - Read When Tornado Spins]]**, and Chris
+**file under [[Tornado Antidote - Read When Tornado Spins]]**, and the user
 answered in the `aaa:` line — *"no not at all, this was a simple memory last
 night like journal? Nothing to do with tornado."* Storm-word similarity, zero
 intent understanding.
@@ -69,7 +69,7 @@ That one row is also a clean specimen of the other two problems:
   cannot see that it has already asked this question.
 
 This is exactly the failure mode the design predicted and did not fully fix:
-in a single-author vault, global similarity mostly measures *"this is Chris
+in a single-author vault, global similarity mostly measures *"this is the user
 writing"*, not *"this is the same thought"* — so everything was pushed onto
 the LLM judge, and the judge alone is not enough.
 
@@ -98,7 +98,7 @@ true`, then `launchctl kickstart -k gui/$(id -u)/com.openaugi.up`.
 
 ## The four ideas to try before turning it back on
 
-These are Chris's, in his order. Idea 1 is the one the design doc (§10) and
+These are the user's, in his order. Idea 1 is the one the design doc (§10) and
 `AGENT/routing.md`'s Contextgraph Rule both already point at, and it is the
 prerequisite for the rest.
 
@@ -114,7 +114,7 @@ compete in one pool.
 The idea: **capture-time taxonomy first.** Get intent (memory / working
 thought / idea / task / reference) and area (the `area/*` facet) onto the
 block *when it is written* — by a light classifier pass over the block, by a
-capture grammar Chris types, or by the mobile capture client's tag-assist —
+capture grammar the user types, or by the mobile capture client's tag-assist —
 and only then let anything match. See `AGENT/My Taxonomy.md` for the facets
 and `docs/plans/capture-tag-stream-loop.md` for the adjacent idea.
 
@@ -124,7 +124,7 @@ which alone would have killed the thunderstorm row.
 
 ### 2. "Block style unrest" — stop mixing blocks
 
-Chris's own suspicion: *"maybe I mix the blocks too much."* A single daily
+The user's own suspicion: *"maybe I mix the blocks too much."* A single daily
 block containing family logging *and* a line about work is genuinely
 un-routable — the design already lists this as the known unfixed limit
 ("mixed blocks slip through"), and the thunderstorm block is one
@@ -161,7 +161,7 @@ block with similar words" is not.
 
 The alternative framing, and the cheapest experiment: **stop trying to be
 interesting and only speak on near-certainty.** Raise the bar until the only
-things that fire are near-duplicates and things Chris has genuinely forgotten
+things that fire are near-duplicates and things the user has genuinely forgotten
 he wrote. One or two a week instead of six a day. That is a different product
 — a duplicate/forgotten-thread detector, not a conversational echo — and it
 does not need the taxonomy work first, which is what makes it worth trying as

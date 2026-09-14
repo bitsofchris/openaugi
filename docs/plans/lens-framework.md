@@ -1,6 +1,6 @@
 ---
 name: lens-framework
-description: NEXT UP (not started). Lenses as data — scope + trigger + prompt(context/persona + intent) specs that generalize views, distillations, and future proactive dashboards. Chris's definition, captured 2026-07-06.
+description: NEXT UP (not started). Lenses as data — scope + trigger + prompt(context/persona + intent) specs that generalize views, distillations, and future proactive dashboards. The user's definition, captured 2026-07-06.
 ---
 
 # Lens Framework — lenses as data
@@ -16,7 +16,7 @@ run-state tracking) — build trigger unchanged: when lens prose visibly
 outgrows what the agent can follow reliably. Scheduling stays dormant
 until master-plan M4 passes.
 
-## Chris's definition (2026-07-06, verbatim intent)
+## The user's definition (2026-07-06, verbatim intent)
 
 A **lens** =
 
@@ -80,4 +80,4 @@ is lost; the skill prose is the interim implementation.
 - docs/plans/review-pass-v1.md (the running system these specs would configure)
 - Vault: `2026-05-06 - Lens - the missing primitive in the Contextgraph`
 - Kleppmann DDIA Part III (derived data / materialized view refresh — the
-  theory Chris re-derived); Kreps, "The Log"
+  theory the user re-derived); Kreps, "The Log"

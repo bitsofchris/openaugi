@@ -1,6 +1,6 @@
 ---
 name: augi-log-routing
-description: The Augi Log becomes the capture/routing surface. Every new human daily-note block gets one routing row (new note / extend / link / file under / memory / hold) with a proposed target; Chris answers with checkboxes and aaa: hints, unanswered rows auto-apply after N days, and every answer is logged so later proposals are biased by his history. Replaces the dead review pass and the failed view-note / mobile render attempts.
+description: The Augi Log becomes the capture/routing surface. Every new human daily-note block gets one routing row (new note / extend / link / file under / memory / hold) with a proposed target; the user answers with checkboxes and aaa: hints, unanswered rows auto-apply after N days, and every answer is logged so later proposals are biased by his history. Replaces the dead review pass and the failed view-note / mobile render attempts.
 ---
 
 # Augi Log routing
@@ -11,7 +11,7 @@ description: The Augi Log becomes the capture/routing surface. Every new human d
 
 ## Where this came from
 
-Chris, daily note 2026-09-02:
+The user, daily note 2026-09-02:
 
 > The augi log - it's the routing decisions as I go. With optional proactive
 > lenses or suggestions but first it's the capture / routing surface.
@@ -39,7 +39,7 @@ The Augi Log stops being an echo-only debug log and becomes the place
 routing happens. For every new **human** daily-note block the watcher
 appends a routing row: the block snippet, one proposed verb and target with
 a one-clause why, up to two alternates, and the fixed fallbacks *memory* and
-*hold*. Chris ticks boxes, or writes an `aaa:` line, or does nothing. When he
+*hold*. The user ticks boxes, or writes an `aaa:` line, or does nothing. When he
 ticks the day's master box (`process this log`) a janitor applies the whole
 log: ticked rows as chosen (DB routing link, and for *extend* an append into
 the target note under a dated heading), untouched rows to the top suggestion
@@ -65,12 +65,12 @@ are waiting.
 
 ## The six design questions
 
-Each was discussed with Chris on 2026-09-03; the decision is recorded under
+Each was discussed with the user on 2026-09-03; the decision is recorded under
 each question.
 
 ### 1. Verbs and checkbox rows
 
-Vocabulary (Chris's list, one word each):
+Vocabulary (the user's list, one word each):
 
 | Verb | Means | Apply writes |
 |---|---|---|
@@ -100,13 +100,13 @@ plain), `new note` shown only when proposed, `memory` and `hold` always
 present. An `aaa:` line overrides everything ("aaa: link [[X]]",
 "aaa: memory"), so anything the boxes cannot say still has a channel.
 
-**Decided 2026-09-03: option B.** Chris's framing: the row is augi's
+**Decided 2026-09-03: option B.** the user's framing: the row is augi's
 suggestion, the boxes are his answer, and `aaa:` is how he speaks to augi
 directly when the boxes cannot say it ("I correct you with aaa:").
 
 ### 2. When rows apply: a master box, not a timer
 
-**Decided 2026-09-03.** Chris asked for a top-level checkbox that gates
+**Decided 2026-09-03.** the user asked for a top-level checkbox that gates
 processing, and chose it over the per-row timer for v1.
 
 - Each day's Augi Log carries one master box at the top of the Routing
@@ -139,7 +139,7 @@ Config: `[routing] enabled = true`, `[routing] confident_margin`.
 ### 3. What "apply" writes for extend
 
 This is the one place the feature touches a human-authored note, so it needs
-Chris's explicit yes. Three options:
+The user's explicit yes. Three options:
 
 - **(a) DB link only.** Safest, and it is exactly what the review pass did.
   It failed because nothing rendered the result where he reads.
@@ -154,7 +154,7 @@ Chris's explicit yes. Three options:
   but it requires writing a `^id` anchor into the daily note, which edits a
   human note, and embeds render poorly on mobile.
 
-**Decided 2026-09-03: (b), with placement rules.** Chris: "typically look
+**Decided 2026-09-03: (b), with placement rules.** the user: "typically look
 for the Journal H1 or the other H3s - I like the most recent entry to be on
 top." So the append is really an *insert*:
 
@@ -287,7 +287,7 @@ search per cycle and cached.
 
 Every commit: `scripts/check.sh` first.
 
-## Open items to settle with Chris
+## Open items to settle with the user
 
 - All six questions decided 2026-09-03; see the **Decided** lines above.
 - Changelog: `CHANGELOG.md` exists (added with the board); entries go under

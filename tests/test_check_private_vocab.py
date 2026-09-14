@@ -24,7 +24,8 @@ def _denylist(tmp_path: Path) -> Path:
 
 
 def test_load_rules_skips_comments_and_blanks_and_reads_regex(tmp_path):
-    rules = cpv.load_rules(_denylist(tmp_path))
+    rules, skips = cpv.load_rules(_denylist(tmp_path))
+    assert skips == []
     assert [r.pattern for r in rules] == ["zebra", r"\bqu+x\b"]
     assert rules[0].search("A ZEBRA crossed")  # case-insensitive
     assert rules[1].search("quuux here") and not rules[1].search("quuxes")
@@ -33,7 +34,7 @@ def test_load_rules_skips_comments_and_blanks_and_reads_regex(tmp_path):
 def test_scan_file_masks_the_match(tmp_path):
     f = tmp_path / "note.md"
     f.write_text("fine line\nthe Zebra and the quux met\n")
-    rules = cpv.load_rules(_denylist(tmp_path))
+    rules, _ = cpv.load_rules(_denylist(tmp_path))
     out = cpv.scan_file(f, rules, label="note.md")
     assert out == [f"note.md:2: the {cpv.MASK} and the {cpv.MASK} met"]
     assert "zebra" not in out[0].lower()
@@ -42,7 +43,7 @@ def test_scan_file_masks_the_match(tmp_path):
 def test_scan_file_skips_binary_and_missing(tmp_path):
     b = tmp_path / "blob.bin"
     b.write_bytes(b"zebra\0zebra")
-    rules = cpv.load_rules(_denylist(tmp_path))
+    rules, _ = cpv.load_rules(_denylist(tmp_path))
     assert cpv.scan_file(b, rules) == []
     assert cpv.scan_file(tmp_path / "missing.md", rules) == []
 
@@ -96,3 +97,15 @@ def test_all_walks_tracked_files_and_skips_scratch(tmp_path, monkeypatch):
     assert cpv.main(["--all", "--denylist", str(words)]) == 0
     (tmp_path / "src.py").write_text("x = 'zebra'\n")
     assert cpv.main(["--all", "--denylist", str(words)]) == 1
+
+
+def test_skip_globs_in_the_list_exempt_paths(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    words = tmp_path / "words.txt"
+    words.write_text("zebra\nskip:NOTICE\nskip:legal/*\n")
+    (tmp_path / "NOTICE").write_text("Copyright zebra\n")
+    (tmp_path / "legal").mkdir()
+    (tmp_path / "legal" / "LICENSE").write_text("zebra\n")
+    (tmp_path / "doc.md").write_text("zebra\n")
+    assert cpv.main(["NOTICE", "legal/LICENSE", "--denylist", str(words)]) == 0
+    assert cpv.main(["NOTICE", "doc.md", "--denylist", str(words)]) == 1

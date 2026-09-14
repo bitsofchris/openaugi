@@ -33,7 +33,7 @@ write-back mechanism. Companion vault docs: `OpenAugi/Docs/OpenAugi - The Pictur
 
 Event sourcing / CQRS applied to the vault:
 
-- **Truth** = Chris's own writing (blocks ingested from his notes). Append-only.
+- **Truth** = the user's own writing (blocks ingested from his notes). Append-only.
   The agent NEVER edits human-authored notes. Blocks are never deleted; things
   demote by ceasing to materialize, not by removal.
 - **Views** = agent-generated markdown files under `OpenAugi/Views/`. Derived,
@@ -62,7 +62,7 @@ The registry is the taxonomy, not a new file: `#note-type/amoc` plus
 
 - AMOC - OpenAugi Main
 - AMOC - AI Research Engineer
-- AMOC - Bits of Chris - Content Creator
+- AMOC - Newsletter - Content Creator
 - AMOC - Self - Weaknesses - Jung - Growth
 - AMOC - Meta - Productivity Process
 
@@ -99,7 +99,7 @@ Body by kind (convention, from the Design Brief):
 Plus `OpenAugi/Views/Dashboard.md`: cross-area rollup (the 6/24 "aggregate
 tasks/projects by area" ask), and a **gravity section** — unrouted blocks that
 cluster together, nominated for promotion with one line each. Promotion happens
-only on Chris's command (inline note or zzz), then the agent assembles the new
+only on the user's command (inline note or zzz), then the agent assembles the new
 note (gathering related old blocks — this is the resurfacing feature).
 
 ## Capture grammar & routing logic
@@ -163,7 +163,7 @@ Agent-first (per repo convention): the pass is an **agent skill**
 - [ ] high-water-mark state (small store helper or state file) + date-scoped block pull
 - [ ] `write_document` accepts `Views` subfolder (verify path handling)
 - [ ] review-pass skill file (the real work: routing + view prompts)
-- [ ] Chris adds `![[OpenAugi/Views/<slug>]]` transclusion to each AMOC (manual, once)
+- [ ] the user adds `![[OpenAugi/Views/<slug>]]` transclusion to each AMOC (manual, once)
 
 Cleanup (separate commit): archive StreamManager + `make_stream`/`update_stream`/
 `get_stream_context`/`list_streams` and `write_snip`/`write_thread` with a docs
@@ -175,7 +175,7 @@ note (purpose superseded by views / done manually). Keep `write_document`.
   notes + Dashboard, transcluded into the AMOCs.
 - **Done when:** run twice (mid-week + Sunday); the Sunday Dashboard answers
   "where did I leave off / what's next per area" without re-reading notes.
-- **Kill condition:** if after two runs the views are mush Chris doesn't trust,
+- **Kill condition:** if after two runs the views are mush the user doesn't trust,
   stop and fix routing (block quality / container scope) before adding anything.
 
 ## Later (explicitly parked)
@@ -184,7 +184,7 @@ note (purpose superseded by views / done manually). Keep `write_document`.
   diverge: each lens = a frontmatter spec {intent prompt, scope/retrieval
   recipe, refresh policy (on-pass | on-demand | after-N-blocks | every-N-days),
   render target}, files under OpenAugi/AGENT/lenses/, the pass becomes the
-  scheduler that reads them. Chris re-derived this 7/6 ("modular context
+  scheduler that reads them. The user re-derived this 7/6 ("modular context
   block recap type") — correct end-state, deferred per the two-real-cases rule.
 - **`openaugi review` CLI** — writes the task file directly so the existing
   task watcher launches the pass without opening a Claude session.

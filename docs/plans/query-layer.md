@@ -6,7 +6,7 @@ description: Design — extract the deterministic query engine out of mcp/server
 # The Query Layer — one engine, thin adapters
 
 **Status: SHIPPED 2026-07-16** (proposed the same day from the
-mobile/explorer design session; adopted with Chris's answers to the open
+mobile/explorer design session; adopted with the user's answers to the open
 questions — saved queries are **markdown+frontmatter**, HTTP `k` caps at
 **500**, merge to local main when green. Implementation ledger below;
 reference doc: [docs/reference/query-layer.md](../reference/query-layer.md).)
@@ -276,7 +276,7 @@ Each step ships green on its own; sequence is dependency order.
 | 6. CLI rewire | ✅ 2026-07-16 | `openaugi search` on the engine (+filters), new `openaugi query`; duplicate path deleted |
 | 7. Docs pass complete | ✅ 2026-07-16 | ARCHITECTURE map + Query flow, `docs/reference/query-layer.md`, this ledger, views ledger pointer, master-plan STATUS |
 
-## Open questions — all resolved 2026-07-16 with Chris
+## Open questions — all resolved 2026-07-16 with the user
 
 1. **Saved-query file format** → **markdown-with-frontmatter.**
    Obsidian-editable, matches `AGENT/lenses/`, avoids a format migration

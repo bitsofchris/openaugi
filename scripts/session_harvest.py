@@ -29,7 +29,7 @@ from datetime import datetime, time, timedelta
 from pathlib import Path
 
 # First human turn of a session dispatched by the OpenAugi task watcher — augi
-# talking to itself, not Chris thinking out loud. Matched against the session's
+# talking to itself, not the user thinking out loud. Matched against the session's
 # opening turn only, so a session that merely mentions the phrase is kept.
 AGENT_PROMPT_MARKERS = ("Read your skill file first",)
 

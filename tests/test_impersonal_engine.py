@@ -3,8 +3,9 @@
 From the decision brief *Where a Personal Surface's Code Lives*: a surface's
 trigger, scope and prompt are the user's configuration and belong in the vault
 as a lens file. Generic mechanism belongs in the engine. The plainest tell that
-a module has drifted the wrong way is prose written *about one person* — a
-first name, or "he / his / him" standing in for whoever installed this.
+a module has drifted the wrong way is prose written *about one person* —
+"he / his / him" standing in for whoever installed this. Names are the
+privacy guard's job (`scripts/check_private_vocab.py`, word list in the vault).
 
 Scope note: second-person "you" is deliberately allowed. It is the product's
 own voice — config examples, the LLM prompts, and the lens templates shipped
@@ -21,8 +22,8 @@ from openaugi import __file__ as package_file
 
 SRC = Path(package_file).parent
 
-#: The name the repo was written around, and the pronouns that stood in for it.
-_PERSONAL_RE = re.compile(r"\b(chris(?:'s)?|he|his|him)\b", re.IGNORECASE)
+#: The pronouns that stood in for one person. Names are the privacy guard's job.
+_PERSONAL_RE = re.compile(r"(he|his|him)", re.IGNORECASE)
 
 
 def _shipped_files() -> list[Path]:

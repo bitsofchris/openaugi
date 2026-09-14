@@ -300,7 +300,7 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 
 ## Related repos
 
-- **private-augi-mobile** (`/Users/chris/repos/private-augi-mobile`) — the mobile capture client (Expo/RN, iOS-first). Thin client over this repo's data model: its mock contract server (`POST /capture`, `GET /context-pack`) pins the API a future FastAPI server in this repo will implement. Mobile captures become blocks here; the container registry + routing built here feed its tag/link-assist suggestions (its milestone M4).
+- **private-augi-mobile** (`~/repos/private-augi-mobile`) — the mobile capture client (Expo/RN, iOS-first). Thin client over this repo's data model: its mock contract server (`POST /capture`, `GET /context-pack`) pins the API a future FastAPI server in this repo will implement. Mobile captures become blocks here; the container registry + routing built here feed its tag/link-assist suggestions (its milestone M4).
 - **openaugi-obsidian-plugin** — Obsidian-side capture/context tooling.
 - **openaugi-private** — parked; not a source of decisions.
 

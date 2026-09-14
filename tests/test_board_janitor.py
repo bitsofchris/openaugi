@@ -593,10 +593,10 @@ WORTH_KEEPING = """\
     ↳ Save this, verbatim, to `OpenAugi/Notes/Harness.md`. Tag it `#human-review`.
       Do not expand it — this text is the note:
       ---
-      Chris, 2026-09-07: *"the harness is the context, the state, the tools, the prompts."*
+      The user, 2026-09-07: *"the harness is the context, the state, the tools, the prompts."*
       Links: [[2026-09-07 - harness matters]] · [[AMOC - OpenAugi Main]]
       ---
-      Source: Harness matters (`ZK Home`), 2026-09-07
+      Source: Harness matters (`Vault`), 2026-09-07
     - [ ] do
     - [ ] no
     <!-- propose:keep-harness-is-four-parts -->
@@ -658,7 +658,7 @@ LONG_WORTH_KEEPING = """\
       ---
       ### 2026-09-10 (augi)
 
-      The first field test. Chris set the resistance dial by hand, repeatedly.
+      The first field test. The user set the resistance dial by hand, repeatedly.
 
       It worked and it was expensive.
 

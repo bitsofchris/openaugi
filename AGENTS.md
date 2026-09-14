@@ -12,14 +12,14 @@ You the agent are constantly improving your ability to work in this codebase - d
    detail; done plans move to `docs/plans/done/`.
 2. **System manual for the write-back loop:** [docs/reference/review-pass.md](docs/reference/review-pass.md)
    (augi_tags, routing, capture grammar, views).
-3. **Vault-side entry** (Chris's daily driver): `View - Dashboard.md` under
+3. **Vault-side entry** (the user's daily driver): `View - Dashboard.md` under
    `<vault>/OpenAugi/Views/` — regenerated every review pass, links everything.
    Two verbs: "run the review pass" (full loop) · "process the dashboard"
    (execute nomination answers only).
 
 # Where things live
 
-This repo is public. Chris's vault is not. Before committing any doc, ask:
+This repo is public. The user's vault is not. Before committing any doc, ask:
 does this contain actual content from the vault, or just describe the
 system that operates on it?
 
@@ -31,7 +31,7 @@ container exists," "clustering produces life-area buckets").
 decisions, actual cluster contents or counts, personal reflections, post
 drafts, session handoffs that quote real vault data — i.e. anything that
 is *output from* the second brain rather than a description *of* it. If a
-doc is reporting what specifically got routed/clustered/decided on Chris's
+doc is reporting what specifically got routed/clustered/decided on the user's
 real data, it belongs in `docs/scratch/` (gitignored), not tracked.
 
 **No personal vocabulary, field names, schedules, or note paths in code or
@@ -69,13 +69,13 @@ build" is `plans/`. Never drop a reference doc at `docs/` root.
 
 # After shipping a feature: update the Command Deck (required)
 
-Chris is still learning his own system, so `<vault>/OpenAugi/Docs/OpenAugi
+The user is still learning their own system, so `<vault>/OpenAugi/Docs/OpenAugi
 Command Deck.md` is his entry point: the one screen that answers "what can I
 actually do with this thing right now." A feature he cannot find there does not
 exist to him.
 
 **Any change to OpenAugi or the Obsidian plugin that adds, alters, or retires
-something Chris can use or must know about ends with an edit to that file** —
+something the user can use or must know about ends with an edit to that file** —
 in the same session as the change, not batched later. That includes new
 commands and capture grammar, new lenses or agents, background behavior, new
 config keys, changed defaults, and anything retired.
@@ -95,13 +95,13 @@ leak into this public repo (see "Where things live").
 
 # Related repos
 
-- `/Users/chris/repos/private-augi-mobile` — **OpenAugi Mobile** (Expo/RN thin
+- `~/repos/private-augi-mobile` — **OpenAugi Mobile** (Expo/RN thin
   capture client). Its mock contract server pins the API this repo will serve
   later (`POST /capture` → markdown block; `GET /context-pack` → taxonomy +
   recent concepts for tag/route suggestions). Captured blocks flow into this
   repo's ingest; the registry/routing built here is what mobile's tag-assist
   (M4) will suggest from. See its `docs/plans/mvp-build-plan.md`.
-- `/Users/chris/repos/openaugi-private` — parked; not a source of decisions.
+- `~/repos/openaugi-private` — parked; not a source of decisions.
 - Vault agent config maps short repo names for zzz task dispatch:
   `<vault>/OpenAugi/AGENT/Repos.md`.
 

@@ -88,7 +88,7 @@ def rules_vault(tmp_path: Path) -> Path:
 
 def test_parse_vault_stamps_source_rules(rules_vault: Path):
     # DEFAULT_EXCLUDE_PATTERNS skips **/Readwise/** — a user who ingests
-    # Readwise (like Chris) overrides exclude_patterns, so mirror that here.
+    # Readwise (like the user) overrides exclude_patterns, so mirror that here.
     blocks, _links = parse_vault(
         rules_vault, exclude_patterns=[".obsidian/**"], source_rules=RULES
     )

@@ -103,7 +103,7 @@ open question is not technical (docs/reference/reading-queue.md).
 window used to die there. Step 10 of the currency-board build now applies a new
 **`chat-harvest`** lens over yesterday's Claude Code / Codex transcripts and
 merges one `## Worth keeping` section into the board: at most one candidate
-note, under 150 words, anchored on Chris's own prompts rather than the model's
+note, under 150 words, anchored on the user's own prompts rather than the model's
 answers, with the coding layer excluded and the destination (new note, or an
 append to a named note) already decided. `scripts/session_harvest.py` does the
 extraction and no judging — one local calendar day, human turns only, harness

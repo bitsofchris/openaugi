@@ -23,7 +23,7 @@ The vault adapter stays as-is. New adapters plug in alongside it.
 |---|---|---|
 | Adapter contract | Protocol in `protocols.py` + shared helpers module | Loose coupling. Vault stays functional. New adapters can be classes. Runner dispatches by protocol. |
 | Block identity key | `metadata["source_id"]` (replaces vault's `source_path` as canonical) | Generic across file-based and API-based sources. Vault uses relative path, ChatGPT uses conversation ID, Readwise uses highlight ID. |
-| Adapters to build | ChatGPT export, Readwise API, Research output, LlamaIndex bridge | These are Chris's actual data sources. Skip speculative adapters. |
+| Adapters to build | ChatGPT export, Readwise API, Research output, LlamaIndex bridge | These are the user's actual data sources. Skip speculative adapters. |
 | LlamaIndex | Optional bridge adapter, not a core dependency | `pip install openaugi[llamaindex]` pulls it in. Core stays lean. Bridge translates LlamaIndex `Document` → our blocks. |
 | Config model | `[sources.*]` sections in `config.toml`, setup via `openaugi init` | Config-driven ingest from the start. `openaugi ingest` runs all enabled sources. |
 | CLI | `openaugi ingest` (all sources) / `openaugi ingest --source <name>` (one) | Abstract away source selection. Config is the source of truth. |
@@ -187,7 +187,7 @@ reader_args = { input_dir = "~/documents" }
 - Books: `id`, `title`, `author`, `category` (articles|books|podcasts|tweets), `source` (reader|kindle|etc), `source_url`, `num_highlights`, `tags[]`, `document_note`
 - Pagination: `count`, `next`, `previous`, `results[]`
 - Incremental: `updated` field on both — use `?updated__gt=` param
-- Chris has 2,581 highlights across 235 sources
+- The user has 2,581 highlights across 235 sources
 
 **Ingest modes** (configurable via `mode`):
 
@@ -386,8 +386,8 @@ openaugi init                       # interactive: add/configure sources
 - Readwise API tests mock the HTTP layer (no real API calls in CI)
 
 ### Manual testing (local only, not committed)
-- Ingest Chris's real ChatGPT export (`~/Downloads/chatgpt-history/`)
-- Ingest Chris's Readwise highlights (API key from `keys.env`)
+- Ingest the user's real ChatGPT export (`~/Downloads/chatgpt-history/`)
+- Ingest the user's Readwise highlights (API key from `keys.env`)
 - Run compile after multi-source ingest — verify context blocks span sources
 - Demo: `openaugi up` with vault + chatgpt configured → both ingested → search finds results from both
 

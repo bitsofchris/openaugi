@@ -62,7 +62,7 @@ Not yet observed in daily use — the first live run is the 06:00 board on
 whether the drafted note is good enough to save without editing.
 
 **2026-08-29: proactive echo — the first thing that runs unasked.** New
-daily-note blocks are matched against Chris's own prior writing; when the
+daily-note blocks are matched against the user's own prior writing; when the
 match would genuinely help, an echo is appended to
 `OpenAugi/YYYY/MM/DD/Augi Log.md` with promote/good/bad checkboxes that a
 janitor acts on (promotion writes a note; feedback appends to the mobile
@@ -124,7 +124,7 @@ blocks never truncated, read-only, k≤500, Cloudflare auth now guards
 `/api` like `/mcp`), **CLI** (`openaugi search` gains all the MCP
 filters; the old filter-less duplicate is deleted; new `openaugi query`).
 **Saved queries are data**: `OpenAugi/AGENT/queries/*.md`
-(markdown+frontmatter per Chris, tokens `-14d`/`today`/`$review-mark`
+(markdown+frontmatter per the user, tokens `-14d`/`today`/`$review-mark`
 resolve at run time); seeds `dashboard-task-shelf` (the has_task
 docstring convention is now a file), `review-queue`, `today` ship via
 init. views-as-rendered-queries step 5 now has its landing format.
@@ -188,12 +188,12 @@ Dashboard regenerated. (2) **The durable fix (`ad111f1`)**:
 tests for both failure modes; template/AGENT/docs now say the queue pulls
 by `after_ingested`, never `after`. 489 green. **MCP server must restart
 to expose the new param before pass #6.** (3) **Weekly reflection ran**
-(skill + Chris's TLDR prompt) → `OpenAugi/Drafts/WK-26-07-12-Reflection.md`;
+(skill + the user's TLDR prompt) → `OpenAugi/Drafts/WK-26-07-12-Reflection.md`;
 nomination queue triaged to zero (positioning-reconcile approved — pass #6
 drafts the top-line paste-line; wind-turbine registration declined —
 "don't bloat the registry"; niche note + 2 promotes parked). (4) **Parked
 is now a first-class state (`10458fa`)**: `#status/parked` widened beyond
-PMOCs (taxonomy updated, Chris's call), Dashboard carries a permanent
+PMOCs (taxonomy updated, the user's call), Dashboard carries a permanent
 Parked shelf — Dataview over the tag scoped to mtime ≤14 days so ignored
 parks fall away; cluster nominations park as dated ledger lines, third
 park of the same anchor gets called out. Retrieval never filters parked.
@@ -201,12 +201,12 @@ park of the same anchor gets called out. Retrieval never filters parked.
 registry description paste-lines are STILL unapplied (registry runs on
 AGENT seeds); phone pass + Dashboard-on-phone staleness UI unchanged from
 below; two #human-review research notes (Shusett producer-writer, CQRS
-prior-art) await Chris.
+prior-art) await the user.
 
 **2026-07-11 (evening): views-as-rendered-queries ADOPTED and its whole
 buildable slice shipped in one day.** The design doc
 ([views-as-rendered-queries.md](views-as-rendered-queries.md)) went
-draft → resolutions with Chris → adopted; its ledger tracks every step
+draft → resolutions with the user → adopted; its ledger tracks every step
 by commit. Shipped: (1) **`apply_routing` is the single route CRUD
 tool** — add/remove per decision, `route_block` deleted, wrong routes
 now actually correctable; (2) **membership = containment ∪ routing** —
@@ -222,7 +222,7 @@ one materialized file; (6) mobile test-suite timezone fix (TZ pinned —
 385 green there, 479 green here). **Pass #4 ran (evening, light):** 11
 new blocks, 5 routed, wind-turbine PMOC detected → registration
 nomination pending; recaps seeded for all 9 registered containers.
-**Left off / next:** Chris answers 4 nominations + paste-lines; Sunday
+**Left off / next:** the user answers 4 nominations + paste-lines; Sunday
 pass #5 (first fully native run); phone pass (mobile TESTING.md — needs
 launchd daemon+bridge first); then Dashboard-on-phone staleness UI,
 `/context-pack` absorption, Obsidian plugin pane, lens convergence.
@@ -231,7 +231,7 @@ Docs refreshed: [core-principles.md](../reference/core-principles.md)
 (`docs/scratch/2026-07-11-session/`).
 
 **2026-07-09 (later): route durability re-decided — similarity matcher
-RIPPED OUT, re-derive contract in (Chris's call).** The CQRS discussion
+RIPPED OUT, re-derive contract in (the user's call).** The CQRS discussion
 landed the right model: the vault is the current-state store for content,
 the DB is a projection, and routing is decision-state that gets
 RE-DECIDED, not fuzzily preserved — an edited block drops its routes by
@@ -252,7 +252,7 @@ mtime > now; `_extract_frontmatter_created` in splitter.py, resolver in
 vault.py) — the generic hook any source converter uses to stamp real
 historical dates on imported files. 490 tests green. `gdrive_import.py`
 itself (the rclone/pandoc/textutil → vault markdown converter) hardcodes
-Chris's own Drive folder taxonomy, so it moved to gitignored
+The user's own Drive folder taxonomy, so it moved to gitignored
 `docs/scratch/` alongside the bespoke import artifacts (inventory,
 runbook, file-contract plan) and the personal history-RAG exploration —
 none of that is in the repo.
@@ -266,13 +266,13 @@ Cluster-weather snapshots carry 256-dim centroids; cross-run matching
 accepts centroid cosine ≥ .9, killing the label-drift born/died churn —
 first centroid-bearing snapshot recorded, deltas clean from next run.
 Lineage enhancements (drift/branches/genealogy) PARKED with revive
-conditions (Chris's call — value unproven; see future-work.md). Lens
+conditions (the user's call — value unproven; see future-work.md). Lens
 shakedown: "apply lens idea-lineage to advice on finding your niche" ran
 end-to-end → artifact at `OpenAugi/Notes/2026-07-09 - Lineage - advice
 on finding your niche.md` (146 blocks, 2023-11→2026-07, the idea
 inverts: "pick a category" → "don't niche first"); one CLI bug found +
 fixed (--json stdout contamination). Also: `source/podcast` added
-(Chris's call) — 2,480 Snipd/podcast blocks attributed; total source
+(the user's call) — 2,480 Snipd/podcast blocks attributed; total source
 firewall coverage now ~3.2k blocks.
 
 **2026-07-08: salience gating centralized here (cross-repo with mobile).**
@@ -303,7 +303,7 @@ when a routed block is edited (content-hash identity + CASCADE) — the
 trading MOC had lost all 3 routes in 48h, restored by hand; this bleeds
 M4 routing quality until fixed. (2) cluster-weather cross-run matching is
 churn-heavy (born/died label-drift pairs dominate the real grew/shrank
-signal) — consider centroid-similarity matching. **Next:** Chris reads
+signal) — consider centroid-similarity matching. **Next:** the user reads
 the Dashboard/briefing/loops and answers nominations ("process the
 dashboard" executes them); Sunday 7/12 pass is the M2-style DoD test for
 the anchored flow; fix the route-durability bug before M4 accumulates
@@ -330,11 +330,11 @@ note; consistent with "text is truth," pinned not fixed. *(Reversed
 that STATUS entry and docs/plans/anchor-segmentation.md.)*
 
 **2026-07-07 (last session of the day): M8 opened — source firewall LIVE
-+ idea-lineage lens.** Two builds, both grounded in Chris's own notes
++ idea-lineage lens.** Two builds, both grounded in the user's own notes
 (History RAG PMOC, "Persistent Memory Artifact System" 6/6): (1)
 **Source attribution:** `[vault.source_rules]` config (folder glob →
 `source/*` tag, explicit text tags win), applied at ingest +
-`openaugi backfill-source-tags` for existing rows — Chris's DB now has
+`openaugi backfill-source-tags` for existing rows — the user's DB now has
 684 blocks attributed (533 readwise / 128 webclip / 23 ai-chat); rules
 live in his config for Readwise/Instapaper/Articles/Reddit/AI
 Conversations. No Readwise API adapter, ever — Readwise→Obsidian plugin
@@ -349,13 +349,13 @@ filed in mobile's ROADMAP parking lot; mobile also shipped M13 read tab
 distinct from echoes (current thinking → recognition) as topic → full
 biography. Live demo: `OpenAugi/lineage/dopamine.json` (100 blocks,
 2024-03 → 2026-05). **Next in M8:** ChatGPT-history converter when
-Chris re-exports (queued in future-work.md); curator waits for
+The user re-exports (queued in future-work.md); curator waits for
 nomination-answer signal.
 
-**2026-07-07 (late night): milestone reset + surface decision (Chris's
+**2026-07-07 (late night): milestone reset + surface decision (the user's
 call).** M4 and M5 are CLOSED — no more gating on them; M5 shakedowns are
 parked (the try-it checklist lives in the user guide §0, docs/scratch/
-2026-07-06-session/user-guide.html — Chris runs it when he can, nothing
+2026-07-06-session/user-guide.html — the user runs it when he can, nothing
 blocks on it). **Surface decision: no web app, ever, for now** — the two
 surfaces are the mobile app (the one UI we own) and Obsidian as the
 desktop app (vault files are the API; the plugin stays a thin task-file
@@ -369,17 +369,17 @@ already delivered from the mobile side; what remains here is
 reachability (Tailscale) and verification. **Next build: M8 (data lake
 + curator), starting with the source firewall + first third-party
 adapter — see M8 section (resequenced 2026-07-07).** Note: the ChatGPT
-export at ~/Downloads/chatgpt-history no longer exists; Chris re-exports
+export at ~/Downloads/chatgpt-history no longer exists; the user re-exports
 when M8's ChatGPT adapter comes up.
 
-**2026-07-07 (eod):** M2 passed (Chris's call). M3 rescoped to "converge
+**2026-07-07 (eod):** M2 passed (the user's call). M3 rescoped to "converge
 every surface on the file contracts" (spec below) and **built the same
 day** across all three repos: M3a shipped here (context-pack writer +
 nomination anchors, live-verified against the real vault), M3b committed
 in `openaugi-obsidian-plugin` (521399e — task-file commands, legacy Task
 Dispatch deprecated), M3c vault mode built in the parallel
 `private-augi-mobile` thread. **M3 loose ends (human verification, not
-build):** (1) Chris verifies the plugin commands in Obsidian, then cuts a
+build):** (1) the user verifies the plugin commands in Obsidian, then cuts a
 plugin release; (2) phone-loop verify for vault mode; (3) the next review
 pass is the first to exercise nomination anchors + `write_context_pack()`
 — watch it. **M4 (routing quality) is now IN PROGRESS** — usage-gated, two
@@ -405,13 +405,13 @@ try-it line. Next weather run gets real deltas. See docs/reference/clustering.md
 passes).
 
 **2026-07-07 (later): lens system MVP shipped; lifestream parked.**
-Chris reframed M5: the lens is the product primitive ("saved questions"),
+The user reframed M5: the lens is the product primitive ("saved questions"),
 and the MVP had to be end-to-end before refining individual lenses. Built:
 lens registry (`OpenAugi/AGENT/lenses/`, distill + nuggets migrated),
 prose engine in `augi-agent.md` (apply/create from any surface), `lenses`
 field in the context pack for mobile chips, dormant scheduler note in
 review-pass. See M5 below + [docs/reference/lenses.md](../reference/lenses.md). Lifestream
-(M6 first screen) got Chris's verdict — no value add — and is parked.
+(M6 first screen) got the user's verdict — no value add — and is parked.
 Nomination format meanwhile evolved to checkboxes (other thread).
 
 **Mobile ↔ backend contract (how the repos work together):** the wire
@@ -425,7 +425,7 @@ Cross-repo changes get a heads-up line in each repo's plan STATUS.
 
 ## The value (why any of this)
 
-Capture is cheap; curation is expensive; Chris was the only curator — so
+Capture is cheap; curation is expensive; the user was the only curator — so
 every visibility system died. The system separates truth (his append-only
 writing) from derived views (agent-maintained), gating human review to
 structure changes only. Success metric, always: **time-to-context — "where
@@ -441,7 +441,7 @@ Details: [review-pass-v1.md](review-pass-v1.md).
 ### M2 — Live the loop ✅ (2026-07-07)
 Run passes on demand (`openaugi review`, phrase, or zzz). Answer
 nominations. Gate passed: the Dashboard answers "where did I leave off per
-area" with zero archaeology and Chris trusts the recaps.
+area" with zero archaeology and the user trusts the recaps.
 
 ### M3 — Converge surfaces on the file contracts ✅ (2026-07-07, spec below)
 Rescoped 2026-07-07 from "Obsidian plugin commands" to the full interface:
@@ -452,12 +452,12 @@ in STATUS above.
 
 ### M4 — Routing quality (IN PROGRESS since 2026-07-07 — usage-gated)
 Real `type/*` facets; `aaa:` honored in the wild; salience tuning from
-Chris's corrections; `description` frontmatter on all registry notes;
+The user's corrections; `description` frontmatter on all registry notes;
 rename handling exercised. **Gate:** two weeks of passes with <handful of
 manual corrections each.
 
 ### M5 — Lens system (MVP SHIPPED 2026-07-07 — [docs/reference/lenses.md](../reference/lenses.md))
-**Reframed 2026-07-07 (Chris): the lens is the product primitive** —
+**Reframed 2026-07-07 (the user): the lens is the product primitive** —
 saved questions applied to your life data; blocks/routing/surfaces are
 substrate and delivery. MVP shipped end-to-end as files + prose:
 - **Registry:** one markdown file per lens in `OpenAugi/AGENT/lenses/`
@@ -485,7 +485,7 @@ Remaining M5 work: habit/tornado (needs accumulated passes), spec engine
 only if prose visibly fails.
 
 ### M6 — Rich render surface (lifestream PARKED 2026-07-07 — verdict: no value add)
-Lifestream v1 shipped and Chris's verdict was it doesn't add anything
+Lifestream v1 shipped and the user's verdict was it doesn't add anything
 (plus a heat-strip UTC/local filter bug — not fixed, not worth it).
 Gate discipline: built cheap, looked, parked. The `render/` package +
 `openaugi render` CLI stay as infrastructure. Next candidate only when a
@@ -501,7 +501,7 @@ Dashboard per M3a), renders a review queue, upserts answers by anchor;
 "process the dashboard" executes them. Plus reachability (Tailscale).
 
 ### M8 — Data lake + curator
-Multi-source ingest (gdrive = Chris's voice; readwise/notebooks =
+Multi-source ingest (gdrive = the user's voice; readwise/notebooks =
 attributed third-party), `source/*` firewall, dedup/identity. Curator /
 self-improving taxonomy (needs accumulated accept/reject signal).
 
@@ -512,7 +512,7 @@ and zzz all reduce to three file contracts — no HTTP into openaugi, no
 coupling between repos beyond file formats.
 
 **1. Capture contract (write side).** Markdown blocks in the vault.
-Desktop: Chris types in daily notes (already true). Mobile: the Node
+Desktop: The user types in daily notes (already true). Mobile: the Node
 bridge (formerly "mock server" — it's the real mobile→vault bridge now)
 writes into **mobile's own daily file** (`Capture/<YYYY-MM-DD>.md`), one
 paragraph per block with a trailing Obsidian-native `^<block-id>` anchor,

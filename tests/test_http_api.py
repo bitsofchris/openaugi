@@ -256,7 +256,7 @@ class TestAuthParity:
 
         class FakeVerifier:
             def verify(self, token: str) -> dict | None:
-                return {"sub": "chris"} if token == "good-token" else None
+                return {"sub": "alice"} if token == "good-token" else None
 
         _register_auth_middleware(fresh, FakeVerifier())  # type: ignore[arg-type]
 

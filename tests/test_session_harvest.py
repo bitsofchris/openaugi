@@ -51,7 +51,7 @@ def _assistant(text: str, ts: str, **extra) -> dict:
 
 
 def _claude_file(tmp_path: Path, objs, name: str = "abc12345-session") -> Path:
-    proj = tmp_path / "projects" / "-Users-chris-repos-demo"
+    proj = tmp_path / "projects" / "-Users-someone-repos-demo"
     proj.mkdir(parents=True, exist_ok=True)
     path = proj / f"{name}.jsonl"
     _write_jsonl(path, objs)

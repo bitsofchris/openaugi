@@ -1,4 +1,4 @@
-"""Tests for the route re-derive contract (decided 2026-07-09, Chris's call).
+"""Tests for the route re-derive contract (decided 2026-07-09, the user's call).
 
 Routing is a decision the review pass makes, recorded as routed_to links in
 the DB — a projection, not truth. Editing a routed block changes its

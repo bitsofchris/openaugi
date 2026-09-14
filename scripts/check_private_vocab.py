@@ -10,8 +10,10 @@ this hook stops both at commit time:
    private-vocabulary.txt`), so the guard itself can never be the leak.
    One entry per line; blank lines and `#` comments are ignored; entries
    match case-insensitively as plain substrings, or as a regex when the
-   line starts with `re:`. Offending lines are printed with the match
-   masked, so the hook's own output is safe to paste anywhere.
+   line starts with `re:`; a line starting with `skip:` is a path glob the
+   check leaves alone (LICENSE, NOTICE — where the public author identity
+   belongs). Offending lines are printed with the match masked, so the
+   hook's own output is safe to paste anywhere.
 
 2. **Notebook outputs.** A `.ipynb` with cell outputs is how real vault
    text once reached the history. Any notebook with a non-empty `outputs`
@@ -30,6 +32,7 @@ Usage (pre-commit passes the file names; see .pre-commit-config.yaml):
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -57,15 +60,19 @@ def resolve_denylist(explicit: str | None) -> Path | None:
     return Path(vault) / DENYLIST_REL if vault else None
 
 
-def load_rules(path: Path) -> list[re.Pattern[str]]:
-    rules = []
+def load_rules(path: Path) -> tuple[list[re.Pattern[str]], list[str]]:
+    """The list as (word patterns, path globs to skip)."""
+    rules, skips = [], []
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
+        if line.startswith("skip:"):
+            skips.append(line[5:].strip())
+            continue
         pattern = line[3:].strip() if line.startswith("re:") else re.escape(line)
         rules.append(re.compile(pattern, re.IGNORECASE))
-    return rules
+    return rules, skips
 
 
 def notebook_has_outputs(text: str) -> bool:
@@ -107,8 +114,12 @@ def tracked_files(root: Path) -> list[Path]:
     return [root / p for p in out.split("\0") if p]
 
 
-def skipped(path: Path) -> bool:
-    return any(part in path.as_posix() for part in SKIP_PARTS)
+def skipped(path: Path, globs: list[str] = ()) -> bool:
+    posix = path.as_posix()
+    if any(part in posix for part in SKIP_PARTS):
+        return True
+    rel = posix.removeprefix(Path.cwd().as_posix() + "/")
+    return any(fnmatch.fnmatch(rel, g) for g in globs)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -122,12 +133,12 @@ def main(argv: list[str] | None = None) -> int:
 
     root = Path.cwd()
     files = tracked_files(root) if args.all else [Path(f) for f in args.files]
-    files = [f for f in files if not skipped(f)]
 
     denylist = resolve_denylist(args.denylist)
     rules: list[re.Pattern[str]] = []
+    skips: list[str] = []
     if denylist and denylist.exists():
-        rules = load_rules(denylist)
+        rules, skips = load_rules(denylist)
     else:
         where = denylist or f"${ENV_VAR} / <vault>/{DENYLIST_REL}"
         print(
@@ -135,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
+    files = [f for f in files if not skipped(f, skips)]
     offenders = [line for f in files for line in scan_file(f, rules)]
     if offenders:
         print("Private content refused. Vocabulary lives in the vault, not the repo:")

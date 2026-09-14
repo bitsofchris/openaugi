@@ -12,7 +12,7 @@ description: Post-run-2 fixes merged into four workstreams — unified registry 
 changes SHIPPED: unified registry rule + adopt-before-create + reference
 handling reconciled across template, reference doc, and the live vault
 prompt (v1 plan's registry section marked superseded). Silver semantics
-clarified with Chris: view-on-touch, not on-demand — silver notes are
+clarified with the user: view-on-touch, not on-demand — silver notes are
 permanent visible sources of truth via the same transclusion pattern as
 AMOCs. WS3.2 (reference grouping), WS3.3 (`apply_routing`), and WS4
 (weekly-reflection nomination triage, in the skills repo) ALSO SHIPPED same
@@ -50,10 +50,10 @@ canonical `context_block:document`).
 
 Code and schema never learn the words bronze/silver/gold. Tiers are
 capability bundles expressed through existing primitives. The loop they
-serve: Chris captures → the pass puts each block in the right curated home —
+serve: The user captures → the pass puts each block in the right curated home —
 either the area/project log (gold) or the specific concept note (silver).
 
-- **Bronze** = data blocks. Chris's capture, raw thinking, reflections.
+- **Bronze** = data blocks. The user's capture, raw thinking, reflections.
   Append-only truth. They route; they are never routing targets.
 - **Reference** (not "imports") = external material — Snipd, Readwise, etc.
   Routed at **document granularity** (one artifact, one routing decision;
@@ -63,7 +63,7 @@ either the area/project log (gold) or the specific concept note (silver).
   A canonical note that **collects**: container tag (`#note-type/moc`) +
   filled `description` ⇒ registered inference target. Once created, the
   silver note is the **permanent, visible source of truth** for that idea:
-  Chris sees, refers to, and extends it; routing there again is the default
+  The user sees, refers to, and extends it; routing there again is the default
   ("I've said this before" → merge here). Mechanics are the AMOC pattern —
   human-owned note embeds `![[OpenAugi/Views/<concept>]]`; the view carries
   the current-understanding recap + links to all routed blocks, and each
@@ -122,14 +122,14 @@ gravity signal.
       not just this pass's routed blocks — in the MOC recap spec.
 - [x] Dashboard: per-silver-note activity lines; **age** on every pending
       nomination (template + live prompt). 2026-07-11.
-- [ ] Next pass: draft all 9 registry descriptions as paste-lines for Chris
+- [ ] Next pass: draft all 9 registry descriptions as paste-lines for the user
       (answers `^nom-describe-registry-notes`, riding since 7/6).
 - [ ] Register Dream Journal + mindfulness by tag + description (kills both
       promote nominations).
 
 ## WS2 — Canonicalize verb: adopt-before-create (prompt changes, no code)
 
-Hard rule in the promotion step, generalizing Chris's positioning answer
+Hard rule in the promotion step, generalizing the user's positioning answer
 ("I should already have a note for this — roll these into it"):
 
 1. **Search first** — title, semantic, and tag search for an existing note
@@ -177,12 +177,12 @@ Order matters; each is a small, separately committed change with tests.
 ## Sequencing
 
 1. **Before pass #3:** WS3.1 (one-liner), WS1 registry-rule reconcile.
-2. **Pass #3 itself:** drafts the 9 descriptions; Chris pastes → registry
+2. **Pass #3 itself:** drafts the 9 descriptions; the user pastes → registry
    fully described; register Dream Journal + mindfulness.
 3. **Then:** WS3.2 + WS3.3, WS2 prompt text, WS4.
 4. WS3.4 only if still needed.
 
-## Non-goals (explicitly parked, per Chris)
+## Non-goals (explicitly parked, per the user)
 
 - No tier fields, enums, or bronze/silver/gold vocabulary in code or schema.
 - No "which note types are excluded from search" mechanism yet — everything

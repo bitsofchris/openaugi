@@ -28,8 +28,10 @@ python3 scripts/check_private_vocab.py --all
 through the openaugi config's `[vault] default_path` (or `--denylist PATH`,
 or `$OPENAUGI_PRIVATE_VOCAB`). One entry per line, matched
 case-insensitively as a plain substring; a line starting with `re:` is a
-regex; blank lines and `#` comments are ignored. It is the user's file: add
-a word the moment you coin one for a personal schema.
+regex; a line starting with `skip:` is a path glob the check leaves alone
+(`skip:NOTICE`, where the copyright holder is named on purpose); blank lines
+and `#` comments are ignored. It is the user's file: add a word the moment
+you coin one for a personal schema, a family name, a place.
 
 **The checks.** For every file pre-commit hands it (the staged files at
 commit time, the message file at commit-msg time, the changed files at

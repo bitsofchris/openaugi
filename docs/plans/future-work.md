@@ -110,19 +110,19 @@ ChatGPT, Readwise, Research output, and a LlamaIndex bridge are planned for Phas
 
 ---
 
-## Queued tasks (2026-07-07, Chris's call)
+## Queued tasks (2026-07-07, the user's call)
 
 - **Tailscale reachability** — mobile capture away from home wifi; per the
   M3 connectivity note it's an env-var change on the bridge, not a build.
   Do when away-from-home capture starts mattering.
-- **ChatGPT history ingest** — two steps: (1) Chris re-exports his ChatGPT
+- **ChatGPT history ingest** — two steps: (1) the user re-exports his ChatGPT
   history (the old copy at `~/Downloads/chatgpt-history` is gone); (2) we
   convert it to markdown files with `source/ai-chat` attribution and let
   the vault adapter ingest them — a one-time converter script, NOT a live
   API adapter (supersedes the phase3-adapters API-adapter approach; the
   vault filesystem is the API, per M3).
 
-## Parked: lineage enhancements (2026-07-09, Chris's call — value unproven)
+## Parked: lineage enhancements (2026-07-09, the user's call — value unproven)
 
 Three designs sketched after idea-lineage shipped, parked before building:
 none has usage evidence, and the lens artifact hasn't been lived with yet.
@@ -130,7 +130,7 @@ Each has an explicit revive condition — build NONE of them before it fires.
 
 - **Era drift (delta vectors)** — per-era match centroid + cosine drift
   between eras → mechanically answers "advancing vs looping." Revive:
-  after Chris has read 2–3 lineage artifacts AND the agent's prose
+  after the user has read 2–3 lineage artifacts AND the agent's prose
   judgment of loop-vs-advance has actually been wrong or unconvincing.
 - **Branches (sub-clustering the match set)** — split a topic's matches
   into named sub-threads for a branching timeline. Revive: when mobile
@@ -144,7 +144,7 @@ Each has an explicit revive condition — build NONE of them before it fires.
 ## Found in the wild (2026-07-08, first agent-run review pass) — BOTH FIXED 2026-07-09
 
 - **`routed_to` links don't survive block edits.** Resolved 2026-07-09 as a
-  **design decision, not a bug** (Chris's call — the re-derive contract):
+  **design decision, not a bug** (the user's call — the re-derive contract):
   routing is projection state; an edited block deliberately drops its
   routes and re-enters the review queue as a new block for the next pass to
   re-decide; `aaa:` lines in text carry durable human intent. A
