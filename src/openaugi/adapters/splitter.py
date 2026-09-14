@@ -34,6 +34,8 @@ the `zzz:` convention.
    anchor becomes its own anchor-less segment.
 5. For each sub-section:
    - Extract `zzz[:] body` lines → `zzz_instructions` list, strip from content.
+     Lines inside fenced code blocks are documentation, not directives,
+     and are left alone.
    - Drop if the remaining content is empty or structurally meaningless
      (horizontal rules, empty checkboxes, URL-only lines, dataview blocks).
 6. A YYYY-MM-DD prefix on a heading sets the date for itself and subsequent
@@ -495,10 +497,20 @@ def _extract_links(text: str) -> list[str]:
 
 
 def _extract_zzz_instructions(text: str) -> tuple[str, list[str]]:
-    """Extract `zzz` lines. Returns (clean_content, instructions)."""
+    """Extract `zzz` lines. Returns (clean_content, instructions).
+
+    A `zzz:` line inside a fenced code block is documentation, not a
+    directive. The Command Deck lists every standing command that way so
+    the line can be copied into a note, and regenerating the deck would
+    otherwise dispatch its own examples as tasks. Fenced lines stay in the
+    content and are never collected.
+    """
     instructions: list[str] = []
+    fence_ranges = _code_fence_ranges(text)
 
     def _capture(match: re.Match[str]) -> str:
+        if any(start <= match.start() < end for start, end in fence_ranges):
+            return match.group(0)
         body = match.group(1).strip()
         if body:
             instructions.append(body)

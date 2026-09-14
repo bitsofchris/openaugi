@@ -122,6 +122,43 @@ class TestSplitText:
         assert len(segs) == 1
         assert segs[0].section_heading == "Real"
 
+    def test_fenced_zzz_is_documentation_not_a_directive(self):
+        """A `zzz:` inside a code fence is a command being *shown*, not given."""
+        text = "# H\nhow to dispatch:\n```\nzzz: run the review pass\n```\nthat is all"
+        segs = split_text(text)
+        assert len(segs) == 1
+        assert segs[0].zzz_instructions == []
+        # The line stays put — it is content the reader copies from.
+        assert "zzz: run the review pass" in segs[0].clean_content
+
+    def test_unfenced_zzz_still_fires_next_to_a_fenced_one(self):
+        text = "# H\n```\nzzz: apply lens <name>\n```\nzzz: apply lens echoes\n"
+        segs = split_text(text)
+        assert segs[0].zzz_instructions == ["apply lens echoes"]
+        assert "zzz: apply lens <name>" in segs[0].clean_content
+
+    def test_command_deck_shape_dispatches_nothing(self):
+        """Regression: 2026-09-13 — regenerating the Command Deck dispatched
+        its own button list three times. Six documented commands, no task.
+        """
+        text = (
+            "# Standing commands\n\n"
+            "```\nzzz: run the review pass\n```\n"
+            "Full loop: route new blocks then refresh recaps.\n\n"
+            "```\nzzz: process the dashboard\n```\n"
+            "Executes your inline answers.\n\n"
+            "```\nzzz: apply lens system-janitor\n```\n"
+            "Checks the system for drift.\n"
+        )
+        segs = split_text(text)
+        assert [z for s in segs for z in s.zzz_instructions] == []
+
+    def test_unterminated_fence_swallows_trailing_zzz(self):
+        """An unclosed fence runs to end of text, matching heading detection."""
+        text = "# H\nreal thought\n```\nzzz: never dispatched\n"
+        segs = split_text(text)
+        assert segs[0].zzz_instructions == []
+
 
 class TestAnchorSplitting:
     """A line that is only an Obsidian block anchor (`^id`) closes the current

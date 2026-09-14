@@ -102,6 +102,8 @@ Three tokens, written anywhere in a note:
 
 - `qqq` — block delimiter (splits a note into blocks at ingest)
 - `zzz: <instruction>` — agent dispatch: spawn a task (see [task-dispatch.md](task-dispatch.md))
+  A `zzz:` inside a fenced code block is documentation, not a directive —
+  notes that *list* the standing commands never dispatch them.
 - `aaa: <instruction>` — routing instruction to the review pass:
   "aaa: route to OpenAugi Mobile", "aaa: find my note on X and link this".
   **Not processed at ingest** — unlike `zzz:`, no watcher acts on it. It

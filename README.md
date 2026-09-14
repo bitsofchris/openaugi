@@ -71,7 +71,7 @@ openaugi up      ← ingest + file watcher + zzz dispatch + task agent   (one pe
 openaugi serve   ← MCP tools for your client                          (one per client)
 ```
 
-**ZZZ dispatch:** Write `zzz: <instruction>` anywhere in your notes — any capitalization works (`zzz`, `ZZZ`, `Zzz`). The file watcher detects changes, ingests the block, and writes a task file to `OpenAugi/Tasks/`. The task watcher picks it up and launches a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>`. The agent's behavior is governed by a skill file you edit in Obsidian. See [Getting Started](docs/reference/GETTING_STARTED.md).
+**ZZZ dispatch:** Write `zzz: <instruction>` anywhere in your notes — any capitalization works (`zzz`, `ZZZ`, `Zzz`). A `zzz:` line inside a fenced code block is documentation, not a directive — that is how you write a command down without firing it. The file watcher detects changes, ingests the block, and writes a task file to `OpenAugi/Tasks/`. The task watcher picks it up and launches a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>`. The agent's behavior is governed by a skill file you edit in Obsidian. See [Getting Started](docs/reference/GETTING_STARTED.md).
 
 **Review pass (write-back):** The loop that keeps the knowledge base maintained. On trigger ("run the review pass"), an agent routes new blocks to your area/project notes as graph links, refreshes each container's recap, and proposes structure changes (new notes, merges, registrations) for your approval. Agents never edit your notes; views are regenerable caches. See [Review Pass](docs/reference/review-pass.md).
 
