@@ -6,7 +6,10 @@
 # Manual run: scripts/write-board-task.sh
 set -euo pipefail
 
-VAULT="${OPENAUGI_VAULT:-$(python3 -c 'from openaugi.config import load_config, resolve_vault_path; print(resolve_vault_path(None, load_config()) or "")' 2>/dev/null)}"
+# Vault: $OPENAUGI_VAULT (launchd sets it), else the openaugi config via the repo venv.
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+PY="$REPO/.venv/bin/python"; [ -x "$PY" ] || PY=python3
+VAULT="${OPENAUGI_VAULT:-$("$PY" -c 'from openaugi.config import load_config, resolve_vault_path; print(resolve_vault_path(None, load_config()) or "")' 2>/dev/null)}"
 [ -n "$VAULT" ] || { echo "no vault: set OPENAUGI_VAULT or [vault] default_path in the openaugi config" >&2; exit 1; }
 DAY="$(date +%Y-%m-%d)"
 TASKS="$VAULT/OpenAugi/Tasks"
