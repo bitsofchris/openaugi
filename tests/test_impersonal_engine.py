@@ -23,7 +23,7 @@ from openaugi import __file__ as package_file
 SRC = Path(package_file).parent
 
 #: The pronouns that stood in for one person. Names are the privacy guard's job.
-_PERSONAL_RE = re.compile(r"(he|his|him)", re.IGNORECASE)
+_PERSONAL_RE = re.compile(r"\b(he|his|him)\b", re.IGNORECASE)
 
 
 def _shipped_files() -> list[Path]:
