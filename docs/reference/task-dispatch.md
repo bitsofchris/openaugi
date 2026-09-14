@@ -58,6 +58,26 @@ you write `zzz: research deep learning` in a note
   → marks task file status: done
 ```
 
+## One instruction, one task
+
+A block's id is the hash of its raw text, so editing the paragraph around a
+`zzz` line deletes one block and inserts another — with the instruction
+unchanged. Three mechanisms keep that from becoming three agents:
+
+| Mechanism | Covers |
+|---|---|
+| **Settle window** (`DEFAULT_ZZZ_SETTLE`, 120s) | A half-typed instruction. The draft never becomes a task. |
+| **Supersession** | An instruction edited *after* it dispatched. The old task is retired and its tmux session killed. |
+| **Instruction keys** | The same instruction re-hashed. Every ledger row carries a hash of `source_path` + instruction text, so the predecessor is found by lookup — across cycles, across restarts, across a whole-file re-read. |
+
+Keys are scoped to the note, so the same standing command in two different
+notes is two different asks. A *changed* instruction is a real edit and
+still dispatches.
+
+Rows written before keys existed (pre-2026-09-11) carry neither the key nor
+the instruction list; they are matched once on source path plus title, then
+upgraded.
+
 ## The single-source contract
 
 The format of a task file is the **one contract** between the writer (`pipeline/dispatch.py`, or you manually, or a mobile capture) and the reader (the task watcher). It lives in exactly one place:

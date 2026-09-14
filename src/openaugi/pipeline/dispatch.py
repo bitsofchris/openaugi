@@ -44,6 +44,15 @@ Two mechanisms fix it, and both are needed because they cover different gaps:
    (On 2026-09-09 one research `zzz` dispatched three times this way.) A
    *changed* instruction is a real edit and still supersedes.
 
+4. **Instruction keys.** Carry-forward needs to *pair* a predecessor with a
+   successor, which only works when both show up in one cycle. Every row also
+   carries `instruction_key` — a hash of the source path and the instruction
+   text — so the predecessor can be found by lookup when pairing cannot see
+   it: the daemon restarted mid-edit, the cycle reported no removals, the file
+   was re-read from scratch. Same key, live row, already dispatched → inherit
+   it. This is what makes the guarantee hold across restarts rather than only
+   within a cycle.
+
 The ledger lives in the `records` table under the `zzz_queue` collection
 (docs/reference/records.md) — workflow state, droppable, pruned once settled.
 It also makes dispatch idempotent across restarts and re-ingests: a block id
@@ -52,6 +61,7 @@ that has been dispatched once never dispatches again.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import subprocess
@@ -91,6 +101,36 @@ ANCHOR_REF_RE = re.compile(r"\[\[(\d{4}-\d{2}-\d{2})#\^(augi-[A-Za-z0-9]+)\]\]")
 def _instructions_of(block: Block) -> list[str]:
     """The block's zzz instructions, normalised for comparison."""
     return [str(z).strip() for z in block.metadata.get("zzz_instructions", [])]
+
+
+def _instruction_key(source_path: str, instructions: list[str]) -> str:
+    """Stable identity for "this instruction, in this note".
+
+    A block id is the hash of its raw text, so editing the prose around a
+    `zzz` line mints a new id for an instruction that never changed. This key
+    does not move when that happens. Matching on it is a lookup rather than a
+    guess, so it survives the cases pairing cannot see: a restart between the
+    edit and the re-ingest, a cycle that reports no removals, a file re-read
+    from scratch.
+    """
+    payload = "\n".join([source_path, *instructions])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _is_live(row: dict) -> bool:
+    return row.get("status") in {QUEUED, DISPATCHED}
+
+
+def _live_twin(ledger: dict[str, dict], key: str, exclude_id: str) -> dict | None:
+    """A live row for the same instruction under a different block id."""
+    twins = [
+        row
+        for row in ledger.values()
+        if row.get("id") != exclude_id and _is_live(row) and row.get("instruction_key") == key
+    ]
+    # Newest wins: if a chain of edits somehow left two live rows, the most
+    # recent one owns the task file.
+    return max(twins, key=lambda r: r.get("updated_at") or "", default=None)
 
 
 def _slugify(text: str, max_len: int = 50) -> str:
@@ -386,6 +426,35 @@ def record_zzz_changes(
         for block in news:
             if block.id in ledger:
                 continue  # already seen — never re-dispatch the same block
+            instructions = _instructions_of(block)
+            key = _instruction_key(source_path, instructions)
+
+            # The predecessor is usually in `removed_blocks` and was handled
+            # above. When it is not — a restart landed between the edit and
+            # the re-ingest, or the file was re-read whole — the key still
+            # finds it, and this is the only chance to notice before a second
+            # task file exists.
+            twin = _live_twin(ledger, key, block.id)
+            if twin is not None and twin["status"] == DISPATCHED:
+                _adopt(store, ledger, twin, block, stamp, reason="re-hashed")
+                continue
+            if twin is not None:
+                # Still settling. Retire the stale row and let this one start
+                # its own clock — an instruction being retyped should reset
+                # the settle window, not race its own draft to a task file.
+                store.update_record(
+                    ZZZ_QUEUE_COLLECTION,
+                    twin["id"],
+                    {"status": SUPERSEDED, "reason": "re-hashed", "superseded_by": block.id},
+                    stamp,
+                )
+                ledger[twin["id"]] = {**twin, "status": SUPERSEDED}
+                logger.info(
+                    "zzz %s re-hashed as %s before settling — queue row moved",
+                    twin["id"][:12],
+                    block.id[:12],
+                )
+
             store.write_record(
                 ZZZ_QUEUE_COLLECTION,
                 block.id,
@@ -393,11 +462,18 @@ def record_zzz_changes(
                     "status": QUEUED,
                     "source_path": source_path,
                     "title": _derive_title(block),
-                    "instructions": _instructions_of(block),
+                    "instructions": instructions,
+                    "instruction_key": key,
                     "task_content": build_task_file(block, vault_path=vault),
                 },
                 stamp,
             )
+            ledger[block.id] = {
+                "id": block.id,
+                "status": QUEUED,
+                "source_path": source_path,
+                "instruction_key": key,
+            }
             logger.info(
                 "zzz %s queued from %s (settling)", block.id[:12], source_path or "unknown"
             )
@@ -428,27 +504,54 @@ def _carry_forward(
     row = ledger.get(old_id, {})
     if row.get("status") != DISPATCHED:
         return False
-    previous = row.get("instructions")
-    if not isinstance(previous, list) or [str(z) for z in previous] != _instructions_of(new):
-        # Either the instruction really changed, or this row predates the
-        # `instructions` field and we cannot tell — supersede, as before.
+    if not _same_instruction(row, new):
         return False
+    _adopt(store, ledger, row, new, stamp, reason="text-edited")
+    return True
 
+
+def _same_instruction(row: dict, new: Block) -> bool:
+    """Does this ledger row already stand for the new block's instruction?"""
+    source_path = new.metadata.get("source_path", "")
+    key = row.get("instruction_key")
+    if key is not None:
+        return key == _instruction_key(source_path, _instructions_of(new))
+    # Rows written before instruction keys existed carry neither the key nor
+    # the instruction list. They can still be recognised by the pair that has
+    # always been stored — the note they came from and the title derived from
+    # the instruction itself. Narrow by construction: it only applies to rows
+    # that predate the key, and each one upgrades on first match.
+    return row.get("source_path") == source_path and row.get("title") == _derive_title(new)
+
+
+def _adopt(
+    store: SQLiteStore,
+    ledger: dict[str, dict],
+    row: dict,
+    new: Block,
+    stamp: str,
+    reason: str,
+) -> None:
+    """Move a dispatched row onto the block that now carries its instruction."""
+    old_id = row["id"]
+    source_path = new.metadata.get("source_path", "")
     store.update_record(
         ZZZ_QUEUE_COLLECTION,
         old_id,
-        {"status": SUPERSEDED, "reason": "text-edited", "superseded_by": new.id},
+        {"status": SUPERSEDED, "reason": reason, "superseded_by": new.id},
         stamp,
     )
+    ledger[old_id] = {**row, "status": SUPERSEDED, "reason": reason, "superseded_by": new.id}
     carried = {
         **row,
         "status": DISPATCHED,
         "carried_from": old_id,
         "instructions": _instructions_of(new),
+        "instruction_key": _instruction_key(source_path, _instructions_of(new)),
+        "source_path": source_path,
     }
-    carried.pop("id", None)
-    carried.pop("created_at", None)
-    carried.pop("updated_at", None)
+    for field in ("id", "created_at", "updated_at"):
+        carried.pop(field, None)
     store.write_record(ZZZ_QUEUE_COLLECTION, new.id, carried, stamp)
     ledger[new.id] = {"id": new.id, **carried}
     logger.info(
@@ -456,7 +559,6 @@ def _carry_forward(
         old_id[:12],
         new.id[:12],
     )
-    return True
 
 
 def _supersede(

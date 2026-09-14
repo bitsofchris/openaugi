@@ -532,3 +532,113 @@ def test_two_tasks_in_one_second_do_not_overwrite_each_other(tmp_path: Path, sto
     assert len(set(written)) == 2
     assert len(_tasks(tmp_path)) == 2
     assert _ledger(store, "aaa1")["task_file"] != _ledger(store, "aaa2")["task_file"]
+
+
+# ── Instruction keys: idempotence that survives a restart ──────────────────
+
+
+def test_rehash_without_a_removal_still_does_not_dispatch_twice(
+    tmp_path: Path, store: SQLiteStore
+):
+    """The gap carry-forward could not cover.
+
+    Carry-forward pairs a predecessor with a successor out of the removals
+    `run_layer0` reported *this cycle*. Restart the daemon between the edit
+    and the re-ingest and there are no removals to pair with — the successor
+    looks brand new. The instruction key finds the predecessor anyway.
+    """
+    zzz = ["run the review pass"]
+    first = _make_block("aaa1", "the deck, version one", zzz=zzz)
+    store.insert_blocks([first])
+    record_zzz_changes([first], [], store, tmp_path)
+    (task,) = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+
+    # Same instruction, rewritten prose, and *no* removed_blocks.
+    second = _make_block("aaa2", "the deck, version two", zzz=zzz)
+    store.insert_blocks([second])
+    record_zzz_changes([second], [], store, tmp_path)
+
+    assert drain_zzz_queue(store, tmp_path, settle_seconds=0) == []
+    assert _tasks(tmp_path) == [task]
+    assert _ledger(store, "aaa2")["status"] == DISPATCHED
+    assert _ledger(store, "aaa2")["carried_from"] == "aaa1"
+    assert _ledger(store, "aaa1")["reason"] == "re-hashed"
+
+
+def test_rehash_of_a_still_settling_block_leaves_one_queue_row(tmp_path: Path, store: SQLiteStore):
+    """A draft re-hashed with no removal must not race itself to two tasks."""
+    zzz = ["look into this"]
+    first = _make_block("aaa1", "draft", zzz=zzz)
+    store.insert_blocks([first])
+    record_zzz_changes([first], [], store, tmp_path)
+
+    second = _make_block("aaa2", "draft, expanded", zzz=zzz)
+    store.insert_blocks([second])
+    record_zzz_changes([second], [], store, tmp_path)
+
+    assert _ledger(store, "aaa1")["status"] == SUPERSEDED
+    assert _ledger(store, "aaa2")["status"] == QUEUED
+    assert len(drain_zzz_queue(store, tmp_path, settle_seconds=0)) == 1
+
+
+def test_a_legacy_row_is_recognised_and_upgraded(tmp_path: Path, store: SQLiteStore):
+    """Rows written before keys existed carry neither key nor instructions.
+
+    All 134 rows in the live ledger looked like this, which is why
+    carry-forward never fired once in production. They are matched on the
+    pair that was always stored — source path and title — and upgraded.
+    """
+    zzz = ["formulate the preliminary research from this angle"]
+    first = _make_block("aaa1", "black swan prep", zzz=zzz)
+    store.insert_blocks([first])
+    record_zzz_changes([first], [], store, tmp_path)
+    (task,) = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+
+    # Strip the modern fields, leaving the shape a pre-2026-09-11 row had.
+    row = _ledger(store, "aaa1")
+    legacy = {
+        k: v
+        for k, v in row.items()
+        if k not in {"id", "created_at", "updated_at", "instructions", "instruction_key"}
+    }
+    store.write_record(ZZZ_QUEUE_COLLECTION, "aaa1", legacy, "2026-09-04T09:00:00")
+    assert "instruction_key" not in _ledger(store, "aaa1")
+
+    second = _make_block("aaa2", "black swan prep, expanded", zzz=zzz)
+    store.insert_blocks([second])
+    record_zzz_changes([second], [first], store, tmp_path)
+
+    assert drain_zzz_queue(store, tmp_path, settle_seconds=0) == []
+    assert _tasks(tmp_path) == [task]
+    # Upgraded on first match — the next edit matches on the key, not the title.
+    assert _ledger(store, "aaa2")["instruction_key"]
+
+
+def test_two_different_instructions_in_one_note_keep_their_own_tasks(
+    tmp_path: Path, store: SQLiteStore
+):
+    """The key must not collapse genuinely separate asks in the same note."""
+    one = _make_block("aaa1", "first", zzz=["research the thing"])
+    two = _make_block("aaa2", "second", zzz=["draft the post"])
+    store.insert_blocks([one, two])
+    record_zzz_changes([one, two], [], store, tmp_path)
+
+    assert len(drain_zzz_queue(store, tmp_path, settle_seconds=0)) == 2
+
+
+def test_the_same_instruction_in_a_different_note_is_its_own_task(
+    tmp_path: Path, store: SQLiteStore
+):
+    """The key is scoped to the note — the same words elsewhere are a new ask."""
+    zzz = ["run the review pass"]
+    monday = _make_block("aaa1", "monday", source_path="2026-09-14.md", zzz=zzz)
+    store.insert_blocks([monday])
+    record_zzz_changes([monday], [], store, tmp_path)
+    drain_zzz_queue(store, tmp_path, settle_seconds=0)
+
+    tuesday = _make_block("aaa2", "tuesday", source_path="2026-09-15.md", zzz=zzz)
+    store.insert_blocks([tuesday])
+    record_zzz_changes([tuesday], [], store, tmp_path)
+
+    assert len(drain_zzz_queue(store, tmp_path, settle_seconds=0)) == 1
+    assert len(_tasks(tmp_path)) == 2
