@@ -14,6 +14,9 @@ target: >-
 
 ## Run
 
+at: 06:30
+on: Sun
+
 The window is the seven days ending today. Read [[Slowly Changing Context]]
 first, then both boards, then the prior 2–3 reflections. Follow **Draft**
 below exactly: the scheduled brief carries no format of its own, and neither

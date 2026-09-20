@@ -28,6 +28,8 @@ stale, the board is broken.
 
 ## Run
 
+at: 06:00
+
 What a scheduled run needs that a person asking for one would have said out
 loud. Read `OpenAugi/Board/.board-state.json` before building anything — it is
 step 1 of the Process below and it is the one file a cold run cannot infer.
