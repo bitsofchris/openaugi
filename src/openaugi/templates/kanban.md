@@ -59,7 +59,7 @@ One column per AMOC in the user's taxonomy, plus Triage (Board only), a
 Creative sub-list (Backlog only), and Household / Other. The Board caps each
 AMOC column at 3.
 
-A Board card in OpenAugi or Research Engineer is a PMOC. The Board is the record of what is active; `#status/active` is a tag Chris sets for the Dashboard's query and is not kept in sync with the Board — a card without the tag is not drift. Backlog sub-lists are allowed where an area has real sub-kinds, a few, never on the Board. A new column only when they name it.
+A Board card in OpenAugi or Research Engineer is a PMOC. The Board is the record of what is active; `#status/active` is a tag the user sets for the Dashboard's query and is not kept in sync with the Board — a card without the tag is not drift. Backlog sub-lists are allowed where an area has real sub-kinds, a few, never on the Board. A new column only when they name it.
 
 ## Card rules
 
