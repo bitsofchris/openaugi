@@ -45,6 +45,7 @@ stale_after_minutes: 10
 lenses:
   - name: currency-board
     trigger: every 1d
+    anchor: "06:00"                      # from the lens's `## Run`; empty if none
     period_seconds: 86400
     last_run: 2026-09-20T10:00:00+00:00
     next_due: 2026-09-21T10:00:00+00:00
@@ -75,9 +76,9 @@ watcher:  running (pid 12345)
 code:     3c8d900a1b2c (current)
 tick:     2026-09-20T12:55+00:00 (2m ago) ok
 
-lens                 trigger      last run                   next due
-currency-board       every 1d     2026-09-20T10:00+00:00     2026-09-21T10:00+00:00
-substack-batch       every 7d     2026-09-18T10:30+00:00     2026-09-25T10:30+00:00
+lens                 trigger      anchor     last run                   next due
+currency-board       every 1d     06:00      2026-09-20T06:00-04:00     2026-09-21T06:00-04:00
+substack-batch       every 7d     06:30 Fri  2026-09-18T06:30-04:00     2026-09-25T06:30-04:00
 ```
 
 | Line | Source |

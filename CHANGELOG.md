@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**A cadence can name a time.** `at: HH:MM` and `on: <weekday>` in a lens's
+`## Run` section anchor `every <period>` to the local clock — `at: 06:00`
+fires at 06:00 on both sides of a DST change, `on: Fri` with `every 7d`
+stays on Friday after a weekend asleep (one catch-up run, then the next
+Friday). The zone is `[tasks] timezone` in config, else the system's. The
+lens contract and `trigger:` are unchanged; a malformed anchor is logged and
+the plain interval is used. Due lenses are written earliest anchor first, so
+a 05:50 lens lands before the 06:00 board that embeds it. The heartbeat view
+and `openaugi doctor` show each lens's anchor and its next local due.
+
 **A dead watcher is visible.** Since the launchd cutover one process runs
 everything, and nothing said when it stopped. The drain tick now writes
 `OpenAugi/Views/View - System Heartbeat.md` every five minutes — `last_tick`,

@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -39,7 +39,7 @@ import yaml
 
 from openaugi.adapters.vault import HEARTBEAT_VIEW
 from openaugi.pipeline.context_pack import _FRONTMATTER_RE
-from openaugi.pipeline.schedule import lens_status
+from openaugi.pipeline.schedule import describe_anchor, lens_status
 from openaugi.service_version import SERVICE_STATE_COLLECTION, UP_RECORD_ID, head_sha
 
 if TYPE_CHECKING:
@@ -155,6 +155,8 @@ def render_heartbeat(
         lines += [
             f"  - name: {row['name']}",
             f"    trigger: {row['trigger']}",
+            # Quoted: bare `06:00` is a sexagesimal integer to a YAML 1.1 reader.
+            f'    anchor: "{describe_anchor(row.get("anchor"))}"',
             f"    period_seconds: {int(row['period'].total_seconds())}",
             f"    last_run: {_stamp(row['last_run'])}",
             f"    next_due: {_stamp(row['next_due'])}",
@@ -171,14 +173,14 @@ def render_heartbeat(
         f"{stale_minutes} minutes old, `openaugi up` is not running: "
         "`launchctl kickstart -k gui/$(id -u)/com.openaugi.up`.",
         "",
-        "| Lens | Trigger | Last run | Next due | |",
-        "|---|---|---|---|---|",
+        "| Lens | Trigger | Anchor | Last run | Next due | |",
+        "|---|---|---|---|---|---|",
     ]
     for row in lenses:
         flag = "**overdue**" if row["overdue"] else ""
         lines.append(
-            f"| {row['name']} | `{row['trigger']}` | {_stamp(row['last_run']) or '—'} "
-            f"| {_stamp(row['next_due'])} | {flag} |"
+            f"| {row['name']} | `{row['trigger']}` | {describe_anchor(row.get('anchor')) or '—'} "
+            f"| {_stamp(row['last_run']) or '—'} | {_stamp(row['next_due'])} | {flag} |"
         )
     lines.append("")
     return "\n".join(lines)
@@ -190,11 +192,14 @@ def write_heartbeat(
     now: datetime | None = None,
     pid: int | None = None,
     force: bool = False,
+    tz: tzinfo | None = None,
 ) -> Path | None:
     """Write the heartbeat view if the last one is old enough. None if throttled.
 
     The throttle reads the previous file rather than remembering the last
-    write, so it holds across a restart and costs nothing to test.
+    write, so it holds across a restart and costs nothing to test. `tz` is
+    the schedule's zone, for the anchored lenses' next-due; None means the
+    system zone.
     """
     when = now or datetime.now(UTC)
     if not force:
@@ -206,7 +211,7 @@ def write_heartbeat(
     path = heartbeat_path(vault)
     path.parent.mkdir(parents=True, exist_ok=True)
     text = render_heartbeat(
-        when, running_commit(store), pid or os.getpid(), lens_status(vault, store, when)
+        when, running_commit(store), pid or os.getpid(), lens_status(vault, store, when, tz)
     )
     path.write_text(text, encoding="utf-8")
     logger.debug("Heartbeat written: %s", path.name)

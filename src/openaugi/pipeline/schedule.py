@@ -32,6 +32,17 @@ would re-anchor the cadence and the drift only ever goes forward: a 06:00 board
 becomes a 06:04 board, then 06:11. A three-day sleep produces one catch-up run,
 not three, and lands the lens back on its own grid.
 
+A bare `every <period>` is a UTC interval: it cannot say "06:00" or
+"Friday", and across a DST change 10:00Z stops meaning 06:00. So the `## Run`
+section may carry an **anchor** — `at: HH:MM` (local wall clock, honored
+across DST) and `on: <weekday>` — and a lens with one is due when its cadence
+has elapsed *and* local time is past today's anchor *and* its last run was
+before today's anchor. The timezone comes from `[tasks] timezone` in config,
+defaulting to the system zone. The anchor lives in `## Run` rather than in
+`trigger:` so the lens contract and every existing lens file stay untouched.
+A malformed `at:` or `on:` is logged and the lens falls back to the plain
+interval — never guessed at, same as a malformed trigger.
+
 Deduplication is deliberately two-layered, because "already ran" has two
 meanings. The schedule records the last run per lens, which answers *is it
 due*; the optional `## Run` section's `dedupe:` line names an output path,
@@ -45,10 +56,13 @@ No LLM calls in this module.
 from __future__ import annotations
 
 import logging
+import os
 import re
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass
+from datetime import UTC, datetime, time, timedelta, tzinfo
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from openaugi.pipeline.context_pack import _FRONTMATTER_RE, LENSES_DIR, read_lens_specs
 from openaugi.pipeline.dispatch import DEFAULT_TASKS_FOLDER
@@ -77,6 +91,184 @@ _RUN_SECTION_RE = re.compile(
 )
 #: `dedupe: OpenAugi/Board/{date} - Board.md` — one line inside `## Run`.
 _DEDUPE_RE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?dedupe:[ \t]*(?P<path>\S.*?)[ \t]*$", re.MULTILINE)
+#: `at: 06:00` / `on: Fri` — the anchor lines inside `## Run`. A trailing
+#: `# comment` is fine; the value is whatever sits between the key and it.
+_AT_RE = re.compile(
+    r"^[ \t]*(?:[-*][ \t]+)?at:[ \t]*(?P<value>[^#\n]*?)[ \t]*(?:#.*)?$", re.MULTILINE
+)
+_ON_RE = re.compile(
+    r"^[ \t]*(?:[-*][ \t]+)?on:[ \t]*(?P<value>[^#\n]*?)[ \t]*(?:#.*)?$", re.MULTILINE
+)
+_CLOCK_RE = re.compile(r"^(\d{1,2}):(\d{2})$")
+#: Full names, Monday = 0; `on:` accepts the full name or any prefix of at
+#: least three letters (`Fri`, `friday`).
+_WEEKDAYS = {
+    name: i
+    for i, name in enumerate(
+        ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+    )
+}
+
+
+@dataclass(frozen=True)
+class Anchor:
+    """Where on the local clock a cadence lands.
+
+    `at` is a wall-clock time in the schedule's zone (midnight when only a
+    weekday is pinned); `on` is a weekday, Monday = 0, or None for every day.
+    """
+
+    at: time | None = None
+    on: int | None = None
+
+    @property
+    def clock(self) -> time:
+        return self.at or time(0, 0)
+
+
+def describe_anchor(anchor: Anchor | None) -> str:
+    """`06:00`, `06:30 Fri`, `Sun` — or empty for a plain interval."""
+    if anchor is None:
+        return ""
+    parts = []
+    if anchor.at is not None:
+        parts.append(anchor.at.strftime("%H:%M"))
+    if anchor.on is not None:
+        parts.append(list(_WEEKDAYS)[anchor.on][:3].capitalize())
+    return " ".join(parts)
+
+
+class MalformedAnchor(ValueError):
+    """An `at:` or `on:` line that will not parse. Logged by the caller."""
+
+
+def parse_anchor(run: str) -> Anchor | None:
+    """The `at:` / `on:` anchor in a `## Run` section, or None if it has none.
+
+    Raises `MalformedAnchor` rather than guessing: `at: 6am` and `on: Funday`
+    are not cadences, and the lens falls back to its plain interval.
+    """
+    at_line = _AT_RE.search(run)
+    on_line = _ON_RE.search(run)
+    if not at_line and not on_line:
+        return None
+    at = on = None
+    if at_line:
+        value = at_line.group("value")
+        m = _CLOCK_RE.match(value)
+        if not m or not (0 <= int(m.group(1)) < 24 and 0 <= int(m.group(2)) < 60):
+            raise MalformedAnchor(f"at: {value!r} is not HH:MM")
+        at = time(int(m.group(1)), int(m.group(2)))
+    if on_line:
+        value = on_line.group("value").strip().lower()
+        full = (
+            next((n for n in _WEEKDAYS if n.startswith(value)), None) if len(value) >= 3 else None
+        )
+        if full is None:
+            raise MalformedAnchor(f"on: {on_line.group('value')!r} is not a weekday")
+        on = _WEEKDAYS[full]
+    return Anchor(at=at, on=on)
+
+
+def _system_zone() -> tzinfo:
+    """The machine's zone as a DST-aware `ZoneInfo` where it can be found.
+
+    `datetime.now().astimezone().tzinfo` is only the *current* offset — fine
+    today, wrong on the far side of a DST change, which is the one date this
+    module exists to get right. So look for a named zone first: `TZ`, then
+    the `/etc/localtime` symlink that macOS and most Linux distributions
+    keep. The fixed offset is the last resort, and it is logged.
+    """
+    name = os.environ.get("TZ")
+    if not name:
+        try:
+            target = os.readlink("/etc/localtime")
+            name = target.split("zoneinfo/", 1)[1] if "zoneinfo/" in target else None
+        except OSError:
+            name = None
+    if name:
+        try:
+            return ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError):
+            logger.debug("System zone %r is not a known zone name", name)
+    logger.debug("No named system zone found; using the current fixed offset")
+    return datetime.now().astimezone().tzinfo or UTC
+
+
+def schedule_timezone(config: dict[str, Any]) -> tzinfo:
+    """The zone `at:` and `on:` are read in: `[tasks] timezone`, else the system's.
+
+    A name that is not a zone is logged and ignored — a typo in config must
+    not move every anchored lens to UTC silently.
+    """
+    name = config.get("tasks", {}).get("timezone")
+    if name:
+        try:
+            return ZoneInfo(str(name))
+        except (ZoneInfoNotFoundError, ValueError):
+            logger.warning("[tasks] timezone %r is not a known zone; using the system zone", name)
+    return _system_zone()
+
+
+def anchor_slot(anchor: Anchor, now: datetime, tz: tzinfo) -> datetime:
+    """The most recent anchor boundary at or before `now`, on the local clock.
+
+    Today's anchor if the clock is past it, else yesterday's; with `on:`, the
+    most recent such weekday's. Built with `datetime.combine(..., tzinfo=tz)`
+    so a `ZoneInfo` zone applies whatever offset that *date* has — which is
+    what "06:00 local, honored across DST" means.
+    """
+    local = now.astimezone(tz)
+    day = local.date()
+    if anchor.on is not None:
+        day -= timedelta(days=(day.weekday() - anchor.on) % 7)
+    slot = datetime.combine(day, anchor.clock, tzinfo=tz)
+    if slot > local:
+        day -= timedelta(days=7 if anchor.on is not None else 1)
+        slot = datetime.combine(day, anchor.clock, tzinfo=tz)
+    return slot
+
+
+def next_anchor(anchor: Anchor, previous: datetime, period: timedelta, tz: tzinfo) -> datetime:
+    """The first anchor boundary a full cadence after `previous`.
+
+    Counted in local calendar days, not seconds — the day after 06:00 EDT is
+    06:00 EST, 25 hours later, and it is still one day.
+    """
+    day = previous.astimezone(tz).date() + timedelta(days=period.days)
+    if anchor.on is not None:
+        day += timedelta(days=(anchor.on - day.weekday()) % 7)
+    return datetime.combine(day, anchor.clock, tzinfo=tz)
+
+
+def _anchor_for(spec: dict, run: str, period: timedelta) -> Anchor | None:
+    """The lens's usable anchor, or None with a warning when it has none worth using."""
+    try:
+        anchor = parse_anchor(run)
+    except MalformedAnchor as exc:
+        logger.warning("Lens %s: %s; using the plain interval", spec["name"], exc)
+        return None
+    if anchor is not None and (period < timedelta(days=1) or period % timedelta(days=1)):
+        logger.warning(
+            "Lens %s: an anchor needs a whole-day cadence, not %r; using the plain interval",
+            spec["name"],
+            spec.get("trigger"),
+        )
+        return None
+    return anchor
+
+
+def _utc(now: datetime | None) -> datetime:
+    """The tick's clock, always in UTC.
+
+    Not cosmetic: two aware datetimes that share one `ZoneInfo` object are
+    subtracted and compared *naively* by Python — the offsets are ignored —
+    so "hours since the last run" would be wrong by an hour across a DST
+    change whenever `now` and a slot were built in the same zone. Holding
+    `now` in UTC keeps every subtraction in this module mixed-zone and
+    therefore honest.
+    """
+    return (now or datetime.now(UTC)).astimezone(UTC)
 
 
 def scheduling_enabled(config: dict[str, Any]) -> bool:
@@ -187,21 +379,55 @@ def record_run(
     )
 
 
+def _due_slot(
+    previous: datetime | None,
+    period: timedelta,
+    anchor: Anchor | None,
+    when: datetime,
+    tz: tzinfo,
+) -> datetime | None:
+    """The slot this tick would run for, or None if the lens is not due.
+
+    Plain interval: due once a full period has elapsed since the last run;
+    the slot is the grid boundary (`slot_for`). Anchored: due once the clock
+    is past the current anchor, the last run was before it, and a full
+    cadence of local days separates the two; the slot is the anchor itself.
+    """
+    if anchor is None:
+        if previous is not None and when - previous < period:
+            return None
+        return slot_for(previous, period, when)
+    slot = anchor_slot(anchor, when, tz)
+    if previous is not None:
+        if previous >= slot:
+            return None
+        elapsed = (slot.date() - previous.astimezone(tz).date()).days
+        if elapsed < period.days:
+            return None
+    return slot
+
+
 def due_lenses(
     vault: Path,
     store: SQLiteStore,
     now: datetime | None = None,
     tasks_folder: str = DEFAULT_TASKS_FOLDER,
+    tz: tzinfo | None = None,
 ) -> list[dict]:
-    """Every lens whose cadence has come round, in registry order.
+    """Every lens whose cadence has come round, earliest slot first.
 
     Each returned spec carries what `write_lens_task` needs: the contract
-    fields plus `period` and the `## Run` prose. A lens is skipped when it
-    declares no cadence, when its spec already violates the contract, when its
-    task file for today is already on disk, or when its `dedupe:` output
-    exists — each for a different reason, all of them logged.
+    fields plus `period`, the `## Run` prose, and the `slot` the run belongs
+    to. A lens is skipped when it declares no cadence, when its spec already
+    violates the contract, when its task file for today is already on disk,
+    or when its `dedupe:` output exists — each for a different reason, all
+    of them logged.
+
+    Ordered by slot so that on a catch-up tick a lens anchored earlier in the
+    morning is written before the one that embeds its output.
     """
-    when = now or datetime.now(UTC)
+    when = _utc(now)
+    zone = tz or _system_zone()
     due = []
     for spec in read_lens_specs(vault):
         name = spec["name"]
@@ -219,21 +445,25 @@ def due_lenses(
                 "Lens %s has an unreadable trigger %r, not scheduling it", name, trigger
             )
             continue
-        previous = last_run(store, name)
-        if previous is not None and when - previous < period:
+        run, dedupe = read_run_section(vault, spec)
+        anchor = _anchor_for(spec, run, period)
+        slot = _due_slot(last_run(store, name), period, anchor, when, zone)
+        if slot is None:
             continue
         if (vault / tasks_folder / task_filename(name, when)).exists():
             logger.debug("Lens %s already has a task file for today", name)
             continue
-        run, dedupe = read_run_section(vault, spec)
         if dedupe and (vault / expand(dedupe, when)).exists():
             logger.debug("Lens %s already produced %s", name, expand(dedupe, when))
             continue
-        due.append({**spec, "period": period, "run": run, "dedupe": dedupe})
+        due.append({**spec, "period": period, "run": run, "dedupe": dedupe, "slot": slot})
+    due.sort(key=lambda spec: spec["slot"])
     return due
 
 
-def lens_status(vault: Path, store: SQLiteStore, now: datetime | None = None) -> list[dict]:
+def lens_status(
+    vault: Path, store: SQLiteStore, now: datetime | None = None, tz: tzinfo | None = None
+) -> list[dict]:
     """One row per scheduled lens: what ran last, what is due next, and whether
     it is overdue.
 
@@ -244,7 +474,8 @@ def lens_status(vault: Path, store: SQLiteStore, now: datetime | None = None) ->
     the line the Dashboard alarm draws. Lenses that never fire on a tick
     (`on-demand`, `on-pass`, malformed) are not rows here.
     """
-    when = now or datetime.now(UTC)
+    when = _utc(now)
+    zone = tz or _system_zone()
     rows = []
     for spec in read_lens_specs(vault):
         trigger = (spec.get("trigger") or "").strip()
@@ -253,12 +484,20 @@ def lens_status(vault: Path, store: SQLiteStore, now: datetime | None = None) ->
         period = parse_period(trigger)
         if period is None:
             continue
+        run, _ = read_run_section(vault, spec)
+        anchor = _anchor_for(spec, run, period)
         previous = last_run(store, spec["name"])
-        next_due = previous + period if previous is not None else when
+        if previous is None:
+            next_due = when
+        elif anchor is None:
+            next_due = previous + period
+        else:
+            next_due = next_anchor(anchor, previous, period, zone)
         rows.append(
             {
                 "name": spec["name"],
                 "trigger": trigger,
+                "anchor": anchor,
                 "period": period,
                 "last_run": previous,
                 "next_due": next_due,
@@ -354,13 +593,13 @@ def run_due_lenses(
     """
     if not scheduling_enabled(config):
         return []
-    when = now or datetime.now(UTC)
+    when = _utc(now)
     tasks_folder = config.get("tasks", {}).get("folder", DEFAULT_TASKS_FOLDER)
     written = []
-    for spec in due_lenses(vault, store, when, tasks_folder):
+    for spec in due_lenses(vault, store, when, tasks_folder, schedule_timezone(config)):
         path = write_lens_task(spec, vault, when, tasks_folder)
         if path is None:
             continue
-        record_run(store, spec["name"], when, path.name, period=spec["period"])
+        record_run(store, spec["name"], spec["slot"], path.name)
         written.append(path)
     return written

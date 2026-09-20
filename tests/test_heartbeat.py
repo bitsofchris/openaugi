@@ -74,6 +74,15 @@ class TestWrite:
         assert "| currency-board | `every 1d` |" in text
         assert "distill" not in text
 
+    def test_an_anchored_lens_shows_its_anchor(self, tmp_path, store):
+        write_lens(
+            tmp_path, "substack-batch", trigger="every 7d", run="\n## Run\n\nat: 06:30\non: Fri\n"
+        )
+        text = write_heartbeat(tmp_path, store, NOW, pid=1).read_text(encoding="utf-8")
+        (row,) = read_heartbeat(tmp_path)["lenses"]
+        assert row["anchor"] == "06:30 Fri"  # a string, not YAML's sexagesimal 390
+        assert "| substack-batch | `every 7d` | 06:30 Fri |" in text
+
     def test_an_overdue_lens_is_flagged(self, tmp_path, store):
         write_lens(tmp_path, "currency-board", trigger="every 1d")
         record_run(store, "currency-board", NOW - timedelta(days=3), "t.md")

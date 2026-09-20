@@ -1465,9 +1465,11 @@ def doctor(
     """
     from openaugi.config import load_config, resolve_vault_path
     from openaugi.doctor import diagnose, render
+    from openaugi.pipeline.schedule import schedule_timezone
     from openaugi.store.sqlite import SQLiteStore
 
-    vault_path = resolve_vault_path(path, load_config())
+    config = load_config()
+    vault_path = resolve_vault_path(path, config)
     if not vault_path:
         console.print("[red]No vault path specified.[/red] Use --path or set it in config.")
         raise typer.Exit(1)
@@ -1479,7 +1481,7 @@ def doctor(
 
     store = SQLiteStore(db_path, read_only=True)
     try:
-        report = diagnose(Path(vault_path), store)
+        report = diagnose(Path(vault_path), store, tz=schedule_timezone(config))
     finally:
         store.close()
 

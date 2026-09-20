@@ -203,8 +203,16 @@ trigger: every 1d
 
 Read `OpenAugi/Board/.board-state.json` before building.
 
+at: 06:00          # local wall clock, honored across DST
 dedupe: OpenAugi/Board/{date} - Board.md
 ```
+
+The `at:` line is what makes it a 06:00 board rather than a "24 hours after
+the last one" board — without it the cadence drifts forward with every late
+tick and moves an hour on the day the clocks change. Any lens the board
+embeds (a habit parse, say) gets an earlier `at:` so it lands first; the
+scheduler writes due lenses earliest anchor first. See
+[lenses.md](lenses.md) "Anchors".
 
 ```bash
 # 3. build one now, without waiting for the tick — write the task file by hand

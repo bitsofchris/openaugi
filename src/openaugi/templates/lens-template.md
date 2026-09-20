@@ -56,11 +56,16 @@ a colon+space or starts with a quote. When in doubt, always use `>-`.
 BODY — the intent prose the agent follows. Recommended sections:
 ## Intent (the question + the bar), ## Process (numbered), ## Hard rules.
 
-## Run — OPTIONAL, and only for a scheduled lens. The two things a
-run with nobody to ask needs: prose naming the state to read before
-starting (copied verbatim into the task file), and one line
-`dedupe: <path>` naming the output that proves today's run already
-happened (`{date}` expands to the run date). See docs/reference/lenses.md.
+## Run — OPTIONAL, and only for a scheduled lens. What a run with
+nobody to ask needs: prose naming the state to read before starting
+(copied verbatim into the task file); one line `dedupe: <path>` naming
+the output that proves today's run already happened (`{date}` expands
+to the run date); and an anchor — `at: HH:MM` (local wall clock, honored
+across DST) and/or `on: <weekday>` (e.g. `on: Fri`, with `every 7d`) —
+so the cadence names a time instead of drifting from its last run.
+Timezone: `[tasks] timezone` in config, else the system zone. A
+malformed `at:`/`on:` is logged and the plain interval is used. See
+docs/reference/lenses.md "Anchors".
 
 EVERY lens inherits the augi-agent hard rules: never edit notes outside
 OpenAugi/ · dashboard/note output is nominate-or-`seen` · only

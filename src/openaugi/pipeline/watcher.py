@@ -245,7 +245,7 @@ def run_due_lenses(vault_path: Path, store: Any, config: dict[str, Any]) -> None
         logger.error(f"Lens schedule failed: {e}", exc_info=True)
 
 
-def write_heartbeat(vault_path: Path, store: Any) -> None:
+def write_heartbeat(vault_path: Path, store: Any, config: dict[str, Any]) -> None:
     """Leave proof that the tick ran. Never fails the caller.
 
     The one thing a dead watcher cannot do is say so; the heartbeat file is
@@ -255,8 +255,9 @@ def write_heartbeat(vault_path: Path, store: Any) -> None:
     """
     try:
         from openaugi.pipeline.heartbeat import write_heartbeat as _write
+        from openaugi.pipeline.schedule import schedule_timezone
 
-        _write(vault_path, store)
+        _write(vault_path, store, tz=schedule_timezone(config))
     except Exception as e:
         logger.error(f"Heartbeat failed: {e}", exc_info=True)
 
@@ -279,7 +280,7 @@ def _drain_tick(vault_path: Path, db_path: str, config: dict[str, Any]) -> None:
     try:
         drain_zzz_queue(vault_path, store, config)
         run_due_lenses(vault_path, store, config)
-        write_heartbeat(vault_path, store)
+        write_heartbeat(vault_path, store, config)
     finally:
         store.close()
 

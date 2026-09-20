@@ -15,12 +15,12 @@ drift. Everything here is a read; the command changes nothing.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from openaugi.pipeline.heartbeat import STALE_AFTER, read_heartbeat
-from openaugi.pipeline.schedule import lens_status
+from openaugi.pipeline.schedule import describe_anchor, lens_status
 from openaugi.service_version import head_sha, version_drift
 from openaugi.singleton import holder
 
@@ -36,8 +36,13 @@ def diagnose(
     now: datetime | None = None,
     lock_dir: Path | None = None,
     stale_after: timedelta = STALE_AFTER,
+    tz: tzinfo | None = None,
 ) -> dict[str, Any]:
-    """Everything `doctor` prints, as data. `healthy` is what the exit code follows."""
+    """Everything `doctor` prints, as data. `healthy` is what the exit code follows.
+
+    `tz` is the schedule's zone (`schedule.schedule_timezone(config)`), for
+    the anchored lenses' next-due; None means the system zone.
+    """
     when = now or datetime.now(UTC)
     beat = read_heartbeat(vault)
     age = (when - beat["last_tick"]) if beat else None
@@ -53,7 +58,7 @@ def diagnose(
         "tick_age": age,
         "stale": stale,
         "stale_after": stale_after,
-        "lenses": lens_status(vault, store, when),
+        "lenses": lens_status(vault, store, when, tz),
         "healthy": not stale,
     }
 
@@ -107,11 +112,14 @@ def render(report: dict[str, Any]) -> str:
     lenses = report["lenses"]
     if lenses:
         lines.append("")
-        lines.append(f"{'lens':<20} {'trigger':<12} {'last run':<26} {'next due':<26}")
+        lines.append(
+            f"{'lens':<20} {'trigger':<12} {'anchor':<10} {'last run':<26} {'next due':<26}"
+        )
         for row in lenses:
             flag = "  OVERDUE" if row["overdue"] else ""
+            anchor = describe_anchor(row.get("anchor")) or "-"
             lines.append(
-                f"{row['name']:<20} {row['trigger']:<12} "
+                f"{row['name']:<20} {row['trigger']:<12} {anchor:<10} "
                 f"{_stamp(row['last_run']):<26} {_stamp(row['next_due']):<26}{flag}"
             )
     else:
