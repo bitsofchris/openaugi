@@ -39,6 +39,11 @@ Pruning keeps it bounded without losing anything reachable. A bare
 `someday`, and anything carrying a `reason` ("not until October"), is durable
 and never pruned.
 
+The weekly reflection (`Research/Weekly Reflection - <date>.md`) is the one
+other surface with `do` / `no` offers — "Propose next week" and "Apply", the
+two ticks of the Sunday pass. `sync_reflection` runs only the proposal half
+on it: same task file shape, its own log source, no state projection.
+
 No LLM calls in this module.
 """
 
@@ -108,6 +113,14 @@ NOTE_SOURCE = "currency-board-note"
 PROPOSAL_SOURCE = "currency-board-proposal"
 #: Where a dispatched proposal lands. The task watcher hydrates and renames it.
 TASKS_FOLDER = "OpenAugi/Tasks"
+#: The second surface that carries `do` / `no` proposals: the Sunday
+#: reflection (`OpenAugi/AGENT/lenses/weekly-reflection.md`). Its two offers —
+#: "Propose next week" and "Apply" — are the whole Sunday pass, so a tick there
+#: must dispatch exactly like a tick on a board. It has no items, no lanes and
+#: no state file; only the proposal half of this module applies to it.
+REFLECTION_FOLDER = "OpenAugi/Research"
+REFLECTION_SOURCE = "weekly-reflection-proposal"
+_REFLECTION_STEM_RE = re.compile(r"^Weekly Reflection - \d{4}-\d{2}-\d{2}$")
 #: The only states this module recognises. Anything else in a state file was
 #: written by something that had no business writing it, and is discarded.
 _VALID_STATES = {"open", "done", "not-doing", "someday"}
@@ -383,7 +396,14 @@ def parse_proposals(text: str) -> dict[str, dict]:
 
 
 def build_proposal_task(
-    key: str, proposal: dict, *, vault_path: Path, day: str, board_stem: str
+    key: str,
+    proposal: dict,
+    *,
+    vault_path: Path,
+    day: str,
+    board_stem: str,
+    source: str = BOARD_SOURCE,
+    origin: str = "the currency board",
 ) -> str:
     """The pending task file for an accepted proposal.
 
@@ -395,7 +415,7 @@ def build_proposal_task(
     return f"""---
 status: pending
 working_dir: {vault_path}
-source: {BOARD_SOURCE}
+source: {source}
 board: {day}
 proposal: {key}
 ---
@@ -404,7 +424,7 @@ proposal: {key}
 
 ## Context
 
-Proposed by the currency board on {day} and accepted from [[{board_stem}]].
+Proposed by {origin} on {day} and accepted from [[{board_stem}]].
 
 {proposal["body"]}{aaa}
 
@@ -426,9 +446,22 @@ and set `status: needs-input` rather than guessing.
 
 
 def _process_proposals(
-    lines: list[str | None], text: str, board_path: Path, vault_path: Path, day: str
+    lines: list[str | None],
+    text: str,
+    board_path: Path,
+    vault_path: Path,
+    day: str,
+    *,
+    task_prefix: str = "board",
+    source: str = PROPOSAL_SOURCE,
+    task_source: str = BOARD_SOURCE,
+    origin: str = "the currency board",
 ) -> int:
     """Act on ticked proposal boxes: `do` writes a task, `no` retires the offer.
+
+    The keyword arguments name the surface: a board writes `board-<day>-<key>`
+    under the board sources, the reflection writes `reflection-<day>-<key>`
+    under its own, so the two never share a log projection.
 
     Returns the number of proposals answered on this call.
     """
@@ -440,7 +473,7 @@ def _process_proposals(
         if proposal["answer"] == "dispatched":
             tasks_dir = vault_path / TASKS_FOLDER
             tasks_dir.mkdir(parents=True, exist_ok=True)
-            task_path = tasks_dir / f"board-{day}-{key}.md"
+            task_path = tasks_dir / f"{task_prefix}-{day}-{key}.md"
             if task_path.exists():
                 # Already written and possibly already hydrated into a TASK-*
                 # file; writing again would launch the same agent twice.
@@ -453,6 +486,8 @@ def _process_proposals(
                         vault_path=vault_path,
                         day=day,
                         board_stem=board_path.stem,
+                        source=task_source,
+                        origin=origin,
                     ),
                     encoding="utf-8",
                 )
@@ -462,7 +497,7 @@ def _process_proposals(
             vault_path,
             {
                 "ts": now(),
-                "source": PROPOSAL_SOURCE,
+                "source": source,
                 "board": day,
                 "item": key,
                 "title": proposal["title"],
@@ -756,6 +791,52 @@ def sync_board(board_path: Path, vault_path: Path) -> int:
     return answered
 
 
+def is_reflection_note(path: Path) -> bool:
+    """`OpenAugi/Research/Weekly Reflection - 2026-09-20.md`, and nothing else."""
+    return (
+        path.suffix == ".md"
+        and path.parent.name == Path(REFLECTION_FOLDER).name
+        and bool(_REFLECTION_STEM_RE.match(path.stem))
+    )
+
+
+def sync_reflection(note_path: Path, vault_path: Path) -> int:
+    """Act on the ticked `do` / `no` boxes of one weekly reflection. Idempotent.
+
+    The reflection carries proposals only — no three-box items, no lanes, no
+    note channel — and it never touches `.board-state.json`: the board's state
+    is projected from board notes and board log rows, and a Sunday tick is
+    neither. An answered box is rewritten into a confirmation and its task
+    file is never written twice, exactly as on a board.
+
+    Returns the number of proposals answered on this call.
+    """
+    if not note_path.exists():
+        return 0
+    text = note_path.read_text(encoding="utf-8")
+    if not parse_proposals(text):
+        return 0
+    day = board_date(note_path)
+    lines: list[str | None] = list(text.splitlines())
+    answered = _process_proposals(
+        lines,
+        text,
+        note_path,
+        vault_path,
+        day,
+        task_prefix="reflection",
+        source=REFLECTION_SOURCE,
+        task_source="weekly-reflection",
+        origin="the weekly reflection",
+    )
+    if answered:
+        note_path.write_text(
+            "\n".join(line for line in lines if line is not None) + "\n", encoding="utf-8"
+        )
+        logger.info(f"Board janitor: {answered} proposal(s) answered on {note_path.name}")
+    return answered
+
+
 def open_items(vault_path: Path) -> dict[str, dict]:
     """Items the next board may carry — everything not retired or parked."""
     return {
@@ -775,13 +856,18 @@ def retired_items(vault_path: Path) -> dict[str, dict]:
 
 
 def process_changed(changed_paths: set[str], vault_path: Path) -> int:
-    """Janitor entry point for the watcher — handles any touched board note."""
+    """Janitor entry point for the watcher — any touched board or reflection."""
     total = 0
     for raw in changed_paths:
         path = Path(raw)
         if path.suffix == ".md" and path.parent.name == "Board" and "Board" in path.stem:
             try:
                 total += sync_board(path, vault_path)
+            except Exception as e:
+                logger.error(f"Board janitor failed on {path}: {e}", exc_info=True)
+        elif is_reflection_note(path):
+            try:
+                total += sync_reflection(path, vault_path)
             except Exception as e:
                 logger.error(f"Board janitor failed on {path}: {e}", exc_info=True)
     return total
