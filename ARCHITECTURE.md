@@ -70,7 +70,8 @@ src/openaugi/
 │   ├── board_janitor.py   # Currency board write-back — checkboxes → feedback log → projected .board-state.json (docs/reference/currency-board.md)
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
 │   ├── schedule.py        # Lens triggers → due lenses → task files (docs/reference/lenses.md)
-│   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch + lens tick
+│   ├── heartbeat.py       # The tick's liveness view — View - System Heartbeat.md, never ingested (docs/reference/heartbeat.md)
+│   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch + lens tick + heartbeat
 ├── render/                # M6 — static HTML surfaces from the DB (no server)
 │   └── lifestream.py      # Merged chronological stream + heat strip → OpenAugi/render/
 ├── agents/                # Agent plane — launches Claude Code sessions
@@ -92,8 +93,9 @@ src/openaugi/
 │   ├── server.py          # MCP adapter — agent presentation (summaries, docstrings) over query/; write + review tools
 │   └── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
 ├── http_api.py            # HTTP adapter — /api/* JSON routes on the daemon (full blocks, read-only)
+├── doctor.py              # `openaugi doctor` — watcher alive? code current? tick fresh? lenses due? (docs/reference/heartbeat.md)
 ├── cli/
-│   └── main.py            # typer CLI (up, ingest, serve, watch, search, query, hubs, status, service)
+│   └── main.py            # typer CLI (up, ingest, serve, watch, search, query, hubs, status, doctor, service)
 └── config.py              # TOML config loader + .env loader + vault path resolution
 ```
 
@@ -281,6 +283,7 @@ openaugi serve   ← MCP tools for one client                       (one per cli
 | `openaugi task-dispatch` | Watch `OpenAugi/Tasks/` and launch pending tasks in tmux (standalone) |
 | `openaugi serve` | MCP server only (stdio or HTTP) |
 | `openaugi watch` | File watcher only (incremental ingest on vault changes) |
+| `openaugi doctor` | Is `up` alive and ticking? Watcher pid, running commit vs HEAD, heartbeat age, every scheduled lens's last run / next due. Exit 1 when the tick is stale |
 | `openaugi re-embed` | Reset + re-embed all data blocks with current model (use after model switch) |
 | `openaugi cluster` | Run clustering DAG → write `context_block:cluster` nodes + a `cluster_run` snapshot to DB |
 | `openaugi cluster --dry-run` | Compute clusters + print stats, no DB writes (use for param tuning) |
@@ -317,6 +320,7 @@ format (`name:`/`description:` frontmatter) so they're scannable.
 - [docs/reference/agentic-kb-field-guide.md](docs/reference/agentic-kb-field-guide.md) — The portable ruleset: what building this hardened or simplified from the "agent + janitor + flat folder" starting advice; transplantable to any agentic knowledge base.
 - [docs/reference/reading-queue.md](docs/reference/reading-queue.md) — Reading queue: notes flagged `reading_queue: true` pushed to Readwise Reader under a daily cap, highlights harvested back onto the note that produced them. Manual commands, nothing scheduled.
 - [docs/reference/pings.md](docs/reference/pings.md) — Pings: phone check-ins appended to the daily note as `- [HH:MM] <kind>: key=value …` lines, `scripts/ping_stats.py` cross-tabs them (kinds, target key and vocabulary come from the vault lens that invokes it, never from the code)
+- [docs/reference/heartbeat.md](docs/reference/heartbeat.md) — System heartbeat: the drain tick writes `View - System Heartbeat.md` (last tick, running commit, every scheduled lens's next due); the Dashboard renders the alarm from it at read time and `openaugi doctor` exits non-zero when the tick is stale
 - [docs/reference/privacy-guard.md](docs/reference/privacy-guard.md) — Privacy guard: the pre-commit hook that refuses private vocabulary (word list in the vault, never the repo) and notebooks with outputs
 - [docs/reference/user-guide.md](docs/reference/user-guide.md) — Day-to-day manual: entry points, the loop, trust rules, triggering a pass, lens system in brief. Chronological build history stays in this file's STATUS header, not there.
 - [docs/reference/augi-log-routing.md](docs/reference/augi-log-routing.md) — **Routing rows in the Augi Log (PAUSED 2026-09-04; replaced the review pass for daily capture):** verbs, the master box, what each verb writes, undo, the feedback record. Design record: [docs/plans/augi-log-routing.md](docs/plans/augi-log-routing.md)

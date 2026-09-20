@@ -260,9 +260,12 @@ never run has no grid yet; its first run is the origin.
 ### The trade this makes
 
 `launchctl` fired whether or not anything else was running. The drain tick
-does not: **if the watcher is stopped, no scheduled lens runs**, and a
-stopped watcher is currently invisible. Until overdue lenses are surfaced
-on the Dashboard, `openaugi lenses` and the log are how you find out.
+does not: **if the watcher is stopped, no scheduled lens runs.** What makes
+that survivable is that a stopped watcher is no longer invisible: the tick
+writes a heartbeat view every five minutes, the Dashboard renders a red line
+from it when it goes stale, and `openaugi doctor` prints every scheduled
+lens's last run and next due and exits non-zero when the tick is stale. See
+[heartbeat.md](heartbeat.md).
 
 ## Wiring notes (for surfaces)
 

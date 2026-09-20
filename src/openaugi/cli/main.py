@@ -1452,6 +1452,42 @@ def status(
         store.close()
 
 
+@app.command()
+def doctor(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+):
+    """Is `openaugi up` alive and ticking? Exits 1 when the heartbeat is stale.
+
+    Watcher pid, running commit vs HEAD, age of the last drain tick, and every
+    scheduled lens's last run and next due — the terminal twin of the
+    Dashboard's heartbeat block, for when Obsidian is not open. Read-only.
+    """
+    from openaugi.config import load_config, resolve_vault_path
+    from openaugi.doctor import diagnose, render
+    from openaugi.store.sqlite import SQLiteStore
+
+    vault_path = resolve_vault_path(path, load_config())
+    if not vault_path:
+        console.print("[red]No vault path specified.[/red] Use --path or set it in config.")
+        raise typer.Exit(1)
+
+    db_path = db or str(_default_db())
+    if not Path(db_path).exists():
+        console.print(f"[red]Database not found:[/red] {db_path}")
+        raise typer.Exit(1)
+
+    store = SQLiteStore(db_path, read_only=True)
+    try:
+        report = diagnose(Path(vault_path), store)
+    finally:
+        store.close()
+
+    console.print(render(report), markup=False, highlight=False)
+    if not report["healthy"]:
+        raise typer.Exit(1)
+
+
 # ── Reading queue ──────────────────────────────────────────────────
 
 reading_app = typer.Typer(

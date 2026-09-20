@@ -228,7 +228,10 @@ schedule at all.
 
 **What the trade costs.** `launchctl` fired at 06:00 whether or not anything
 else was up. The drain tick only fires while `com.openaugi.up` is running, so a
-stopped watcher means no board — and a stopped watcher is currently invisible.
+stopped watcher means no board. The tick leaves a heartbeat view, so a missing
+board has a diagnosis: the Dashboard's heartbeat block goes red when the tick
+is stale, and `openaugi doctor` says whether the watcher is alive, what code it
+runs, and when the board is next due — see [heartbeat.md](heartbeat.md).
 
 `.obsidian/` is gitignored in the vault, so the snippet's versioned copy lives
 at `src/openaugi/templates/board.css` in this repo — edit there, copy across.

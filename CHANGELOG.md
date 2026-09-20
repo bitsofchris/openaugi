@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+**A dead watcher is visible.** Since the launchd cutover one process runs
+everything, and nothing said when it stopped. The drain tick now writes
+`OpenAugi/Views/View - System Heartbeat.md` every five minutes — `last_tick`,
+the running commit, the pid, and every scheduled lens's last run and next due
+— and the file is excluded from ingest unconditionally, whatever
+`[vault] exclude_patterns` says. `openaugi doctor` prints the same in the
+terminal (watcher pid from the singleton lock, running commit vs HEAD,
+heartbeat age, lens table) and exits non-zero when the tick is more than ten
+minutes old, so a janitor can fire on it. `docs/reference/heartbeat.md`.
+
+**The lens ledger records the slot, not the tick.** A scheduled run that
+fired late used to re-anchor its cadence to the late time, and the drift only
+ever went forward. `last_run` is now the boundary the run belongs to, so a
+late fire catches up to its own grid and a three-day sleep produces one
+catch-up run, not three.
+
 **Privacy guard.** `scripts/check_private_vocab.py` runs as a pre-commit
 hook at commit, commit-msg and push time. It refuses any file or commit
 message containing a word from `<vault>/OpenAugi/AGENT/private-vocabulary.txt`
