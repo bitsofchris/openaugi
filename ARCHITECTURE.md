@@ -67,7 +67,7 @@ src/openaugi/
 │   ├── routing_janitor.py # Applies a log's routing rows once its master box is ticked; undo; feedback
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
 │   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar + lens list (docs/reference/lenses.md)
-│   ├── board_janitor.py   # Currency board write-back — checkboxes → feedback log → projected .board-state.json; also the weekly reflection's `do` offers (docs/reference/currency-board.md)
+│   ├── board_janitor.py   # Currency board write-back — checkboxes → feedback log → projected .board-state.json (docs/reference/currency-board.md)
 │   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
 │   ├── schedule.py        # Lens triggers → due lenses → task files (docs/reference/lenses.md)
 │   ├── heartbeat.py       # The tick's liveness view — View - System Heartbeat.md, never ingested (docs/reference/heartbeat.md)

@@ -122,21 +122,7 @@ user ticks boxes → watcher sees the change → board_janitor.sync_board()
 
 user ticks `do` on a proposal → board_janitor writes OpenAugi/Tasks/board-<date>-<key>.md
               → task_watcher hydrates it → an agent runs the brief as written
-
-user ticks `do` on the weekly reflection (OpenAugi/Research/Weekly Reflection - <date>.md)
-              → board_janitor.sync_reflection() writes OpenAugi/Tasks/reflection-<date>-<key>.md
-              → same hydrate-and-run; its own log source, no state projection
 ```
-
-The reflection is the second surface the janitor understands (2026-09-20):
-a `do` / `no` offer on `Weekly Reflection - <date>.md` dispatches through
-`sync_reflection`, which runs only the proposal half — no items, no lanes,
-never `.board-state.json` — under the `weekly-reflection-proposal` log source
-so a Sunday tick can never appear in a board's projected state. **Dormant by
-design:** the Sunday pass was ruled a chat session the same day
-(`OpenAugi/AGENT/lenses/weekly-reflection.md` § The Sunday session), so the
-draft carries no offers. The code stays, tested, as the phone-only fallback:
-one lens edit puts the boxes back.
 
 - **The lens** (`OpenAugi/AGENT/lenses/currency-board.md` in the vault) holds
   the intent, process and hard rules. Target family is `note` — a new dated
