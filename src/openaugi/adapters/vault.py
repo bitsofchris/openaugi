@@ -53,6 +53,16 @@ QQQ_PATTERN = _splitter.QQQ_PATTERN
 DATAVIEW_BLOCK_PATTERN = _splitter.DATAVIEW_BLOCK_PATTERN
 ZZZ_PATTERN = _splitter.ZZZ_PATTERN
 
+#: The watcher's liveness file (pipeline/heartbeat.py). Written every few
+#: minutes by the process that also runs ingest, so it is excluded here
+#: unconditionally rather than through config: a `[vault] exclude_patterns`
+#: list in config replaces the defaults wholesale, and one missing line would
+#: make the heartbeat re-trigger the ingest that writes it, forever.
+HEARTBEAT_VIEW = "OpenAugi/Views/View - System Heartbeat.md"
+
+#: Files the engine owns and never ingests, whatever config says.
+SYSTEM_EXCLUDE_PATTERNS = [HEARTBEAT_VIEW]
+
 DEFAULT_EXCLUDE_PATTERNS = [
     ".obsidian/**",
     ".git/**",
@@ -92,7 +102,7 @@ def parse_vault(
     vault = Path(vault_path).expanduser()
     if not vault.is_dir():
         raise FileNotFoundError(f"Vault path does not exist: {vault}")
-    excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
+    excludes = effective_excludes(exclude_patterns)
     rules = _normalize_source_rules(source_rules)
     prov_rules = _normalize_provenance_rules(provenance_rules)
 
@@ -161,7 +171,7 @@ def parse_vault_incremental(
     vault = Path(vault_path).expanduser()
     if not vault.is_dir():
         raise FileNotFoundError(f"Vault path does not exist: {vault}")
-    excludes = exclude_patterns or DEFAULT_EXCLUDE_PATTERNS
+    excludes = effective_excludes(exclude_patterns)
     rules = _normalize_source_rules(source_rules)
     prov_rules = _normalize_provenance_rules(provenance_rules)
 
@@ -467,6 +477,11 @@ def _hash_file(file_path: Path) -> str:
 def _hash_content(content: str) -> str:
     """Salted SHA-256 hash of string content — must match `_hash_file`."""
     return hashlib.sha256(_DOC_HASH_SALT + content.encode("utf-8")).hexdigest()[:16]
+
+
+def effective_excludes(exclude_patterns: list[str] | None) -> list[str]:
+    """The configured (or default) excludes plus the ones that are not optional."""
+    return list(exclude_patterns or DEFAULT_EXCLUDE_PATTERNS) + SYSTEM_EXCLUDE_PATTERNS
 
 
 def _should_include(file_path: Path, vault_root: Path, patterns: list[str]) -> bool:

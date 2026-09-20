@@ -217,8 +217,16 @@ trigger: every 1d
 
 Read `OpenAugi/Board/.board-state.json` before building.
 
+at: 06:00          # local wall clock, honored across DST
 dedupe: OpenAugi/Board/{date} - Board.md
 ```
+
+The `at:` line is what makes it a 06:00 board rather than a "24 hours after
+the last one" board — without it the cadence drifts forward with every late
+tick and moves an hour on the day the clocks change. Any lens the board
+embeds (a habit parse, say) gets an earlier `at:` so it lands first; the
+scheduler writes due lenses earliest anchor first. See
+[lenses.md](lenses.md) "Anchors".
 
 ```bash
 # 3. build one now, without waiting for the tick — write the task file by hand
@@ -242,7 +250,10 @@ schedule at all.
 
 **What the trade costs.** `launchctl` fired at 06:00 whether or not anything
 else was up. The drain tick only fires while `com.openaugi.up` is running, so a
-stopped watcher means no board — and a stopped watcher is currently invisible.
+stopped watcher means no board. The tick leaves a heartbeat view, so a missing
+board has a diagnosis: the Dashboard's heartbeat block goes red when the tick
+is stale, and `openaugi doctor` says whether the watcher is alive, what code it
+runs, and when the board is next due — see [heartbeat.md](heartbeat.md).
 
 `.obsidian/` is gitignored in the vault, so the snippet's versioned copy lives
 at `src/openaugi/templates/board.css` in this repo — edit there, copy across.

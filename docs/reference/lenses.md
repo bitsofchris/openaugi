@@ -227,6 +227,8 @@ body:
 Read `OpenAugi/Board/.board-state.json` before building: never re-propose
 an item whose state is `done`, `not-doing` or `someday`.
 
+at: 06:00          # local wall clock, honored across DST
+on: Fri            # weekday pin, only meaningful with `every 7d`
 dedupe: OpenAugi/Board/{date} - Board.md
 ```
 
@@ -235,8 +237,54 @@ dedupe: OpenAugi/Board/{date} - Board.md
 - **`dedupe: <path>`** names the output that proves the run already
   happened. `{date}` expands to the run's date. If that file exists, the
   lens is not due, whatever the records say.
+- **`at: HH:MM`** anchors the cadence to a local wall-clock time, and
+  **`on: <weekday>`** (`Fri`, `friday`) to a weekday. See "Anchors" below.
 
-Both are optional; most lenses need neither.
+All are optional; most lenses need none. A trailing `# comment` on any of
+these lines is fine.
+
+### Anchors — `at:` and `on:`
+
+A bare `every 1d` is a UTC interval. It cannot say "06:00" or "Friday"; it
+only remembers the time of day its last run landed on, and on the day the
+clocks change 10:00Z silently stops meaning 06:00. An anchor names the time:
+
+```markdown
+trigger: every 1d
+## Run
+at: 06:00
+```
+
+```markdown
+trigger: every 7d
+## Run
+at: 06:30
+on: Fri
+```
+
+With an anchor a lens is due when **all three** hold: the cadence has
+elapsed, local time is past today's anchor, and the last run was before
+today's anchor. "Elapsed" is counted in local calendar days, so the day after
+06:00 EDT is 06:00 EST — 25 hours later, and still one day. The run is
+recorded as the anchor itself, so a fire at 06:40 is still the 06:00 run.
+
+- `at:` alone anchors every day at that time; `on:` alone anchors that
+  weekday at midnight; together, that weekday at that time.
+- **Timezone:** `[tasks] timezone = "America/New_York"` in
+  `~/.openaugi/config.toml` (an IANA name). Unset, the system zone — read
+  from `TZ` or `/etc/localtime`, so it follows DST.
+- **Catch-up is at most one run.** Asleep over a weekend, a Friday lens
+  fires once on wake and records the Friday it missed; the next fire is the
+  next Friday, not the next Sunday.
+- **Malformed is logged and ignored, never guessed at**, same as a malformed
+  trigger: `at: 6am` or `on: Funday` drops the anchor and the lens keeps its
+  plain interval. So does an anchor on a sub-day cadence (`every 12h`).
+- **Order.** On a single tick, due lenses are written earliest anchor
+  first — a `05:50` habit parse lands before the `06:00` board that embeds
+  it, even on a catch-up tick where both are due at once.
+
+The anchor lives in `## Run` rather than in `trigger:` so the lens contract
+(`LENS_TRIGGER_RE`) and every existing lens file stay untouched.
 
 ### How "already ran" is decided
 
@@ -248,12 +296,24 @@ Three guards, because the question has three failure modes:
 | `OpenAugi/Tasks/TASK-{date}-{lens}.md` exists | is it already queued? | a lost database |
 | the `dedupe:` output exists | did the work already land? | a re-import, a rebuilt vault |
 
+**The ledger records the slot, not the tick.** The drain tick rides the
+debounce, so a run whose boundary lands while the vault is busy fires late.
+What gets stamped as `last_run` is the boundary it belongs to — the latest
+`previous + n·period` not after now — never the moment the tick happened to
+run. A fire forty minutes late therefore does not move the next day's fire
+time, and a machine asleep for three days produces **one** catch-up run and
+lands back on its own grid, not three runs and a new anchor. A lens that has
+never run has no grid yet; its first run is the origin.
+
 ### The trade this makes
 
 `launchctl` fired whether or not anything else was running. The drain tick
-does not: **if the watcher is stopped, no scheduled lens runs**, and a
-stopped watcher is currently invisible. Until overdue lenses are surfaced
-on the Dashboard, `openaugi lenses` and the log are how you find out.
+does not: **if the watcher is stopped, no scheduled lens runs.** What makes
+that survivable is that a stopped watcher is no longer invisible: the tick
+writes a heartbeat view every five minutes, the Dashboard renders a red line
+from it when it goes stale, and `openaugi doctor` prints every scheduled
+lens's last run and next due and exits non-zero when the tick is stale. See
+[heartbeat.md](heartbeat.md).
 
 ## Wiring notes (for surfaces)
 
