@@ -9,18 +9,7 @@ stays on Friday after a weekend asleep (one catch-up run, then the next
 Friday). The zone is `[tasks] timezone` in config, else the system's. The
 lens contract and `trigger:` are unchanged; a malformed anchor is logged and
 the plain interval is used. Due lenses are written earliest anchor first, so
-a 05:50 lens lands before the 06:00 board that embeds it. The heartbeat view
-and `openaugi doctor` show each lens's anchor and its next local due.
-
-**A dead watcher is visible.** Since the launchd cutover one process runs
-everything, and nothing said when it stopped. The drain tick now writes
-`OpenAugi/Views/View - System Heartbeat.md` every five minutes — `last_tick`,
-the running commit, the pid, and every scheduled lens's last run and next due
-— and the file is excluded from ingest unconditionally, whatever
-`[vault] exclude_patterns` says. `openaugi doctor` prints the same in the
-terminal (watcher pid from the singleton lock, running commit vs HEAD,
-heartbeat age, lens table) and exits non-zero when the tick is more than ten
-minutes old, so a janitor can fire on it. `docs/reference/heartbeat.md`.
+a 05:50 lens lands before the 06:00 board that embeds it.
 
 **The lens ledger records the slot, not the tick.** A scheduled run that
 fired late used to re-anchor its cadence to the late time, and the drift only

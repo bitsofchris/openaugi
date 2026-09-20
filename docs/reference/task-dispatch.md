@@ -75,8 +75,7 @@ launchctl kickstart -k gui/$(id -u)/com.openaugi.up
 `up` stamps the SHA it started from into the `service_state` record, and
 `openaugi status` compares it against HEAD — a red banner above every other
 stat, because everything below it can look healthy while the daemon runs code
-from last week. `openaugi doctor` reports the same drift alongside whether the
-daemon is alive at all — see [heartbeat.md](heartbeat.md).
+from last week.
 
 > **Why this is a documented rule and not a footnote.** On 2026-09-13 the
 > service had been up since the 4th. A dispatch fix committed on the 11th had

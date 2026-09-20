@@ -17,7 +17,6 @@ from openaugi.pipeline.schedule import (
     describe_anchor,
     due_lenses,
     last_run,
-    lens_status,
     next_anchor,
     parse_anchor,
     record_run,
@@ -281,25 +280,3 @@ class TestDueWithAnchor:
         (spec,) = due_lenses(tmp_path, store, local(2026, 9, 14, 8), tz=NY)
         assert "at: 06:00" in spec["run"]
         assert spec["dedupe"] == "OpenAugi/Board/{date} - Board.md"
-
-
-class TestStatusWithAnchor:
-    def test_next_due_is_the_next_anchor(self, tmp_path, store):
-        write_lens(tmp_path, "substack-batch", trigger="every 7d", run=BATCH_RUN)
-        record_run(store, "substack-batch", local(2026, 9, 18, 6, 30), "t.md")
-        (row,) = lens_status(tmp_path, store, local(2026, 9, 20, 8), tz=NY)
-        assert row["next_due"] == local(2026, 9, 25, 6, 30)
-        assert row["anchor"] == Anchor(at=time(6, 30), on=4)
-        assert row["overdue"] is False
-
-    def test_next_due_crosses_dst_on_the_local_clock(self, tmp_path, store):
-        write_lens(tmp_path, "currency-board", trigger="every 1d", run=BOARD_RUN)
-        record_run(store, "currency-board", local(2026, 10, 31, 6), "t.md")
-        (row,) = lens_status(tmp_path, store, local(2026, 10, 31, 8), tz=NY)
-        assert row["next_due"] == local(2026, 11, 1, 6)
-
-    def test_overdue_is_a_whole_missed_period_past_the_anchor(self, tmp_path, store):
-        write_lens(tmp_path, "currency-board", trigger="every 1d", run=BOARD_RUN)
-        record_run(store, "currency-board", local(2026, 9, 13, 6), "t.md")
-        assert lens_status(tmp_path, store, local(2026, 9, 15, 6), tz=NY)[0]["overdue"] is False
-        assert lens_status(tmp_path, store, local(2026, 9, 15, 6, 1), tz=NY)[0]["overdue"] is True

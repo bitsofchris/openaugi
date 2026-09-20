@@ -27,10 +27,8 @@ class _DebouncedHandler(FileSystemEventHandler):
         debounce_seconds: float,
         exclude_patterns: list[str] | None = None,
     ) -> None:
-        from openaugi.adapters.vault import SYSTEM_EXCLUDE_PATTERNS
-
         self.debounce_seconds = debounce_seconds
-        self.exclude_patterns = list(exclude_patterns or []) + SYSTEM_EXCLUDE_PATTERNS
+        self.exclude_patterns = exclude_patterns or []
         self._changed = threading.Event()
         self._stop = threading.Event()
         self._lock = threading.Lock()
@@ -245,25 +243,8 @@ def run_due_lenses(vault_path: Path, store: Any, config: dict[str, Any]) -> None
         logger.error(f"Lens schedule failed: {e}", exc_info=True)
 
 
-def write_heartbeat(vault_path: Path, store: Any, config: dict[str, Any]) -> None:
-    """Leave proof that the tick ran. Never fails the caller.
-
-    The one thing a dead watcher cannot do is say so; the heartbeat file is
-    what the Dashboard and `openaugi doctor` read to notice the silence. It
-    is throttled inside `heartbeat.write_heartbeat`, so calling it on every
-    tick costs one small file read.
-    """
-    try:
-        from openaugi.pipeline.heartbeat import write_heartbeat as _write
-        from openaugi.pipeline.schedule import schedule_timezone
-
-        _write(vault_path, store, tz=schedule_timezone(config))
-    except Exception as e:
-        logger.error(f"Heartbeat failed: {e}", exc_info=True)
-
-
 def _drain_tick(vault_path: Path, db_path: str, config: dict[str, Any]) -> None:
-    """Drain the zzz queue, run what the lens registry says is due, and leave a heartbeat.
+    """Drain the zzz queue, and run what the lens registry says is due.
 
     Without the drain, an instruction written just before the vault goes quiet
     would sit queued until the next file change — the settle window would
@@ -280,7 +261,6 @@ def _drain_tick(vault_path: Path, db_path: str, config: dict[str, Any]) -> None:
     try:
         drain_zzz_queue(vault_path, store, config)
         run_due_lenses(vault_path, store, config)
-        write_heartbeat(vault_path, store, config)
     finally:
         store.close()
 

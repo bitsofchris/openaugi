@@ -76,23 +76,3 @@ def acquire(name: str, lock_dir: Path | None = None) -> Path:
     fd.flush()
     _held.append(fd)
     return lock_path
-
-
-def holder(name: str, lock_dir: Path | None = None) -> str | None:
-    """The pid of the process holding the named lock, or None if nobody does.
-
-    The same kernel answer `acquire` gets, asked without taking anything: a
-    non-blocking attempt that is released the instant it succeeds. This is
-    how `openaugi doctor` knows whether `up` is alive without trusting a pid
-    file — the lock dies with its process, a pid file does not.
-    """
-    lock_path = (lock_dir or Path.home() / ".openaugi") / f"{name}.lock"
-    if not lock_path.is_file():
-        return None
-    with open(lock_path) as fd:
-        try:
-            fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return fd.read().strip() or "?"
-        fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
-    return None

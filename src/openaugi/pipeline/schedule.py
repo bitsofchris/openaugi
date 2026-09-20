@@ -461,52 +461,6 @@ def due_lenses(
     return due
 
 
-def lens_status(
-    vault: Path, store: SQLiteStore, now: datetime | None = None, tz: tzinfo | None = None
-) -> list[dict]:
-    """One row per scheduled lens: what ran last, what is due next, and whether
-    it is overdue.
-
-    The read-only twin of `due_lenses`, for the surfaces that report on the
-    schedule (the heartbeat view, `openaugi doctor`) rather than act on it.
-    "Overdue" means the next due time is more than one full period in the
-    past — a slot has been missed outright, not merely reached — which is
-    the line the Dashboard alarm draws. Lenses that never fire on a tick
-    (`on-demand`, `on-pass`, malformed) are not rows here.
-    """
-    when = _utc(now)
-    zone = tz or _system_zone()
-    rows = []
-    for spec in read_lens_specs(vault):
-        trigger = (spec.get("trigger") or "").strip()
-        if trigger.lower() in _NEVER_DUE or spec.get("error"):
-            continue
-        period = parse_period(trigger)
-        if period is None:
-            continue
-        run, _ = read_run_section(vault, spec)
-        anchor = _anchor_for(spec, run, period)
-        previous = last_run(store, spec["name"])
-        if previous is None:
-            next_due = when
-        elif anchor is None:
-            next_due = previous + period
-        else:
-            next_due = next_anchor(anchor, previous, period, zone)
-        rows.append(
-            {
-                "name": spec["name"],
-                "trigger": trigger,
-                "anchor": anchor,
-                "period": period,
-                "last_run": previous,
-                "next_due": next_due,
-                "overdue": when - next_due > period,
-            }
-        )
-    return rows
-
-
 def build_lens_task(spec: dict, vault: Path, when: datetime) -> str:
     """The pending task file for one scheduled lens run.
 

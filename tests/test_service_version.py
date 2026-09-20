@@ -98,3 +98,33 @@ def test_a_non_git_install_reports_no_drift(store: SQLiteStore, tmp_path: Path, 
     record_service_start(store, "2026-09-13T21:50:00", pid=1)
 
     assert version_drift(store) is None
+
+
+def test_liveness_is_none_before_any_start(store: SQLiteStore):
+    from openaugi.service_version import service_liveness
+
+    assert service_liveness(store) is None
+
+
+def test_liveness_reports_a_running_pid(store: SQLiteStore, monkeypatch):
+    import os
+
+    from openaugi.service_version import record_service_start, service_liveness
+
+    monkeypatch.setattr("openaugi.service_version.head_sha", lambda root=None: "abc")
+    record_service_start(store, "2026-09-20T10:00:00", os.getpid())
+    live = service_liveness(store)
+    assert live == {"pid": os.getpid(), "started_at": "2026-09-20T10:00:00", "alive": True}
+
+
+def test_liveness_reports_a_dead_pid(store: SQLiteStore, monkeypatch):
+    from openaugi.service_version import record_service_start, service_liveness
+
+    monkeypatch.setattr("openaugi.service_version.head_sha", lambda root=None: "abc")
+
+    def gone(pid, sig):
+        raise ProcessLookupError
+
+    monkeypatch.setattr("openaugi.service_version.os.kill", gone)
+    record_service_start(store, "2026-09-20T10:00:00", 424242)
+    assert service_liveness(store)["alive"] is False

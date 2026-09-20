@@ -61,19 +61,6 @@ class TestDebouncedHandler:
 
         assert handler.drain() == {"/vault/notes/real.md"}
 
-    def test_the_heartbeat_view_never_wakes_the_watcher(self):
-        # Whatever config says — the file the tick writes must not trigger the
-        # ingest that writes it.
-        handler = _DebouncedHandler(debounce_seconds=1.0, exclude_patterns=[])
-        event = MagicMock()
-        event.is_directory = False
-        event.src_path = "/vault/OpenAugi/Views/View - System Heartbeat.md"
-        handler.on_any_event(event)
-        event.src_path = "/vault/OpenAugi/Views/View - Dashboard.md"
-        handler.on_any_event(event)
-
-        assert handler.drain() == {"/vault/OpenAugi/Views/View - Dashboard.md"}
-
     def test_ignores_directories(self):
         handler = _DebouncedHandler(debounce_seconds=1.0)
         event = MagicMock()
@@ -195,26 +182,6 @@ class TestDrainTick:
         _drain_tick(vault, str(tmp_path / "test.db"), config)
 
         assert len(list((vault / "OpenAugi" / "Tasks").glob("TASK-*.md"))) == 1
-
-    def test_the_tick_leaves_a_heartbeat(self, tmp_path: Path):
-        from openaugi.pipeline.heartbeat import read_heartbeat
-
-        vault = self._vault_with_a_due_lens(tmp_path)
-        _drain_tick(vault, str(tmp_path / "test.db"), {})
-
-        beat = read_heartbeat(vault)
-        assert beat is not None
-        assert [row["name"] for row in beat["lenses"]] == ["currency-board"]
-
-    def test_a_failing_heartbeat_does_not_take_the_tick_down(self, tmp_path: Path):
-        vault = self._vault_with_a_due_lens(tmp_path)
-        with patch(
-            "openaugi.pipeline.heartbeat.write_heartbeat", side_effect=Exception("disk full")
-        ):
-            _drain_tick(vault, str(tmp_path / "test.db"), {"tasks": {"schedule_lenses": True}})
-
-        (task,) = (vault / "OpenAugi" / "Tasks").glob("TASK-*-currency-board.md")
-        assert task.exists()
 
     def test_a_failing_scheduler_does_not_take_the_tick_down(self, tmp_path: Path):
         vault = self._vault_with_a_due_lens(tmp_path)

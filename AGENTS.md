@@ -214,6 +214,15 @@ The markers are Obsidian comments (hidden in reading view, plain text to an
 agent). The engine sentence that the ruling justifies stays outside the region,
 reworded for whoever installs this ("the user", "they").
 
+**When a personal process changes, the repo does not.** The user's workflow
+(the Sunday pass, the boards, what a lens asks) lives in vault lens files and
+changes there first. Repo code changes only when the engine is actually broken
+(a bug anyone would hit) or when the process needs a primitive it does not
+have — and then the agent says so before touching `src/`, because a primitive
+built for one iteration of a personal process is usually dead a day later
+(2026-09-20: the reflection do-box dispatch, added and removed the same day).
+Try the lens-only version for a week before asking the engine for anything.
+
 **Workflow.** Edit the vault file → `python3 scripts/sync_templates.py --write`
 (vault path from the openaugi config, or `--vault`) → commit the template.
 `--check` reports drift and is the pre-push habit. Which files `init` copies is

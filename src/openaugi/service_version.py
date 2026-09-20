@@ -17,6 +17,7 @@ diverge the moment you commit, which is exactly the window worth naming.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -64,6 +65,32 @@ def record_service_start(store: SQLiteStore, stamp: str, pid: int) -> None:
         {"started_at": stamp, "pid": pid, "sha": head_sha()},
         stamp,
     )
+
+
+def service_liveness(store: SQLiteStore) -> dict | None:
+    """Is the `up` process that last recorded a start still alive?
+
+    None when no daemon has ever recorded a start. Otherwise the recorded
+    pid and start time, with `alive` from a signal-0 probe — the cheapest
+    honest answer to "is OpenAugi running?", and the one `status` prints
+    first. launchd restarts the process when it dies; this line is for the
+    moment before it has, or for a machine where launchd is not loaded.
+    """
+    rows = store.list_records(SERVICE_STATE_COLLECTION, limit=10)
+    row = next((r for r in rows if r["id"] == UP_RECORD_ID), None)
+    if row is None:
+        return None
+    pid = row.get("pid")
+    alive = False
+    if isinstance(pid, int) and pid > 0:
+        try:
+            os.kill(pid, 0)
+            alive = True
+        except ProcessLookupError:
+            alive = False
+        except PermissionError:
+            alive = True
+    return {"pid": pid, "started_at": row.get("started_at"), "alive": alive}
 
 
 def version_drift(store: SQLiteStore) -> dict | None:

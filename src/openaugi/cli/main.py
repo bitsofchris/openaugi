@@ -1418,10 +1418,26 @@ def status(
 
         console.print(f"\n[bold]OpenAugi Status[/bold]  ({db_path})\n")
 
+        # First line answers the only question most days: is it running?
+        from openaugi.service_version import service_liveness, version_drift
+
+        live = service_liveness(store)
+        if live is None:
+            console.print("[yellow]watcher: never started[/yellow] — run `openaugi up`\n")
+        elif live["alive"]:
+            console.print(
+                f"[green]watcher: running[/green] "
+                f"(pid {live['pid']}, since {live['started_at']})\n"
+            )
+        else:
+            console.print(
+                f"[red]watcher: NOT running[/red] (last pid {live['pid']}, "
+                f"started {live['started_at']}).\n"
+                "  Restart it: [bold]launchctl kickstart -k gui/$(id -u)/com.openaugi.up[/bold]\n"
+            )
+
         # Loudest line on the page when it fires: everything below can be
         # healthy while the daemon runs code from a week ago.
-        from openaugi.service_version import version_drift
-
         drift = version_drift(store)
         if drift:
             behind = drift["commits_behind"]
@@ -1450,44 +1466,6 @@ def status(
                 console.print(f"  {kind}: {count}")
     finally:
         store.close()
-
-
-@app.command()
-def doctor(
-    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
-    db: str | None = typer.Option(None, "--db", help="Database path"),
-):
-    """Is `openaugi up` alive and ticking? Exits 1 when the heartbeat is stale.
-
-    Watcher pid, running commit vs HEAD, age of the last drain tick, and every
-    scheduled lens's last run and next due — the terminal twin of the
-    Dashboard's heartbeat block, for when Obsidian is not open. Read-only.
-    """
-    from openaugi.config import load_config, resolve_vault_path
-    from openaugi.doctor import diagnose, render
-    from openaugi.pipeline.schedule import schedule_timezone
-    from openaugi.store.sqlite import SQLiteStore
-
-    config = load_config()
-    vault_path = resolve_vault_path(path, config)
-    if not vault_path:
-        console.print("[red]No vault path specified.[/red] Use --path or set it in config.")
-        raise typer.Exit(1)
-
-    db_path = db or str(_default_db())
-    if not Path(db_path).exists():
-        console.print(f"[red]Database not found:[/red] {db_path}")
-        raise typer.Exit(1)
-
-    store = SQLiteStore(db_path, read_only=True)
-    try:
-        report = diagnose(Path(vault_path), store, tz=schedule_timezone(config))
-    finally:
-        store.close()
-
-    console.print(render(report), markup=False, highlight=False)
-    if not report["healthy"]:
-        raise typer.Exit(1)
 
 
 # ── Reading queue ──────────────────────────────────────────────────
