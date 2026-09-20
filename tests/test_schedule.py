@@ -20,6 +20,7 @@ from openaugi.pipeline.schedule import (
     record_run,
     run_due_lenses,
     scheduling_enabled,
+    slot_for,
     task_filename,
     write_lens_task,
 )
@@ -213,6 +214,73 @@ class TestLedger:
         with caplog.at_level("WARNING"):
             assert last_run(store, "currency-board") is None
         assert "currency-board" in caplog.text
+
+
+class TestSlotNotTick:
+    """The ledger records the boundary a run belongs to, never the tick.
+
+    The drift this guards against: the drain tick rides the debounce, so a
+    run whose boundary lands while the vault is busy fires late — and if the
+    late fire became the new anchor, every slip would move the cadence
+    forward, permanently. Three lenses seeded this way sat at 08:55 instead
+    of 06:00 within a day of the cutover.
+    """
+
+    def test_the_first_run_ever_is_its_own_origin(self):
+        assert slot_for(None, timedelta(days=1), NOW) == NOW
+
+    def test_a_late_fire_records_the_boundary_it_missed(self):
+        late = NOW + timedelta(minutes=40)
+        assert slot_for(NOW - timedelta(days=1), timedelta(days=1), late) == NOW
+
+    def test_a_long_sleep_skips_to_the_latest_boundary(self):
+        woke = NOW + timedelta(days=3, hours=2)
+        assert slot_for(NOW, timedelta(days=1), woke) == NOW + timedelta(days=3)
+
+    def test_a_previous_run_in_the_future_does_not_break_the_grid(self):
+        # A ledger seeded ahead of the clock (or a clock set back): stamp now
+        # rather than extrapolate a grid that starts in the future.
+        assert slot_for(NOW + timedelta(hours=1), timedelta(days=1), NOW) == NOW
+
+    def test_record_run_with_a_period_stamps_the_slot(self, store):
+        record_run(store, "currency-board", NOW - timedelta(days=1), "seed.md")
+        record_run(
+            store, "currency-board", NOW + timedelta(minutes=40), "t.md", period=timedelta(days=1)
+        )
+        assert last_run(store, "currency-board") == NOW
+
+    def test_record_run_without_a_period_stamps_verbatim(self, store):
+        # Hand-seeding the ledger has to be able to say exactly what it means.
+        record_run(store, "currency-board", NOW + timedelta(minutes=40), "t.md")
+        assert last_run(store, "currency-board") == NOW + timedelta(minutes=40)
+
+    def test_a_run_forced_40_minutes_late_does_not_move_the_next_fire(self, tmp_path, store):
+        write_lens(tmp_path, "currency-board", trigger="every 1d")
+        config = {"tasks": {"schedule_lenses": True}}
+        run_due_lenses(tmp_path, store, config, NOW)
+
+        late = NOW + timedelta(days=1, minutes=40)
+        assert len(run_due_lenses(tmp_path, store, config, late)) == 1
+        assert last_run(store, "currency-board") == NOW + timedelta(days=1)
+
+        # The day after, the fire time is still the original one — not 06:40.
+        assert run_due_lenses(tmp_path, store, config, NOW + timedelta(days=2, minutes=-1)) == []
+        assert len(run_due_lenses(tmp_path, store, config, NOW + timedelta(days=2))) == 1
+
+    def test_a_three_day_sleep_produces_one_catch_up_run_not_three(self, tmp_path, store):
+        write_lens(tmp_path, "currency-board", trigger="every 1d")
+        config = {"tasks": {"schedule_lenses": True}}
+        run_due_lenses(tmp_path, store, config, NOW)
+
+        woke = NOW + timedelta(days=3, hours=2)
+        assert len(run_due_lenses(tmp_path, store, config, woke)) == 1
+        assert run_due_lenses(tmp_path, store, config, woke + timedelta(minutes=5)) == []
+        assert len(list((tmp_path / "OpenAugi" / "Tasks").glob("TASK-*.md"))) == 2
+
+        # Caught up to its own grid: the next fire is the next boundary, on time.
+        assert last_run(store, "currency-board") == NOW + timedelta(days=3)
+        assert run_due_lenses(tmp_path, store, config, NOW + timedelta(days=4, minutes=-1)) == []
+        assert len(run_due_lenses(tmp_path, store, config, NOW + timedelta(days=4))) == 1
 
 
 class TestTaskFile:

@@ -248,6 +248,15 @@ Three guards, because the question has three failure modes:
 | `OpenAugi/Tasks/TASK-{date}-{lens}.md` exists | is it already queued? | a lost database |
 | the `dedupe:` output exists | did the work already land? | a re-import, a rebuilt vault |
 
+**The ledger records the slot, not the tick.** The drain tick rides the
+debounce, so a run whose boundary lands while the vault is busy fires late.
+What gets stamped as `last_run` is the boundary it belongs to — the latest
+`previous + n·period` not after now — never the moment the tick happened to
+run. A fire forty minutes late therefore does not move the next day's fire
+time, and a machine asleep for three days produces **one** catch-up run and
+lands back on its own grid, not three runs and a new anchor. A lens that has
+never run has no grid yet; its first run is the origin.
+
 ### The trade this makes
 
 `launchctl` fired whether or not anything else was running. The drain tick

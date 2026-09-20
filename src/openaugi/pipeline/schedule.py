@@ -24,6 +24,14 @@ session:
   failed the contract, or whose period will not parse, is logged and dropped.
   Being unable to read a cadence is not a reason to invent one.
 
+The ledger records the **slot, not the tick**. A late fire — the boundary
+landed while the vault was busy, or the machine was asleep — is stamped as the
+scheduled boundary it belongs to (`previous + n·period`, the latest one not
+after now), never as the moment the tick happened to run. Otherwise every slip
+would re-anchor the cadence and the drift only ever goes forward: a 06:00 board
+becomes a 06:04 board, then 06:11. A three-day sleep produces one catch-up run,
+not three, and lands the lens back on its own grid.
+
 Deduplication is deliberately two-layered, because "already ran" has two
 meanings. The schedule records the last run per lens, which answers *is it
 due*; the optional `## Run` section's `dedupe:` line names an output path,
@@ -140,8 +148,36 @@ def last_run(store: SQLiteStore, name: str) -> datetime | None:
         return None
 
 
-def record_run(store: SQLiteStore, name: str, when: datetime, task: str) -> None:
-    """Stamp a lens's run into the ledger. One row per lens, replaced in place."""
+def slot_for(previous: datetime | None, period: timedelta, now: datetime) -> datetime:
+    """The scheduled boundary a run at `now` belongs to.
+
+    The latest point on the lens's own grid (`previous + n·period`) that is
+    not after `now` — so a fire forty minutes late records the boundary it
+    missed, and a fire three days late skips to the most recent boundary
+    rather than replaying the ones in between. Without a previous run there
+    is no grid yet, and `now` becomes its origin.
+    """
+    if previous is None or now < previous:
+        return now
+    missed = (now - previous) // period
+    return previous + period * max(missed, 1)
+
+
+def record_run(
+    store: SQLiteStore,
+    name: str,
+    when: datetime,
+    task: str,
+    period: timedelta | None = None,
+) -> None:
+    """Stamp a lens's run into the ledger. One row per lens, replaced in place.
+
+    With a `period`, what is stamped is the slot the run belongs to (see
+    `slot_for`), not `when` itself; the tick is late, the grid is not. Without
+    one, `when` is stamped verbatim — that is how a ledger is seeded by hand.
+    """
+    if period is not None:
+        when = slot_for(last_run(store, name), period, when)
     stamp = when.isoformat()
     store.write_record(
         LENS_SCHEDULE_COLLECTION,
@@ -290,6 +326,6 @@ def run_due_lenses(
         path = write_lens_task(spec, vault, when, tasks_folder)
         if path is None:
             continue
-        record_run(store, spec["name"], when, path.name)
+        record_run(store, spec["name"], when, path.name, period=spec["period"])
         written.append(path)
     return written
