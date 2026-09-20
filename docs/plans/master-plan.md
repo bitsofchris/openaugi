@@ -7,6 +7,36 @@ description: The long-running sequence — what to build and use next, in order,
 
 ## STATUS / LEFT OFF (update every session)
 
+**2026-09-20: the cutover — launchd is gone, the trigger field is the schedule.**
+`feat/writeback` rebased onto main and merged (`07bd4a5`); the full suite is
+green. Then the vault half, in order: `currency-board.md` → `every 1d` with a
+`## Run` section carrying `dedupe: OpenAugi/Board/{date} - Board.md`,
+`substack-batch.md` → `every 7d` (its illegal `weekly` is gone),
+`detector-coping.md` → `on-demand` (parked with the pings; `on-pass` would have
+run it inside every review pass). `[tasks] schedule_lenses = true` in
+`~/.openaugi/config.toml`, watcher kickstarted. The tick then wrote three due
+lens tasks — `habit-parse`, `habit-read`, `system-janitor` — and the task
+watcher launched all three as agent sessions, which is the whole path proven
+end to end. `com.openaugi.board.plist`, `com.openaugi.substack.plist`,
+`scripts/write-board-task.sh` and `scripts/write-substack-task.sh` are deleted.
+
+One thing the four steps did not name and this cutover needed: the
+`lens_schedule` ledger was empty, so every cadence would have restarted from
+the moment the key was flipped — the board pinned to whenever that happened
+(00:00 UTC, i.e. 8pm local, dated the *next* UTC day) and substack moved from
+Friday to whatever weekday the flip landed on. Seeded two rows with the runs
+launchd had actually done — `currency-board` 2026-09-20T10:00Z, `substack-batch`
+2026-09-18T10:30Z — so the schedule moved rather than restarted. Worth knowing
+for any future lens given a cadence: the first run happens immediately unless
+its ledger row says otherwise.
+
+**Still open:** a stopped watcher is now the single point of failure for every
+scheduled surface and it is still invisible — the overdue-lenses line on the
+Dashboard is unbuilt. And `every <period>` is a pure interval in UTC, so a
+cadence cannot say "Friday" or "06:00 local"; it holds the time of day its
+last run landed on, and drifts with the tick. Fine for now, wrong the first
+time a DST boundary or a long sleep shifts it.
+
 **2026-09-13: the week's branches merged, and the engine / personal line.**
 `fix/keep-proposal-dispatch` (chat harvest, reading queue, carry-forward,
 checkbox review signal, writeback module, proposal-brief fix) merged to `main`

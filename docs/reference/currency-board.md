@@ -111,7 +111,7 @@ and make *identifying the object* the first action.
 ## How it works
 
 ```
-launchd 06:00 → scripts/write-board-task.sh → OpenAugi/Tasks/TASK-<date>-currency-board.md
+watcher drain tick → `trigger: every 1d` → OpenAugi/Tasks/TASK-<date>-currency-board.md
               → task_watcher picks it up → agent applies the currency-board lens
               → OpenAugi/Board/<date> - Board.md  (+ View - Board.md embed)
 
@@ -207,28 +207,24 @@ dedupe: OpenAugi/Board/{date} - Board.md
 ```
 
 ```bash
-# 3. build one now, without waiting for the tick
-scripts/write-board-task.sh        # honors $OPENAUGI_VAULT; no-ops if today's board or task exists
+# 3. build one now, without waiting for the tick — write the task file by hand
+#    (or ask for it: `zzz: apply lens currency-board`)
 
 # 4. rendering — install and enable the snippet once
 cp src/openaugi/templates/board.css "<vault>/.obsidian/snippets/board.css"
 #    Obsidian → Settings → Appearance → CSS snippets → enable "board"
 ```
 
-**Migrating off launchd (pending).** The original install scheduled the board
+**Migrated off launchd 2026-09-20.** The original install scheduled the board
 with `~/Library/LaunchAgents/com.openaugi.board.plist` calling
-`scripts/write-board-task.sh` at 06:00. Both are still in place and still work;
-neither is needed once the lens carries its own trigger. The cutover, in order,
-because each step depends on the one before it:
-
-1. Give `currency-board.md` a `trigger: every 1d` and a `## Run` section.
-2. Turn on `tasks.schedule_lenses` and restart the watcher.
-3. Watch one day's board get built by the tick.
-4. `launchctl unload ~/Library/LaunchAgents/com.openaugi.board.plist` and
-   delete the plist; delete `scripts/write-board-task.sh`.
-
-Doing 4 before 3 leaves no schedule at all. `com.openaugi.substack.plist` and
-`scripts/write-substack-task.sh` migrate the same way, with `every 7d`.
+`scripts/write-board-task.sh` at 06:00. Both are gone, as are
+`com.openaugi.substack.plist` and `scripts/write-substack-task.sh`; the cadence
+is the `trigger:` field on each lens file and nothing else. The order mattered
+and is worth keeping written down, because each step depended on the one
+before it: (1) the lens files get their triggers, (2) the config key goes on
+and the watcher restarts, (3) one lens is watched firing from the tick, (4)
+only then are the plists and scripts deleted. Doing 4 before 3 leaves no
+schedule at all.
 
 **What the trade costs.** `launchctl` fired at 06:00 whether or not anything
 else was up. The drain tick only fires while `com.openaugi.up` is running, so a
@@ -237,14 +233,15 @@ stopped watcher means no board — and a stopped watcher is currently invisible.
 `.obsidian/` is gitignored in the vault, so the snippet's versioned copy lives
 at `src/openaugi/templates/board.css` in this repo — edit there, copy across.
 
-- **Logs:** `/tmp/openaugi-board.log` and `/tmp/openaugi-board.err` for the
-  schedule; the agent run itself lands in the task file's `## Results` and in
-  its tmux session.
-- **Rebuild today's board:** delete `OpenAugi/Board/<date> - Board.md` and run
-  the script again. State is keyed by item, not by file, so answers already
+- **Logs:** `~/.openaugi/logs/up.err` for the schedule (`Scheduled lens
+  currency-board → ...`); the agent run itself lands in the task file's
+  `## Results` and in its tmux session.
+- **Rebuild today's board:** delete `OpenAugi/Board/<date> - Board.md`; the
+  `dedupe:` line is what was suppressing the rerun, so the next tick builds it. State is keyed by item, not by file, so answers already
   recorded survive the rebuild and the new board still won't re-propose them.
-- **Turn it off:** `launchctl unload ~/Library/LaunchAgents/com.openaugi.board.plist`.
-  Nothing else in the system depends on the board existing.
+- **Turn it off:** set `trigger: on-demand` in the lens file (or
+  `schedule_lenses = false` to stop every scheduled lens at once). Nothing else
+  in the system depends on the board existing.
 - **Inspect or repair state:** `OpenAugi/Board/.board-state.json` is plain JSON,
   but it is generated — hand-edits are discarded on the next tick. To repair it,
   delete it and replay:
