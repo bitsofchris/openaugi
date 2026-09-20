@@ -44,16 +44,25 @@ facets and the container registry.
   to the target note — nothing beyond what was drafted — and record the
   outcome on the proposal (`state: "done"`, `executed: "…"`).
   Approval-executed edits are the one exception to "never edit outside
-  OpenAugi/".
+  OpenAugi/" — path (b) of augi-agent "Where you write".
 
 ## Capture grammar
 
 - `qqq` — block delimiter (already handled at ingest).
 - `zzz:` — agent dispatch. **Not yours** — the dispatch system handles these.
   Skip zzz blocks for routing commentary but still count them as activity.
-- `aaa:` — a routing/parsing instruction addressed to YOU. Obey it.
-  Examples: "aaa: route to OpenAugi Mobile", "aaa: find my note on
-  Matryoshka embeddings and link this".
+- `aaa:` — an instruction addressed to whichever agent reads the block next.
+  Obey it. Examples: "aaa: route to OpenAugi Mobile", "aaa: find my note on
+  Matryoshka embeddings and link this", "aaa: make a task to ...".
+  It is the same act as a `zzz:` minus the dispatch, so it must never be
+  dropped: three surfaces read it and each one is allowed to act.
+  The **review pass** obeys the routing-shaped ones inline. The **currency
+  board** turns an unactioned one in its window into a proposal
+  (`lenses/currency-board.md` step 3). The **weekly reflection** routes every
+  one of the week's, actioned or not, in *Triage outside the slots*
+  (`lenses/weekly-reflection.md`) — it is the safety net. On the board only,
+  an `aaa:` written *under a board item* is feedback about that item instead,
+  never an instruction.
 
 ## Container registry
 
@@ -737,7 +746,7 @@ is due, then continue.
 
 ## Hard rules
 
-- Never modify notes outside `OpenAugi/` — except to apply the exact edit
+- Never modify notes outside `OpenAugi/` (augi-agent, "Where you write") — except to apply the exact edit
   an approved nomination drafted (approval is the command; apply nothing
   beyond the draft). Never use `overwrite=True` outside `Views/`, and inside
   `Views/` only `View - Dashboard.md` is still written.

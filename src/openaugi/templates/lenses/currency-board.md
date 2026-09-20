@@ -4,8 +4,8 @@ name: currency-board
 description: >-
   The terse daily board — this week's slots, where each active thing left off (from its PMOC and the coding sessions), one move each, at most three judgment items, at most two proposals. Read at re-entry, answered with checkboxes.
 scope: >-
-  [[Slowly Changing Context]] first, every run. Then the `#status/active` PMOCs (newest dated entry each), the coding sessions since the last board (Claude Code ~/.claude/projects, Codex ~/.codex/sessions via scripts/session_harvest.py in the openaugi repo), their own writing since the last board (daily notes, PMOC/AMOC entries; default 72h), and OpenAugi/Board/.board-state.json. Never OpenAugi-generated prose except the board state and the previous board.
-trigger: on-demand   # daily 06:00 via launchd until the lens scheduler cutover (PMOC - Lens Scheduler)
+  [[Slowly Changing Context]] first, every run. Then the `#status/active` PMOCs (newest dated entry each), the coding sessions since the last board (Claude Code ~/.claude/projects, Codex ~/.codex/sessions via scripts/session_harvest.py in the openaugi repo), their own writing since the last board (daily notes, PMOC/AMOC entries; default 72h) including every `Aaa:` instruction in it, [[Quiz Schedule - Foundations]] (the quiz review rows), and OpenAugi/Board/.board-state.json. Never OpenAugi-generated prose except the board state and the previous board.
+trigger: every 1d
 target: >-
   note — OpenAugi/Board/YYYY-MM-DD - Board.md (a new dated note per run; yesterday's ticked boxes stay readable). Then overwrite OpenAugi/Views/View - Board.md with a link and embed of today's board.
 ---
@@ -26,13 +26,25 @@ menu of directions, never comment on how they spent their time.
 The board is the only surface that promises currency. If a claim here is
 stale, the board is broken.
 
+## Run
+
+What a scheduled run needs that a person asking for one would have said out
+loud. Read `OpenAugi/Board/.board-state.json` before building anything — it is
+step 1 of the Process below and it is the one file a cold run cannot infer.
+
+dedupe: OpenAugi/Board/{date} - Board.md
+
+Today's board existing is proof the day's run already landed, whatever the
+schedule records say. A rerun is their call: delete the board.
+
 ## Anchor
 
 Read [[Slowly Changing Context]] first. §4 is three named slots, P0–P2, set
 by them on Sunday, plus Self and Work lines. Every left-off and every move is
 framed against §4 and §3; a move that serves neither is not a move for this
 week. If §4 looks superseded by their writing, one italic line under `This
-week` says so; the board does not act on it.
+week` says so; the board does not act on it. §4 is rewritten by the Sunday
+pass's Apply step (`lenses/weekly-reflection.md`), never by this board.
 
 ## Process
 
@@ -45,7 +57,21 @@ week` says so; the board does not act on it.
 2. **Gather the window.** Their writing since `last_run` (fall back to 72h) by
    ingest time: daily notes, PMOC and AMOC entries. The previous board's
    `aaa:` lines and ticks.
-3. **Build the left-off for each active thing.** Active things are the
+3. **Collect the `Aaa:` instructions in the window.** An `Aaa:` line in their own
+   writing is an instruction addressed to augi (capture grammar,
+   `OpenAugi/AGENT/review-pass.md`) — the typed equivalent of them telling an
+   agent to do something. Every one in the window that has no artifact on disk
+   yet becomes a **proposal** in `Augi could run these`, with its brief written
+   from the instruction and the block it sits under, and the block quoted on the
+   `↳` line. Its key is `aaa-<kebab of the instruction>`, so a declined or
+   dispatched one never returns. This is the board's only source of proposals it
+   did not derive from a lane. More than two in a window: carry the two whose
+   blocks are closest to the §4 slots and leave the rest to the weekly
+   reflection, which routes all of them.
+   **The two `aaa` are different things.** `aaa:` under a board item is their
+   feedback about *that item*. `Aaa:` in a daily note or a MOC entry is an
+   instruction to *do something*. Never read one as the other.
+4. **Build the left-off for each active thing.** Active things are the
    `#status/active` PMOCs on [[Dashboard]] plus the §4 slots. For each, read
    two sources together: the PMOC's newest dated `###` entry, quoted, and the
    coding sessions since the last board that touched it, matched by repo and
@@ -54,26 +80,50 @@ week` says so; the board does not act on it.
    finished, what is uncommitted or waiting on them. Name the session on the
    `↳` line so they can resume it. A session is a source for the left-off,
    never a section, a thread, or a status line.
-4. **One move per active thing.** Derived from the left-off, never invented.
+5. **One move per active thing.** Derived from the left-off, never invented.
    A move names a physical action, carries an activity chip (`focus` /
    `quick` / `read` / `ship` / `build` / `decide`) and a time estimate, and
    carries its context on a `↳` line: what to open to start, the note, path,
    or session. A quiet lane gets its left-off line and no move. When the
    source is vague, quote the vagueness and make identifying the object the
    move; never manufacture precision.
-5. **Judgment, cap three, section omitted when empty.** Decisions that block
+6. **Quiz reviews due.** Read the table in [[Quiz Schedule - Foundations]].
+   A row whose `due` is today or earlier and whose `done` box is unticked is
+   due. When one is, the Fundamentals lane's move *is* that review:
+   `quick · 10 min · Quiz review N of unit NN`. The `↳` line gives the quiz
+   file path and how to start: Claude Code in `~/repos/deep-learning`,
+   Prompt B from [[Lecture Learning Prompt]]. It replaces the move step 5
+   would have derived for that lane; the left-off line stays. Nothing due,
+   this step writes nothing.
+   Only rows in the note count; never invent a due date.
+7. **Judgment, cap three, section omitted when empty.** Decisions that block
    something and that only they can make: blocked builds, tasks at
    `needs-input`, a registration or ingest check. Ranked by age and by
    whether their recent writing mentions it. Each states in one line what
    ticking means.
-6. **Proposals, cap two, section omitted when empty.** Work augi would do,
-   derived from the priorities already on the board. The `↳` brief is the
+8. **Proposals, cap two, section omitted when empty.** Work augi would do:
+   first the `Aaa:` instructions from step 3, which take the slots ahead of
+   anything derived, then work derived from the priorities already on the board. The `↳` brief is the
    prompt the agent receives verbatim on `do`: three sentences, what, over
    what scope, producing what artifact. Multi-day work restates its whole
    context every day it appears. Never re-offer a `declined` or `dispatched`
    proposal unless its output is on disk and the next step is different.
    Propose nothing rather than pad.
-7. **Write the board** in the format below, then overwrite
+9. **Habits: parse yesterday, then show it back.** First apply
+   [[habit-parse]] for yesterday (it writes `OpenAugi/Habit Log/<yesterday>.md`
+   from the daily note's `# Habits` section, or nothing if the section is
+   absent or the file already exists). Then, under `This week`, one line
+   naming the active habits from the Self column of [[Kanban]] and yesterday's
+   tick count (`2/3 yesterday`, or `no log yesterday`), followed by an embed
+   of the log file — `![[OpenAugi/Habit Log/<yesterday>]]` — so they can check
+   the parse and fix a row in place. Never interpret, never streak-count,
+   never comment on a miss. The journal prose stays theirs.
+   When the newest `OpenAugi/Notes/YYYY-MM-DD - Habit Read.md` carries
+   unanswered questions (a `<!-- habit:... -->` block with neither box
+   ticked), repeat those blocks verbatim under the same habits line, under
+   the heading `*From the habit read (<its date>):*`, until they tick one or
+   [[habit-read]] drops it. Carry the boxes; add nothing to them.
+10. **Write the board** in the format below, then overwrite
    `OpenAugi/Views/View - Board.md` with a link and embed of it.
 
 Other lenses feed sections, never add them: `open-loops` over the window for
@@ -224,6 +274,19 @@ by the nearest heading above.
   cold and belongs as a scoped task.
 - Never invent precision the source does not have.
 - Never re-offer a `declined` proposal or re-propose a retired item.
+- Never propose running the weekly reflection, the janitor, or any other
+  `every` lens — those are scheduled and fire on their own. On a Sunday the
+  board says under `## This week` that today's reflection lands at ~06:30
+  (`OpenAugi/Research/Weekly Reflection - <today>.md`), nothing more.
+- **Monday only:** if `last_reviewed` in [[Slowly Changing Context]] is older
+  than yesterday, the first italic line under `## This week` is *Sunday pass
+  not applied — [[Weekly Reflection - <date>]] is waiting on its ticks.* One
+  line, no proposal, no other change. That is the whole "is Sunday done"
+  check.
+- Never drop an `Aaa:` instruction from the window without either
+  proposing it or leaving it for the weekly reflection. A typed
+  instruction that no surface picked up is the one failure this board
+  cannot have.
 - The only states are `done` / `not-doing` / `someday` / `open`, each from a
   ticked box.
 - Never write a "not yet seen" list, a drift section, a flags section, a

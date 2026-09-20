@@ -10,7 +10,7 @@ consumers: [weekly-reflection, currency-board, kanban, task-dispatch]
 
 ## What a PMOC is, and what it is not
 
-A **PMOC is an outcome that takes more than one sitting.** It accumulates dated entries; the newest entry is where they left off. It ends when the outcome sentence is true. It is a card on the Board (a thing that ends), it is `#status/active` while it is on the Board, and it is never deleted: an inactive PMOC is the memory the PMOC check reads before anything similar gets a new note.
+A **PMOC is an outcome that takes more than one sitting.** It accumulates dated entries; the newest entry is where they left off. It ends when the outcome sentence is true. It is a card on the Board (a thing that ends), it carries `#status/active` while the user is working it — the tag is their marker for the Dashboard query, not a mirror of the Board — and it is never deleted: an inactive PMOC is the memory the PMOC check reads before anything similar gets a new note.
 
 A **TASK is one dispatched unit of work** — a `zzz:` or a board `do`, hydrated by the task watcher, finished inside one session, with a `## Results` section. A task may *belong* to a PMOC (it links it) but is never one.
 
