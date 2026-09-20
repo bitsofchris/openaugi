@@ -41,12 +41,14 @@ schedule records say. A rerun is their call: delete the board.
 
 ## Anchor
 
-Read [[Slowly Changing Context]] first. §4 is three named slots, P0–P2, set
-by them on Sunday, plus Self and Work lines. Every left-off and every move is
-framed against §4 and §3; a move that serves neither is not a move for this
-week. If §4 looks superseded by their writing, one italic line under `This
-week` says so; the board does not act on it. §4 is rewritten by the Sunday
-pass's Apply step (`lenses/weekly-reflection.md`), never by this board.
+Read [[Slowly Changing Context]] first. §4 says: **this week is the top card
+in each column of the Board** (`_private/0-Current Focus/Kanban.md`), in the
+lane order §4 names, plus a Work line. Read the Board's current order every
+run — they reorder it whenever they want, and the board follows. Every
+left-off and every move is framed against those top cards and §3; a move
+that serves neither is not a move for this week. If the Board's order looks
+superseded by their writing, one italic line under `This week` says so; the
+board does not act on it and never edits the Board.
 
 ## Process
 
@@ -68,13 +70,13 @@ pass's Apply step (`lenses/weekly-reflection.md`), never by this board.
    `↳` line. Its key is `aaa-<kebab of the instruction>`, so a declined or
    dispatched one never returns. This is the board's only source of proposals it
    did not derive from a lane. More than two in a window: carry the two whose
-   blocks are closest to the §4 slots and leave the rest to the weekly
+   blocks are closest to the top cards and leave the rest to the weekly
    reflection, which routes all of them.
    **The two `aaa` are different things.** `aaa:` under a board item is their
    feedback about *that item*. `Aaa:` in a daily note or a MOC entry is an
    instruction to *do something*. Never read one as the other.
 4. **Build the left-off for each active thing.** Active things are the
-   `#status/active` PMOCs on [[Dashboard]] plus the §4 slots. For each, read
+   `#status/active` PMOCs on [[Dashboard]] plus the top card of each Board column. For each, read
    two sources together: the PMOC's newest dated `###` entry, quoted, and the
    coding sessions since the last board that touched it, matched by repo and
    title (a session's repo or vault name maps to the PMOC it serves).
@@ -187,8 +189,8 @@ and anything carrying a `reason`, is durable.
 
 Plain markdown, headings not callouts, so every line can be tapped into
 on a phone. Empty sections are omitted. Bookkeeping lives in a collapsed
-`<details>` block near the bottom, never at the top. Lanes render in §4
-priority order.
+`<details>` block near the bottom, never at the top. Lanes render in the
+lane order §4 names.
 
 ````markdown
 ---
@@ -203,9 +205,8 @@ created: <date>
 
 ## This week
 
-- **P0 · <lane>** — <§4 line, quoted>
-- **P1 · <lane>** — <§4 line, quoted>
-- **P2 · <lane>** — <§4 line, quoted>
+- **<lane>** — [[<top card>]] — <its clause, quoted>   (one line per Board column that has a card, in §4 lane order; Household / Other omitted)
+- **Work** — <the §4 Work line, quoted>
 *<optional: one rule of theirs that applies today>*
 
 ## <Lane name> · <three-word state>

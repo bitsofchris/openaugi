@@ -65,7 +65,7 @@ A Board card in OpenAugi or Research Engineer is a PMOC. The Board is the record
 
 - **A card is a thing that ends.** A task or a project — something that can be ticked done. A reference note, a system description, an AMOC, a habit, an idea with no next action: never a card. A reference belongs as a link on the area's AMOC journal or the Dashboard. If a card cannot be finished, it is misfiled.
 - **One card, one link, one clause.** `- [ ] [[Note]] — why it is here`. If there is no note, the clause is the whole card and it should be short enough to do in an hour, otherwise it needs a note first.
-- **No priorities on the board.** Order within a column is theirs. Agents append at the bottom.
+- **Order within a column is theirs, and it means something: the top card of each column is this week's focus** ([[Slowly Changing Context]] §4). Agents append at the bottom and never reorder, except the Sunday session performing a reorder they ruled.
 - **No duplicates.** Search the board (all columns and Archive) before adding. A card that exists gets its clause updated, not a twin.
 - **Source stays with the card** when an agent adds it: `(from [[2026-09-11]])` at the end of the clause, so they can see why it appeared.
 - **Nothing lane-shaped.** If it belongs to an active PMOC, it is a left-off line in that PMOC, not a card here. Habits are not cards ([[Slowly Changing Context]] §7).

@@ -37,7 +37,8 @@ call: delete the note, or say `apply lens weekly-reflection`.
    linked under `# AI Thoughts`). That note is theirs; no lens writes to it.
 3. They open a chat session and say **`run the Sunday pass`**. The session
    follows *The Sunday session* below: one question per turn, each ruling
-   applied the moment it is made — Weekly focus, cards, janitor fixes.
+   applied the moment it is made — this week's cards, other card moves,
+   janitor fixes.
 4. **Done** is one fact: `last_reviewed` in [[Slowly Changing Context]] equals
    this Sunday. Monday's board says one line if it does not.
 
@@ -106,11 +107,12 @@ and the newest dated entry in `OpenAugi/Notes/System Janitor.md`. Then ask,
 client has one (numbered options otherwise), in this order. Their thoughts
 outrank the draft: where they disagree, offer what they wrote.
 
-1. **Weekly focus** — one question per line, P0 · P1 · P2 · Self · Work.
-   Quote the current line; offer *affirm*, one drafted full replacement
-   (smallest next step first, from their words, dated), and *retire*. Write
-   the ruled line into §4 before asking the next. The heading becomes
-   `## 4. Weekly focus — week of <next Monday>` on the first change.
+1. **This week's cards** — one question: the top card of each Board column,
+   listed in §4 lane order, with *confirm* or a reorder drafted from their
+   thoughts (which card rises, which drops, per column). Perform the reorder
+   on the Board before the next question. Then one question for the §4
+   **Work** line only if their week contradicts it; they usually set it
+   themselves.
 2. **The other sections** — only where the week contradicts them, at most
    three, one question each: *edit as drafted* or *leave*. Explain what the
    section is for in two lines when they ask; never assume they remember.
@@ -128,9 +130,9 @@ outrank the draft: where they disagree, offer what they wrote.
    `✓ fixed <date>`. Leave the rest.
 5. **Close** — set `last_reviewed: <this Sunday>` and append one change-log
    line to [[Slowly Changing Context]] (`- **<date>** — Sunday pass from
-   [[Weekly Reflection - <date>]]: <one clause per changed slot>`). Append
-   `## Applied` to the draft: at most five lines — what changed in §4, cards
-   moved and added, fixes run, anything ruled that could not be done. End in
+   [[Weekly Reflection - <date>]]: <the top cards this week, one clause>`).
+   Append `## Applied` to the draft: at most five lines — the top cards,
+   cards moved and added, fixes run, anything ruled that could not be done. End in
    chat with one line and a *what's left* list, ideally empty.
 
 Rules for the session: never more than one question in a turn, never a
@@ -139,8 +141,9 @@ an answer of "leave" or "skip" means untouched. "Discuss" means a short
 conversation, then the same question again. Never propose PMOC entries, a
 pull from the Backlog, or a demotion unless they ask. If they stop midway,
 the receipt names what was ruled and what was not, and a later `run the
-Sunday pass` resumes there — a §4 heading already carrying next Monday's
-date and a card `aaa:` already marked done are skipped.
+Sunday pass` resumes there — a card `aaa:` already marked done is skipped,
+and `last_reviewed` already equal to this Sunday means only the receipt is
+missing.
 
 ## Rules
 
