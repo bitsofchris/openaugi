@@ -293,6 +293,12 @@ def main() -> int:
     ap.add_argument("--claude-dir", default="~/.claude/projects")
     ap.add_argument("--codex-dir", default="~/.codex/sessions")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument(
+        "--changed",
+        action="store_true",
+        help="rewrite only cards whose transcript changed since the card "
+        "was written; the index is always refreshed",
+    )
     args = ap.parse_args()
     vault = resolve_vault(args.vault)
     if vault is None:
@@ -311,10 +317,17 @@ def main() -> int:
         return 0
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    written = 0
     for s in sessions:
-        (out_dir / card_filename(s)).write_text(render_card(s), encoding="utf-8")
+        card = out_dir / card_filename(s)
+        if args.changed and card.exists():
+            src = Path(s.source_path)
+            if src.exists() and src.stat().st_mtime <= card.stat().st_mtime:
+                continue  # transcript unchanged since the card was written
+        card.write_text(render_card(s), encoding="utf-8")
+        written += 1
     (out_dir / "Sessions Index.md").write_text(render_index(sessions), encoding="utf-8")
-    print(f"wrote {len(sessions)} cards + index -> {out_dir}")
+    print(f"wrote {written} cards ({len(sessions)} in window) + index -> {out_dir}")
     return 0
 
 

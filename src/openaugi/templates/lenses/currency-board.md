@@ -39,6 +39,19 @@ dedupe: OpenAugi/Board/{date} - Board.md
 Today's board existing is proof the day's run already landed, whatever the
 schedule records say. A rerun is their call: delete the board.
 
+**Build only what changed, per card.** Before building, compare each Board
+card against its lane on the previous board. A lane is rebuilt only when its
+card changed: an `aaa:` line or a ticked box under it since the previous
+board, a coding session for its repo or title with a transcript newer than
+that board, the card itself moved or reworded on [[Kanban]], or an `Aaa:` in
+their writing that names it. An unchanged lane is carried forward verbatim
+from the previous board — left-off, move, boxes and item key untouched, its
+age incremented. Their daily writing alone does not rebuild a lane. If no
+card changed, write nothing: [[View - Board]] keeps pointing at the previous
+board and the bookkeeping records "unchanged". Sessions are read
+incrementally: only transcripts changed since the previous board are opened
+(`scripts/session_cards.py --days 14 --changed`), never the whole store.
+
 ## Anchor
 
 Read [[Slowly Changing Context]] first. §4 says: **this week is the top card
