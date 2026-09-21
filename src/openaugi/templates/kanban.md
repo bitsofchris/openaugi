@@ -10,6 +10,8 @@ consumers: [currency-board, weekly-reflection, review-pass, habit-parse]
 
 ## What it is
 
+**Only the user makes cards.** Agents never add a card to the Board; new cards come up at Sunday triage and are discussed there. Agents may add to the Backlog with a source, as below.
+
 Two boards in `_private/0-Current Focus/`, opened by the Obsidian Kanban plugin: **`Kanban.md` is the Board** (in progress and next, cap 3 per AMOC column) and **`Backlog.md` is the Backlog** (never lost, no cap). System note: [[MOC - My Operating System]]. A **column is an AMOC** from [[My Taxonomy]], plus Triage (Board only) and Household / Other (both). A **card is a link** to the note that holds the work, plus at most one clause. The board holds; it never explains. If a card needs a paragraph, the paragraph goes in the linked note and the card stays one line.
 
 The boards are updated together on Sundays. Design history: [[PMOC - Kanban per Area - Triage, Park, Elevate]].
