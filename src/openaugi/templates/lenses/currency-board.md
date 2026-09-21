@@ -2,7 +2,7 @@
 kind: engine
 name: currency-board
 description: >-
-  The terse daily board — this week's slots, where each active thing left off (from its PMOC and the coding sessions), one move each, at most three judgment items, at most two proposals. Read at re-entry, answered with checkboxes.
+  The terse daily board — this week's slots, where each active thing left off (from its PMOC and the coding sessions), one move each, at most three judgment items, and the delegation queue: one agent-doable step per active card with a verification line. Read at re-entry, answered with checkboxes.
 scope: >-
   [[Slowly Changing Context]] first, every run. Then the `#status/active` PMOCs (newest dated entry each), the coding sessions since the last board (Claude Code ~/.claude/projects, Codex ~/.codex/sessions via scripts/session_harvest.py in the openaugi repo), their own writing since the last board (daily notes, PMOC/AMOC entries; default 72h) including every `Aaa:` instruction in it, [[Quiz Schedule - Foundations]] (the quiz review rows), and OpenAugi/Board/.board-state.json. Never OpenAugi-generated prose except the board state and the previous board.
 trigger: every 1d
@@ -105,14 +105,23 @@ board does not act on it and never edits the Board.
    `needs-input`, a registration or ingest check. Ranked by age and by
    whether their recent writing mentions it. Each states in one line what
    ticking means.
-8. **Proposals, cap two, section omitted when empty.** Work augi would do:
-   first the `Aaa:` instructions from step 3, which take the slots ahead of
-   anything derived, then work derived from the priorities already on the board. The `↳` brief is the
-   prompt the agent receives verbatim on `do`: three sentences, what, over
-   what scope, producing what artifact. Multi-day work restates its whole
-   context every day it appears. Never re-offer a `declined` or `dispatched`
-   proposal unless its output is on disk and the next step is different.
-   Propose nothing rather than pad.
+8. **Proposals — the delegation queue. One per active card, section omitted
+   when empty.** For each card on the Board whose next step an agent can take
+   alone, one proposal, about that card's work only — derived from its PMOC
+   and its coding sessions, never from the week's writing or the priorities on
+   their own. The board never creates a card, note, or PMOC; only the user
+   makes cards, at Sunday triage. `Aaa:` instructions from step 3 come first and count
+   against their card. The `↳` brief is the prompt the agent receives verbatim
+   on `do`: three sentences, what, over what scope, producing what artifact.
+   Then two labeled lines: `for: [[card note]]`, the note the receipt lands
+   in, and `verify: <how they know it is done without reading the transcript>`
+   (a test passing, a file at a path, a note with links). A card whose next
+   step needs them shows in step 7 as blocked on them with the question named,
+   and gets no proposal. Cards in the learning lane get no proposal unless
+   their `aaa:` asks for one.
+   Multi-day work restates its whole context every day it appears. Never
+   re-offer a `declined` or `dispatched` proposal unless its output is on disk
+   and the next step is different. Propose nothing rather than pad.
 9. **Habits: parse yesterday, then show it back.** First apply
    [[habit-parse]] for yesterday (it writes `OpenAugi/Habit Log/<yesterday>.md`
    from the daily note's `# Habits` section, or nothing if the section is
@@ -213,8 +222,9 @@ created: <date>
 
 *Left off: [[PMOC]] <date> — "<their newest dated entry, quoted>." Session `<repo · title>` ended with <finished / uncommitted / waiting on them>.*
 
-- **<The one concrete next move>** `chip · time`
+- **You:** <the one concrete next move> `chip · time`
     ↳ <what to open to start: [[note]] · path · session>
+- **Augi:** <the one delegable step, or the word *nothing*> — its brief and boxes live under *Augi could run these*
     - [ ] done
     - [ ] not doing
     - [ ] someday
@@ -233,10 +243,12 @@ created: <date>
 
 ## Augi could run these
 
-*`do` dispatches an agent on the brief as written; `no` means never offer it again.*
+*One per active card, only what an agent can do alone. `do` dispatches it on the brief as written; the receipt lands in the `for:` note. `no` means never offer it again.*
 
 - **<The task, phrased as you would want to receive it cold>** `chip · est`
     ↳ <three sentences: what, over what scope, producing what artifact. Day two of a multi-day piece restates the whole context.>
+    for: [[<the card note the receipt lands in>]]
+    verify: <how they know it is done without reading the transcript>
     - [ ] do
     - [ ] no
     <!-- propose:<stable-kebab-key> -->
