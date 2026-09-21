@@ -32,7 +32,7 @@ order of what a fresh session should read:
    `Backlog.md`, one column per AMOC. Rules: `OpenAugi/AGENT/kanban.md`.
    The user moves cards; agents add with a source and propose as checkboxes.
 4. **PMOCs** — the active projects; newest dated Journal entry is the
-   left-off. Rules and the two tiers: `OpenAugi/AGENT/pmoc.md`.
+   left-off. Rules, and task note vs PMOC: `OpenAugi/AGENT/pmoc.md`.
 5. **The currency board** — `lenses/currency-board.md`, terse, daily, reads
    PMOCs and coding sessions for the left-off. **The weekly reflection** —
    `lenses/weekly-reflection.md` — is the bigger pass and the only place

@@ -1,7 +1,7 @@
 ---
 kind: engine
 name: pmoc
-description: How a PMOC is made and kept — the two tiers (dated note on the Backlog, PMOC when active), the line between a task and a project, the note format, and the five-step pass (intent, PMOC check, context, related, first entry). Read before creating or reviving any PMOC or tier-two note.
+description: How a PMOC is made and kept — the two kinds (a task note on the Backlog, a PMOC when active), the line between a task and a project, the note format, and the five-step pass (intent, PMOC check, context, related, first entry). Read before creating or reviving any PMOC or task note.
 created: 2026-09-13
 consumers: [weekly-reflection, currency-board, kanban, task-dispatch]
 ---
@@ -16,14 +16,14 @@ A **TASK is one dispatched unit of work** — a `zzz:` or a board `do`, hydrated
 
 Rule of thumb: **if it will have a second dated entry, it is a PMOC.** If it is done when the session ends, it is a task. An **AMOC** is an area, never active, never a card.
 
-## Two tiers
+## Two kinds: task note and PMOC
 
-| Tier | Note | Lives | Card | Tag |
+| Kind | Note | Lives | Card | Tag |
 |---|---|---|---|---|
-| **Tier two** — a thread with an end state but not yet a project | `OpenAugi/Notes/YYYY-MM-DD - <what it is>.md` — end state, their words, what exists, what is missing, smallest next step. No Journal, no header. | OpenAugi/Notes | Backlog, its AMOC column | none |
+| **Task note** — a thread with an end state but not yet a project | `OpenAugi/Notes/YYYY-MM-DD - <what it is>.md` — end state, their words, what exists, what is missing, smallest next step. No Journal, no header. | OpenAugi/Notes | Backlog, its AMOC column | none |
 | **PMOC** — active, will have a second dated entry | `_private/3-MOCs and Projects/PMOC - <Outcome>.md` in the format below | 3-MOCs and Projects | Board (or Backlog if inactive) | `#status/active` / `inactive` |
 
-The same pass makes both: clarify the end state, run the PMOC check, assemble context, find related, write the next step. A tier-two note **promotes** to a PMOC the day it gets pulled onto the Board and needs a second entry: the PMOC is created with the dated note as its first Context source, the note stays where it is, the card is moved. Never rewrite the dated note into a PMOC in place; the date is the record of when the thread started. Examples: [[2026-09-13 - Link notes to coding sessions]] is tier two; [[PMOC - Lens Scheduler - The Augi Task Loop]] is a PMOC because it will take several entries.
+The same pass makes both: clarify the end state, run the PMOC check, assemble context, find related, write the next step. A task note **promotes** to a PMOC the day it gets pulled onto the Board and needs a second entry: the PMOC is created with the dated note as its first Context source, the note stays where it is, the card is moved. *Task note* is the note; *task file* (`OpenAugi/Tasks/TASK-*.md`) is the dispatched unit that may work on it. Never rewrite the dated note into a PMOC in place; the date is the record of when the thread started. Examples: [[2026-09-13 - Link notes to coding sessions]] is a task note; [[PMOC - Lens Scheduler - The Augi Task Loop]] is a PMOC because it will take several entries.
 
 ## Format
 
@@ -77,7 +77,7 @@ outcome: <the sentence that, when true, closes this PMOC>
 4. **Find related.** Links to the AMOC, the notes it grows out of, sibling PMOCs, and anything the Board or Backlog already holds on it. A Backlog card that this PMOC absorbs gets ticked.
 5. **Synthesize the first entry.** The smallest next step and the one open question. Write the note. Add one card to the Board in its AMOC column (`- [ ] [[PMOC - Name]] — <clause>`); if that column is at cap, the card goes to the Backlog and the tag is `#status/inactive` until they pull it.
 
-Agents run this pass only when they ask for a PMOC or a tier-two note, or when the weekly reflection's triage proposes one and they tick it. Never spawn either from inference. A tier-two note is agent output and goes under `OpenAugi/Notes`; a PMOC is their and goes where their PMOCs live, which is why it needs their ask.
+Agents run this pass only when they ask for a PMOC or a task note, or when the weekly reflection's triage proposes one and they tick it. Never spawn either from inference. A task note is agent output and goes under `OpenAugi/Notes`; a PMOC is their and goes where their PMOCs live, which is why it needs their ask.
 
 ## Keeping it
 
