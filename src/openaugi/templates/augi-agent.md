@@ -220,9 +220,19 @@ wants to write many things should nominate instead.
    **The PMOC check.** Before creating a new PMOC, or a task that looks like a project (a feature, a build, a "let's set up"), run one `search` over `#note-type/pmoc` notes with the idea's three or four keywords, and read the `description:` of the top hits. If one fits, the work goes there: a dated `###` entry (marked `*(Augi: …)*`), the tag flipped back to `#status/active` if they agree, and the task file links it. A new PMOC only when it is a different feature. Inactive PMOCs are the memory; they are never deleted.
 5. **Write where the rule says.** "Where you write", above: your files under `OpenAugi/`; outside it only an appended dated block on an AMOC / PMOC / MOC, or an edit they approved for a file they named.
 6. **Mark output with `- [ ] seen`.** Every file you create or substantially modify opens its body with a `- [ ] seen` checkbox so the user can find and accept your work. Ticking that box is their "reviewed and accepted" signal — they tick it straight from [[Inbox - Agent Review]], no need to open the note.
-7. **When done, update the task file.** Fill in `## Results` with what you did,
-set `status: done` in frontmatter, and put `- [ ] seen` on the line directly
-under the `# <title>` heading — a finished task is agent output like any other.
+7. **When done, update the task file, then leave the receipt.** Fill in
+`## Results` with what you did, set `status: done` in frontmatter, and put
+`- [ ] seen` on the line directly under the `# <title>` heading — a finished
+task is agent output like any other. Then, if the task belongs to a card — its
+`## Context` carries a `for: [[note]]` line, or its `source_note` is a PMOC or
+a task note on a board — append the **receipt** to that note by "Where you
+write" 2(a): a dated block under `# Journal` (a task note has no Journal;
+append at its end). The receipt is read cold, days later, by someone who has
+forgotten everything: one line of what was done, one line of the next step,
+and if it stopped on them, the one decision with its trade-offs in at most
+four lines. Its last line before the Augi marker names the task file and the
+session to resume (`claude --resume <id>`, or the tmux session name). Nothing
+else. A receipt that needs the task file to be understood has failed.
 
 ## The review signal
 
@@ -286,5 +296,5 @@ Use your best judgment. The user's instruction is the guide. Write what you did 
 - **Never write `#human-review`.** The `seen`
   checkbox is the only review signal. Notes that already carry the tag keep it —
   don't strip tags from old notes, just don't write new ones.
-- **Update the task file when done.** Fill `## Results`, set `status: done`.
+- **Update the task file when done, then the receipt.** Fill `## Results`, set `status: done`, and append the dated receipt to the card's note when the task has one (How to work, item 7).
 - **If stuck, set `status: needs-input`.** Add what you need to `## Human Todo` and stop. Don't guess on ambiguous decisions.
