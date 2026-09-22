@@ -793,3 +793,25 @@ class TestDispatchSkipsDuplicates:
         tw.dispatch_task(dup, "tmux", "claude", {}, vault_path=tmp_path)
 
         assert dup not in tw.scan_pending(tmp_path / "Tasks", settle=0)
+
+
+class TestScheduledTaskIdentity:
+    """A scheduled lens run is identified by its lens and its day, never by
+    its words — the words are the same every morning."""
+
+    def test_each_day_of_a_scheduled_lens_is_its_own_task(self):
+        body = "## User instruction\n\n> apply lens currency-board\n"
+        monday = {"source": "lens-schedule", "lens": "currency-board", "run": "2026-09-21"}
+        tuesday = {"source": "lens-schedule", "lens": "currency-board", "run": "2026-09-22"}
+        assert tw.task_fingerprint(monday, body) != tw.task_fingerprint(tuesday, body)
+
+    def test_two_lenses_on_one_day_are_distinct(self):
+        body = "## User instruction\n\n> apply lens x\n"
+        a = {"source": "lens-schedule", "lens": "currency-board", "run": "2026-09-22"}
+        b = {"source": "lens-schedule", "lens": "habit-parse", "run": "2026-09-22"}
+        assert tw.task_fingerprint(a, body) != tw.task_fingerprint(b, body)
+
+    def test_the_same_scheduled_run_rewritten_is_the_same_task(self):
+        body = "## User instruction\n\n> apply lens currency-board\n"
+        fm = {"source": "lens-schedule", "lens": "currency-board", "run": "2026-09-22"}
+        assert tw.task_fingerprint(fm, body) == tw.task_fingerprint(dict(fm), body)

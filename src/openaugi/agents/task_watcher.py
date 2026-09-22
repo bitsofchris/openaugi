@@ -505,6 +505,12 @@ def _source_identity(fm: dict) -> str:
     """
     if note := str(fm.get("source_note") or "").strip():
         return note
+    if str(fm.get("source") or "").strip() == "lens-schedule":
+        # A scheduled run says the same words every day ("apply lens
+        # currency-board"); the day is the identity. Without this, Tuesday's
+        # board is a duplicate of Monday's and no board is ever built again
+        # (2026-09-22: two mornings lost before it was noticed).
+        return f"lens:{fm.get('lens', '')}/{fm.get('run', '')}"
     board = str(fm.get("board") or "").strip()
     proposal = str(fm.get("proposal") or "").strip()
     return f"board:{board}/{proposal}" if proposal else ""
