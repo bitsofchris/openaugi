@@ -320,7 +320,7 @@ Not in this phase. Once cluster blocks exist in the DB:
 
 ---
 
-## Knowledge Explorer (experiments/knowledge-explorer/) — Done
+## Knowledge Explorer (experiments/archive/knowledge-explorer/) — Done, archived 2026-09-27 (see its README)
 
 A WebGL scatter plot for exploring cluster embeddings visually.
 Built with React + deck.gl (ScatterplotLayer). Works offline against
@@ -349,7 +349,7 @@ Built with React + deck.gl (ScatterplotLayer). Works offline against
 
 **To use against a real DB (once clustering is done):**
 ```bash
-cd experiments/knowledge-explorer
+cd experiments/archive/knowledge-explorer
 pip install fastapi uvicorn umap-learn numpy
 npm install   # once inside frontend/
 ./start.sh --db ~/.openaugi/openaugi.db

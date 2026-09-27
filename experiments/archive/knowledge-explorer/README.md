@@ -5,6 +5,8 @@ description: Interactive WebGL scatter plot for exploring openaugi block embeddi
 
 # Knowledge Explorer
 
+> **Archived 2026-09-27.** Unmaintained since April. Its frontend pinned `vite ^5.0.0`, which carried three open security advisories (GHSA-fx2h-pf6j-xcff, GHSA-4w7w-66w2-5vf9, GHSA-v6wh-96g9-6wx3; fixed only in vite 6.4.3+). Rather than upgrade a tool nobody runs, `package.json` and `vite.config.ts` were removed; the source (`frontend/src`, `backend/server.py`) stays for reference. It is not part of the openaugi package. To revive: restore those two files from git history (`git log -- experiments/knowledge-explorer/frontend/package.json`), bump to `vite ^6.4.3` and a matching `@vitejs/plugin-react`, then `npm install && npm run build`. The quickstart below no longer works as written.
+
 WebGL-powered visualization of openaugi's embedding space. Adapted from the private knowledge-explorer experiment.
 
 ## What it shows
