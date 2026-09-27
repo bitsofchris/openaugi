@@ -78,6 +78,10 @@ Restart Claude Desktop after editing.
 
 Both are optional if you've run `openaugi init` — the config file is the default. `OPENAUGI_VAULT_PATH` may use `~`; it is expanded before use.
 
+## Server instructions
+
+The server sends an `instructions` string on connect (`INSTRUCTIONS` in `src/openaugi/mcp/server.py`). Clients such as Claude Code put it in every session's system prompt, so an agent knows before any tool is loaded that the vault is searchable here and should be searched here instead of with grep. It names the ways to search: `get_context` as the research default, semantic / keyword / title `search`, date browsing (`after` / `before`, `recent`, `after_ingested`), links (`get_related`, `traverse`), the `provenance` and path filters, and `get_block(s)` for full content. `tests/test_mcp.py::TestServerInstructions` fails if the text names a tool or parameter that does not exist. A running `openaugi serve` picks up changes on restart.
+
 ## Tools
 
 ### Read tools
