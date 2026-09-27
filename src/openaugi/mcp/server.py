@@ -50,7 +50,37 @@ from openaugi.store.sqlite import SQLiteStore
 
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP("openaugi")
+# Sent to the client at initialize; Claude Code puts it in every session's
+# system prompt. Every tool and parameter named here is checked against the
+# registered tools by tests/test_mcp.py::TestServerInstructions.
+INSTRUCTIONS = """\
+OpenAugi is the user's knowledge base: their notes vault, indexed as blocks \
+(note sections) with embeddings, full-text search and a link graph. For any \
+question about what exists, related or earlier ideas, or what the user wrote \
+in a date window, use these tools before grep/find. Grep only for a file path \
+you already know.
+
+How to search:
+- Default for research: `get_context(query=...)` runs semantic + keyword search, \
+dedups, and expands via links in one call.
+- Semantic: `search(query=...)`. Exact terms: `search(keyword=...)`. \
+Note titles: `search(title=...)`.
+- By date: `search(after=..., before=...)` browses by content date (paginate \
+with offset). `recent()` lists the newest blocks. \
+`search(after_ingested=...)` answers "what's new since <timestamp>".
+- By links: `get_related(block_id=...)` for one hop, `traverse(start_id=...)` \
+for multi-hop.
+- Filters on search and get_context: `provenance=["human"]` keeps only what \
+the user wrote themselves; `include_path_prefix` / `exclude_path_prefix` \
+scope by folder.
+- Results are summaries. Read full content with `get_block(block_id=...)` or \
+`get_blocks(block_ids=[...])`.
+
+Writing: `write_document` saves a note under the vault's OpenAugi/ folder. \
+`write_record`, `list_records` and `update_record` keep workflow state between runs.
+"""
+
+mcp = FastMCP("openaugi", instructions=INSTRUCTIONS)
 
 
 # ── State (initialized lazily) ─────────────────────────────────────

@@ -797,3 +797,60 @@ class TestHasTaskFilter:
         )
         assert "call the plumber" not in joined
         assert result["count"] == 1  # the tagged task remains
+
+
+class TestServerInstructions:
+    """The instructions string goes into every client's system prompt, so a
+    tool or parameter it names that does not exist would steer agents wrong.
+    These tests pin the text to the registered tool list."""
+
+    @staticmethod
+    def _tools() -> dict[str, set[str]]:
+        import asyncio
+
+        from openaugi.mcp.server import mcp
+
+        tools = asyncio.run(mcp.list_tools())
+        return {t.name: set(t.inputSchema.get("properties", {})) for t in tools}
+
+    def test_instructions_are_set_and_short(self):
+        from openaugi.mcp.server import mcp
+
+        text = mcp.instructions or ""
+        assert text.strip()
+        assert len(text.splitlines()) <= 30
+
+    def test_every_call_names_a_real_tool_and_param(self):
+        import re
+
+        from openaugi.mcp.server import mcp
+
+        tools = self._tools()
+        calls = re.findall(r"\b([a-z_]+)\(([^)]*)\)", mcp.instructions or "")
+        assert calls
+        for name, args in calls:
+            assert name in tools, f"instructions name unknown tool {name!r}"
+            for param in re.findall(r"(\w+)=", args):
+                assert param in tools[name], f"{name} has no parameter {param!r}"
+
+    def test_every_backticked_name_is_a_tool_or_param(self):
+        import re
+
+        from openaugi.mcp.server import mcp
+
+        tools = self._tools()
+        params = set().union(*tools.values())
+        spans = re.findall(r"`([^`]+)`", mcp.instructions or "")
+        assert spans
+        for span in spans:
+            ident = re.match(r"[a-z_]+", span)
+            assert ident, f"backticked span {span!r} does not start with a name"
+            name = ident.group(0)
+            assert name in tools or name in params, f"{name!r} is not a tool or parameter"
+
+    def test_core_search_tools_are_mentioned(self):
+        from openaugi.mcp.server import mcp
+
+        text = mcp.instructions or ""
+        for name in ("get_context", "search", "recent", "get_related", "traverse", "get_block"):
+            assert f"`{name}" in text, f"instructions do not mention {name}"
