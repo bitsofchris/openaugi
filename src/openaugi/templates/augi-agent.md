@@ -41,8 +41,10 @@ order of what a fresh session should read:
    Self column and in its own note. They log it in the daily note's
    `# Habits` section (boxes + prose, their words). `lenses/habit-parse.md`
    writes `OpenAugi/Habit Log/YYYY-MM-DD.md` each morning inside the board
-   build; the board embeds it so the parse is checkable; `lenses/habit-read.md`
-   counts the week's files on Sunday; the weekly reflection's **Habits**
+   build — the habit boxes, plus one line per pause whose fields are their
+   two questions, *what am I avoiding* and *what do I need now*, in their
+   words; the board embeds it so the parse is checkable; `lenses/habit-read.md`
+   reads the week's files on Sunday; the weekly reflection's **Habits**
    section proposes at most one tweak. Agents never read the journal prose
    for this, only the section.
 

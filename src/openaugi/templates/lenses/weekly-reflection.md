@@ -5,7 +5,7 @@ description: >-
   The Sunday pass. Drafted at 06:30: what the week was about, a recap by lane, what kept coming up, what their writing contradicts, what they learned and are avoiding, candidates for next week, questions. Then the Sunday session: they open a chat and say `run the Sunday pass`; the agent walks the decisions one question at a time — Weekly focus lines, card moves, janitor fixes — and applies each as it is ruled. The only place priorities move.
 scope: >-
   Every block from the last 7 days via the OpenAugi MCP (`recent` or `search` with a date window): daily notes, ideas, tasks, reflections — and every `Aaa:` instruction inside them. [[Slowly Changing Context]] §3 and §4. The Board and the Backlog (`_private/0-Current Focus/Kanban.md`, `Backlog.md`). The 2–3 prior reflections in `OpenAugi/Research/Weekly Reflection - *.md`, for patterns across weeks only. For Propose, additionally: their own `# My Thoughts` in `_private/0-Current Focus/WK - YY-MM-DD.md` and this Sunday's entry in `OpenAugi/Notes/System Janitor.md`.
-trigger: every 7d   # Sunday 06:30 local (10:30 UTC; the scheduler has no clock, so this drifts an hour at DST — re-seed the ledger row then). Anchored 2026-09-20. On demand: the /weekly-reflection skill points here.
+trigger: every 7d   # Sunday 06:30 local; the `## Run` anchor below is the schedule.
 target: >-
   note — OpenAugi/Research/Weekly Reflection - YYYY-MM-DD.md (date = the Sunday it runs, the end of the week reflected on). Not to chat. The Sunday session appends its receipt to the same note; nothing else on Sunday gets its own file.
 ---
@@ -51,7 +51,7 @@ decided in that one session.
 The daily board is a terse pointer; this is where the week gets read. Honest,
 not encouraging. No padding, no cheerful wrap-up. The value is what is hard to
 see from inside the week, said in their own dated words. The draft is a read,
-under ~700 words; the decisions come later and are checkboxes, never prose
+under ~850 words; the decisions come later and are checkboxes, never prose
 proposals.
 
 ## Draft (the 06:30 run)
@@ -78,6 +78,15 @@ quotes. No energy, no drift, no scorekeeping.
 short paragraphs, or three bullets each. Direct. Given the longer arc in
 [[Slowly Changing Context]], is this week's pattern high-leverage?
 
+**Self** — what is working and what is not for their health,
+energy, performance, happiness and well-being, and for the inner work (the
+patterns that keep repeating, what they are growing into). Only from their
+own writing this week — daily notes, the WK note's thoughts, and their self
+and health area notes if touched. Two short lists, *Working* and *Not working*,
+two or three bullets each, one dated quote per bullet; then one line: what
+they may not be seeing. Family, mood and the hard things count when they wrote
+them — say them plainly, without advice lists, counts or scores.
+
 **Candidates for next week** — at most five, one line each with the date:
 only things they captured that could become a slot or a card. This is what
 Propose turns into slot and Backlog boxes. Below it, if any, **Instructions
@@ -92,8 +101,8 @@ Then the closing line, verbatim:
 *Next: open a session and say `run the Sunday pass`.*
 ```
 
-Confirm the path in the task's `## Results` and nothing else. No habits
-section (the read is off), no bottlenecks list, no labeled surfaced list, no
+Confirm the path in the task's `## Results` and nothing else. No habit
+counts or streaks, no bottlenecks list, no labeled surfaced list, no
 checkboxes.
 
 ## The Sunday session (interactive, in chat)
@@ -117,8 +126,7 @@ outrank the draft: where they disagree, offer what they wrote.
    three, one question each: *edit as drafted* or *leave*. Explain what the
    section is for in two lines when they ask; never assume they remember.
 3. **Cards** — one question each, in this order: every card carrying an
-   `aaa:` on either board (do what the words ask); every card in the Board's
-   Triage column (one destination); any column over its cap (name the cards,
+   `aaa:` on either board (do what the words ask); any column over its cap (name the cards,
    ask which moves, nominate nothing); at most three Backlog adds from the
    draft's *Candidates for next week* (source date on each); every
    `[unanswered]` instruction (dispatch or drop). Perform each ruling before

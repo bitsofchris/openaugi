@@ -137,13 +137,17 @@ board does not act on it and never edits the Board.
    and the next step is different. Propose nothing rather than pad.
 9. **Habits: parse yesterday, then show it back.** First apply
    [[habit-parse]] for yesterday (it writes `OpenAugi/Habit Log/<yesterday>.md`
-   from the daily note's `# Habits` section, or nothing if the section is
-   absent or the file already exists). Then, under `This week`, one line
-   naming the active habits from the Self column of [[Kanban]] and yesterday's
-   tick count (`2/3 yesterday`, or `no log yesterday`), followed by an embed
-   of the log file — `![[OpenAugi/Habit Log/<yesterday>]]` — so they can check
-   the parse and fix a row in place. Never interpret, never streak-count,
-   never comment on a miss. The journal prose stays theirs.
+   from the daily note's `# Habits` section — the habit boxes, plus one line
+   per pause carrying their two questions, *what am I avoiding* and *what do I
+   need now*, in their words — or nothing if the section is absent or the file
+   already exists). Then, under `This week`, one line naming the active
+   habits from the Self column of [[Kanban]] and yesterday's tick count
+   (`2/3 yesterday`, or `no log yesterday`), followed by an embed of the log
+   file — `![[OpenAugi/Habit Log/<yesterday>]]` — so they can check the parse
+   and fix a line in place. Never interpret, never streak-count, never count
+   or characterise the pause lines, never comment on a miss. The tick count
+   is habit rows only. What the avoidance means is theirs to write in the
+   habit note; the journal prose stays theirs.
    When the newest `OpenAugi/Notes/YYYY-MM-DD - Habit Read.md` carries
    unanswered questions (a `<!-- habit:... -->` block with neither box
    ticked), repeat those blocks verbatim under the same habits line, under
@@ -237,11 +241,11 @@ created: <date>
 
 - **You:** <the one concrete next move> `chip · time`
     ↳ <what to open to start: [[note]] · path · session>
-- **Augi:** <the one delegable step, or the word *nothing*> — its brief and boxes live under *Augi could run these*
     - [ ] done
     - [ ] not doing
     - [ ] someday
     <!-- item:<stable-kebab-key> -->
+- **Augi:** <the one delegable step, or the word *nothing*> — its brief and its `do` / `no` boxes live under *Augi could run these*, once
 
 ## Needs your judgment (N of 3)
 
