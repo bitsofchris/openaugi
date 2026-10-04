@@ -2,6 +2,8 @@
 
 The board (see `OpenAugi/AGENT/lenses/currency-board.md`) offers three boxes
 under every move, judgment item and drift option: done / not doing / someday.
+A judgment item that is a question instead carries boxes named by its answers
+(`- [ ] yes: …` / `- [ ] no: …`), which map to done / not-doing.
 Ticking one IS the command — the same precedent the echo janitor follows.
 An optional `aaa:` line under the boxes is the comment channel: free text
 explaining *why*, which the next board must honor literally.
@@ -68,6 +70,11 @@ STATE_FILE = f"{BOARD_FOLDER}/.board-state.json"
 _ITEM_RE = re.compile(r"^\s*>?\s*<!-- item:(?P<key>[a-z0-9][a-z0-9-]*) -->\s*$")
 #: `- [x] not doing` at any indent, optionally inside a callout.
 _BOX_RE = box_re("done", "not doing", "someday", callout=True)
+#: `- [x] yes: archive them` — a question's answer boxes. The text after the
+#: colon is the answer as the board worded it; only the leading word maps.
+_ANSWER_BOX_RE = re.compile(
+    r"^(?P<pre>\s*>?\s*)- \[(?P<mark>[ xX])\] (?P<label>yes|no)(?::\s*(?P<text>.*?))?\s*$"
+)
 #: `aaa: because it can wait until October`
 _AAA_RE = aaa_re(callout=True)
 #: `- **Pull the three numbers from the benefits portal** \`quick · 5m\``
@@ -95,6 +102,8 @@ _PROPOSE_RE = re.compile(r"^\s*>?\s*<!-- propose:(?P<key>[a-z0-9][a-z0-9-]*) -->
 _PROPOSE_BOX_RE = box_re("do", "no", callout=True)
 
 _STATES = {"done": "done", "not doing": "not-doing", "someday": "someday"}
+#: A question is answered in its own words, but decided in the same vocabulary.
+_ANSWER_STATES = {"yes": "done", "no": "not-doing"}
 _PROPOSE_STATES = {"do": "dispatched", "no": "declined"}
 #: The only proposal states. `dispatched` means a task file was written and the
 #: task watcher owns it from there; `declined` means never offer this again.
@@ -199,17 +208,24 @@ def parse_items(text: str) -> dict[str, dict]:
             "box_lines": [],
             "answer_line": None,
             "indent": "",
+            "confirmation": "",
         }
         # The boxes and the aaa: line sit between the title and this marker.
         for offset in range(1, min(_LOOKBACK, idx) + 1):
             pos = idx - offset
-            if box := _BOX_RE.match(lines[pos]):
+            if (box := _BOX_RE.match(lines[pos])) or (box := _ANSWER_BOX_RE.match(lines[pos])):
                 item["box_lines"].append(pos)
                 if ticked(box) and item["answer"] is None:
-                    item["answer"] = _STATES[box.group("label")]
+                    label = box.group("label")
+                    item["answer"] = _STATES.get(label) or _ANSWER_STATES[label]
                     item["answer_line"] = pos
                     # Captured here so the rewrite never re-matches the line.
                     item["indent"] = box.group("pre")
+                    # A question's confirmation keeps the answer as it was
+                    # worded: `✓ yes: archive them` reads; `✓ done` would not.
+                    if label in _ANSWER_STATES:
+                        worded = box.groupdict().get("text")
+                        item["confirmation"] = f"{label}: {worded}" if worded else label
             elif aaa := _AAA_RE.match(lines[pos]):
                 item["reason"] = aaa.group("reason")
             elif _TITLE_RE.match(lines[pos]):
@@ -751,7 +767,8 @@ def sync_board(board_path: Path, vault_path: Path) -> int:
         )
         # Confirmation replaces the answered box; the unanswered boxes go.
         answer_line = item["answer_line"]
-        lines[answer_line] = f"{item['indent']}- ✓ {item['answer']}"
+        confirmation = item["confirmation"] or item["answer"]
+        lines[answer_line] = f"{item['indent']}- ✓ {confirmation}"
         for pos in item["box_lines"]:
             if pos != answer_line:
                 lines[pos] = None

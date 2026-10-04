@@ -451,6 +451,47 @@ def test_plain_markdown_ticks_and_aaa_work_without_a_callout(plain, vault):
     assert "- ✓ not-doing" in plain.read_text(encoding="utf-8")
 
 
+QUESTION_BOARD = """# Board — 2026-09-30 (Wednesday)
+
+## Needs your judgment (2 of 3)
+
+- **Archive the three finished sessions?** — idle and complete
+    - [ ] yes: archive all three
+    - [ ] no: keep them open
+    <!-- item:archive-question -->
+- **Move the quiz to Friday?** — it collides with the shorts batch
+    - [ ] yes: move it
+    - [ ] no: keep Thursday
+    <!-- item:quiz-day -->
+"""
+
+
+def test_a_question_is_answered_with_yes_and_no_boxes(vault):
+    path = vault / "OpenAugi" / "Board" / "2026-09-30 - Board.md"
+    text = QUESTION_BOARD.replace("[ ] yes: archive all three", "[x] yes: archive all three")
+    text = text.replace(
+        "    - [ ] no: keep Thursday\n",
+        "    - [x] no: keep Thursday\n    aaa: Friday is for the writeup\n",
+    )
+    path.write_text(text, encoding="utf-8")
+
+    items = parse_items(text)
+    assert items["archive-question"]["answer"] == "done"
+    assert items["quiz-day"]["answer"] == "not-doing"
+    assert sync_board(path, vault) == 2
+
+    state = load_state(vault)["items"]
+    assert state["archive-question"]["state"] == "done"
+    assert state["quiz-day"]["state"] == "not-doing"
+    assert state["quiz-day"]["reason"] == "Friday is for the writeup"
+    # The confirmation keeps the answer as worded; the other box goes.
+    after = path.read_text(encoding="utf-8")
+    assert "    - ✓ yes: archive all three\n" in after
+    assert "    - ✓ no: keep Thursday\n" in after
+    assert "keep them open" not in after and "move it" not in after
+    assert sync_board(path, vault) == 0
+
+
 def test_plain_markdown_board_note_is_logged_without_quote_prefixes(plain, vault):
     text = plain.read_text(encoding="utf-8").replace(
         "<!-- board-note -->\n", "<!-- board-note -->\nthe drift section was noise today\n"
