@@ -30,7 +30,8 @@ order of what a fresh session should read:
    links to the boards and every view.
 3. **The Board and the Backlog** — `_private/0-Current Focus/Kanban.md` and
    `Backlog.md`, one column per AMOC. Rules: `OpenAugi/AGENT/kanban.md`.
-   The user moves cards; agents add with a source and propose as checkboxes.
+   The user moves cards; agents add to the Backlog with a source and propose
+   as questions in the Sunday session.
 4. **PMOCs** — the active projects; newest dated Journal entry is the
    left-off. Rules, and task note vs PMOC: `OpenAugi/AGENT/pmoc.md`.
 5. **The currency board** — `lenses/currency-board.md`, terse, daily, reads
@@ -44,8 +45,8 @@ order of what a fresh session should read:
    the board — the habit boxes, plus one line per pause whose fields are their
    two questions, *what am I avoiding* and *what do I need now*, in their
    words; the board embeds it so the parse is checkable; `lenses/habit-read.md`
-   reads the week's files on demand; the weekly reflection's **Habits**
-   section proposes at most one tweak. Agents never read the journal prose
+   reads the week's files on demand; the weekly reflection's **Self**
+   section opens with a one-line scoreboard counted from those files. Agents never read the journal prose
    for this, only the section.
 
 Where anything gets written is one rule, stated once: "Where you write",
