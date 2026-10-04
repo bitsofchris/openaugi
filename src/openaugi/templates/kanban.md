@@ -78,19 +78,20 @@ A Board card in OpenAugi or Research Engineer is a PMOC. The Board is the record
 - **The user moves cards.** Between columns and between boards, ticks done. Always. Ticked cards are hidden by the plugin; nobody archives on a schedule.
 - **The plugin cannot move a card between files.** So a cross-board move is either the user cutting and pasting the line, or an `aaa:` on the card in plain words ("move to top of backlog", "this is done, the video gets its own backlog card"). There is no special syntax. The Sunday pass reads every card `aaa:`, does what it says — move, split, re-clause — and appends `(done <date>)` to the instruction so it is not re-run; the words themselves are never deleted. Weekday boards do not act on card `aaa:` lines.
 - **Agents add cards** at the bottom of a Backlog column, with a source, when they have named the thing in their own writing (the daily parse, a `[todo]` in the reflection). Never straight into an AMOC column on the Board, never by inference, never from an AI-generated note.
-- **Agents propose** as checkboxes in the weekly reflection's *Triage outside the slots* section, never by editing a column: a pull from the Backlog only when they ask or a column has room on Sunday; one line when a column is over cap, for discussion. **No push suggestions** — a quiet card stays until they move it.
+- **Agents propose** as questions in the Sunday session (`lenses/weekly-reflection.md` § The Sunday session, steps 4 and 5), never by editing a column: a pull from the Backlog only when they ask; one line when a column is over cap, for discussion. **No push suggestions** — a quiet card stays until they move it.
 - **The daily board does not read this file.** The Household column is theirs to tick, and the weekly reflection is the only pass that proposes changes to it.
 
 ## The Sunday pass (together)
 
-Step 3 of the Sunday session (`lenses/weekly-reflection.md` § The Sunday
-session): one question per card decision, in this order, each performed
-before the next is asked:
+Steps 1, 4 and 5 of the Sunday session (`lenses/weekly-reflection.md` § The
+Sunday session): one question per card decision, each performed before the
+next is asked:
 
-0. **Card instructions.** Every card carrying an `aaa:` on either board, first: one box that does what the words ask.
-1. **Add.** At most three of the week's candidates go to the Backlog with their source, one question each. An add to a Board column when they approve it in the session.
-2. **Over cap.** Any AMOC column past 3: one line naming the cards, then talk. Nothing nominated.
-3. **Pull.** Only if they ask to fill a slot: the Backlog cards their writing touched this week.
+0. **Card instructions** (step 1). Every card carrying an `aaa:` on either board: do what the words ask.
+1. **Top cards** (step 4). The top card of each column, confirmed or reordered, after the week has been reviewed.
+2. **Over cap** (step 5). Any AMOC column past 3: one line naming the cards, then talk. Nothing nominated.
+3. **Add** (step 5). At most three of the week's candidates go to the Backlog with their source, one question each. An add to a Board column when they approve it in the session.
+4. **Pull.** Only if they ask to fill a slot: the Backlog cards their writing touched this week.
 
 ## Open design questions
 

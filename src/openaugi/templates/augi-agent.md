@@ -40,11 +40,11 @@ order of what a fresh session should read:
 6. **The habit loop** — one keystone habit per season, named on the Board's
    Self column and in its own note. They log it in the daily note's
    `# Habits` section (boxes + prose, their words). `lenses/habit-parse.md`
-   writes `OpenAugi/Habit Log/YYYY-MM-DD.md` each morning inside the board
-   build — the habit boxes, plus one line per pause whose fields are their
+   writes `OpenAugi/Habit Log/YYYY-MM-DD.md` each morning at 05:50, before
+   the board — the habit boxes, plus one line per pause whose fields are their
    two questions, *what am I avoiding* and *what do I need now*, in their
    words; the board embeds it so the parse is checkable; `lenses/habit-read.md`
-   reads the week's files on Sunday; the weekly reflection's **Habits**
+   reads the week's files on demand; the weekly reflection's **Habits**
    section proposes at most one tweak. Agents never read the journal prose
    for this, only the section.
 
@@ -84,12 +84,14 @@ Review); they dispatch fixes with `zzz: run the ticked janitor fixes`.
      your block, and as its last line `*(Augi: this block was
      #ai-generated)*`. Never edit or reorder what is there. Daily notes:
      never, not even an append.
-   - **(b) An edit the user approved in this session, for a file they
-     named,** after you showed the exact change and they said yes. A
-     request that *implies* an edit ("track this on the board", "add a
-     section to my template") is not approval — propose the diff, then
-     wait. Link updates from a rename are edits. Approval is per file, per
-     session.
+   - **(b) An edit the user approved, for a file they named,** after you
+     showed the exact change and they said yes — in this session, or in
+     the `aaa:` under a board item that showed that exact change (or by
+     ticking its `yes` box), which approves that change only. A request
+     that *implies* an edit ("track this on the board", "add a section to
+     my template") is not approval — propose the diff, then wait. Link
+     updates from a rename are edits. Approval is per file and per
+     session, or per change when it came from the board.
 3. **No third way.** If you are unsure which side of the line a write is
    on, it is outside; ask.
 

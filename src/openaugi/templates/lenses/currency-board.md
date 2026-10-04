@@ -74,17 +74,30 @@ board does not act on it and never edits the Board.
 2. **Gather the window.** Their writing since `last_run` (fall back to 72h) by
    ingest time: daily notes, PMOC and AMOC entries. The previous board's
    `aaa:` lines and ticks.
-3. **Collect the `Aaa:` instructions in the window.** An `Aaa:` line in their own
-   writing is an instruction addressed to augi (capture grammar,
-   `OpenAugi/AGENT/review-pass.md`) — the typed equivalent of them telling an
-   agent to do something. Every one in the window that has no artifact on disk
-   yet becomes a **proposal** in `Augi could run these`, with its brief written
-   from the instruction and the block it sits under, and the block quoted on the
-   `↳` line. Its key is `aaa-<kebab of the instruction>`, so a declined or
-   dispatched one never returns. This is the board's only source of proposals it
-   did not derive from a lane. More than two in a window: carry the two whose
-   blocks are closest to the top cards and leave the rest to the weekly
-   reflection, which routes all of them.
+3. **Collect the `Aaa:` instructions in the window, all of them.** An `Aaa:`
+   line in their own writing is an instruction addressed to augi (capture
+   grammar, `OpenAugi/AGENT/review-pass.md`) — the typed equivalent of them
+   telling an agent to do something. List them with
+   `scripts/instruction_list.py` in the openaugi repo (`--start` / `--end` set
+   to the window's days); never find them by reading. There is no cap. Each
+   one with no artifact on disk yet goes one of three ways, and every one
+   gets a line under `## Your instructions`:
+   - **Small and clear: do it on this run.** The instruction names the thing
+     and the thing is one of: a note under `OpenAugi/`, a Backlog card with
+     its source (per `kanban.md`, related links into the note), or a dated
+     journal block on an existing MOC / AMOC / PMOC that links or records
+     something. Do it, then report `✓ did: "<quote>" → [[artifact]]`. They
+     comment with an `aaa:` under the line if it is wrong.
+   - **Real work an agent can do alone** (a build, research, a rule edit):
+     a **proposal** in `Augi could run these`, brief written from the
+     instruction and the block it sits under, the block quoted on the `↳`
+     line, key `aaa-<kebab of the instruction>` so a declined or dispatched
+     one never returns. Report `→ proposed: "<quote>"`.
+   - **Needs them** (a judgment, a priority, a Board card, an edit to their
+     own file, a question only a conversation answers, or anything unclear):
+     it waits for the Sunday session. Report `→ Sunday: "<quote>"`. Do not
+     turn it into a judgment item.
+   When unsure between the first and the third, it is the third.
    **The two `aaa` are different things.** `aaa:` under a board item is their
    feedback about *that item*. `Aaa:` in a daily note or a MOC entry is an
    instruction to *do something*. Never read one as the other.
@@ -99,7 +112,7 @@ board does not act on it and never edits the Board.
    never a section, a thread, or a status line.
 5. **One move per active thing.** Derived from the left-off, never invented.
    A move names a physical action, carries an activity chip (`focus` /
-   `quick` / `read` / `ship` / `build` / `decide`) and a time estimate, and
+   `quick` / `read` / `ship` / `build` / `decide`) and no time estimate, and
    carries its context on a `↳` line: what to open to start, the note, path,
    or session. A quiet lane gets its left-off line and no move. When the
    source is vague, quote the vagueness and make identifying the object the
@@ -107,7 +120,7 @@ board does not act on it and never edits the Board.
 6. **Quiz reviews due.** Read the table in [[Quiz Schedule - Foundations]].
    A row whose `due` is today or earlier and whose `done` box is unticked is
    due. When one is, the Fundamentals lane's move *is* that review:
-   `quick · 10 min · Quiz review N of unit NN`. The `↳` line gives the quiz
+   `quick` · Quiz review N of unit NN. The `↳` line gives the quiz
    file path and how to start: Claude Code in `~/repos/deep-learning`,
    Prompt B from [[Lecture Learning Prompt]]. It replaces the move step 5
    would have derived for that lane; the left-off line stays. Nothing due,
@@ -117,14 +130,15 @@ board does not act on it and never edits the Board.
    something and that only they can make: blocked builds, tasks at
    `needs-input`, a registration or ingest check. Ranked by age and by
    whether their recent writing mentions it. Each states in one line what
-   ticking means.
+   ticking means. An item that is a question carries answer boxes, not the
+   three (see "The checkbox contract").
 8. **Proposals — the delegation queue. One per active card, section omitted
    when empty.** For each card on the Board whose next step an agent can take
    alone, one proposal, about that card's work only — derived from its PMOC
    and its coding sessions, never from the week's writing or the priorities on
    their own. The board never creates a card, note, or PMOC; only the user
-   makes cards, at Sunday triage. `Aaa:` instructions from step 3 come first and count
-   against their card. The `↳` brief is the prompt the agent receives verbatim
+   makes cards, at Sunday triage. `Aaa:` proposals from step 3 come first and are
+   not capped by card. The `↳` brief is the prompt the agent receives verbatim
    on `do`: three sentences, what, over what scope, producing what artifact.
    Then two labeled lines: `for: [[card note]]`, the note the receipt lands
    in, and `verify: <how they know it is done without reading the transcript>`
@@ -161,8 +175,9 @@ left-off lines; `decision-audit` for ranking judgment items by real decision
 language; `openaugi-state` and `content-pipeline` read from their last View.
 Not run on a daily board: `chat-harvest`, `nuggets`, `echoes`,
 `idea-lineage`, `cluster-weather`, `emerging`, `morning-briefing`,
-`substack-batch`, `ping-read`. Those belong to their own triggers and the
-Sunday pass.
+`ping-read`. Those belong to their own triggers and the Sunday pass.
+[[shorts-queue]] is not run here either: this board only does its intake
+(step 6, "Shorts suggestions"); storyboards are on demand.
 
 ## The checkbox contract
 
@@ -183,6 +198,22 @@ aaa: <optional one line, free text, read by the next board>
   On its third board the item gets one plain clause ("third board, do it or
   say not doing") unless the window shows them working it or its `aaa:` says
   to keep it. Staleness is neglect, not duration.
+
+A judgment item that is a question carries boxes named by its answers
+instead:
+
+```
+- [ ] yes: <what yes does, a few words>
+- [ ] no: <what no does, a few words>
+aaa: <optional one line, same channel>
+```
+
+- **yes** — recorded as `done`; the line becomes `✓ yes: …`.
+- **no** — recorded as `not-doing`; the `aaa:` reason is honored.
+- When the question is an edit to a file outside `OpenAugi/`, the item shows
+  the exact change, and a yes — the box, or a yes in its `aaa:` — is
+  approval for that change only ("Where you write" 2(b) in
+  `augi-agent.md`).
 
 Proposals carry two boxes:
 
@@ -239,7 +270,7 @@ created: <date>
 
 *Left off: [[PMOC]] <date> — "<their newest dated entry, quoted>." Session `<repo · title>` ended with <finished / uncommitted / waiting on them>.*
 
-- **You:** <the one concrete next move> `chip · time`
+- **You:** <the one concrete next move> `chip`
     ↳ <what to open to start: [[note]] · path · session>
     - [ ] done
     - [ ] not doing
@@ -247,22 +278,41 @@ created: <date>
     <!-- item:<stable-kebab-key> -->
 - **Augi:** <the one delegable step, or the word *nothing*> — its brief and its `do` / `no` boxes live under *Augi could run these*, once
 
+*(Content lane only, while [[Shorts Queue]] holds fewer than five; at most two; omitted when none.)*
+- **Short?** <the idea, one line> — from [[<source note>]]
+    - [ ] yes: queue it
+    - [ ] no
+    <!-- item:short-<kebab> -->
+
 ## Needs your judgment (N of 3)
 
 *Decisions that block something and that only you can make. `aaa:` reshapes an item instead of answering it.*
 
-- **<The specific yes/no>** — <one line of what ticking means>
+- **<The specific decision>** — <one line of what ticking means>
     ↳ <what to open>
     - [ ] done
     - [ ] not doing
     - [ ] someday
     <!-- item:<key> -->
+- **<A question?>** — <one line of context; the exact change, if it edits their file>
+    ↳ <what to open>
+    - [ ] yes: <what yes does>
+    - [ ] no: <what no does>
+    <!-- item:<key> -->
+
+## Your instructions
+
+*Every `Aaa:` you typed since the last board. Small ones are already done; `aaa:` under a line to correct it. The rest wait for Sunday.*
+
+- ✓ did: "<quote>" → [[<artifact>]]
+- → proposed: "<quote>" (under *Augi could run these*)
+- → Sunday: "<quote>"
 
 ## Augi could run these
 
-*One per active card, only what an agent can do alone. `do` dispatches it on the brief as written; the receipt lands in the `for:` note. `no` means never offer it again.*
+*One per active card, plus your `Aaa:` proposals; only what an agent can do alone. `do` dispatches it on the brief as written; the receipt lands in the `for:` note. `no` means never offer it again.*
 
-- **<The task, phrased as you would want to receive it cold>** `chip · est`
+- **<The task, phrased as you would want to receive it cold>** `chip`
     ↳ <three sentences: what, over what scope, producing what artifact. Day two of a multi-day piece restates the whole context.>
     for: [[<the card note the receipt lands in>]]
     verify: <how they know it is done without reading the transcript>
@@ -315,12 +365,12 @@ by the nearest heading above.
   not applied — [[Weekly Reflection - <date>]] is waiting on its ticks.* One
   line, no proposal, no other change. That is the whole "is Sunday done"
   check.
-- Never drop an `Aaa:` instruction from the window without either
-  proposing it or leaving it for the weekly reflection. A typed
-  instruction that no surface picked up is the one failure this board
-  cannot have.
+- Never drop an `Aaa:` instruction from the window. Each one is done,
+  proposed, or left for Sunday, and each has its line under `## Your
+  instructions`. A typed instruction that no surface picked up is the one
+  failure this board cannot have.
 - The only states are `done` / `not-doing` / `someday` / `open`, each from a
-  ticked box.
+  ticked box (`yes` is `done`, `no` is `not-doing`).
 - Never write a "not yet seen" list, a drift section, a flags section, a
   since-yesterday narrative, or standing reminders. Unreviewed output lives
   on [[Dashboard]]; errands live on the Board's Household / Other column;
