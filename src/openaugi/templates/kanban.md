@@ -3,7 +3,7 @@ kind: engine
 name: kanban
 description: How the two kanban boards work — file format the Obsidian plugin needs, columns, cards, who moves what, and the Sunday pass. Read before touching _private/0-Current Focus/Kanban.md (the Board) or Backlog.md (the Backlog).
 created: 2026-09-13
-consumers: [currency-board, weekly-reflection, review-pass, habit-parse]
+consumers: [currency-board, weekly-reflection, review-pass]
 ---
 
 # Kanban

@@ -38,16 +38,6 @@ order of what a fresh session should read:
    PMOCs and coding sessions for the left-off. **The weekly reflection** —
    `lenses/weekly-reflection.md` — is the bigger pass and the only place
    priorities move.
-6. **The habit loop** — one keystone habit per season, named on the Board's
-   Self column and in its own note. They log it in the daily note's
-   `# Habits` section (boxes + prose, their words). `lenses/habit-parse.md`
-   writes `OpenAugi/Habit Log/YYYY-MM-DD.md` each morning at 05:50, before
-   the board — the habit boxes, plus one line per pause whose fields are their
-   two questions, *what am I avoiding* and *what do I need now*, in their
-   words; the board embeds it so the parse is checkable; `lenses/habit-read.md`
-   reads the week's files on demand; the weekly reflection's **Self**
-   section opens with a one-line scoreboard counted from those files. Agents never read the journal prose
-   for this, only the section.
 
 Where anything gets written is one rule, stated once: "Where you write",
 below.

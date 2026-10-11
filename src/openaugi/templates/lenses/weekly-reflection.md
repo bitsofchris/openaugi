@@ -90,12 +90,7 @@ own writing this week — daily notes, the WK note's thoughts, and their self
 and health area notes if touched. Two short lists, *Working* and *Not working*,
 two or three bullets each, one dated quote per bullet; then one line: what
 they may not be seeing. Family, mood and the hard things count when they wrote
-them — say them plainly, without advice lists, counts or scores — except the
-**scoreboard**, one line first in this section, counted from the week's
-`OpenAugi/Habit Log/` rows (never the daily notes): each active habit's
-`done=yes` ticks over days logged, e.g. *Scoreboard: pause 4/7 · rest-after 5/7
-· screens-off 6/7 · chin-tucks 3/7*. A blank is unknown, never a miss; no rate,
-no streak, no comment.
+them — say them plainly, without advice lists, counts or scores.
 
 **Candidates for next week** — at most five, one line each with the date:
 only things they captured that could become a slot or a card. This is what
@@ -115,7 +110,7 @@ Then the closing line, verbatim:
 ```
 
 Confirm the path in the task's `## Results` and nothing else. No habit
-streaks or rates beyond the Self scoreboard line, no bottlenecks list, no
+scoreboard, streaks or rates, no bottlenecks list, no
 labeled surfaced list, no checkboxes.
 
 ## The Sunday session (interactive, in chat)
