@@ -175,6 +175,8 @@ Process the user instruction(s) above in the context of the source block.
 - `source_block_id`, `source_note` — provenance back to the block that triggered the task
 - `task_id`, `created`, `tmux_session` — added by the watcher during hydration (don't set these yourself)
 
+Hydration also adds a `## Session` section (the `tmux attach` line) just above the `## Results` heading, and appends `## Results` if there is none. Both are matched as whole heading lines, so a body that mentions `## Results` in a sentence is left as written.
+
 See [src/openaugi/templates/task-template.md](../../src/openaugi/templates/task-template.md) for the annotated authoritative version.
 
 ## The Repos.md map

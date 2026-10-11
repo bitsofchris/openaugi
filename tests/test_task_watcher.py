@@ -243,6 +243,36 @@ class TestHydrateNote:
         assert body.count("## Session") == 1
         assert body.count("## Results") == 1
 
+    def test_inline_heading_text_is_not_a_heading(self, tmp_path: Path):
+        """`## Results` quoted mid-sentence is prose: the Session block goes
+        before the real heading only, once (regression: 2026-10-11 identity-fusion task)."""
+        f = tmp_path / "task.md"
+        f.write_text(
+            "---\nstatus: pending\n---\n# T\n\n## Task\n\n"
+            "Link the note from the receipt in `## Results` only.\n"
+            "Mentioning ## Session inline is prose too.\n\n"
+            "## Human Todo\n\n## Results\n",
+            encoding="utf-8",
+        )
+        task_id, _, new_path = tw.hydrate_note(f)
+        _, body = tw.parse_note(new_path.read_text())
+        assert body.count(f"tmux attach -t {task_id}") == 1
+        assert "receipt in `## Results` only.\n" in body
+        assert body.index("\n## Session\n") > body.index("## Human Todo")
+        assert body.index("\n## Session\n") < body.rindex("\n## Results\n")
+
+    def test_inline_results_text_still_gets_results_heading(self, tmp_path: Path):
+        """A body that only mentions `## Results` inline still gets the real heading."""
+        f = tmp_path / "task.md"
+        f.write_text(
+            "---\nstatus: pending\n---\nFill in `## Results` when done.\n",
+            encoding="utf-8",
+        )
+        _, _, new_path = tw.hydrate_note(f)
+        _, body = tw.parse_note(new_path.read_text())
+        assert body.rstrip().endswith("## Results")
+        assert body.count("\n## Session\n") == 1
+
     def test_no_default_workstream_or_priority(self, tmp_path: Path):
         """Hydration does not invent workstream/priority — the writer owns those."""
         f = tmp_path / "task.md"

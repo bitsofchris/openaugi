@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**Hydration matches headings, not text.** The task watcher inserted its
+`## Session` block before every occurrence of the string `## Results`, so a
+task body that quoted `` `## Results` `` mid-sentence was split and got the
+block twice; a body that mentioned `## Session` in prose got none. Both are
+now matched as whole heading lines.
+
 **A cadence can name a time.** `at: HH:MM` and `on: <weekday>` in a lens's
 `## Run` section anchor `every <period>` to the local clock — `at: 06:00`
 fires at 06:00 on both sides of a DST change, `on: Fri` with `every 7d`

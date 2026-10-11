@@ -96,6 +96,8 @@ DEFAULT_REAP_INTERVAL = 3600.0  # seconds between reaps of tmux sessions for don
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
+SESSION_HEADING_RE = re.compile(r"^## Session[ \t]*$", re.MULTILINE)
+RESULTS_HEADING_RE = re.compile(r"^## Results[ \t]*$", re.MULTILINE)
 
 # Frontmatter keys that all mean "working directory"
 WORKING_DIR_KEYS = ("working_dir", "working-dir", "repo")
@@ -225,16 +227,18 @@ def hydrate_note(filepath: Path) -> tuple[str, str, Path]:
     # watcher logs the task as-is rather than labeling it under a surprise
     # workstream the user didn't choose.
 
-    # Inject Session section if not present
-    if "## Session" not in body:
+    # Inject Session section if not present. Headings are matched as whole
+    # lines: a body that quotes `## Results` in prose is not a heading.
+    if not SESSION_HEADING_RE.search(body):
         session_block = f"\n## Session\n\n```bash\ntmux attach -t {session_name}\n```\n"
-        if "## Results" in body:
-            body = body.replace("## Results", f"{session_block}\n## Results")
+        results = RESULTS_HEADING_RE.search(body)
+        if results:
+            body = body[: results.start()] + f"{session_block}\n" + body[results.start() :]
         else:
             body = body.rstrip() + f"\n{session_block}\n## Results\n\n"
 
     # Ensure ## Results exists
-    if "## Results" not in body:
+    if not RESULTS_HEADING_RE.search(body):
         body = body.rstrip() + "\n\n## Results\n\n"
 
     new_text = rebuild_note(fm, body)
