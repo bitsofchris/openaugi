@@ -2,7 +2,7 @@
 kind: engine
 name: weekly-reflection
 description: >-
-  The Sunday pass. Drafted at 06:30: what the week was about, a recap by lane, what kept coming up, what their writing contradicts, what they learned and are avoiding, candidates for next week, questions. Then the Sunday session: they open a chat and say `run the Sunday pass`; the agent goes through every typed instruction of the week, updates the context note, reviews the week with them, and only then asks about priorities, cards and janitor fixes — one question at a time, each applied as it is ruled. The only place priorities move.
+  The Sunday pass. Drafted at 06:30: what the week was about, a recap by lane, what kept coming up, what their writing contradicts, what they learned and are avoiding, an outside view (right what, and the bottleneck), candidates for next week, questions. Then the Sunday session: they open a chat and say `run the Sunday pass`; the agent goes through every typed instruction of the week, updates the context note, agrees the week's bottleneck with them, and only then asks about priorities, cards and janitor fixes — one question at a time, each applied as it is ruled. The only place priorities move.
 scope: >-
   Every block from the last 7 days via the OpenAugi MCP (`recent` or `search` with a date window): daily notes, ideas, tasks, reflections — and every `Aaa:` instruction inside them. [[Slowly Changing Context]] §3 and §4. The Board and the Backlog (`_private/0-Current Focus/Kanban.md`, `Backlog.md`). The 2–3 prior reflections in `OpenAugi/Research/Weekly Reflection - *.md`, for patterns across weeks only. For the Sunday session, additionally: the week's daily notes and dated side notes in full, their own `# My Thoughts` in `_private/0-Current Focus/WK - YY-MM-DD.md` and this Sunday's entry in `OpenAugi/Notes/System Janitor.md`.
 trigger: every 7d   # Sunday 06:30 local; the `## Run` anchor below is the schedule.
@@ -83,6 +83,28 @@ quotes. No energy, no drift, no scorekeeping.
 short paragraphs, or three bullets each. Direct. Given the longer arc in
 [[Slowly Changing Context]], is this week's pattern high-leverage?
 
+**The outside view: right what, and the bottleneck** — step outside the
+week and look at it whole, against their goals (the North Star, §3, and
+where they say they are going). The method: the right problem first
+(Hamming), then the one constraint that caps the system (Goldratt). Three
+short paragraphs, your own judgment; it may name something they have not.
+
+*Last week's bottleneck.* Read the prior reflection's **Agreed** block
+and this week's `Bottleneck —` box in the daily notes `# Habits`. Two
+lines: did they run the experiment (days ticked), and did the constraint
+move, judged from their writing and what shipped? If it did not move,
+ask why before naming a new one; it may still be the bottleneck.
+
+*Right what.* At a high level, is the one thing they are working on the
+most important problem they could be working on? Or a nearby, easier one?
+Say it plainly either way.
+
+*The bottleneck.* What is slowing them down or keeping them from getting
+where they want to go, that they may not see? It can be role-specific
+(work, research, content) or about their life and self overall. Name the
+one constraint that matters most right now, ask yourself why it is there
+until you reach something they can change, and give the first step.
+
 **Self** — what is working and what is not for their health,
 energy, performance, happiness and well-being, and for the inner work (the
 patterns that keep repeating, what they are growing into). Only from their
@@ -110,7 +132,7 @@ Then the closing line, verbatim:
 ```
 
 Confirm the path in the task's `## Results` and nothing else. No habit
-scoreboard, streaks or rates, no bottlenecks list, no
+scoreboard, streaks or rates, one bottleneck, never a list, no
 labeled surfaced list, no checkboxes.
 
 ## The Sunday session (interactive, in chat)
@@ -126,8 +148,10 @@ the week so the list is the script's, not the draft's. Then go in this
 order, **one question per turn**, offering the choices as a question card
 where the client has one (numbered options otherwise). Their thoughts
 outrank the draft: where they disagree, offer what they wrote. Priorities
-come fourth, not first: they are decided after the instructions, the context
-and the week have been gone through.
+come third, not first: they are decided after the instructions and the
+context note have been gone through. Every proposed wording (a context
+edit, a lens or template line, a card clause) is shown in chat, before and
+not inside the question: question-card previews do not reach them.
 
 1. **Instructions** — open with a short read of the week and the full table
    of the week's `Aaa:` lines with each one's state. Then one question per
@@ -144,26 +168,31 @@ and the week have been gone through.
    or *discuss*. Explain what the section is for in two lines when they
    ask; never assume they remember. Any note written as "input for Sunday"
    during the week brings its rulings here.
-3. **The week, reviewed** — one turn, no question card: the week pieced
-   together from their notes, by lane, in their words, with what is open in
-   each (their own newest "what's next" list is the frame when they wrote
-   one). Under 200 words. Ask what is off, and talk until they say it is
-   right.
-4. **This week's cards** — one question: the top card of each Board column,
+3. **This week's cards** — first one turn, no card: show the draft's
+   outside view in full and ask if it is right and what would unblock
+   it; talk until it is, and let it shape the card order. It ends with
+   one agreed bottleneck and one experiment against it. Write them under
+   the draft's outside view as **Agreed** (the bottleneck, the
+   experiment, the box), at most three lines, in their words. The
+   experiment is the one `- [ ] Bottleneck — <experiment>` line at the
+   end of `# Habits` in the daily note template: when it changes,
+   show the new line and rewrite it on their yes. Then one
+   question: the top card of each Board column,
    listed in §4 lane order, with *confirm* or a reorder drafted from their
-   thoughts and from step 3 (which card rises, which drops, per column).
+   thoughts and from the outside view (which card rises, which drops, per
+   column).
    Perform the reorder on the Board before the next question.
-5. **Cards** — one question each, in this order: any column over its cap
+4. **Cards** — one question each, in this order: any column over its cap
    (name the cards, ask which moves, nominate nothing); at most three
    Backlog adds from the draft's *Candidates for next week* that step 1 did
    not already card (source date on each). Perform each ruling before the
    next question, per `kanban.md`. An add to a Board column is fine when
    they approve it in the session.
-6. **Janitor** — one multi-select question listing this Sunday's unfixed
+5. **Janitor** — one multi-select question listing this Sunday's unfixed
    items that are plain fixes, then one question for each item that needs a
    choice. Run the chosen ones as `system-janitor.md` says and rewrite each
    to `✓ fixed <date>`. Leave the rest.
-7. **Close** — set `last_reviewed: <this Sunday>` and append one change-log
+6. **Close** — set `last_reviewed: <this Sunday>` and append one change-log
    line to [[Slowly Changing Context]] (`- **<date>** — Sunday pass from
    [[Weekly Reflection - <date>]]: <the top cards this week, one clause>`).
    Append `## Applied` to the draft: the top cards, each instruction and how
