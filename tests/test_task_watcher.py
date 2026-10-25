@@ -9,6 +9,7 @@ and dispatch_task with a monkeypatched launch_tmux so no real tmux runs.
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -524,7 +525,7 @@ class TestDispatchTask:
 
         calls: dict = {}
 
-        def fake_launch(tmux, claude, session_name, prompt, working_dir=None):
+        def fake_launch(tmux, claude, session_name, prompt, working_dir=None, remote_control=None):
             calls["session"] = session_name
             calls["working_dir"] = working_dir
             calls["prompt"] = prompt
@@ -567,7 +568,7 @@ class TestDispatchTask:
         monkeypatch.setattr(tw, "CONTEXT_DIR", tmp_path / "ctx")
         calls: dict = {}
 
-        def fake_launch(tmux, claude, session_name, prompt, working_dir=None):
+        def fake_launch(tmux, claude, session_name, prompt, working_dir=None, remote_control=None):
             calls["prompt"] = prompt
             return True
 
@@ -641,7 +642,7 @@ class TestTaskTemplateContract:
 
         calls: dict = {}
 
-        def fake_launch(tmux, claude, session_name, prompt, working_dir=None):
+        def fake_launch(tmux, claude, session_name, prompt, working_dir=None, remote_control=None):
             calls["session"] = session_name
             calls["working_dir"] = working_dir
             calls["prompt"] = prompt
@@ -883,3 +884,92 @@ class TestScheduledTaskIdentity:
         body = "## User instruction\n\n> apply lens currency-board\n"
         fm = {"source": "lens-schedule", "lens": "currency-board", "run": "2026-09-22"}
         assert tw.task_fingerprint(fm, body) == tw.task_fingerprint(dict(fm), body)
+
+
+# ── Remote Control and routed prompts ──────────────────────────────────────
+
+
+class TestRemoteControl:
+    def test_argv_without_remote_control_is_unchanged(self):
+        argv = tw.build_tmux_argv("tmux", "claude", "S", "do it")
+        assert "--remote-control" not in argv
+        assert argv[-1] == "do it"
+
+    def test_argv_with_remote_control_names_the_session(self):
+        argv = tw.build_tmux_argv("tmux", "claude", "S", "do it", remote_control="GIL short")
+        i = argv.index("--remote-control")
+        assert argv[i + 1] == "GIL short"
+        assert argv[-1] == "do it"  # the prompt stays the positional argument
+
+    def test_display_name_from_h1_truncated(self):
+        body = "\n# Short: the Python GIL, processes vs threads\n\n## Context\n"
+        assert (
+            tw.session_display_name(body, "TASK-1")
+            == "Short: the Python GIL, processes vs threads"
+        )
+        assert tw.session_display_name("no heading", "TASK-1") == "TASK-1"
+        assert len(tw.session_display_name("# " + "x" * 200, "T")) == tw.DISPLAY_NAME_MAX
+
+    def test_routed_task_launches_in_repo_with_remote_control_and_no_skill_file(
+        self, tmp_path: Path, monkeypatch
+    ):
+        vault = tmp_path / "vault"
+        (vault / "OpenAugi" / "AGENT").mkdir(parents=True)
+        (vault / "OpenAugi" / "AGENT" / "augi-agent.md").write_text("augi brief", encoding="utf-8")
+        repo = tmp_path / "pm"
+        repo.mkdir()
+        tasks = vault / "OpenAugi" / "Tasks"
+        tasks.mkdir()
+        f = tasks / "short-gil.md"
+        f.write_text(
+            "---\nstatus: pending\nroute: short\nrepo: videos-repo\nremote_control: true\n---\n"
+            "# Short: the GIL\n\n## Context\nidea\n\n## Task\nRead AGENTS.md.\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "ledger.json")
+        monkeypatch.setattr(tw, "CONTEXT_DIR", tmp_path / "ctx")
+        calls: list[list[str]] = []
+
+        def fake_run(argv, check=False, capture_output=False):
+            calls.append(list(argv))
+            if argv[1] == "has-session":
+                return subprocess.CompletedProcess(argv, 1, b"", b"")
+            return subprocess.CompletedProcess(argv, 0, b"", b"")
+
+        monkeypatch.setattr(tw.subprocess, "run", fake_run)
+        task_id = tw.dispatch_task(
+            f, "tmux", "claude", {"videos-repo": str(repo)}, vault_path=vault
+        )
+        assert task_id
+        new_session = next(c for c in calls if c[1] == "new-session")
+        assert new_session[new_session.index("-c") + 1] == str(repo)
+        assert new_session[new_session.index("--remote-control") + 1] == "Short: the GIL"
+        prompt = new_session[-1]
+        assert "augi-agent.md" not in prompt
+        assert "Read AGENTS.md." in prompt
+        assert f"edit {vault / 'OpenAugi' / 'Tasks' / task_id}.md" in prompt
+
+    def test_unrouted_task_keeps_skill_file_and_no_remote_control(
+        self, tmp_path: Path, monkeypatch
+    ):
+        vault = tmp_path / "vault"
+        (vault / "OpenAugi" / "AGENT").mkdir(parents=True)
+        (vault / "OpenAugi" / "AGENT" / "augi-agent.md").write_text("augi brief", encoding="utf-8")
+        tasks = vault / "OpenAugi" / "Tasks"
+        tasks.mkdir()
+        f = tasks / "chore.md"
+        f.write_text("---\nstatus: pending\n---\n# Chore\n\n## Task\nTidy.\n", encoding="utf-8")
+        monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "ledger.json")
+        monkeypatch.setattr(tw, "CONTEXT_DIR", tmp_path / "ctx")
+        calls: list[list[str]] = []
+
+        def fake_run(argv, check=False, capture_output=False):
+            calls.append(list(argv))
+            rc = 1 if argv[1] == "has-session" else 0
+            return subprocess.CompletedProcess(argv, rc, b"", b"")
+
+        monkeypatch.setattr(tw.subprocess, "run", fake_run)
+        assert tw.dispatch_task(f, "tmux", "claude", {}, vault_path=vault)
+        new_session = next(c for c in calls if c[1] == "new-session")
+        assert "--remote-control" not in new_session
+        assert "augi-agent.md" in new_session[-1]

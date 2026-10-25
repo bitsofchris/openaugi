@@ -84,6 +84,45 @@ from last week.
 > task files, and the apparent cause was a logic bug in code that was already
 > correct. Nothing in the system was able to say "you are not running this."
 
+## Routes: a verb that runs in a repo
+
+By default a task runs in the vault with the `augi-agent` brief. A **route**
+sends a `zzz:` whose first word is a known verb somewhere else: a repo, with
+that repo's own brief, and (when asked) a Claude session you can continue
+from your phone. The table lives in the repos note's frontmatter next to
+`repos:`, so the engine never learns a personal repo name:
+
+```yaml
+---
+repos:
+  my-videos: /Users/me/repos/my-videos
+routes:
+  short:
+    repo: my-videos            # resolved through `repos:` by the watcher
+    remote_control: true       # claude starts with --remote-control <task title>
+    brief: |
+      Read AGENTS.md first. Run the storyboard steps for the block in
+      `## Context` and report the path you wrote.
+---
+```
+
+- Matching is on the **first word of the first instruction**, case-insensitive,
+  punctuation after it ignored: `zzz: short`, `zzz: Short: the GIL`, `zzz: SHORT —
+  threads` all match `short`. The whole line still lands in `## User instruction`.
+- A routed task file carries `route: <verb>`, `repo: <repo>` and
+  `remote_control: true` in its frontmatter and the route's `brief` as its
+  `## Task` section. `pipeline/dispatch.py` writes it; `task_watcher.py` reads it.
+- With `route:` set the watcher leaves the augi-agent skill file out of the
+  prompt: the repo's own entry point is the brief.
+- With `remote_control: true` the watcher adds `--remote-control <name>` to the
+  claude argv, `<name>` being the task's H1 (≤ 60 chars). The session is still
+  in tmux under the task id; Remote Control is how it also appears in the
+  Claude app and at claude.ai/code. Vault chores never ask for it.
+- No `routes:` table, or an unknown verb: nothing changes.
+
+Restart the daemon after editing the route table? No: routes are read from the
+note on every dispatch. Restart after changing the code, as always.
+
 ## One instruction, one task
 
 A block's id is the hash of its raw text, so editing the paragraph around a

@@ -361,11 +361,15 @@ def build_prompt(
     body: str,
     links: list[str],
     skill_file: Path | None = None,
+    vault_path: Path | None = None,
 ) -> str:
     """Build the initial prompt handed to the Claude agent in its tmux session.
 
     Injects the augi-agent skill file reference so the agent reads it first,
-    then provides the task body and a finish instruction.
+    then provides the task body and a finish instruction. The task file in
+    that instruction is an absolute path when `vault_path` is given: a routed
+    task runs with a repo as cwd, where the vault-relative path would not
+    resolve.
     """
     lines: list[str] = []
 
@@ -380,12 +384,25 @@ def build_prompt(
         lines.append(f"Linked notes (pull via openaugi MCP): {joined}\n")
 
     lines.append(f"{body.strip()}\n")
+    task_file = f"OpenAugi/Tasks/{task_id}.md"
+    if vault_path is not None:
+        task_file = str(vault_path / task_file)
     lines.append(
-        f"When done, edit OpenAugi/Tasks/{task_id}.md: fill in `## Results` "
-        f"and set frontmatter `status: done`.\n"
+        f"When done, edit {task_file}: fill in `## Results` and set frontmatter `status: done`.\n"
     )
 
     return "\n".join(lines)
+
+
+H1_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
+DISPLAY_NAME_MAX = 60
+
+
+def session_display_name(body: str, task_id: str) -> str:
+    """The name a Remote Control session shows: the task's H1, else its id."""
+    m = H1_RE.search(body)
+    name = (m.group(1) if m else task_id).strip()
+    return name[:DISPLAY_NAME_MAX].rstrip()
 
 
 def write_context_file(task_id: str, prompt: str) -> Path:
@@ -407,11 +424,18 @@ def build_tmux_argv(
     session_name: str,
     prompt: str,
     working_dir: str | None = None,
+    remote_control: str | None = None,
 ) -> list[str]:
     """Build the argv for `tmux new-session` that execs claude directly.
 
     Returns a pure argv list — no shell involved, no quoting concerns.
     The prompt is one argv element and reaches claude intact.
+
+    `remote_control` is a display name: when given, claude starts with
+    Remote Control on under that name, so the session shows up in the
+    Claude app and at claude.ai/code and can be continued from a phone.
+    Routed tasks (a `zzz:` verb in the repos note's `routes:` table) ask
+    for it; vault chores do not.
     """
     cmd = [tmux, "new-session", "-d", "-s", session_name]
     if working_dir and os.path.isdir(working_dir):
@@ -422,8 +446,10 @@ def build_tmux_argv(
         "auto",
         "--settings",
         SETTINGS_JSON,
-        prompt,
     ]
+    if remote_control:
+        cmd += ["--remote-control", remote_control]
+    cmd.append(prompt)
     return cmd
 
 
@@ -433,6 +459,7 @@ def launch_tmux(
     session_name: str,
     prompt: str,
     working_dir: str | None = None,
+    remote_control: str | None = None,
 ) -> bool:
     """Launch claude in a named detached tmux session, no shell middleman.
 
@@ -453,7 +480,9 @@ def launch_tmux(
         logger.warning("tmux session %s already exists, skipping", session_name)
         return False
 
-    argv = build_tmux_argv(tmux, claude, session_name, prompt, working_dir=working_dir)
+    argv = build_tmux_argv(
+        tmux, claude, session_name, prompt, working_dir=working_dir, remote_control=remote_control
+    )
     subprocess.run(argv, check=True)
 
     subprocess.run(
@@ -652,14 +681,16 @@ def dispatch_task(
     # the "Linked notes" prompt line.
     links = [lnk for lnk in extract_wiki_links(body) if "#^augi-" not in lnk]
 
-    # Resolve the augi-agent skill file
+    # Resolve the augi-agent skill file. A routed task (`route:` in the
+    # frontmatter) runs in its repo under that repo's own brief, so the vault
+    # skill file stays out of its prompt.
     skill_file = None
-    if vault_path:
+    if vault_path and not fm.get("route"):
         candidate = vault_path / SKILL_FILE_RELATIVE
         if candidate.exists():
             skill_file = candidate
 
-    prompt = build_prompt(task_id, body, links, skill_file=skill_file)
+    prompt = build_prompt(task_id, body, links, skill_file=skill_file, vault_path=vault_path)
 
     work_dir = resolve_working_dir(fm, repo_paths)
     if work_dir:
@@ -672,7 +703,13 @@ def dispatch_task(
 
     write_context_file(task_id, prompt)  # debug/audit only; not read at runtime
 
-    launched = launch_tmux(tmux, claude, session_name, prompt, working_dir=work_dir)
+    remote_name = session_display_name(body, task_id) if fm.get("remote_control") else None
+    if remote_name:
+        logger.info("Remote Control on, named %r", remote_name)
+
+    launched = launch_tmux(
+        tmux, claude, session_name, prompt, working_dir=work_dir, remote_control=remote_name
+    )
     if launched:
         logger.info("Launched tmux session: %s", session_name)
         record_fingerprint(fingerprint, task_id)

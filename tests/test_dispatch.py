@@ -23,6 +23,8 @@ from openaugi.pipeline.dispatch import (
     build_task_file,
     dispatch_zzz_blocks,
     drain_zzz_queue,
+    load_routes,
+    match_route,
     record_zzz_changes,
     resolve_anchor_refs,
 )
@@ -642,3 +644,77 @@ def test_the_same_instruction_in_a_different_note_is_its_own_task(
 
     assert len(drain_zzz_queue(store, tmp_path, settle_seconds=0)) == 1
     assert len(_tasks(tmp_path)) == 2
+
+
+# ── Routes ─────────────────────────────────────────────────────────────────
+
+ROUTES = {
+    "short": {
+        "repo": "videos-repo",
+        "remote_control": True,
+        "brief": "Read AGENTS.md. Run runbook steps 0-1 for the block above.",
+    }
+}
+
+
+class TestRoutes:
+    def test_routed_verb_sets_repo_remote_control_and_brief(self):
+        block = _make_block("a" * 16, "the python GIL idea", zzz=["short"])
+        text = build_task_file(block, routes=ROUTES)
+        fm_text = text.split("---")[1]
+        assert "route: short" in fm_text
+        assert "repo: videos-repo" in fm_text
+        assert "remote_control: true" in fm_text
+        assert "Read AGENTS.md. Run runbook steps 0-1" in text
+        assert "Process the user instruction(s)" not in text
+        assert "the python GIL idea" in text
+
+    def test_verb_matches_case_and_punctuation_insensitively(self):
+        for line in ("Short", "short: the GIL", "SHORT — processes vs threads"):
+            block = _make_block("b" * 16, "x", zzz=[line])
+            assert "route: short" in build_task_file(block, routes=ROUTES), line
+            assert f"> {line}" in build_task_file(block, routes=ROUTES)
+
+    def test_unrouted_instruction_is_unchanged(self):
+        block = _make_block("c" * 16, "x", zzz=["research the GIL for a short"])
+        text = build_task_file(block, routes=ROUTES)
+        assert "route:" not in text
+        assert "repo:" not in text
+        assert "Process the user instruction(s)" in text
+
+    def test_no_routes_means_no_route(self):
+        block = _make_block("d" * 16, "x", zzz=["short"])
+        text = build_task_file(block, routes={})
+        assert "route:" not in text
+
+    def test_routes_load_from_repos_note(self, tmp_path: Path):
+        vault = tmp_path / "vault"
+        (vault / "OpenAugi" / "AGENT").mkdir(parents=True)
+        (vault / "OpenAugi" / "AGENT" / "Repos.md").write_text(
+            "---\nrepos:\n  videos-repo: /tmp/pm\nroutes:\n  short:\n"
+            "    repo: videos-repo\n    remote_control: true\n"
+            "    brief: |\n      Do the storyboard.\n---\n# Repos\n",
+            encoding="utf-8",
+        )
+        route = load_routes(vault)["short"]
+        assert (route["repo"], route["remote_control"]) == ("videos-repo", True)
+        assert route["brief"].strip() == "Do the storyboard."
+        block = _make_block("e" * 16, "x", zzz=["short"])
+        written = dispatch_zzz_blocks([block], vault)
+        text = written[0].read_text()
+        assert "repo: videos-repo" in text
+        assert "Do the storyboard." in text
+
+    def test_routes_missing_or_malformed_is_empty(self, tmp_path: Path):
+        assert load_routes(None) == {}
+        assert load_routes(tmp_path) == {}
+        (tmp_path / "OpenAugi" / "AGENT").mkdir(parents=True)
+        (tmp_path / "OpenAugi" / "AGENT" / "Repos.md").write_text(
+            "---\nroutes: nope\n---\n", encoding="utf-8"
+        )
+        assert load_routes(tmp_path) == {}
+
+    def test_match_route_direct(self):
+        assert match_route(["short: x"], ROUTES) == ("short", ROUTES["short"])
+        assert match_route([], ROUTES) is None
+        assert match_route(["— odd"], ROUTES) is None

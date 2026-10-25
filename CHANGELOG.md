@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+**A `zzz:` verb can route to a repo, with Remote Control on.** The repos
+note's frontmatter gains a `routes:` table next to `repos:`: a verb, the
+repo it runs in, whether to start claude with `--remote-control`, and the
+brief that becomes the task's `## Task` section. A `zzz:` whose first word is
+a route verb (`zzz: short`, `zzz: short: the GIL`) is written with `route:`,
+`repo:` and `remote_control:` in its frontmatter; the watcher then starts it
+in that repo under that brief (the augi-agent skill file stays out of the
+prompt) and, when asked, with Remote Control under the task's title, so the
+session shows up in the Claude app and at claude.ai/code and can be
+continued from a phone. Unrouted instructions are unchanged.
+`docs/reference/task-dispatch.md` § Routes.
+
+**Hydration matches headings, not text.** The task watcher inserted its
+`## Session` block before every occurrence of the string `## Results`, so a
+task body that quoted `` `## Results` `` mid-sentence was split and got the
+block twice; a body that mentioned `## Session` in prose got none. Both are
+now matched as whole heading lines.
+
 **Finished task sessions outlive the reaper by three days.** The hourly reap
 no longer kills the tmux wrapper of a `status: done` task on the same tick it
 finishes; it waits until the task file has been untouched for 3 days

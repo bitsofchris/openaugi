@@ -69,6 +69,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from openaugi.agents.task_watcher import REPOS_NOTE_CANDIDATES, parse_note
 from openaugi.model.block import Block
 
 if TYPE_CHECKING:
@@ -138,6 +139,58 @@ def _slugify(text: str, max_len: int = 50) -> str:
     slug = re.sub(r"[^\w\s-]", "", text)
     slug = re.sub(r"[\s_]+", "-", slug).strip("-").lower()
     return slug[:max_len]
+
+
+# ── Routes ─────────────────────────────────────────────────────────────────
+#
+# A route sends a `zzz:` whose first word is a known verb to a repo with its
+# own brief, instead of the vault with the augi-agent brief. The table lives
+# in the vault's Repos.md frontmatter next to `repos:`, so the engine stays
+# free of personal repo names:
+#
+#     routes:
+#       short:
+#         repo: my-videos        # resolved via `repos:` by the watcher
+#         remote_control: true       # launch claude with --remote-control
+#         brief: |
+#           Read AGENTS.md. ...      # becomes the task's `## Task` section
+#
+# `zzz: short` / `zzz: short: the GIL` / `zzz: Short — the GIL` all match
+# `short`; the rest of the line stays in `## User instruction`.
+
+ROUTE_VERB_RE = re.compile(r"^\s*([A-Za-z][\w-]*)")
+
+
+def load_routes(vault_path: str | Path | None) -> dict[str, dict]:
+    """The `routes:` table from the repos note, keys lowercased; {} if none."""
+    if vault_path is None:
+        return {}
+    vault = Path(vault_path)
+    note = next((vault / c for c in REPOS_NOTE_CANDIDATES if (vault / c).exists()), None)
+    if note is None:
+        return {}
+    try:
+        fm, _ = parse_note(note.read_text(encoding="utf-8"))
+    except Exception as e:  # pragma: no cover - a broken note must not stop dispatch
+        logger.error("Error loading routes from %s: %s", note, e)
+        return {}
+    routes = fm.get("routes") or {}
+    if not isinstance(routes, dict):
+        logger.warning("`routes` in %s is not a dict", note)
+        return {}
+    return {str(k).lower(): v for k, v in routes.items() if isinstance(v, dict)}
+
+
+def match_route(instructions: list[str], routes: dict[str, dict]) -> tuple[str, dict] | None:
+    """(verb, route) when the first instruction's first word is a route verb."""
+    if not instructions or not routes:
+        return None
+    m = ROUTE_VERB_RE.match(instructions[0])
+    if not m:
+        return None
+    verb = m.group(1).lower()
+    route = routes.get(verb)
+    return (verb, route) if route else None
 
 
 def _derive_title(block: Block) -> str:
@@ -226,12 +279,22 @@ def resolve_anchor_refs(
     return resolved
 
 
-def build_task_file(block: Block, vault_path: str | Path | None = None) -> str:
+def build_task_file(
+    block: Block,
+    vault_path: str | Path | None = None,
+    routes: dict[str, dict] | None = None,
+) -> str:
     """Build a pending task file from a block with zzz instructions.
 
     Follows the task file contract in templates/task-template.md.
     The zzz instructions become both the user instruction and the task
     body — the agent in the tmux session interprets them.
+
+    When the first instruction's first word is a route verb (`routes`, or
+    the repos note's `routes:` table when vault_path is given), the task
+    gets `route:`, `repo:` and `remote_control:` in its frontmatter and the
+    route's brief as its `## Task` section, so the watcher starts it in that
+    repo with that brief instead of the vault with the augi-agent brief.
 
     When vault_path is given, [[YYYY-MM-DD#^augi-<id8>]] anchor refs in the
     block (mobile distill-with-lens) are resolved and their content inlined
@@ -251,14 +314,30 @@ def build_task_file(block: Block, vault_path: str | Path | None = None) -> str:
         if sections:
             content += "\n\n### Referenced blocks\n\n" + "\n\n".join(sections)
 
+    if routes is None:
+        routes = load_routes(vault_path)
+    matched = match_route(zzz_list, routes)
+
     # Build frontmatter
     fm_lines = [
         "---",
         "status: pending",
         f"source_block_id: {block.id}",
         f'source_note: "[[{source_title}]]"',
-        "---",
     ]
+    task_section = (
+        "Process the user instruction(s) above in the context of the source block.\n"
+        "The instruction text is the user's own words — interpret and execute accordingly."
+    )
+    if matched:
+        verb, route = matched
+        fm_lines.append(f"route: {verb}")
+        if route.get("repo"):
+            fm_lines.append(f"repo: {route['repo']}")
+        if route.get("remote_control"):
+            fm_lines.append("remote_control: true")
+        task_section = str(route.get("brief") or task_section).strip()
+    fm_lines.append("---")
 
     # Build body
     zzz_text = "\n".join(f"> {z}" for z in zzz_list)
@@ -275,8 +354,7 @@ def build_task_file(block: Block, vault_path: str | Path | None = None) -> str:
 
 ## Task
 
-Process the user instruction(s) above in the context of the source block.
-The instruction text is the user's own words — interpret and execute accordingly.
+{task_section}
 
 ## Human Todo
 
@@ -306,9 +384,10 @@ def dispatch_zzz_blocks(
     tasks_dir.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []
+    routes = load_routes(vault)
 
     for block in zzz_blocks(blocks):
-        task_content = build_task_file(block, vault_path=vault)
+        task_content = build_task_file(block, vault_path=vault, routes=routes)
         filepath = _write_task_file(tasks_dir, _derive_title(block), task_content)
         logger.info("Dispatched zzz task: %s → %s", block.id[:12], filepath.name)
         written.append(filepath)
@@ -387,6 +466,7 @@ def record_zzz_changes(
             out.setdefault(b.metadata.get("source_path", ""), []).append(b)
         return out
 
+    routes = load_routes(vault)
     fresh = _by_doc(zzz_blocks(new_blocks))
     # A removed block was a zzz block iff we have a ledger row for it. That
     # avoids depending on metadata surviving the store round-trip, and it is
@@ -464,7 +544,7 @@ def record_zzz_changes(
                     "title": _derive_title(block),
                     "instructions": instructions,
                     "instruction_key": key,
-                    "task_content": build_task_file(block, vault_path=vault),
+                    "task_content": build_task_file(block, vault_path=vault, routes=routes),
                 },
                 stamp,
             )
