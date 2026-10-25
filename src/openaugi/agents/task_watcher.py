@@ -93,6 +93,10 @@ DEFAULT_REPOS_NOTE = REPOS_NOTE_CANDIDATES[0]
 DEFAULT_POLL_INTERVAL = 5.0  # seconds between scans
 DEFAULT_SETTLE_TIME = 30.0  # seconds a file must be unchanged before processing
 DEFAULT_REAP_INTERVAL = 3600.0  # seconds between reaps of tmux sessions for done tasks
+# A done task's tmux wrapper is kept this long after the task file was last written,
+# so a finished weekly run is still attachable for a few days. The conversation
+# itself is on disk either way (`claude --resume <id>`).
+DEFAULT_REAP_RETENTION = 3 * 24 * 3600.0
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
@@ -677,8 +681,16 @@ def dispatch_task(
     return None
 
 
-def reap_done_sessions(tasks_dir: Path, tmux: str) -> int:
-    """Kill tmux sessions for tasks whose file is `status: done`.
+def reap_done_sessions(
+    tasks_dir: Path,
+    tmux: str,
+    retention: float = DEFAULT_REAP_RETENTION,
+    now: float | None = None,
+) -> int:
+    """Kill tmux sessions for tasks whose file has been `status: done` for `retention` seconds.
+
+    "Done since" is the task file's mtime: the agent's last write is the one
+    that sets `status: done`. A file written more recently is left alone.
 
     The Claude conversation is preserved on disk and can be resumed later via
     `claude --resume <session-id>` — only the tmux wrapper is torn down.
@@ -686,6 +698,7 @@ def reap_done_sessions(tasks_dir: Path, tmux: str) -> int:
     """
     if not tasks_dir.exists():
         return 0
+    now = time.time() if now is None else now
     killed = 0
     for f in tasks_dir.glob("*.md"):
         try:
@@ -697,6 +710,8 @@ def reap_done_sessions(tasks_dir: Path, tmux: str) -> int:
             continue
         session = fm.get("tmux_session")
         if not session:
+            continue
+        if now - f.stat().st_mtime < retention:
             continue
         has = subprocess.run(
             [tmux, "has-session", "-t", session],
@@ -718,6 +733,7 @@ def watch_tasks(
     poll_interval: float = DEFAULT_POLL_INTERVAL,
     settle: float = DEFAULT_SETTLE_TIME,
     reap_interval: float = DEFAULT_REAP_INTERVAL,
+    reap_retention: float = DEFAULT_REAP_RETENTION,
 ) -> None:
     """Watch `<vault>/<tasks_folder>/` for pending tasks and dispatch them.
 
@@ -760,7 +776,7 @@ def watch_tasks(
             now = time.time()
             if now - last_reap_at >= reap_interval:
                 try:
-                    reap_done_sessions(tasks_dir, tmux)
+                    reap_done_sessions(tasks_dir, tmux, retention=reap_retention)
                 except Exception as e:
                     logger.error("Reap failed: %s", e)
                 last_reap_at = now

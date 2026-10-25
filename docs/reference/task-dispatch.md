@@ -287,6 +287,8 @@ Save it, wait ~30s (the settle window), and it dispatches. Useful for mobile cap
 
 **Why tmux?** Detached sessions survive if the watcher or your terminal dies. Named sessions make attaching trivial (`tmux attach -t TASK-...`). You can have ten agent sessions running in parallel, switch between them, and close/kill any individual one.
 
+**When are finished sessions torn down?** Once a task file is `status: done`, the watcher kills its tmux wrapper, hourly, but only after the file has been untouched for 3 days (`DEFAULT_REAP_RETENTION`). So a finished weekly run stays attachable for a few days. The Claude conversation is never deleted: `claude --resume <session-id>` opens it after the wrapper is gone.
+
 **Why no defaults for workstream/priority?** The writer (zzz dispatch or you) owns those fields. If `workstream` is missing, the task is logged un-scoped — which is honest.
 
 ## Related

@@ -357,12 +357,50 @@ class TestReapDoneSessions:
             return subprocess.CompletedProcess(argv, 0, b"", b"")
 
         monkeypatch.setattr(tw.subprocess, "run", fake_run)
-        n = tw.reap_done_sessions(tmp_path, "tmux")
+        n = tw.reap_done_sessions(tmp_path, "tmux", retention=0)
         assert n == 1
         assert killed == ["S-done"]
 
     def test_missing_dir_is_noop(self, tmp_path: Path):
         assert tw.reap_done_sessions(tmp_path / "nope", "tmux") == 0
+
+    def _done_task(self, path: Path, age_seconds: float, now: float) -> None:
+        path.write_text("---\nstatus: done\ntmux_session: S-x\n---\n", encoding="utf-8")
+        import os
+
+        os.utime(path, (now - age_seconds, now - age_seconds))
+
+    def test_keeps_recently_finished_session(self, tmp_path: Path, monkeypatch):
+        now = 1_000_000_000.0
+        self._done_task(tmp_path / "fresh.md", age_seconds=3600, now=now)
+        killed: list[str] = []
+        monkeypatch.setattr(tw.subprocess, "run", _fake_tmux(killed))
+        assert tw.reap_done_sessions(tmp_path, "tmux", retention=3 * 86400, now=now) == 0
+        assert killed == []
+
+    def test_kills_session_past_retention(self, tmp_path: Path, monkeypatch):
+        now = 1_000_000_000.0
+        self._done_task(tmp_path / "old.md", age_seconds=4 * 86400, now=now)
+        killed: list[str] = []
+        monkeypatch.setattr(tw.subprocess, "run", _fake_tmux(killed))
+        assert tw.reap_done_sessions(tmp_path, "tmux", retention=3 * 86400, now=now) == 1
+        assert killed == ["S-x"]
+
+    def test_default_retention_is_three_days(self):
+        assert tw.DEFAULT_REAP_RETENTION == 3 * 24 * 3600
+
+
+def _fake_tmux(killed: list[str]):
+    """subprocess.run stand-in: every session reports live; kills are recorded."""
+    import subprocess
+
+    def fake_run(argv, check=False, capture_output=False):
+        if argv[1] == "kill-session":
+            killed.append(argv[3])
+        rc = 0
+        return subprocess.CompletedProcess(argv, rc, b"", b"")
+
+    return fake_run
 
 
 # ── Prompt building ────────────────────────────────────────────────────────

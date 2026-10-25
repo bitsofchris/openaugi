@@ -2,11 +2,13 @@
 
 ## Unreleased
 
-**Hydration matches headings, not text.** The task watcher inserted its
-`## Session` block before every occurrence of the string `## Results`, so a
-task body that quoted `` `## Results` `` mid-sentence was split and got the
-block twice; a body that mentioned `## Session` in prose got none. Both are
-now matched as whole heading lines.
+**Finished task sessions outlive the reaper by three days.** The hourly reap
+no longer kills the tmux wrapper of a `status: done` task on the same tick it
+finishes; it waits until the task file has been untouched for 3 days
+(`DEFAULT_REAP_RETENTION`, passed as `reap_retention`). Before, a Sunday
+weekly-reflection or system-janitor run was torn down within the hour and
+could not be reattached. The conversation was always on disk; only the tmux
+wrapper is affected.
 
 **A cadence can name a time.** `at: HH:MM` and `on: <weekday>` in a lens's
 `## Run` section anchor `every <period>` to the local clock — `at: 06:00`
