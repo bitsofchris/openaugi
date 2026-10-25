@@ -294,7 +294,7 @@ created: <date>
 ## Short from today (experiment)
 
 - **<the question a viewer would search>** — from [[<source note>]]: "<their line>" `build`
-    ↳ <the brief: question, three beats, storyboard stub in ~/repos/private-manim; session left open>
+    ↳ <the brief: question, three beats, storyboard stub in the video repo; session left open>
     for: [[<source note>]]
     verify: <the storyboard stub at its path>
     - [ ] do
