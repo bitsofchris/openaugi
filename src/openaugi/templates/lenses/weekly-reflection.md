@@ -49,7 +49,7 @@ decided in that one session.
 
 ## Intent
 
-The daily board is a terse pointer; this is where the week gets read. Honest,
+The daily board holds each day to the plan and routes what was captured; this is where the week gets read. Honest,
 not encouraging. No padding, no cheerful wrap-up. The value is what is hard to
 see from inside the week, said in their own dated words. The draft is a read,
 under ~850 words; the decisions come later and are checkboxes, never prose

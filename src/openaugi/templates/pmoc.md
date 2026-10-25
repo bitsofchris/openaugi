@@ -44,7 +44,7 @@ outcome: <the sentence that, when true, closes this PMOC>
 
 ### YYYY-MM-DD — created
 
-<The synthesized next step: the smallest thing that moves toward the outcome, and the one open question if there is one. This is the first left-off line the currency board will read.>
+<The synthesized next step: the smallest thing that moves toward the outcome, and the one open question if there is one. This is the first left-off line: what they, the weekly reflection, and any agent resuming the work read first.>
 
 *(Augi: this block was #ai-generated)*
 
@@ -81,7 +81,7 @@ Agents run this pass only when they ask for a PMOC or a task note, or when the w
 
 ## Keeping it
 
-- **Left-off is the newest entry.** The currency board reads it with the coding sessions; nothing else needs to be maintained for the board to be right.
+- **Left-off is the newest entry.** The weekly reflection and any agent resuming the work read it; nothing else needs to be maintained for the left-off to be right.
 - **Context is not updated;** the journal is. If the context section is badly wrong, one dated entry says so.
 - **The space between the links line and `# Journal` is theirs.** Notes to themselves, pinned reminders, whatever. Agents never write there.
 - **Dashboard and Board stay in sync** through the tag (kanban.md, Sunday pass step 5).

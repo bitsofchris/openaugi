@@ -34,8 +34,11 @@ order of what a fresh session should read:
    as questions in the Sunday session.
 4. **PMOCs** — the active projects; newest dated Journal entry is the
    left-off. Rules, and task note vs PMOC: `OpenAugi/AGENT/pmoc.md`.
-5. **The currency board** — `lenses/currency-board.md`, terse, daily, reads
-   PMOCs and coding sessions for the left-off. **The weekly reflection** —
+5. **The currency board** — `lenses/currency-board.md`, daily and slim. It
+   does not restate the left-off (Kanban and the PMOCs hold it). It holds
+   the day to the season and week decided on Sunday (On track), routes
+   every `Aaa:`, names sessions waiting on them, and offers card edits as
+   yes/no questions. **The weekly reflection** —
    `lenses/weekly-reflection.md` — is the bigger pass and the only place
    priorities move.
 
@@ -65,7 +68,8 @@ Review); they dispatch fixes with `zzz: run the ticked janitor fixes`.
    `Notes/` drafted notes (open with `- [ ] seen`) · `Research/` ·
    `Docs/` system docs, [[MOC - My Operating System]], the deck · `Plans/` ·
    `Drafts/` · `Views/` regenerable caches (the only legal overwrite) ·
-   `Board/` the daily boards · `Habit Log/` · `Sessions/` · `Tasks/` ·
+   `Board/` the daily boards · `Habit Log/` · `Sessions/` (old session
+   cards, no longer written) · `Tasks/` ·
    `YYYY/MM/DD/` dated artifacts · `AGENT/` rules and lenses. Never ask
    permission to write here.
 2. **Everything outside `OpenAugi/` is the user's. Read-only, with exactly
