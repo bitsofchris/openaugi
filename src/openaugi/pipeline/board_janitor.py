@@ -416,13 +416,13 @@ def build_proposal_task(
     file, hydrates it, and launches a session like any other.
 
     A proposal whose key starts with a route verb (`short-<kebab>` with a
-    `short` route in the repos note) is routed exactly as `zzz short:` is:
+    `short` route in the repos note) is routed exactly as `zzz short: …` is:
     `route:` / `repo:` / `remote_control:` instead of the vault working dir,
     and the route's brief as the `## Task` section. The proposal text stays
     in `## Context`, so the agent still has the question and the quoted line.
     """
     aaa = f"\n\nNote on it: {proposal['reason']}" if proposal["reason"] else ""
-    matched = match_route([key.replace("-", " ", 1)], load_routes(vault_path))
+    matched = match_route([key.replace("-", ": ", 1)], load_routes(vault_path))
     if matched:
         verb, route = matched
         where = f"route: {verb}"

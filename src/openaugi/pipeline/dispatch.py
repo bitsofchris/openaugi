@@ -155,10 +155,12 @@ def _slugify(text: str, max_len: int = 50) -> str:
 #         brief: |
 #           Read AGENTS.md. ...      # becomes the task's `## Task` section
 #
-# `zzz short: the GIL` / `zzz: short` / `zzz: Short — the GIL` all match
-# `short`; the rest of the line stays in `## User instruction`.
+# The form is `zzz <verb>: <text>`: the verb right after `zzz`, then a colon.
+# `zzz short: the GIL` routes; `zzz: short` and `zzz short the GIL` do not,
+# so a plain instruction that happens to start with a verb word is never
+# hijacked. The rest of the line stays in `## User instruction`.
 
-ROUTE_VERB_RE = re.compile(r"^\s*([A-Za-z][\w-]*)")
+ROUTE_VERB_RE = re.compile(r"^\s*([A-Za-z][\w-]*)\s*:")
 
 
 def load_routes(vault_path: str | Path | None) -> dict[str, dict]:
@@ -182,7 +184,7 @@ def load_routes(vault_path: str | Path | None) -> dict[str, dict]:
 
 
 def match_route(instructions: list[str], routes: dict[str, dict]) -> tuple[str, dict] | None:
-    """(verb, route) when the first instruction's first word is a route verb."""
+    """(verb, route) when the first instruction starts with `<route verb>:`."""
     if not instructions or not routes:
         return None
     m = ROUTE_VERB_RE.match(instructions[0])

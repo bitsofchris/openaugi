@@ -4,15 +4,15 @@
 
 **The board's Short from today takes the `short` route.** A proposal whose
 key starts with a route verb (`propose:short-<kebab>`) is written by the board
-janitor exactly as `zzz short:` is: `route:` / `repo:` / `remote_control:`
+janitor exactly as `zzz short: …` is: `route:` / `repo:` / `remote_control:`
 instead of the vault working dir, the route's brief as `## Task`, the proposal
 text kept in `## Context`. Other proposals are unchanged.
 
 **A `zzz:` verb can route to a repo, with Remote Control on.** The repos
 note's frontmatter gains a `routes:` table next to `repos:`: a verb, the
 repo it runs in, whether to start claude with `--remote-control`, and the
-brief that becomes the task's `## Task` section. A `zzz:` whose first word is
-a route verb (`zzz: short`, `zzz: short: the GIL`) is written with `route:`,
+brief that becomes the task's `## Task` section. A `zzz` of the form
+`zzz <verb>: <text>` (`zzz short: the GIL`) is written with `route:`,
 `repo:` and `remote_control:` in its frontmatter; the watcher then starts it
 in that repo under that brief (the augi-agent skill file stays out of the
 prompt) and, when asked, with Remote Control under the task's title, so the

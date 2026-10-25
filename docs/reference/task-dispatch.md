@@ -106,10 +106,10 @@ routes:
 ---
 ```
 
-- Matching is on the **first word of the first instruction**, case-insensitive,
-  punctuation after it ignored: `zzz short: the GIL`, `zzz: short`, `zzz: SHORT —
-  threads` all match `short` (the splitter accepts `zzz` with or without a colon).
-  The whole line still lands in `## User instruction`.
+- The form is **`zzz <verb>: <text>`**: the verb right after `zzz`, then a
+  colon, case-insensitive. `zzz short: the GIL` routes; `zzz: short` and
+  `zzz short the GIL` are ordinary instructions and run in the vault. The whole
+  line still lands in `## User instruction`.
 - A routed task file carries `route: <verb>`, `repo: <repo>` and
   `remote_control: true` in its frontmatter and the route's `brief` as its
   `## Task` section. `pipeline/dispatch.py` writes it; `task_watcher.py` reads it.

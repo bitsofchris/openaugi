@@ -659,7 +659,7 @@ ROUTES = {
 
 class TestRoutes:
     def test_routed_verb_sets_repo_remote_control_and_brief(self):
-        block = _make_block("a" * 16, "the python GIL idea", zzz=["short"])
+        block = _make_block("a" * 16, "the python GIL idea", zzz=["short: the GIL"])
         text = build_task_file(block, routes=ROUTES)
         fm_text = text.split("---")[1]
         assert "route: short" in fm_text
@@ -669,11 +669,17 @@ class TestRoutes:
         assert "Process the user instruction(s)" not in text
         assert "the python GIL idea" in text
 
-    def test_verb_matches_case_and_punctuation_insensitively(self):
-        for line in ("Short", "short: the GIL", "SHORT — processes vs threads"):
-            block = _make_block("b" * 16, "x", zzz=[line])
-            assert "route: short" in build_task_file(block, routes=ROUTES), line
-            assert f"> {line}" in build_task_file(block, routes=ROUTES)
+    def test_verb_matches_case_insensitively_with_a_colon(self):
+        for line in ("Short: the GIL", "SHORT : processes vs threads", "short:"):
+            text = build_task_file(_make_block("b" * 16, "x", zzz=[line]), routes=ROUTES)
+            assert "route: short" in text, line
+            assert f"> {line}" in text
+
+    def test_verb_without_a_colon_does_not_route(self):
+        # `zzz: short` reaches dispatch as "short"; `zzz short the GIL` as "short the GIL".
+        for line in ("short", "short the GIL", "SHORT — threads"):
+            text = build_task_file(_make_block("b" * 16, "x", zzz=[line]), routes=ROUTES)
+            assert "route:" not in text, line
 
     def test_unrouted_instruction_is_unchanged(self):
         block = _make_block("c" * 16, "x", zzz=["research the GIL for a short"])
@@ -683,7 +689,7 @@ class TestRoutes:
         assert "Process the user instruction(s)" in text
 
     def test_no_routes_means_no_route(self):
-        block = _make_block("d" * 16, "x", zzz=["short"])
+        block = _make_block("d" * 16, "x", zzz=["short: x"])
         text = build_task_file(block, routes={})
         assert "route:" not in text
 
@@ -699,7 +705,7 @@ class TestRoutes:
         route = load_routes(vault)["short"]
         assert (route["repo"], route["remote_control"]) == ("videos-repo", True)
         assert route["brief"].strip() == "Do the storyboard."
-        block = _make_block("e" * 16, "x", zzz=["short"])
+        block = _make_block("e" * 16, "x", zzz=["short: x"])
         written = dispatch_zzz_blocks([block], vault)
         text = written[0].read_text()
         assert "repo: videos-repo" in text
@@ -716,5 +722,6 @@ class TestRoutes:
 
     def test_match_route_direct(self):
         assert match_route(["short: x"], ROUTES) == ("short", ROUTES["short"])
+        assert match_route(["short"], ROUTES) is None
         assert match_route([], ROUTES) is None
         assert match_route(["— odd"], ROUTES) is None
