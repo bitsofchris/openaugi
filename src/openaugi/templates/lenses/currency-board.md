@@ -173,8 +173,8 @@ card suggestions; `openaugi-state` and `content-pipeline` read from their last V
 Not run on a daily board: `chat-harvest`, `nuggets`, `idea-lineage`,
 `cluster-weather`, `morning-briefing`, `ping-read`. `echoes` and `emerging`
 feed Spotted (step 7b) over yesterday only. Those belong to their own triggers and the Sunday pass.
-[[shorts-queue]] is not run here either: this board only does its intake
-(step 6, "Shorts"); storyboards are on demand.
+Shorts on demand are `content-scan` plus a storyboard request; the board
+only makes Short from today (step 6).
 
 ## The checkbox contract
 
