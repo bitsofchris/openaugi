@@ -333,6 +333,11 @@ def build_task_file(
     )
     if matched:
         verb, route = matched
+        # The title names the session in the Claude app: the words after
+        # `<verb>:`, not the verb. Falls back to the block when nothing follows.
+        after_verb = ROUTE_VERB_RE.sub("", zzz_list[0], count=1).strip()
+        first_line = content.split("\n")[0].strip()
+        title = (after_verb or first_line or title)[:80]
         fm_lines.append(f"route: {verb}")
         if route.get("repo"):
             fm_lines.append(f"repo: {route['repo']}")

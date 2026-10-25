@@ -675,6 +675,16 @@ class TestRoutes:
             assert "route: short" in text, line
             assert f"> {line}" in text
 
+    def test_routed_title_is_the_text_after_the_verb(self):
+        block = _make_block("f" * 16, "the block", zzz=["short: the GIL made simple"])
+        text = build_task_file(block, routes=ROUTES)
+        assert "\n# the GIL made simple\n" in text
+        assert "> short: the GIL made simple" in text
+        bare = build_task_file(
+            _make_block("g" * 16, "the block text", zzz=["short:"]), routes=ROUTES
+        )
+        assert "\n# the block text\n" in bare
+
     def test_verb_without_a_colon_does_not_route(self):
         # `zzz: short` reaches dispatch as "short"; `zzz short the GIL` as "short the GIL".
         for line in ("short", "short the GIL", "SHORT — threads"):
