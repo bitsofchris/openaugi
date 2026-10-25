@@ -107,8 +107,9 @@ routes:
 ```
 
 - Matching is on the **first word of the first instruction**, case-insensitive,
-  punctuation after it ignored: `zzz: short`, `zzz: Short: the GIL`, `zzz: SHORT —
-  threads` all match `short`. The whole line still lands in `## User instruction`.
+  punctuation after it ignored: `zzz short: the GIL`, `zzz: short`, `zzz: SHORT —
+  threads` all match `short` (the splitter accepts `zzz` with or without a colon).
+  The whole line still lands in `## User instruction`.
 - A routed task file carries `route: <verb>`, `repo: <repo>` and
   `remote_control: true` in its frontmatter and the route's `brief` as its
   `## Task` section. `pipeline/dispatch.py` writes it; `task_watcher.py` reads it.
@@ -119,6 +120,10 @@ routes:
   in tmux under the task id; Remote Control is how it also appears in the
   Claude app and at claude.ai/code. Vault chores never ask for it.
 - No `routes:` table, or an unknown verb: nothing changes.
+- The board janitor (`pipeline/board_janitor.py`) applies the same table to an
+  accepted proposal whose key starts with a verb (`propose:short-<kebab>`), so
+  `do` on the morning board's *Short from today* and `zzz short:` in a note
+  produce the same task file.
 
 Restart the daemon after editing the route table? No: routes are read from the
 note on every dispatch. Restart after changing the code, as always.

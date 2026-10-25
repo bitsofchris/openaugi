@@ -746,3 +746,73 @@ def test_ticking_do_on_a_long_brief_dispatches_it_whole(long_harvest_board, vaul
     assert "# The first real field test" in body
     assert "> The first real field test" in body
     assert "### 2026-09-10 (augi)" in body
+
+
+# ── Routed proposals (Short from today) ────────────────────────────────────
+
+SHORT_PROPOSAL = """
+## Short from today (experiment)
+
+- **What is the Python GIL?** — from [[2026-10-24]]: "the python Gil, threads vs processes" `build`
+    ↳ Question, three beats, storyboard stub in the video repo; session left open.
+    - [ ] do
+    - [ ] no
+    <!-- propose:short-python-gil -->
+"""
+
+REPOS_WITH_ROUTE = """---
+repos:
+  videos-repo: /tmp/videos
+routes:
+  short:
+    repo: videos-repo
+    remote_control: true
+    brief: |
+      Read AGENTS.md first. Storyboard the block in Context.
+---
+# Repos
+"""
+
+
+@pytest.fixture
+def short_board(vault):
+    (vault / "OpenAugi" / "AGENT").mkdir(parents=True)
+    (vault / "OpenAugi" / "AGENT" / "Repos.md").write_text(REPOS_WITH_ROUTE, encoding="utf-8")
+    path = vault / "OpenAugi" / "Board" / "2026-09-05 - Board.md"
+    path.write_text(
+        PLAIN_BOARD.replace(
+            "## Augi could run these", SHORT_PROPOSAL + "\n## Augi could run these"
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_short_proposal_is_dispatched_through_the_short_route(short_board, vault):
+    _tick_proposal(short_board, "do", "short-python-gil")
+    assert sync_board(short_board, vault) == 1
+    body = (vault / "OpenAugi" / "Tasks" / "board-2026-09-05-short-python-gil.md").read_text(
+        encoding="utf-8"
+    )
+    fm = body.split("---")[1]
+    assert "route: short" in fm
+    assert "repo: videos-repo" in fm
+    assert "remote_control: true" in fm
+    assert "working_dir:" not in fm
+    assert "proposal: short-python-gil" in fm
+    # The route's brief is the task; the proposal he read is still the context.
+    assert "Read AGENTS.md first. Storyboard the block in Context." in body
+    assert "The proposal text is the brief" not in body
+    assert "What is the Python GIL?" in body
+    assert "Question, three beats, storyboard stub" in body
+
+
+def test_other_proposals_keep_the_vault_working_dir_when_routes_exist(short_board, vault):
+    _tick_proposal(short_board, "do", "drift-sweep")
+    assert sync_board(short_board, vault) == 1
+    body = (vault / "OpenAugi" / "Tasks" / "board-2026-09-05-drift-sweep.md").read_text(
+        encoding="utf-8"
+    )
+    assert f"working_dir: {vault}" in body
+    assert "route:" not in body
+    assert "The proposal text is the brief" in body

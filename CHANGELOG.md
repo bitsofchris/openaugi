@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**The board's Short from today takes the `short` route.** A proposal whose
+key starts with a route verb (`propose:short-<kebab>`) is written by the board
+janitor exactly as `zzz short:` is: `route:` / `repo:` / `remote_control:`
+instead of the vault working dir, the route's brief as `## Task`, the proposal
+text kept in `## Context`. Other proposals are unchanged.
+
 **A `zzz:` verb can route to a repo, with Remote Control on.** The repos
 note's frontmatter gains a `routes:` table next to `repos:`: a verb, the
 repo it runs in, whether to start claude with `--remote-control`, and the

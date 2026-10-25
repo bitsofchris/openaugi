@@ -155,7 +155,7 @@ def _slugify(text: str, max_len: int = 50) -> str:
 #         brief: |
 #           Read AGENTS.md. ...      # becomes the task's `## Task` section
 #
-# `zzz: short` / `zzz: short: the GIL` / `zzz: Short — the GIL` all match
+# `zzz short: the GIL` / `zzz: short` / `zzz: Short — the GIL` all match
 # `short`; the rest of the line stays in `## User instruction`.
 
 ROUTE_VERB_RE = re.compile(r"^\s*([A-Za-z][\w-]*)")

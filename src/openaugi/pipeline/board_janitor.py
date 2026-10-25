@@ -52,6 +52,7 @@ import re
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+from openaugi.pipeline.dispatch import load_routes, match_route
 from openaugi.pipeline.writeback import (
     aaa_re,
     append_feedback,
@@ -413,11 +414,29 @@ def build_proposal_task(
     Deliberately the same shape as a zzz dispatch (`pipeline/dispatch.py`) so
     the task watcher needs to know nothing about boards: it finds a pending
     file, hydrates it, and launches a session like any other.
+
+    A proposal whose key starts with a route verb (`short-<kebab>` with a
+    `short` route in the repos note) is routed exactly as `zzz short:` is:
+    `route:` / `repo:` / `remote_control:` instead of the vault working dir,
+    and the route's brief as the `## Task` section. The proposal text stays
+    in `## Context`, so the agent still has the question and the quoted line.
     """
     aaa = f"\n\nNote on it: {proposal['reason']}" if proposal["reason"] else ""
+    matched = match_route([key.replace("-", " ", 1)], load_routes(vault_path))
+    if matched:
+        verb, route = matched
+        where = f"route: {verb}"
+        if route.get("repo"):
+            where += f"\nrepo: {route['repo']}"
+        if route.get("remote_control"):
+            where += "\nremote_control: true"
+        task = str(route.get("brief") or "").strip() or _DEFAULT_PROPOSAL_TASK
+    else:
+        where = f"working_dir: {vault_path}"
+        task = _DEFAULT_PROPOSAL_TASK
     return f"""---
 status: pending
-working_dir: {vault_path}
+{where}
 source: {source}
 board: {day}
 proposal: {key}
@@ -437,15 +456,18 @@ Proposed by {origin} on {day} and accepted from [[{board_stem}]].
 
 ## Task
 
-Do the work described above. The proposal text is the brief — it is what the
-user read before ticking `do`, so treat it as the instruction and do not widen
-the scope beyond it. If it turns out to be underspecified, say so in `## Results`
-and set `status: needs-input` rather than guessing.
+{task}
 
 ## Human Todo
 
 ## Results
 """
+
+
+_DEFAULT_PROPOSAL_TASK = """Do the work described above. The proposal text is the brief — it is
+what the user read before ticking `do`, so treat it as the instruction and do not
+widen the scope beyond it. If it turns out to be underspecified, say so in
+`## Results` and set `status: needs-input` rather than guessing."""
 
 
 def _process_proposals(
