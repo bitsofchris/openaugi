@@ -113,6 +113,19 @@ what the override reasons have in common, quoted. This is the one count
 the draft carries; it describes the mix, never grades it. The categories:
 [[Slowly Changing Context]] §5.
 
+**Tornado** — the week's flare-ups, from the daily notes, the WK note's
+thoughts and the capture notes: the moments they relitigated the path
+(content vs career vs trading vs product, "what's it all for", "should I
+pivot"). A table, one row per flare-up — date, the trigger as they wrote
+it (a comparison, a scoreboard, a tired afternoon, a free Sunday),
+*indulged* (they kept going: more planning, a new vision note, a new
+project) or *caught* (they named it and went to the next step or rest),
+and what broke it. No rows: `None logged.` Under it one line: what the
+triggers have in common, quoted. Describes, never grades. The practice
+it checks is in their Tornado Antidote note; the agreed rule (11/01) is
+that the path question has one slot, the Sunday session, and everywhere
+else the move is name it, log it, next step.
+
 **Self** — what is working and what is not for their health,
 energy, performance, happiness and well-being, and for the inner work (the
 patterns that keep repeating, what they are growing into). Only from their
@@ -140,7 +153,7 @@ Then the closing line, verbatim:
 ```
 
 Confirm the path in the task's `## Results` and nothing else. No habit
-scoreboard, streaks or rates (the Focus blocks table is the one count), one bottleneck, never a list, no
+scoreboard, streaks or rates (the Focus blocks and Tornado tables are the only counts), one bottleneck, never a list, no
 labeled surfaced list, no checkboxes.
 
 ## The Sunday session (interactive, in chat)
@@ -185,7 +198,10 @@ not inside the question: question-card previews do not reach them.
    the focus blocks: show the draft's Focus blocks table and §5's default
    schedule, and ask *keep* or a shift drafted from the mix and the
    override reasons (which weekday moves to which category); on a shift,
-   rewrite the §5 line on their yes. Then one
+   rewrite the §5 line on their yes. Then, only when the draft's Tornado
+   table has rows, one question: show it and ask whether the triggers
+   point at anything the week should change, or nothing (the usual
+   answer). Record the answer under the table in one line. Then one
    question: the top card of each Board column,
    listed in §4 lane order, with *confirm* or a reorder drafted from their
    thoughts and from the outside view (which card rises, which drops, per
