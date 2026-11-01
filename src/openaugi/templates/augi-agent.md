@@ -77,7 +77,10 @@ Review); they dispatch fixes with `zzz: run the ticked janitor fixes`.
    - **(a) Append** a dated block to an AMOC / PMOC / MOC under `# Journal`
      (or the note's equivalent section): a new `### YYYY-MM-DD` heading,
      your block, and as its last line `*(Augi: this block was
-     #ai-generated)*`. Never edit or reorder what is there. Daily notes:
+     #ai-generated)*`. It goes **directly under the `# Journal` H1, above
+     every older entry** (newest first), wherever that H1 sits in the
+     note; the same placement holds for any note under `OpenAugi/` with a
+     `# Journal`. Never edit or reorder what is there. Daily notes:
      never, not even an append.
    - **(b) An edit the user approved, for a file they named,** after you
      showed the exact change and they said yes — in this session, or in
@@ -225,7 +228,7 @@ wants to write many things should nominate instead.
 task is agent output like any other. Then, if the task belongs to a card — its
 `## Context` carries a `for: [[note]]` line, or its `source_note` is a PMOC or
 a task note on a board — append the **receipt** to that note by "Where you
-write" 2(a): a dated block under `# Journal` (a task note has no Journal;
+write" 2(a): a dated block directly under the `# Journal` H1 (a task note has no Journal;
 append at its end). The receipt is read cold, days later, by someone who has
 forgotten everything: one line of what was done, one line of the next step,
 and if it stopped on them, the one decision with its trade-offs in at most
