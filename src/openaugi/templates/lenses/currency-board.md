@@ -2,7 +2,7 @@
 kind: engine
 name: currency-board
 description: >-
-  The slim daily board — holds yesterday against the season and week you decided on Sunday so you execute instead of re-deciding, routes every `Aaa:` you typed, names the coding sessions that ended waiting on you, maps tasks it finds in your writing onto Kanban cards, and (experiment) spots what you can't see from inside the day and suggests one Short from what you learned. Kanban is the left-off; this board is not. Answered with checkboxes; untouched items are not carried.
+  The slim daily board — opens with today's focus-block category from the default you set on Sunday (one line, no boxes), routes every `Aaa:` you typed, names the coding sessions that ended waiting on you, maps tasks it finds in your writing onto Kanban cards, and (experiment) spots what you can't see from inside the day and suggests one Short from what you learned. Kanban is the left-off; this board is not. Answered with checkboxes; untouched items are not carried.
 scope: >-
   [[Slowly Changing Context]] first, every run. Then the `#status/active` PMOCs (newest dated entry each), the coding sessions since the last board (Claude Code ~/.claude/projects, Codex ~/.codex/sessions via scripts/session_harvest.py in the openaugi repo), their own writing since the last board (daily notes, PMOC/AMOC entries; default 72h) including every `Aaa:` instruction in it, [[Quiz Schedule - Foundations]] (the quiz review rows), and OpenAugi/Board/.board-state.json. For the Spotted section only: OpenAugi search over older notes, to link yesterday to what already exists. Never OpenAugi-generated prose except the board state and the previous board.
 trigger: every 1d
@@ -15,10 +15,10 @@ target: >-
 ## Intent
 
 [[Kanban]] already answers "where did I leave off and what is next"; the
-board does not repeat it. The board does what Kanban cannot: it holds the
-day to the plan decided calmly on Sunday (season and week in [[Slowly
-Changing Context]]), so the weekday job stays capture and execute, never
-decide in the moment ([[Decide the Plan Calm, Execute in the Moment]]); it routes every
+board does not repeat it. The board does what Kanban cannot: it opens
+with today's focus-block category, the default set calmly on Sunday
+([[Slowly Changing Context]] §5), so the first headphone block starts
+without a decision ([[Decide the Plan Calm, Execute in the Moment]]); it routes every
 `Aaa:` they typed, names a session that ended waiting on them, turns a task
 it finds in their writing into an edit to a card (never a new checkbox to
 come back to), and spots what they can't see from inside the day. Under 40
@@ -47,8 +47,8 @@ schedule records say. A rerun is their call: delete the board.
 
 **Nothing is carried.** Every section is built from the window alone. An
 item left untouched is not carried to the next board; the one exception is
-an `Aaa:` line, which is never dropped (Hard rules). On track is written
-every day; on a day with nothing else, the board is On track alone. Sessions are read incrementally and never written to the vault:
+an `Aaa:` line, which is never dropped (Hard rules). The Focus block line is
+written every day; on a day with nothing else, the board is that line alone. Sessions are read incrementally and never written to the vault:
 `scripts/session_cards.py --dry-run --days 2` lists them, and only
 transcripts changed since the previous board are opened.
 
@@ -58,8 +58,8 @@ Read [[Slowly Changing Context]] first. §4 says: **this week is the top card
 in each column of the Board** (`_private/0-Current Focus/Kanban.md`), plus a
 Work line. §3 is the season: its primary, what is supporting, and what is
 parked. Read the Board's current order every run. The board does not render
-the lanes; §3 and §4 feed On track (step 3b) and are the filter for Spotted
-and for card suggestions. It never edits the Board except by a `yes` on a card
+the lanes; §5 feeds the Focus block line (step 3b), and §3 and §4 are the
+filter for Spotted and for card suggestions. It never edits the Board except by a `yes` on a card
 suggestion that showed the exact change.
 
 ## Process
@@ -100,24 +100,15 @@ suggestion that showed the exact change.
    **The two `aaa` are different things.** `aaa:` under a board item is their
    feedback about *that item*. `Aaa:` in a daily note or a MOC entry is an
    instruction to *do something*. Never read one as the other.
-3b. **On track.** Always written, first section, three lines at most, no
-   boxes. Sources: §3 and §4 of [[Slowly Changing Context]], yesterday's
-   writing, and yesterday's sessions by repo.
-   - *Decided:* the season's primary and the §4 Work line, quoted, as one
-     line. This is the plan already chosen, restated so the day starts
-     from it; never a new choice.
-   - *Yesterday:* where yesterday went, against that plan, from what they
-     wrote and which repos had sessions: primary, supporting, or parked.
-     Name a parked item touched (§3 "Parked") or a supporting lane well
-     past its share (OpenAugi ~10%) once, quoting §3. Facts and their
-     words only; no advice, no score, no streak.
-   - *Captured, held for Sunday:* new ideas, priorities or plan changes
-     they wrote yesterday that are outside the plan, one clause each,
-     marked "for Sunday". They are not items and carry no boxes: the board
-     never asks for a decision on the plan during the week. They go into
-     the Sunday draft by the normal `Aaa:` / harvest path.
-   If yesterday matched the plan, *Yesterday* says so in one clause and
-   *Captured* is omitted.
+3b. **Focus block.** Always written, the first line under the title, one
+   line, no boxes, no heading. It names today's default category for the
+   first headphone block of the weekday, read from [[Slowly Changing
+   Context]] §5, and nothing else: *"First focus block: **<category>**
+   (<weekday>). Headphones on."* On a day §5 leaves unscheduled, it says so
+   in the same form: *"No default focus block today."* The board never
+   picks the thing inside the category, never guesses at work it cannot
+   see, and never comments on yesterday's block; overrides and the week's
+   mix are read on Sunday.
 4. **Sessions waiting on you.** From the transcripts changed since the last
    board, take only the end state. List a session only if it ended with
    something uncommitted, a question to them, or a finished artifact they
@@ -250,17 +241,13 @@ on a phone. Empty sections are omitted. Bookkeeping lives in a collapsed
 type: document
 cssclasses:
   - board
-description: Currency board for <date> — this week's slots, where each active thing left off, one move each.
+description: Currency board for <date> — today's focus-block category, your instructions routed, what waits on you.
 created: <date>
 ---
 
 # Board — YYYY-MM-DD (Weekday)
 
-## On track
-
-- **Decided:** <season primary, quoted> · <§4 Work line, quoted>
-- **Yesterday:** <primary / supporting / parked, from their writing and session repos, in their words>
-- **Captured, held for Sunday:** <idea>, <idea> — not today's to decide
+*First focus block: **<category>** (<weekday>). Headphones on.*
 
 ## Your instructions
 
@@ -341,9 +328,9 @@ by the nearest heading above.
   item gets a fresh kebab key from its substance. Never reuse a key for
   different content.
 - Never write `.board-state.json`.
-- The first thing under the title is `## On track`. It never carries a
-  box and never asks for a decision about the plan; plan changes wait for
-  Sunday.
+- The first thing under the title is the Focus block line. It never
+  carries a box and never asks for a decision about the plan; plan changes
+  wait for Sunday.
 - Sessions are lines, never items, and never written to the vault.
 - Every item has a `↳` line naming what to open. `↳` lines cap at 60 words;
   proposal briefs at 120. Overflow means the item is too heavy to answer
@@ -352,10 +339,10 @@ by the nearest heading above.
 - Never re-offer a `declined` proposal or re-propose a retired item.
 - Never propose running the weekly reflection, the janitor, or any other
   `every` lens — those are scheduled and fire on their own. On a Sunday the
-  board's first line under `## On track` says that today's reflection lands at ~06:30
+  board's line after the Focus block line says that today's reflection lands at ~06:30
   (`OpenAugi/Research/Weekly Reflection - <today>.md`), nothing more.
 - **Monday only:** if `last_reviewed` in [[Slowly Changing Context]] is older
-  than yesterday, the first italic line under `## On track` is *Sunday pass
+  than yesterday, the italic line after the Focus block line is *Sunday pass
   not applied — [[Weekly Reflection - <date>]] is waiting on its ticks.* One
   line, no proposal, no other change. That is the whole "is Sunday done"
   check.
@@ -371,5 +358,5 @@ by the nearest heading above.
   drift and harvest belong to the Sunday pass.
 - Never leave a receipt in the `Notes to augi` block.
 - Mirror, not coach. Spotted reports what they wrote and what it connects
-  to, and On track reports where the day went against the plan; neither
+  to, and the Focus block line reports the default they set; neither
   advises. Structure changes stay on the Dashboard.

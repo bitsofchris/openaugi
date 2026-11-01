@@ -2,7 +2,7 @@
 kind: engine
 name: weekly-reflection
 description: >-
-  The Sunday pass. Drafted at 06:30: what the week was about, a recap by lane, what kept coming up, what their writing contradicts, what they learned and are avoiding, an outside view (right what, and the bottleneck), candidates for next week, questions. Then the Sunday session: they open a chat and say `run the Sunday pass`; the agent goes through every typed instruction of the week, updates the context note, agrees the week's bottleneck with them, and only then asks about priorities, cards and janitor fixes — one question at a time, each applied as it is ruled. The only place priorities move.
+  The Sunday pass. Drafted at 06:30: what the week was about, a recap by lane, what kept coming up, what their writing contradicts, what they learned and are avoiding, an outside view (right what, and the bottleneck), the week's focus-block mix (Learn / Do / Write), candidates for next week, questions. Then the Sunday session: they open a chat and say `run the Sunday pass`; the agent goes through every typed instruction of the week, updates the context note, agrees the week's bottleneck with them, and only then asks about priorities, cards and janitor fixes — one question at a time, each applied as it is ruled. The only place priorities move.
 scope: >-
   Every block from the last 7 days via the OpenAugi MCP (`recent` or `search` with a date window): daily notes, ideas, tasks, reflections — and every `Aaa:` instruction inside them. [[Slowly Changing Context]] §3 and §4. The Board and the Backlog (`_private/0-Current Focus/Kanban.md`, `Backlog.md`). The 2–3 prior reflections in `OpenAugi/Research/Weekly Reflection - *.md`, for patterns across weeks only. For the Sunday session, additionally: the week's daily notes and dated side notes in full, their own `# My Thoughts` in `_private/0-Current Focus/WK - YY-MM-DD.md` and this Sunday's entry in `OpenAugi/Notes/System Janitor.md`.
 trigger: every 7d   # Sunday 06:30 local; the `## Run` anchor below is the schedule.
@@ -89,10 +89,9 @@ where they say they are going). The method: the right problem first
 (Hamming), then the one constraint that caps the system (Goldratt). Three
 short paragraphs, your own judgment; it may name something they have not.
 
-*Last week's bottleneck.* Read the prior reflection's **Agreed** block
-and this week's `Bottleneck —` box in the daily notes `# Habits`. Two
-lines: did they run the experiment (days ticked), and did the constraint
-move, judged from their writing and what shipped? If it did not move,
+*Last week's bottleneck.* Read the prior reflection's **Agreed** block.
+Two lines: did they run the experiment, and did the constraint move,
+judged from their writing and what shipped? If it did not move,
 ask why before naming a new one; it may still be the bottleneck.
 
 *Right what.* At a high level, is the one thing they are working on the
@@ -104,6 +103,15 @@ where they want to go, that they may not see? It can be role-specific
 (work, research, content) or about their life and self overall. Name the
 one constraint that matters most right now, ask yourself why it is there
 until you reach something they can change, and give the first step.
+
+**Focus blocks** — the week's `Focus block` lines from the daily notes'
+`# Habits`, weekend included: a table with one row per day — day, the
+category (Learn / Do / Write), the thing, and the override reason when the
+category was not §5's default for that day (blank line: `—`). Under it one
+line: how the blocks split across the categories against the default, and
+what the override reasons have in common, quoted. This is the one count
+the draft carries; it describes the mix, never grades it. The categories:
+[[Slowly Changing Context]] §5.
 
 **Self** — what is working and what is not for their health,
 energy, performance, happiness and well-being, and for the inner work (the
@@ -132,7 +140,7 @@ Then the closing line, verbatim:
 ```
 
 Confirm the path in the task's `## Results` and nothing else. No habit
-scoreboard, streaks or rates, one bottleneck, never a list, no
+scoreboard, streaks or rates (the Focus blocks table is the one count), one bottleneck, never a list, no
 labeled surfaced list, no checkboxes.
 
 ## The Sunday session (interactive, in chat)
@@ -172,11 +180,12 @@ not inside the question: question-card previews do not reach them.
    outside view in full and ask if it is right and what would unblock
    it; talk until it is, and let it shape the card order. It ends with
    one agreed bottleneck and one experiment against it. Write them under
-   the draft's outside view as **Agreed** (the bottleneck, the
-   experiment, the box), at most three lines, in their words. The
-   experiment is the one `- [ ] Bottleneck — <experiment>` line at the
-   end of `# Habits` in the daily note template: when it changes,
-   show the new line and rewrite it on their yes. Then one
+   the draft's outside view as **Agreed** (the bottleneck and the
+   experiment), at most three lines, in their words. Then one question on
+   the focus blocks: show the draft's Focus blocks table and §5's default
+   schedule, and ask *keep* or a shift drafted from the mix and the
+   override reasons (which weekday moves to which category); on a shift,
+   rewrite the §5 line on their yes. Then one
    question: the top card of each Board column,
    listed in §4 lane order, with *confirm* or a reorder drafted from their
    thoughts and from the outside view (which card rises, which drops, per
@@ -195,7 +204,7 @@ not inside the question: question-card previews do not reach them.
 6. **Close** — set `last_reviewed: <this Sunday>` and append one change-log
    line to [[Slowly Changing Context]] (`- **<date>** — Sunday pass from
    [[Weekly Reflection - <date>]]: <the top cards this week, one clause>`).
-   Append `## Applied` to the draft: the top cards, each instruction and how
+   Append `## Applied` to the draft: the top cards, the focus-block default (kept or shifted), each instruction and how
    it was ruled (one line each), context edits, cards moved and added, fixes
    run, anything ruled that could not be done. Then write the week's
    **structured row** (below). End in chat with one line and a *what's
