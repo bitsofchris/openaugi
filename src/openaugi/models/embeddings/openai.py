@@ -36,14 +36,21 @@ class OpenAIEmbedding:
     def _ensure_client(self) -> None:
         if self._client is None:
             try:
-                from openai import OpenAI
+                from openai import OpenAI  # pyright: ignore[reportMissingImports]
             except ImportError as e:
-                raise ImportError("openai not installed. Run: pip install openaugi[openai]") from e
+                raise ImportError(
+                    'openai not installed. Run: pip install "openaugi[openai]"'
+                ) from e
             self._client = OpenAI()
 
     def _ensure_encoding(self) -> None:
         if self._encoding is None:
-            import tiktoken
+            try:
+                import tiktoken  # pyright: ignore[reportMissingImports]
+            except ImportError as e:
+                raise ImportError(
+                    'tiktoken not installed. Run: pip install "openaugi[openai]"'
+                ) from e
 
             self._encoding = tiktoken.encoding_for_model(self.name)
 

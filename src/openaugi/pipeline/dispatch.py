@@ -405,6 +405,31 @@ def dispatch_zzz_blocks(
     return written
 
 
+def queue_from_ingest(
+    result: dict,
+    store: SQLiteStore,
+    vault_path: str | Path,
+    settle_seconds: float = DEFAULT_ZZZ_SETTLE,
+    first_ingest: bool = False,
+) -> tuple[list[Path], int]:
+    """Queue one ingest's zzz instructions, then write task files for settled ones.
+
+    For the on-demand paths (`openaugi ingest`, `openaugi tasks`), which have
+    no watcher to queue between runs. Returns `(written, skipped)`.
+
+    On a vault's first ingest every block is new, so every `zzz:` ever written
+    — years of done instructions — would become a task at once (the same flood
+    a duplicated vault folder once caused). Those are history: `first_ingest`
+    skips them, and `skipped` says how many. An instruction written after
+    setup queues as usual.
+    """
+    new_blocks = result.get("new_data_blocks", [])
+    if first_ingest:
+        return drain_zzz_queue(store, vault_path, settle_seconds), len(zzz_blocks(new_blocks))
+    record_zzz_changes(new_blocks, result.get("removed_data_blocks", []), store, vault_path)
+    return drain_zzz_queue(store, vault_path, settle_seconds), 0
+
+
 def zzz_blocks(blocks: list[Block]) -> list[Block]:
     """The data blocks in `blocks` that carry zzz instructions, in order."""
     return [b for b in blocks if b.kind == "data_block" and b.metadata.get("zzz_instructions")]

@@ -33,8 +33,8 @@ See [docs/reference/data-model.md](docs/reference/data-model.md) for the full da
 | Layer | Plane | Cost | What | Requires |
 |-------|-------|------|------|----------|
 | **Layer 0** | Data | FREE | Split, tag/link extract, FTS, dedup hash, zzz dispatch | Python + SQLite |
-| **Layer 1** | Data | ~$0 | Embed (local default), hub scoring (SQL) | sentence-transformers (local) |
-| **Agent** | Agent | per-task | Execute zzz-dispatched tasks in tmux Claude sessions | Claude Code CLI + tmux |
+| **Layer 1** | Data | ~$0 | Embed (optional: `provider = "none"` skips it), hub scoring (SQL) | an extra: `[local]` or `[openai]` |
+| **Agent** | Agent | per-task | Execute zzz-dispatched tasks in tmux Claude sessions — on request (`openaugi tasks run`), or automatically with `[tasks] auto_dispatch` | Claude Code CLI + tmux |
 
 ## Two Planes
 
@@ -68,7 +68,6 @@ src/openaugi/
 │   ├── rerank.py          # Dedup + MMR re-ranking for get_context
 │   ├── context_pack.py    # OpenAugi/context-pack.json — mobile capture-assist sidecar + lens list (docs/reference/lenses.md)
 │   ├── board_janitor.py   # Currency board write-back — checkboxes → feedback log → projected .board-state.json (docs/reference/currency-board.md)
-│   ├── vault_render.py    # Vault rendering — write blocks as .md to OpenAugi/Compiled/ (future)
 │   ├── schedule.py        # Lens triggers → due lenses → task files (docs/reference/lenses.md)
 │   └── watcher.py         # File watcher — debounced incremental ingest + zzz dispatch + lens tick
 ├── render/                # M6 — static HTML surfaces from the DB (no server)
@@ -93,7 +92,8 @@ src/openaugi/
 │   └── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
 ├── http_api.py            # HTTP adapter — /api/* JSON routes on the daemon (full blocks, read-only)
 ├── cli/
-│   └── main.py            # typer CLI (up, ingest, serve, watch, search, query, hubs, status, service)
+│   ├── main.py            # typer CLI (init, up, ingest, serve, watch, search, query, tasks, hubs, status, service)
+│   └── setup.py           # `openaugi init` guided setup: vault, search mode, task mode
 └── config.py              # TOML config loader + .env loader + vault path resolution
 ```
 
@@ -261,8 +261,10 @@ See [docs/plans/m0.md](docs/plans/m0.md) § Key Design Decisions for full ration
 ### Quick start (one command)
 
 ```bash
-openaugi init          # one-time: configure embedding model, API key, vault path
-openaugi up            # daily: sync vault + file watcher + zzz dispatch
+openaugi init          # one-time: vault, search mode, task mode
+openaugi ingest        # on demand: index the vault (no background process)
+openaugi tasks         # on demand: review and launch zzz: tasks
+openaugi up            # or: the background service (sync + watcher + zzz dispatch)
 ```
 
 `openaugi up` is the background service; `openaugi serve` is what MCP clients talk to:

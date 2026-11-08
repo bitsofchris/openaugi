@@ -74,6 +74,7 @@ import re
 import subprocess
 import tempfile
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -716,6 +717,76 @@ def dispatch_task(
         return task_id
     logger.warning("Skipped launch for %s", task_id)
     return None
+
+
+# ── On demand (no watcher) ─────────────────────────────────────────────────
+#
+# `openaugi tasks` is the same dispatch without a background process: the
+# user lists what is pending, reads it, and launches one. That is the default
+# install — `[tasks] auto_dispatch = true` is what lets `openaugi up` launch on
+# its own. See docs/reference/task-dispatch.md § On demand.
+
+# Display order for `openaugi tasks`: what needs a decision first.
+_STATUS_ORDER = {"pending": 0, "active": 1, "done": 2}
+
+
+@dataclass
+class TaskSummary:
+    """One task file, as `openaugi tasks` shows it."""
+
+    path: Path
+    status: str
+    title: str
+    instruction: str
+    task_id: str | None
+    modified: float
+
+
+def _summarize(path: Path) -> TaskSummary | None:
+    try:
+        fm, body = parse_note(path.read_text())
+    except Exception as e:
+        logger.error("Error reading %s: %s", path.name, e)
+        return None
+    heading = re.search(r"^# (.+)$", body, re.MULTILINE)
+    m = INSTRUCTION_RE.search(body)
+    instruction = re.sub(r"\s+", " ", re.sub(r"^\s*>\s?", "", m.group(1), flags=re.M)) if m else ""
+    return TaskSummary(
+        path=path,
+        status=str(fm.get("status") or "unknown"),
+        title=heading.group(1).strip() if heading else path.stem,
+        instruction=instruction.strip(),
+        task_id=fm.get("task_id"),
+        modified=path.stat().st_mtime,
+    )
+
+
+def list_tasks(tasks_dir: Path, include_finished: bool = False) -> list[TaskSummary]:
+    """Task files in `tasks_dir`: pending, then active, then the rest; newest first.
+
+    `include_finished` adds done/duplicate/superseded tasks, which are history.
+    """
+    if not tasks_dir.exists():
+        return []
+    tasks = [t for f in tasks_dir.glob("*.md") if (t := _summarize(f)) is not None]
+    if not include_finished:
+        tasks = [t for t in tasks if t.status in ("pending", "active")]
+    tasks.sort(key=lambda t: (_STATUS_ORDER.get(t.status, 3), -t.modified))
+    return tasks
+
+
+def run_task(filepath: Path, vault_path: str | Path, repos_note: str | None = None) -> str | None:
+    """Launch one pending task now, in a detached tmux session.
+
+    The watcher's dispatch, called once by the user: same duplicate ledger,
+    same hydration, same prompt. Returns the task_id (also the tmux session
+    name), or None when it was skipped as a duplicate. Raises FileNotFoundError
+    when tmux or claude is missing.
+    """
+    vault = Path(vault_path).resolve()
+    tmux = detect_tmux()
+    claude = detect_claude()
+    return dispatch_task(filepath, tmux, claude, load_repo_paths(vault, repos_note), vault)
 
 
 def reap_done_sessions(

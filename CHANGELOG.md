@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+**`experiments/` moved out of the repo.** `embedding_research/` and the
+archived knowledge-explorer now live in the private research repo (copied
+from `3b42a0f`); nothing in the package used them.
+
+**Dead code removed.** `openaugi explore` (it pointed at a moved experiment
+and pip-installed unpinned packages at runtime), `cluster-explore-within`, the
+archived knowledge-explorer app, `pipeline/vault_render.py`, the unused
+content-only embedding writer, `scripts/plot_umaps.py`,
+`scripts/purge_worktree_blocks.py` and the `ollama` extra. All of it is in git
+history. `cluster-explore` and `scripts/migrate_container_augi_id.py` stay.
+
+**`openaugi init` is a guided, three-question setup.** Vault (with a note
+count), search mode (keyword-only by default, or local / OpenAI embeddings,
+showing which are installed), and task mode (manual by default, or automatic
+via `openaugi up`). Re-running offers your current choices as defaults, and an
+existing `config.toml` is only replaced when you confirm, with a dated backup.
+`--vault/--search/--tasks/--yes` run it unattended. Code: `cli/setup.py`.
+
+**Agents launch only when you ask, unless you opt in.** `openaugi up` no
+longer starts Claude Code agents by default: set `[tasks] auto_dispatch = true`
+(or pass `up --agent`) to keep the old behavior. Without it, `zzz:` still
+becomes a task file and the new `openaugi tasks` command lists, shows and
+launches them by hand, confirming each instruction first. `openaugi ingest`
+now queues `zzz:` too, and a fresh database skips the `zzz:` lines already in
+the vault instead of turning all of them into tasks.
+`docs/reference/task-dispatch.md` § On demand.
+
+**Embeddings can be off.** `[models.embedding] provider = "none"` runs
+keyword-only: semantic searches answer as keyword searches with a note, and
+ingest, the watcher and `get_context` skip vectors without warnings.
+
+**`openai` is an extra, not a core dependency.** A bare `pip install
+openaugi` no longer pulls in `openai` or `tiktoken`; install
+`openaugi[openai]` (or `uv sync --extra openai`) to keep OpenAI embeddings or
+the LLM judge.
+
 **A board tick can carry a note.** `- [x] do - after Friday` and `- [x] no: not
 now` used to be ignored silently, so a `do` never dispatched and a `no` was never
 recorded. Text after a ticked label now counts as that answer's `reason`, merges

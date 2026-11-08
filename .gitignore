@@ -11,9 +11,6 @@ storage/
 *.log
 *lib/
 *.json
-!experiments/**/fixture.json
-!experiments/**/package.json
-!experiments/**/tsconfig*.json
 !tests/fixtures/contracts/*.json
 !tests/fixtures/golden/*.json
 !.claude-plugin/marketplace.json

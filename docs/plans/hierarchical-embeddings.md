@@ -320,7 +320,11 @@ Not in this phase. Once cluster blocks exist in the DB:
 
 ---
 
-## Knowledge Explorer (experiments/archive/knowledge-explorer/) — Done, archived 2026-09-27 (see its README)
+## Knowledge Explorer — Done, archived 2026-09-27, removed 2026-11-08
+
+> Removed from the repo along with `openaugi explore`. The source now lives in
+> the private research repo (`openaugi-private/experiments/from-openaugi/archive/knowledge-explorer/`),
+> and in this repo's history up to `3b42a0f`.
 
 A WebGL scatter plot for exploring cluster embeddings visually.
 Built with React + deck.gl (ScatterplotLayer). Works offline against

@@ -112,15 +112,21 @@ def _run_ingest_cycle(
             f"({stats['total_blocks']} total blocks)"
         )
 
-        # Layer 1: embedding — graceful fallback
+        # Layer 1: embedding — graceful fallback. A keyword-only install
+        # (provider = "none") skips it and everything downstream that needs
+        # vectors, quietly: that is configuration, not a failure.
+        from openaugi.models import embeddings_enabled
+
+        use_embeddings = embeddings_enabled(config.get("models", {}).get("embedding"))
         try:
             from openaugi.models import get_embedding_model
             from openaugi.pipeline.embed import run_embed
 
-            model = get_embedding_model(config.get("models", {}).get("embedding"))
-            count = run_embed(store, model)
-            if count:
-                logger.info(f"Embedded {count} blocks")
+            if use_embeddings:
+                model = get_embedding_model(config.get("models", {}).get("embedding"))
+                count = run_embed(store, model)
+                if count:
+                    logger.info(f"Embedded {count} blocks")
         except Exception as e:
             logger.warning(f"Embedding skipped: {e}")
             logger.info("Blocks saved without embeddings — will retry on next cycle")
@@ -143,7 +149,7 @@ def _run_ingest_cycle(
 
         drain_zzz_queue(vault_path, store, config)
 
-        if new_blocks:
+        if new_blocks and use_embeddings:
             # Proactive echo: surface older thinking that bears on what was
             # just written. Never fails the cycle — it is an extra, not a step.
             try:

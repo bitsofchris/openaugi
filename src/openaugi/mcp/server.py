@@ -44,7 +44,7 @@ from mcp.types import ToolAnnotations
 
 from openaugi.config import load_config, resolve_vault_path
 from openaugi.http_api import register_api_routes
-from openaugi.models import get_embedding_model
+from openaugi.models import EmbeddingsDisabled, get_embedding_model
 from openaugi.query import QuerySpec, engine, saved
 from openaugi.store.sqlite import SQLiteStore
 
@@ -251,9 +251,16 @@ def search(
             }
         )
 
-    model = _get_embedding_model() if spec.mode == "semantic" else None
+    spec, model, note = engine.resolve_semantic(spec, _get_embedding_model)
     result = engine.run(_get_store(), spec, embedding_model=model, config=load_config())
-    return _json(_render_run_result(result))
+    return _json(_with_note(_render_run_result(result), note))
+
+
+def _with_note(envelope: dict, note: str | None) -> dict:
+    """Append a `note` to a result envelope when there is one to tell."""
+    if note:
+        envelope["note"] = note
+    return envelope
 
 
 def _with_routes(summaries: list[dict]) -> list[dict]:
@@ -459,6 +466,8 @@ def get_context(
       question is what the user themselves wrote."""
     try:
         model = _get_embedding_model()
+    except EmbeddingsDisabled:
+        model = None  # keyword-only install: FTS + link expansion, by design
     except Exception:
         # Engine falls back to FTS-only, matching historical get_context
         # behavior when the embedding model can't be constructed.
@@ -589,18 +598,21 @@ def run_query(name: str) -> str:
 
     store = _get_store()
     resolved = saved.resolve_spec(sq.spec, store=store)
-    model = _get_embedding_model() if resolved.mode == "semantic" else None
+    resolved, model, note = engine.resolve_semantic(resolved, _get_embedding_model)
     try:
         result = engine.run(store, resolved, embedding_model=model)
     except engine.EmptyQuerySpec:
         return _json({"error": f"Saved query '{name}' resolves to an empty spec."})
     return _json(
-        {
-            "query": name,
-            "description": sq.description,
-            "resolved_spec": resolved.model_dump(exclude_none=True),
-            **_render_run_result(result),
-        }
+        _with_note(
+            {
+                "query": name,
+                "description": sq.description,
+                "resolved_spec": resolved.model_dump(exclude_none=True),
+                **_render_run_result(result),
+            },
+            note,
+        )
     )
 
 

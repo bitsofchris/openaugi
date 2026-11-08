@@ -34,8 +34,12 @@ class OpenAILLM:
 
     def _ensure_client(self) -> None:
         if self._client is None:
-            from openai import OpenAI
-
+            try:
+                from openai import OpenAI  # pyright: ignore[reportMissingImports]
+            except ImportError as e:
+                raise ImportError(
+                    'openai not installed. Run: pip install "openaugi[openai]"'
+                ) from e
             self._client = OpenAI()
 
     def complete(self, prompt: str, system: str = "", temperature: float = 0.1) -> str:

@@ -6,6 +6,7 @@ Entry point for the `openaugi` command.
 from __future__ import annotations
 
 import logging
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -74,134 +75,92 @@ def main(
         raise typer.Exit()
 
 
+class _SearchChoice(StrEnum):
+    none = "none"
+    local = "local"
+    openai = "openai"
+
+
+class _TasksChoice(StrEnum):
+    manual = "manual"
+    auto = "auto"
+
+
 @app.command()
-def init():
-    """Set up OpenAugi — choose embedding model, configure API keys, set vault path."""
-    config_dir = Path.home() / ".openaugi"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    config_path = config_dir / "config.toml"
-    env_path = config_dir / ".env"
+def init(
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (skips the question)"),
+    search: Annotated[
+        _SearchChoice | None,
+        typer.Option("--search", help="Search mode: none (keyword), local, or openai"),
+    ] = None,
+    tasks: Annotated[
+        _TasksChoice | None,
+        typer.Option(
+            "--tasks",
+            help="zzz: tasks: manual (openaugi tasks) or auto (openaugi up launches them)",
+        ),
+    ] = None,
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Accept defaults; replace an existing config (backed up)"
+    ),
+):
+    """Guided setup: your vault, how to search it, and how zzz: tasks run."""
+    from openaugi.cli.setup import run_setup
 
-    console.print("\n[bold]OpenAugi Setup[/bold]\n")
-
-    # 1. Embedding model
-    console.print("[bold]Embedding model[/bold]")
-    console.print("  1. OpenAI (text-embedding-3-small) — best quality, requires API key")
-    console.print("  2. Local (sentence-transformers) — free, no API key, runs on CPU")
-    console.print("  3. None — skip embeddings, keyword search only")
-
-    choice = typer.prompt("Choose", default="1")
-
-    embedding_provider = None
-    embedding_model = None
-    needs_openai_key = False
-
-    if choice == "1":
-        embedding_provider = "openai"
-        embedding_model = "text-embedding-3-small"
-        needs_openai_key = True
-    elif choice == "2":
-        embedding_provider = "sentence-transformers"
-        embedding_model = "all-MiniLM-L6-v2"
-    # else: no embeddings
-
-    # 2. API key (if needed)
-    env_lines: list[str] = []
-    if needs_openai_key:
-        # Check if already set
-        import os
-
-        existing = os.environ.get("OPENAI_API_KEY", "")
-        if existing:
-            masked = f"{existing[:8]}..."
-            console.print(f"  OPENAI_API_KEY already set in environment [dim]({masked})[/dim]")
-            save_key = typer.confirm("Save to ~/.openaugi/.env for persistence?", default=True)
-            if save_key:
-                env_lines.append(f"OPENAI_API_KEY={existing}")
-        else:
-            key = typer.prompt("  Enter your OpenAI API key", hide_input=True)
-            if key:
-                env_lines.append(f"OPENAI_API_KEY={key}")
-                console.print("  [green]Key saved to ~/.openaugi/.env[/green]")
-
-    # 3. Default vault path
-    vault_path = typer.prompt(
-        "\nDefault vault path (Obsidian vault)",
-        default=str(Path.home() / "Documents" / "vault"),
+    run_setup(
+        vault=vault,
+        search=search.value if search else None,
+        tasks=tasks.value if tasks else None,
+        yes=yes,
     )
-    vault_path = str(Path(vault_path.strip().strip("'\"")).expanduser())
 
-    # Write config.toml
-    toml_lines = []
-    if embedding_provider:
-        toml_lines.extend(
-            [
-                "[models.embedding]",
-                f'provider = "{embedding_provider}"',
-                f'model = "{embedding_model}"',
-                "",
-            ]
+
+def _ingest_vault(vault_path: str, store, config: dict) -> tuple[dict, bool]:
+    """Incremental Layer 0 with the config's vault rules. Returns (result, first_ingest).
+
+    `first_ingest` is true when the database held no blocks before this run —
+    the one ingest where every `zzz:` in the vault looks new.
+    """
+    from openaugi.pipeline.runner import run_layer0
+
+    first_ingest = store.get_stats()["total_blocks"] == 0
+    vault_cfg = config.get("vault", {})
+    result = run_layer0(
+        vault_path,
+        store,
+        exclude_patterns=vault_cfg.get("exclude_patterns"),
+        max_workers=vault_cfg.get("max_workers", 4),
+        source_rules=vault_cfg.get("source_rules"),
+        provenance_rules=vault_cfg.get("provenance_rules"),
+    )
+    return result, first_ingest
+
+
+def _queue_zzz(
+    result: dict, store, vault_path: str, settle: float, first_ingest: bool
+) -> tuple[list[Path], int]:
+    """queue_from_ingest that never fails the command calling it."""
+    from openaugi.pipeline.dispatch import queue_from_ingest
+
+    try:
+        return queue_from_ingest(result, store, vault_path, settle, first_ingest)
+    except Exception as e:
+        logging.getLogger(__name__).error("zzz queueing failed: %s", e, exc_info=True)
+        console.print(f"[yellow]⚠️  Could not queue zzz: tasks:[/yellow] {e}")
+        return [], 0
+
+
+def _report_zzz(written: list[Path], skipped: int) -> None:
+    if skipped:
+        console.print(
+            f"[dim]⏭️  Skipped {skipped} zzz: line(s) already in the vault before setup — "
+            "only new ones become tasks[/dim]"
         )
-    toml_lines.extend(
-        [
-            "[vault]",
-            f'default_path = "{vault_path}"',
-        ]
-    )
-
-    config_path.write_text("\n".join(toml_lines) + "\n")
-    console.print(f"\n  Config written to [cyan]{config_path}[/cyan]")
-
-    # Write .env (append, don't overwrite existing vars)
-    if env_lines:
-        existing_env = env_path.read_text() if env_path.exists() else ""
-        new_vars = {}
-        for line in env_lines:
-            key, _, value = line.partition("=")
-            new_vars[key] = value
-
-        # Parse existing
-        existing_vars: dict[str, str] = {}
-        for line in existing_env.splitlines():
-            if "=" in line and not line.startswith("#"):
-                key, _, value = line.partition("=")
-                existing_vars[key.strip()] = value.strip()
-
-        # Merge (new overrides existing)
-        existing_vars.update(new_vars)
-        env_content = "\n".join(f"{k}={v}" for k, v in existing_vars.items()) + "\n"
-        env_path.write_text(env_content)
-        env_path.chmod(0o600)  # owner-only read/write
-        console.print(f"  Keys written to [cyan]{env_path}[/cyan] (chmod 600)")
-
-    # Copy the engine templates to the vault (only files that don't already exist).
-    # Which files ship is decided by the templates themselves: every markdown
-    # file under templates/ that declares `kind: engine` — see agent_files.py.
-    from openaugi.agent_files import engine_templates, template_description
-
-    vault = Path(vault_path)
-    agent_dir = vault / "OpenAugi" / "AGENT"
-    agent_dir.mkdir(parents=True, exist_ok=True)
-
-    copied = 0
-    for filename, text in engine_templates():
-        dest = agent_dir / filename
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        if dest.exists():
-            console.print(f"  [dim]Skipping {filename} (already exists)[/dim]")
-            continue
-        dest.write_text(text, encoding="utf-8")
-        console.print(f"  [green]Copied {filename}[/green] — {template_description(text)}")
-        copied += 1
-
-    if copied:
-        console.print(f"\n  Agent skills at [cyan]{agent_dir}[/cyan]")
-        console.print("  Edit these in Obsidian to customize agent behavior.")
-
-    console.print("\n[bold green]Setup complete![/bold green]\n")
-    console.print("Next steps:")
-    console.print("  openaugi up              # sync vault + start everything")
-    console.print("  openaugi serve           # MCP server only (for Claude Desktop)")
+    if written:
+        console.print(
+            f"📋 {len(written)} new task(s) waiting — review and launch with "
+            "[cyan]openaugi tasks[/cyan]"
+        )
 
 
 @app.command()
@@ -214,7 +173,6 @@ def ingest(
     _setup_logging(verbose)
 
     from openaugi.config import load_config, resolve_vault_path
-    from openaugi.pipeline.runner import run_layer0
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
@@ -230,29 +188,25 @@ def ingest(
     store = SQLiteStore(db_path)
 
     try:
-        exclude = config.get("vault", {}).get("exclude_patterns")
-        workers = config.get("vault", {}).get("max_workers", 4)
-        source_rules = config.get("vault", {}).get("source_rules")
-        provenance_rules = config.get("vault", {}).get("provenance_rules")
-
         console.print(f"[bold]Ingesting vault:[/bold] {vault_path}")
         console.print(f"[bold]Database:[/bold] {db_path}")
 
-        result = run_layer0(
-            vault_path,
-            store,
-            exclude_patterns=exclude,
-            max_workers=workers,
-            source_rules=source_rules,
-            provenance_rules=provenance_rules,
-        )
+        result, first_ingest = _ingest_vault(vault_path, store, config)
 
         stats = result["stats"]
         console.print(
             f"\n[green]Done.[/green] {stats['total_blocks']} blocks, {stats['total_links']} links"
         )
 
+        # zzz: lines become task files here too, so a vault with no watcher
+        # running still has them waiting for `openaugi tasks`.
+        from openaugi.pipeline.watcher import _zzz_settle
+
+        _report_zzz(*_queue_zzz(result, store, vault_path, _zzz_settle(config), first_ingest))
+
         # Layer 1: embedding (optional — requires sentence-transformers or openai)
+        from openaugi.models import EmbeddingsDisabled
+
         try:
             from openaugi.models import get_embedding_model
             from openaugi.pipeline.embed import run_embed
@@ -263,10 +217,13 @@ def ingest(
                 console.print(f"[green]Embedded {count} blocks[/green]")
             else:
                 console.print("[dim]All blocks already embedded[/dim]")
+        except EmbeddingsDisabled:
+            console.print("[dim]🔤 Embeddings off — keyword, title, tag and link search[/dim]")
         except ImportError as e:
             console.print(
                 f"[yellow]Skipping embeddings:[/yellow] {e}\n"
-                "Install with: pip install openaugi[local]"
+                "Run 'openaugi init' to pick a search mode, or install an extra: "
+                'pip install "openaugi[local]"'
             )
     finally:
         store.close()
@@ -510,11 +467,19 @@ def re_embed(
     _setup_logging(verbose)
 
     from openaugi.config import load_config
-    from openaugi.models import get_embedding_model
+    from openaugi.models import embeddings_enabled, get_embedding_model
     from openaugi.pipeline.embed import run_embed
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
+    if not embeddings_enabled(config.get("models", {}).get("embedding")):
+        # Check before reset_embeddings: wiping vectors and then failing to
+        # build new ones would leave the DB worse than we found it.
+        console.print(
+            '[yellow]Embeddings are off ([models.embedding] provider = "none").[/yellow] '
+            "Run 'openaugi init' to choose a provider first."
+        )
+        raise typer.Exit(1)
     db_path = db or str(_default_db())
     store = SQLiteStore(db_path)
 
@@ -841,67 +806,6 @@ def cluster_explore(
         store.close()
 
 
-@app.command(name="cluster-explore-within")
-def cluster_explore_within(
-    parent_pass: str = typer.Option("life_areas", "--pass", help="Coarse pass id"),
-    cluster: str = typer.Option(..., "--cluster", help="Cluster label to explore (e.g. '7')"),
-    db: str | None = typer.Option(None, "--db", help="Database path"),
-    dims: str = typer.Option("1536,3072", "--dims", help="Comma-separated dims to try"),
-    hdbscan_sizes: str = typer.Option(
-        "10,20,30", "--hdbscan-sizes", help="min_cluster_size values for HDBSCAN"
-    ),
-    k: str = typer.Option("5,8,10", "--k", help="k values for k-means fallback"),
-    samples: int = typer.Option(8, "--samples", help="Sample titles per cluster"),
-    embedding_col: str = typer.Option(
-        "embedding", "--embedding-col", help="'embedding' or 'content_only_embedding'"
-    ),
-    verbose: bool = typer.Option(False, "--verbose", "-v"),
-):
-    """Explore fine clustering within one coarse cluster — HDBSCAN and k-means at multiple dims.
-
-    Tries HDBSCAN (noise = signal; recurring ideas emerge as density) and k-means
-    (every block assigned) at each dims setting. Writes nothing to DB.
-
-    Use --embedding-col content_only_embedding after running embed-content-only
-    to compare clustering with and without title-prepending.
-
-    Example:
-
-    \b
-        openaugi cluster-explore-within --cluster 7
-        openaugi cluster-explore-within --cluster 7 --embedding-col content_only_embedding
-    """
-    _setup_logging(verbose)
-
-    from openaugi.pipeline.cluster import explore_fine_cluster
-    from openaugi.store.sqlite import SQLiteStore
-
-    db_path = db or str(_default_db())
-    dims_list = [int(x.strip()) for x in dims.split(",")]
-    min_sizes = [int(x.strip()) for x in hdbscan_sizes.split(",")]
-    k_list = [int(x.strip()) for x in k.split(",")]
-
-    console.print(f"[bold]Database:[/bold] {db_path}")
-    console.print(f"[bold]Pass:[/bold] {parent_pass}  cluster={cluster}")
-    console.print(f"[bold]Dims:[/bold] {dims_list}  HDBSCAN min_sizes={min_sizes}  k={k_list}")
-    console.print(f"[bold]Embedding:[/bold] {embedding_col}")
-
-    store = SQLiteStore(db_path)
-    try:
-        explore_fine_cluster(
-            store,
-            parent_pass_id=parent_pass,
-            cluster_label=cluster,
-            dims_list=dims_list,
-            hdbscan_min_sizes=min_sizes,
-            k_list=k_list,
-            n_samples=samples,
-            embedding_col=embedding_col,
-        )
-    finally:
-        store.close()
-
-
 @app.command()
 def review(
     path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
@@ -1009,8 +913,13 @@ def up(
         None, "--auth", help="Auth provider for remote access (e.g. cloudflare)"
     ),
     debounce: float = typer.Option(30.0, "--debounce", "-d", help="Watcher debounce seconds"),
-    no_agent: bool = typer.Option(
-        False, "--no-agent", help="Disable task dispatch (watcher + MCP only, no agent sessions)"
+    agent: bool | None = typer.Option(
+        None,
+        "--agent/--no-agent",
+        help=(
+            "Launch agents for pending tasks automatically. "
+            "Default: [tasks] auto_dispatch in config (off unless set)"
+        ),
     ),
     serve_mcp: bool = typer.Option(
         False,
@@ -1068,7 +977,6 @@ def up(
         raise typer.Exit(0) from None
 
     from openaugi.config import load_config, resolve_vault_path
-    from openaugi.pipeline.runner import run_layer0
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
@@ -1100,27 +1008,22 @@ def up(
     err.print(f"[bold]Code:[/bold] {running[:12] if running else 'not a git checkout'}")
 
     try:
-        exclude = config.get("vault", {}).get("exclude_patterns")
-        workers = config.get("vault", {}).get("max_workers", 4)
-        source_rules = config.get("vault", {}).get("source_rules")
-        provenance_rules = config.get("vault", {}).get("provenance_rules")
-        result = run_layer0(
-            vault_path,
-            store,
-            exclude_patterns=exclude,
-            max_workers=workers,
-            source_rules=source_rules,
-            provenance_rules=provenance_rules,
-        )
+        result, first_ingest = _ingest_vault(vault_path, store, config)
         stats = result["stats"]
         err.print(
             f"  {stats['total_blocks']} blocks, {stats['total_links']} links "
             f"({result['blocks_added']} new, {result['blocks_removed']} removed)"
         )
 
-        # Dispatch any zzz instructions from initial ingest
+        # Dispatch any zzz instructions from initial ingest — except on a
+        # fresh database, where every zzz: ever written looks new.
         new_blocks = result.get("new_data_blocks", [])
-        if new_blocks:
+        if first_ingest:
+            from openaugi.pipeline.dispatch import zzz_blocks
+
+            if skipped := len(zzz_blocks(new_blocks)):
+                err.print(f"  [dim]Skipped {skipped} zzz: line(s) from before setup[/dim]")
+        elif new_blocks:
             from openaugi.pipeline.dispatch import dispatch_zzz_blocks
 
             dispatched = dispatch_zzz_blocks(new_blocks, vault_path)
@@ -1148,8 +1051,19 @@ def up(
     start_watcher_thread(vault_path, db_path, config, debounce_seconds=debounce)
     err.print(f"\n[bold]Watcher:[/bold] debounce={debounce}s")
 
-    # Step 3: Task dispatch (picks up pending task files → tmux agents)
-    if not no_agent:
+    # Step 3: Task dispatch (picks up pending task files → tmux agents).
+    # Opt-in: without it, zzz: still becomes a task file and the user
+    # launches it with `openaugi tasks run`.
+    from openaugi.config import auto_dispatch_enabled
+
+    if agent is None:
+        agent = auto_dispatch_enabled(config)
+    if not agent:
+        err.print(
+            "[bold]Agent:[/bold] manual — tasks wait in OpenAugi/Tasks/ for "
+            "`openaugi tasks run` ([tasks] auto_dispatch = true to launch automatically)"
+        )
+    else:
         from openaugi.agents.task_watcher import watch_tasks
 
         dispatch_thread = threading.Thread(
@@ -1295,10 +1209,12 @@ def _run_and_print_spec(store, spec) -> None:
     from openaugi.models import get_embedding_model
     from openaugi.query import engine
 
-    model = None
-    if spec.mode == "semantic":
-        config = load_config()
-        model = get_embedding_model(config.get("models", {}).get("embedding"))
+    def _model():
+        return get_embedding_model(load_config().get("models", {}).get("embedding"))
+
+    spec, model, note = engine.resolve_semantic(spec, _model)
+    if note:
+        console.print(f"[dim]🔤 {note}[/dim]")
 
     result = engine.run(store, spec, embedding_model=model)
 
@@ -1690,6 +1606,205 @@ def task_dispatch(
         raise typer.Exit(1) from None
 
 
+# ── Tasks on demand ────────────────────────────────────────────────
+#
+# `zzz:` dispatch without a background process. `openaugi tasks` syncs the
+# vault, lists what is waiting, and launches what you pick — after showing you
+# the instruction, because a task's text came from a note and a note may hold
+# text you did not write. See docs/reference/task-dispatch.md § On demand.
+
+tasks_app = typer.Typer(
+    help="Review and launch zzz: tasks by hand — no background process.",
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
+app.add_typer(tasks_app, name="tasks")
+
+_TASK_STATUS_LABEL = {
+    "pending": "⏳ pending",
+    "active": "▶️  active",
+    "done": "✅ done",
+    "duplicate": "♻️  duplicate",
+    "superseded": "↪️  superseded",
+}
+
+
+def _tasks_context(path: str | None) -> tuple[dict, str, Path]:
+    """(config, vault_path, tasks_dir), or exit with the init hint."""
+    from openaugi.agents.task_watcher import DEFAULT_TASKS_FOLDER
+    from openaugi.config import load_config, resolve_vault_path
+
+    config = load_config()
+    vault_path = resolve_vault_path(path, config)
+    if not vault_path:
+        console.print("[red]No vault path configured.[/red] Run [cyan]openaugi init[/cyan] first.")
+        raise typer.Exit(1)
+    return config, vault_path, Path(vault_path) / DEFAULT_TASKS_FOLDER
+
+
+def _sync_tasks(config: dict, vault_path: str, db: str | None) -> None:
+    """Pick up zzz: lines written since the last sync and write their task files.
+
+    Settle is 0 here: the user is looking right now, and nothing launches
+    without them, so there is no half-typed instruction to protect.
+    """
+    from openaugi.store.sqlite import SQLiteStore
+
+    store = SQLiteStore(db or str(_default_db()))
+    try:
+        with console.status("🔄 Checking your vault for new zzz: lines…"):
+            result, first_ingest = _ingest_vault(vault_path, store, config)
+            written, skipped = _queue_zzz(result, store, vault_path, 0.0, first_ingest)
+    finally:
+        store.close()
+    _report_zzz(written, skipped)
+
+
+def _print_task_table(tasks: list) -> None:
+    from openaugi.agents.task_watcher import TaskSummary
+
+    table = Table(box=None, pad_edge=False, show_header=True, header_style="dim")
+    table.add_column("#", justify="right", style="bold")
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Task", overflow="fold")
+    table.add_column("Instruction", style="dim", overflow="ellipsis", max_width=60)
+    t: TaskSummary
+    for i, t in enumerate(tasks, 1):
+        label = _TASK_STATUS_LABEL.get(t.status, t.status)
+        table.add_row(str(i), label, t.title, t.instruction or "—")
+    console.print(table)
+
+
+def _pick_task(tasks: list, ref: str):
+    """A task by its number in the list, its task id, or a unique part of its filename."""
+    if ref.isdigit():
+        n = int(ref)
+        if 1 <= n <= len(tasks):
+            return tasks[n - 1]
+        console.print(f"[red]No task #{n}.[/red] Run [cyan]openaugi tasks[/cyan] to see the list.")
+        raise typer.Exit(1)
+    exact = [t for t in tasks if ref in (t.task_id, t.path.stem)]
+    if exact:
+        return exact[0]
+    partial = [t for t in tasks if ref.lower() in t.path.stem.lower()]
+    if len(partial) == 1:
+        return partial[0]
+    what = "matches several tasks" if partial else "matches no task"
+    console.print(f"[red]'{ref}' {what}.[/red] Use the number from [cyan]openaugi tasks[/cyan].")
+    raise typer.Exit(1)
+
+
+@tasks_app.callback()
+def tasks_main(ctx: typer.Context):
+    """With no subcommand: same as `openaugi tasks list`."""
+    if ctx.invoked_subcommand is None:
+        tasks_list(path=None, db=None, show_all=False, no_sync=False)
+
+
+@tasks_app.command("list")
+def tasks_list(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    show_all: bool = typer.Option(False, "--all", "-a", help="Include finished tasks"),
+    no_sync: bool = typer.Option(False, "--no-sync", help="Skip checking the vault first"),
+):
+    """List tasks waiting for you (syncs the vault first)."""
+    from openaugi.agents.task_watcher import list_tasks
+
+    config, vault_path, tasks_dir = _tasks_context(path)
+    if not no_sync:
+        _sync_tasks(config, vault_path, db)
+
+    tasks = list_tasks(tasks_dir, include_finished=show_all)
+    pending = sum(t.status == "pending" for t in tasks)
+    active = sum(t.status == "active" for t in tasks)
+    console.print(f"\n[bold]📋 Tasks[/bold]  [dim]{pending} pending · {active} active[/dim]\n")
+    if not tasks:
+        console.print("  Nothing waiting. Write [cyan]zzz: <instruction>[/cyan] in any note")
+        console.print("  and it shows up here on the next [cyan]openaugi tasks[/cyan].\n")
+        return
+    _print_task_table(tasks)
+    console.print()
+    if pending:
+        console.print("  [dim]Read one:[/dim]    openaugi tasks show [bold]<#>[/bold]")
+        console.print("  [dim]Launch one:[/dim]  openaugi tasks run [bold]<#>[/bold]")
+    if active:
+        console.print("  [dim]Attach:[/dim]      tmux attach -t [bold]<task id>[/bold]")
+    console.print()
+
+
+@tasks_app.command("show")
+def tasks_show(
+    ref: str = typer.Argument(..., help="Task number from `openaugi tasks`, or its id"),
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    show_all: bool = typer.Option(False, "--all", "-a", help="Number against the --all list"),
+):
+    """Print a task file in full."""
+    from rich.markdown import Markdown
+
+    from openaugi.agents.task_watcher import list_tasks, parse_note
+
+    _, _, tasks_dir = _tasks_context(path)
+    task = _pick_task(list_tasks(tasks_dir, include_finished=show_all), ref)
+    _, body = parse_note(task.path.read_text())
+    label = _TASK_STATUS_LABEL.get(task.status, task.status)
+    console.print(f"\n[dim]{task.path}[/dim]  {label}\n")
+    console.print(Markdown(body))
+
+
+@tasks_app.command("run")
+def tasks_run(
+    ref: str | None = typer.Argument(None, help="Task number from `openaugi tasks`, or its id"),
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Launch without asking"),
+    repos_note: str | None = typer.Option(
+        None, "--repos-note", help="Repo map note (default: OpenAugi/AGENT/Repos.md)"
+    ),
+):
+    """Launch one pending task as a Claude Code agent in tmux."""
+    from openaugi.agents.task_watcher import list_tasks, run_task
+
+    _, vault_path, tasks_dir = _tasks_context(path)
+    tasks = list_tasks(tasks_dir)
+    pending = [t for t in tasks if t.status == "pending"]
+    if not pending:
+        console.print("✨ No pending tasks. [dim](openaugi tasks syncs new zzz: lines)[/dim]")
+        return
+
+    if ref is None:
+        if len(pending) == 1:
+            task = pending[0]
+        else:
+            _print_task_table(tasks)
+            task = _pick_task(tasks, str(typer.prompt("\nWhich task? (#)")))
+    else:
+        task = _pick_task(tasks, ref)
+
+    if task.status != "pending":
+        console.print(f"[yellow]'{task.title}' is {task.status}, not pending.[/yellow]")
+        if task.task_id:
+            console.print(f"  Attach: [cyan]tmux attach -t {task.task_id}[/cyan]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold]🤖 {task.title}[/bold]")
+    console.print(f"   [dim]Instruction:[/dim] {task.instruction or '(none)'}")
+    console.print(f"   [dim]File:[/dim] {task.path}\n")
+    if not yes and not typer.confirm("Launch a Claude Code agent for this task?", default=True):
+        console.print("[dim]Left pending.[/dim]")
+        return
+
+    try:
+        task_id = run_task(task.path, vault_path, repos_note=repos_note)
+    except FileNotFoundError as e:
+        console.print(f"[red]❌ {e}[/red]")
+        raise typer.Exit(1) from None
+    if task_id is None:
+        console.print("[yellow]♻️  Same instruction already ran — marked duplicate.[/yellow]")
+        return
+    console.print(f"🚀 Launched [bold]{task_id}[/bold]")
+    console.print(f"   Watch it:  [cyan]tmux attach -t {task_id}[/cyan]\n")
+
+
 # ── Service management ─────────────────────────────────────────────
 
 service_app = typer.Typer(help="Manage OpenAugi as a launchd service (macOS).")
@@ -1920,234 +2035,6 @@ def service_status():
         console.print("[yellow]Cloudflared tunnel: running (publicly reachable)[/yellow]")
     else:
         console.print("[dim]Cloudflared tunnel: not running[/dim]")
-
-
-def _explore_prewarm(db_path: str, backend_dir: Path) -> None:
-    """Pre-generate and cache UMAP projections for all dims options."""
-    import subprocess
-    import sys
-
-    DIMS_OPTIONS = [32, 64, 96, 128, 256, 512, 1024, 1280, 1536, 2048, 2560, 3072]
-
-    # Install backend deps if needed
-    try:
-        import numpy  # noqa: F401
-        import umap  # noqa: F401  # pyright: ignore[reportMissingImports]
-    except ImportError:
-        console.print("[yellow]Installing backend deps…[/yellow]")
-        subprocess.check_call(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "umap-learn",
-                "numpy",
-                "hdbscan",
-                "scikit-learn",
-            ]
-        )
-
-    # Import server helpers directly — no server needed for cache-only work
-    sys.path.insert(0, str(backend_dir))
-    try:
-        from server import (  # pyright: ignore[reportMissingImports]
-            _normalize_coords,
-            _truncate_normalize,
-            compute_umap,
-            load_data_blocks,
-            open_db,
-        )
-    except ImportError as e:
-        console.print(f"[red]Could not import server: {e}[/red]")
-        raise typer.Exit(1) from None
-
-    import numpy as np
-
-    console.print(f"[bold]Pre-warming UMAP cache[/bold] for {len(DIMS_OPTIONS)} dims values")
-    console.print(f"  db: {db_path}")
-    console.print("  cache: ~/.openaugi/umap_cache/\n")
-
-    conn = open_db(db_path)
-    try:
-        blocks = load_data_blocks(conn)
-    finally:
-        conn.close()
-
-    console.print(f"  Loaded [cyan]{len(blocks):,}[/cyan] blocks\n")
-
-    full_matrix = np.stack(
-        [np.frombuffer(b["embedding"], dtype=np.float32).copy() for b in blocks]
-    )
-
-    import time
-
-    for dims in DIMS_OPTIONS:
-        actual = min(dims, full_matrix.shape[1])
-        console.print(f"  [bold]dims={dims}[/bold]  ({actual} actual) …", end="")
-        t0 = time.time()
-        matrix = _truncate_normalize(full_matrix, dims)
-        _normalize_coords(compute_umap(matrix))
-        elapsed = time.time() - t0
-        console.print(f"  [green]done[/green] ({elapsed:.1f}s)")
-
-    console.print(
-        "\n[green]All UMAP projections cached.[/green] Run 'openaugi explore' to launch."
-    )
-
-
-@app.command()
-def explore(
-    db: str | None = typer.Option(None, "--db", help="Database path"),
-    backend_port: int = typer.Option(8000, "--backend-port", help="API server port"),
-    frontend_port: int = typer.Option(5173, "--frontend-port", help="Vite dev server port"),
-    open_browser: bool = typer.Option(True, "--open/--no-open", help="Open browser automatically"),
-    prewarm: bool = typer.Option(
-        False, "--prewarm", help="Pre-generate UMAP caches for all dims, then exit"
-    ),
-):
-    """Launch the Knowledge Explorer — WebGL cluster visualization.
-
-    Starts the FastAPI backend (UMAP projection) and Vite frontend, then opens
-    the browser. Installs Python and npm deps automatically on first run.
-
-    Use --prewarm to pre-generate UMAP projections for all embedding dims so
-    exploration is instant later (runs without launching the browser).
-
-    Example:
-
-    \b
-        openaugi explore
-        openaugi explore --db /path/to/custom.db
-        openaugi explore --prewarm
-    """
-    import os
-    import subprocess
-    import sys
-    import time
-    from pathlib import Path
-
-    _setup_logging(verbose=False)
-
-    repo_root = Path(__file__).resolve().parents[3]
-    experiment_dir = repo_root / "experiments" / "knowledge-explorer"
-    backend_dir = experiment_dir / "backend"
-    frontend_dir = experiment_dir / "frontend"
-
-    if not experiment_dir.exists():
-        console.print(f"[red]Knowledge Explorer not found at {experiment_dir}[/red]")
-        raise typer.Exit(1)
-
-    db_path = db or str(_default_db())
-    if not Path(db_path).exists():
-        console.print(f"[red]Database not found:[/red] {db_path}")
-        console.print("Run 'openaugi ingest --path /your/vault' first.")
-        raise typer.Exit(1)
-
-    # ── Prewarm: generate UMAP caches for all dims, no browser ──────────────────
-    if prewarm:
-        _explore_prewarm(db_path, backend_dir)
-        return
-
-    # ── Backend deps ────────────────────────────────────────────────────────────
-    try:
-        import fastapi  # noqa: F401  # pyright: ignore[reportMissingImports]
-        import umap  # noqa: F401  # pyright: ignore[reportMissingImports]
-        import uvicorn  # noqa: F401
-    except ImportError:
-        console.print("[yellow]Installing backend deps…[/yellow]")
-        subprocess.check_call(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "fastapi",
-                "uvicorn",
-                "umap-learn",
-                "numpy",
-                "hdbscan",
-                "scikit-learn",
-            ]
-        )
-
-    # ── Frontend deps ───────────────────────────────────────────────────────────
-    if not (frontend_dir / "node_modules").exists():
-        console.print("[yellow]Installing frontend deps (npm install)…[/yellow]")
-        subprocess.check_call(["npm", "install"], cwd=frontend_dir)
-
-    # ── Launch backend ──────────────────────────────────────────────────────────
-    console.print(f"[bold]Starting backend[/bold] on :{backend_port}  (db: {db_path})")
-    backend_proc = subprocess.Popen(
-        [sys.executable, "server.py", "--db", db_path, "--port", str(backend_port)],
-        cwd=backend_dir,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-
-    # Wait up to 8s for backend to bind, streaming output so errors are visible
-    import threading
-
-    backend_ready = threading.Event()
-    backend_lines: list[str] = []
-
-    def _stream_backend() -> None:
-        assert backend_proc.stdout
-        for line in backend_proc.stdout:
-            line = line.rstrip()
-            backend_lines.append(line)
-            console.print(f"  [dim]{line}[/dim]")
-            if "Application startup complete" in line:
-                backend_ready.set()
-
-    t = threading.Thread(target=_stream_backend, daemon=True)
-    t.start()
-
-    if not backend_ready.wait(timeout=10):
-        rc = backend_proc.poll()
-        if rc is not None:
-            console.print(
-                f"[red]Backend exited immediately (code {rc}). "
-                f"Is port {backend_port} already in use?[/red]"
-            )
-            raise typer.Exit(1)
-        # Still starting — continue anyway
-    console.print("  [green]Backend ready[/green]")
-
-    # ── Launch frontend ─────────────────────────────────────────────────────────
-    env = os.environ.copy()
-    env["VITE_API_PORT"] = str(backend_port)
-    console.print(f"[bold]Starting frontend[/bold] on :{frontend_port}")
-    frontend_proc = subprocess.Popen(
-        ["npm", "run", "dev", "--", "--port", str(frontend_port), "--host"],
-        cwd=frontend_dir,
-        env=env,
-    )
-
-    url = f"http://localhost:{frontend_port}"
-
-    if open_browser:
-        time.sleep(2)
-        subprocess.Popen(["open", url])
-
-    console.print(f"\n  [bold green]Knowledge Explorer:[/bold green] {url}")
-    console.print(f"  [dim]Backend API:        http://localhost:{backend_port}/api[/dim]")
-    console.print("  [dim](Ctrl-C to stop)[/dim]\n")
-
-    try:
-        # Keep streaming backend output; wait for either process to exit
-        t.join(timeout=None)  # streams until backend stdout closes (on exit)
-        backend_proc.wait()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        backend_proc.terminate()
-        frontend_proc.terminate()
-        backend_proc.wait()
-        frontend_proc.wait()
-        console.print("[dim]Stopped.[/dim]")
 
 
 def _print_block(block, score: float | None = None):
