@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**`openaugi init` no longer seeds saved queries.** The three query templates
+(`dashboard-task-shelf`, `review-queue`, `today`) were never used in a real
+vault; they move to `tests/fixtures/queries/`. Saved queries themselves
+(`openaugi query`, `list_queries`, `run_query`, `/api/queries`) are unchanged.
+
 **Augi, a Claude Code pane, lives in `ui/claude/`.** The plugin that sits beside
 the chat — anchor on a board card, pick what the chat reads, run a lens, keep
 an Agent Log per anchor — moved into this repo, and the repo is now a plugin

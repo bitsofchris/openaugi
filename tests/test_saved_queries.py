@@ -1,7 +1,7 @@
 """Saved queries — markdown+frontmatter QuerySpecs in the vault.
 
 Covers query/saved.py (parsing, listing, token resolution with a frozen
-clock), the shipped seed templates, the MCP tools (list_queries /
+clock), the fixture queries, the MCP tools (list_queries /
 run_query), and the HTTP routes (/api/queries*, POST /api/query saved).
 """
 
@@ -112,10 +112,9 @@ class TestTokenResolution:
 
 class TestSeedTemplates:
     def test_shipped_seeds_parse_and_resolve(self, tmp_path: Path):
-        """The templates 'openaugi init' copies must be valid saved queries."""
-        import importlib.resources
+        """The fixture saved queries are valid and run."""
 
-        templates = importlib.resources.files("openaugi") / "templates" / "queries"
+        templates = Path(__file__).parent / "fixtures" / "queries"
         vault = tmp_path / "vault"
         folder = saved.queries_dir(vault)
         folder.mkdir(parents=True)
@@ -138,13 +137,8 @@ class TestSeedTemplates:
             store.close()
 
     def test_task_shelf_seed_matches_dashboard_convention(self, tmp_path: Path):
-        import importlib.resources
-
         text = (
-            importlib.resources.files("openaugi")
-            / "templates"
-            / "queries"
-            / "dashboard-task-shelf.md"
+            Path(__file__).parent / "fixtures" / "queries" / "dashboard-task-shelf.md"
         ).read_text(encoding="utf-8")
         vault = tmp_path / "v"
         _write_query(vault, "dashboard-task-shelf", text)
@@ -156,7 +150,6 @@ class TestSeedTemplates:
 @pytest.fixture
 def mcp_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     """Golden DB + vault with seed queries, wired into the server module."""
-    import importlib.resources
 
     import openaugi.mcp.server as srv
 
@@ -165,7 +158,7 @@ def mcp_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path
     vault = tmp_path / "vault"
     folder = saved.queries_dir(vault)
     folder.mkdir(parents=True)
-    templates = importlib.resources.files("openaugi") / "templates" / "queries"
+    templates = Path(__file__).parent / "fixtures" / "queries"
     for entry in templates.iterdir():
         (folder / entry.name).write_text(entry.read_text(encoding="utf-8"))
 
