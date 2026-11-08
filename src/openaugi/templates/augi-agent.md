@@ -36,8 +36,8 @@ order of what a fresh session should read:
    left-off. Rules, and task note vs PMOC: `OpenAugi/AGENT/pmoc.md`.
 5. **The currency board** — `lenses/currency-board.md`, daily and slim. It
    does not restate the left-off (Kanban and the PMOCs hold it). It opens
-   with today's focus-block category from §5 and this week's experiment
-   from §4 (a line each), routes
+   with today's focus-block category from §5 and the *Into the week*
+   lines from §4, routes
    every `Aaa:`, and names sessions waiting on them. **The weekly
    reflection** —
    `lenses/weekly-reflection.md` — is the bigger pass and the only place

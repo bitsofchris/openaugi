@@ -38,8 +38,8 @@ call: delete the note, or say `apply lens weekly-reflection`.
 3. They open a chat session and say **`run the Sunday pass`**. The session
    follows *The Sunday session* below: one question per turn, each ruling
    applied the moment it is made — the week's instructions, the context
-   note, a review of the week, then this week's cards, other card moves,
-   janitor fixes.
+   note, a review of the week and what goes into it, then this week's
+   cards, other card moves, a use review, janitor fixes.
 4. **Done** is one fact: `last_reviewed` in [[Slowly Changing Context]] equals
    this Sunday. Monday's board says one line if it does not.
 
@@ -194,10 +194,16 @@ not inside the question: question-card previews do not reach them.
    it; talk until it is, and let it shape the card order. It ends with
    one agreed bottleneck and one experiment against it. Write them under
    the draft's outside view as **Agreed** (the bottleneck and the
-   experiment), at most three lines, in their words, and rewrite the §4
-   *This week's experiment* line in [[Slowly Changing Context]] to the
-   experiment, one line, dated this Sunday (the board quotes it every
-   morning). Then one question on
+   experiment), at most three lines, in their words. Then one question on
+   **Into the week**, the §4 block in [[Slowly Changing Context]] that the
+   board quotes every morning (at most three lines, each dated the Sunday
+   it was set): show the block as it would stand, with the *Experiment*
+   line already rewritten to the agreed experiment, each other line marked
+   *keep*, *rewrite* (show the wording) or *drop*, and at most one new line
+   drafted from what this session ruled (a practice or an affirmation in
+   their words). A line set four or more Sundays ago is shown as *move to
+   §7* (it is a habit now; §7 is not quoted daily) or *drop*, never
+   *keep*. Write the block on their answer. Then one question on
    the focus blocks: show the draft's Focus blocks table and §5's default
    schedule, and ask *keep* or a shift drafted from the mix and the
    override reasons (which weekday moves to which category); on a shift,
@@ -216,14 +222,25 @@ not inside the question: question-card previews do not reach them.
    not already card (source date on each). Perform each ruling before the
    next question, per `kanban.md`. An add to a Board column is fine when
    they approve it in the session.
-5. **Janitor** — one multi-select question listing this Sunday's unfixed
+5. **Use review** — one question, before the janitor: at most three parts
+   of the system (a board section, a reflection section, an *Into the
+   week* line, a session step, a kind of AI output they said they don't
+   read) with one dated quote each from their own
+   writing this week about using, skipping or not needing it, and *cut*,
+   *change* (show the wording) or *keep* for each. Their writing and their
+   answer only: board ticks, untaken moves and missed runs are never the
+   evidence. Nothing quoted: ask once whether anything went unused, and
+   take *nothing* as the answer. A cut or change is performed in the
+   session as a rule change: every AGENT file that states it, the OS note,
+   the deck, and `sync_templates.py --write` in openaugi.
+6. **Janitor** — one multi-select question listing this Sunday's unfixed
    items that are plain fixes, then one question for each item that needs a
    choice. Run the chosen ones as `system-janitor.md` says and rewrite each
    to `✓ fixed <date>`. Leave the rest.
-6. **Close** — set `last_reviewed: <this Sunday>` and append one change-log
+7. **Close** — set `last_reviewed: <this Sunday>` and append one change-log
    line to [[Slowly Changing Context]] (`- **<date>** — Sunday pass from
    [[Weekly Reflection - <date>]]: <the top cards this week, one clause>`).
-   Append `## Applied` to the draft: the top cards, the focus-block default (kept or shifted), each instruction and how
+   Append `## Applied` to the draft: the top cards, the *Into the week* block as written, the focus-block default (kept or shifted), what the use review cut or changed, each instruction and how
    it was ruled (one line each), context edits, cards moved and added, fixes
    run, anything ruled that could not be done. Then write the week's
    **structured row** (below). End in chat with one line and a *what's
