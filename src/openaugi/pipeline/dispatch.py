@@ -288,7 +288,7 @@ def build_task_file(
 ) -> str:
     """Build a pending task file from a block with zzz instructions.
 
-    Follows the task file contract in templates/task-template.md.
+    Follows the task file contract in templates/augi-zzz-task.md.
     The zzz instructions become both the user instruction and the task
     body — the agent in the tmux session interprets them.
 

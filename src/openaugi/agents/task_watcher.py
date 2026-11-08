@@ -28,7 +28,7 @@ No LLM calls in this module. Dispatch only.
 The zzz dispatch hook (writer) and this watcher (reader) agree on one file
 format. The authoritative, annotated version lives in ONE place:
 
-    src/openaugi/templates/task-template.md
+    src/openaugi/templates/augi-zzz-task.md
 
 Change that file and `test_task_template_hydrates_cleanly` breaks until
 the watcher keeps up. A minimal pending task looks like:

@@ -603,14 +603,14 @@ class TestDispatchTask:
 # ── The task format contract ──────────────────────────────────────────────
 
 # The authoritative task file format lives at
-# src/openaugi/templates/task-template.md. This test reads that file and
+# src/openaugi/templates/augi-zzz-task.md. This test reads that file and
 # runs it through the full dispatch pipeline. Any change to the template
 # that the watcher can't hydrate + launch cleanly fails here. The intent
 # is to keep a single source of truth for the zzz dispatch hook (writer) and
 # the watcher (reader) so the contract can't silently drift.
 
 TASK_TEMPLATE_PATH = (
-    Path(__file__).parent.parent / "src" / "openaugi" / "templates" / "task-template.md"
+    Path(__file__).parent.parent / "src" / "openaugi" / "templates" / "augi-zzz-task.md"
 )
 
 
@@ -618,7 +618,7 @@ class TestTaskTemplateContract:
     def test_template_file_exists(self):
         assert TASK_TEMPLATE_PATH.exists(), (
             "Authoritative task template is missing. See "
-            "src/openaugi/templates/task-template.md and the task_watcher "
+            "src/openaugi/templates/augi-zzz-task.md and the task_watcher "
             "docstring for why this file must exist."
         )
 

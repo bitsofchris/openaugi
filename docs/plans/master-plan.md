@@ -580,7 +580,7 @@ because "text is truth" (mobile M6): tags and `aaa:` live in the block
 text and re-ingest carries them.
 
 **2. Trigger contract.** A `status: pending` task file in `OpenAugi/Tasks/`
-(see `templates/task-template.md`); the task watcher is the single
+(see `templates/augi-zzz-task.md`); the task watcher is the single
 execution path. Already true for: zzz grammar, `openaugi review` CLI.
 Mobile needs **no trigger surface** — `zzz:` in a captured block
 dispatches after ingest. Plugin commands write the task file directly via

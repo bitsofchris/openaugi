@@ -230,7 +230,7 @@ live in `src/openaugi/agent_files.py`; the rule is in AGENTS.md "Engine vs
 personal".
 
 The **task file format is a single contract** defined in
-`src/openaugi/templates/task-template.md` and enforced by
+`src/openaugi/templates/augi-zzz-task.md` and enforced by
 `test_task_template_hydrates_cleanly`. Both `dispatch.py` (writer)
 and `task_watcher.py` (reader) point at that template.
 
