@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**`openaugi init` is a guided, three-question setup.** Vault (with a note
+count), search mode (keyword-only by default, or local / OpenAI embeddings,
+showing which are installed), and task mode (manual by default, or automatic
+via `openaugi up`). Re-running offers your current choices as defaults, and an
+existing `config.toml` is only replaced when you confirm, with a dated backup.
+`--vault/--search/--tasks/--yes` run it unattended. Code: `cli/setup.py`.
+
 **Agents launch only when you ask, unless you opt in.** `openaugi up` no
 longer starts Claude Code agents by default: set `[tasks] auto_dispatch = true`
 (or pass `up --agent`) to keep the old behavior. Without it, `zzz:` still

@@ -39,7 +39,24 @@ python3 -m venv .venv
 openaugi init
 ```
 
-Interactive setup — choose embedding model (local or OpenAI), set API key if needed, set your vault path. Config is saved to `~/.openaugi/config.toml`.
+Three questions, each with a safe default (press Enter):
+
+1. 📁 **Vault** — where your notes are. It counts them so you know it's the right folder.
+2. 🔎 **Search** — 🔤 keyword + links (built in, default), 💻 local semantic
+   (`openaugi[local]`), or ☁️ OpenAI semantic (`openaugi[openai]` + API key; note
+   text goes to OpenAI). It shows which are installed and how to install the rest.
+3. 🤖 **zzz: tasks** — ✋ manual (default: `openaugi tasks`, nothing in the
+   background) or ⚡ automatic (`openaugi up` launches agents itself).
+
+It writes `~/.openaugi/config.toml`, copies the agent files into
+`<vault>/OpenAugi/AGENT/` (never overwriting yours), and prints the next
+commands for what you chose. Re-run it any time: your current choices are the
+defaults, and an existing config is only replaced if you say so, with a dated
+backup (`config.toml.bak-…`) kept next to it. Replacing drops settings `init`
+doesn't ask about (exclude patterns, source rules) — copy them back from the
+backup.
+
+Unattended: `openaugi init --vault ~/notes --search none --tasks manual --yes`.
 
 The vault path may use `~` (`~/Documents/vault`) — it is expanded to an absolute path everywhere it is used, whether it comes from `init`, a `--path` flag, or `[vault] default_path` edited by hand.
 

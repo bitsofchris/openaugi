@@ -25,11 +25,14 @@ pip install openaugi              # keyword + link search, nothing leaves your m
 # optional semantic search:  pip install "openaugi[local]"  or  "openaugi[openai]"
 
 # Configure and run
-openaugi init    # one-time: vault path, embedding model, API key
-openaugi up      # sync the vault, then watch it and dispatch tasks
+openaugi init    # 3 questions: vault, search mode, task mode
+openaugi ingest  # index the vault (re-run any time)
+openaugi tasks   # review zzz: tasks and launch one
 ```
 
-Leave `up` running. Then point your MCP client at **`openaugi serve`** —
+Nothing runs in the background unless you choose it: `openaugi up` is the
+optional service that keeps the index fresh and (with `[tasks] auto_dispatch =
+true`) launches agents by itself. Point your MCP client at **`openaugi serve`** —
 [register with Claude](docs/reference/GETTING_STARTED.md#register-with-claude) —
 and start asking questions about your notes.
 

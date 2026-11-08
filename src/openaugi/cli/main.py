@@ -6,6 +6,7 @@ Entry point for the `openaugi` command.
 from __future__ import annotations
 
 import logging
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -74,134 +75,44 @@ def main(
         raise typer.Exit()
 
 
+class _SearchChoice(StrEnum):
+    none = "none"
+    local = "local"
+    openai = "openai"
+
+
+class _TasksChoice(StrEnum):
+    manual = "manual"
+    auto = "auto"
+
+
 @app.command()
-def init():
-    """Set up OpenAugi — choose embedding model, configure API keys, set vault path."""
-    config_dir = Path.home() / ".openaugi"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    config_path = config_dir / "config.toml"
-    env_path = config_dir / ".env"
+def init(
+    vault: str | None = typer.Option(None, "--vault", help="Vault path (skips the question)"),
+    search: Annotated[
+        _SearchChoice | None,
+        typer.Option("--search", help="Search mode: none (keyword), local, or openai"),
+    ] = None,
+    tasks: Annotated[
+        _TasksChoice | None,
+        typer.Option(
+            "--tasks",
+            help="zzz: tasks: manual (openaugi tasks) or auto (openaugi up launches them)",
+        ),
+    ] = None,
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Accept defaults; replace an existing config (backed up)"
+    ),
+):
+    """Guided setup: your vault, how to search it, and how zzz: tasks run."""
+    from openaugi.cli.setup import run_setup
 
-    console.print("\n[bold]OpenAugi Setup[/bold]\n")
-
-    # 1. Embedding model
-    console.print("[bold]Embedding model[/bold]")
-    console.print("  1. OpenAI (text-embedding-3-small) — best quality, requires API key")
-    console.print("  2. Local (sentence-transformers) — free, no API key, runs on CPU")
-    console.print("  3. None — skip embeddings, keyword search only")
-
-    choice = typer.prompt("Choose", default="1")
-
-    embedding_provider = None
-    embedding_model = None
-    needs_openai_key = False
-
-    if choice == "1":
-        embedding_provider = "openai"
-        embedding_model = "text-embedding-3-small"
-        needs_openai_key = True
-    elif choice == "2":
-        embedding_provider = "sentence-transformers"
-        embedding_model = "all-MiniLM-L6-v2"
-    # else: no embeddings
-
-    # 2. API key (if needed)
-    env_lines: list[str] = []
-    if needs_openai_key:
-        # Check if already set
-        import os
-
-        existing = os.environ.get("OPENAI_API_KEY", "")
-        if existing:
-            masked = f"{existing[:8]}..."
-            console.print(f"  OPENAI_API_KEY already set in environment [dim]({masked})[/dim]")
-            save_key = typer.confirm("Save to ~/.openaugi/.env for persistence?", default=True)
-            if save_key:
-                env_lines.append(f"OPENAI_API_KEY={existing}")
-        else:
-            key = typer.prompt("  Enter your OpenAI API key", hide_input=True)
-            if key:
-                env_lines.append(f"OPENAI_API_KEY={key}")
-                console.print("  [green]Key saved to ~/.openaugi/.env[/green]")
-
-    # 3. Default vault path
-    vault_path = typer.prompt(
-        "\nDefault vault path (Obsidian vault)",
-        default=str(Path.home() / "Documents" / "vault"),
+    run_setup(
+        vault=vault,
+        search=search.value if search else None,
+        tasks=tasks.value if tasks else None,
+        yes=yes,
     )
-    vault_path = str(Path(vault_path.strip().strip("'\"")).expanduser())
-
-    # Write config.toml
-    toml_lines = []
-    if embedding_provider:
-        toml_lines.extend(
-            [
-                "[models.embedding]",
-                f'provider = "{embedding_provider}"',
-                f'model = "{embedding_model}"',
-                "",
-            ]
-        )
-    toml_lines.extend(
-        [
-            "[vault]",
-            f'default_path = "{vault_path}"',
-        ]
-    )
-
-    config_path.write_text("\n".join(toml_lines) + "\n")
-    console.print(f"\n  Config written to [cyan]{config_path}[/cyan]")
-
-    # Write .env (append, don't overwrite existing vars)
-    if env_lines:
-        existing_env = env_path.read_text() if env_path.exists() else ""
-        new_vars = {}
-        for line in env_lines:
-            key, _, value = line.partition("=")
-            new_vars[key] = value
-
-        # Parse existing
-        existing_vars: dict[str, str] = {}
-        for line in existing_env.splitlines():
-            if "=" in line and not line.startswith("#"):
-                key, _, value = line.partition("=")
-                existing_vars[key.strip()] = value.strip()
-
-        # Merge (new overrides existing)
-        existing_vars.update(new_vars)
-        env_content = "\n".join(f"{k}={v}" for k, v in existing_vars.items()) + "\n"
-        env_path.write_text(env_content)
-        env_path.chmod(0o600)  # owner-only read/write
-        console.print(f"  Keys written to [cyan]{env_path}[/cyan] (chmod 600)")
-
-    # Copy the engine templates to the vault (only files that don't already exist).
-    # Which files ship is decided by the templates themselves: every markdown
-    # file under templates/ that declares `kind: engine` — see agent_files.py.
-    from openaugi.agent_files import engine_templates, template_description
-
-    vault = Path(vault_path)
-    agent_dir = vault / "OpenAugi" / "AGENT"
-    agent_dir.mkdir(parents=True, exist_ok=True)
-
-    copied = 0
-    for filename, text in engine_templates():
-        dest = agent_dir / filename
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        if dest.exists():
-            console.print(f"  [dim]Skipping {filename} (already exists)[/dim]")
-            continue
-        dest.write_text(text, encoding="utf-8")
-        console.print(f"  [green]Copied {filename}[/green] — {template_description(text)}")
-        copied += 1
-
-    if copied:
-        console.print(f"\n  Agent skills at [cyan]{agent_dir}[/cyan]")
-        console.print("  Edit these in Obsidian to customize agent behavior.")
-
-    console.print("\n[bold green]Setup complete![/bold green]\n")
-    console.print("Next steps:")
-    console.print("  openaugi up              # sync vault + start everything")
-    console.print("  openaugi serve           # MCP server only (for Claude Desktop)")
 
 
 def _ingest_vault(vault_path: str, store, config: dict) -> tuple[dict, bool]:
