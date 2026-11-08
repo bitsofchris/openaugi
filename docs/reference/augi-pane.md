@@ -35,10 +35,10 @@ in `/config` under `augi`; `/augi setup` runs it again):
 |---|---|---|
 | `notesFolder` | The notes folder; Obsidian's known vaults are offered as buttons | — |
 | `editor` / `editorCommand` | What opens a note: obsidian, vscode, cursor, system, or a custom command with `{file}` | `obsidian` |
-| `boardNote` | The Kanban note whose linked cards are the anchors | `Augi/Board.md` |
-| `contextNote` | A note about the user and this season | `Augi/Context.md` |
-| `lensFolder` | One markdown file per lens | `Augi/Lenses` |
-| `logFolder` | One Agent Log per anchor | `Augi/Agent-Logs` |
+| `boardNote` | The Kanban note whose linked cards are the anchors | `Kanban.md` |
+| `contextNote` | A note about the user and this season | `OpenAugi/AGENT/Slowly Changing Context.md` |
+| `lensFolder` | One markdown file per lens | `OpenAugi/AGENT/lenses` |
+| `logFolder` | One Agent Log per anchor | `OpenAugi/Agent-Logs` |
 | `lensPicks` | Lenses listed first, comma separated; empty lists all | — |
 
 Each missing file can be created as a starter, pointed at an existing note, or
@@ -54,7 +54,8 @@ skipped. Starters are never written over an existing file.
 - **Draft** (`n`): fills the prompt with that context. Nothing is sent until
   the user presses enter.
 - **Lenses** (`l`): run a lens with the same context; `g` drafts a new one.
-  A lens with `augi: true` in its frontmatter is always listed.
+  Lenses follow the OpenAugi lens contract (`OpenAugi/AGENT/lens-template.md`):
+  with no picks set, every lens with `trigger: on-demand` is listed.
 - **Agent Log**: per anchor, a companion note that holds the pinned context,
   open questions and the chats started from the pane. The user's own note is
   never written; `⧉` copies an embed line to paste into it.

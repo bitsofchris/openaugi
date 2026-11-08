@@ -1,6 +1,6 @@
 {
   "name": "augi",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Augi, the OpenAugi pane beside your agent chat: anchor on a Kanban project or task, pin its context (notes, sessions, artifacts, links), run lenses, and keep its Agent Log of context, questions, chats and saved notes. Drafts only; you press enter.",
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -33,30 +33,30 @@
       "type": "string",
       "title": "Context note",
       "description": "Who you are, your season focus and your projects, inside the notes folder. The first bold line under a heading with 'season' or 'focus' becomes your focus line.",
-      "default": "Augi/Context.md"
+      "default": "OpenAugi/AGENT/Slowly Changing Context.md"
     },
     "boardNote": {
       "type": "string",
       "title": "Board note",
       "description": "A Kanban-style board inside the notes folder. Each open card that links a note can be your anchor.",
-      "default": "Augi/Board.md"
+      "default": "Kanban.md"
     },
     "lensFolder": {
       "type": "string",
       "title": "Lens folder",
       "description": "A folder of lens notes inside the notes folder: one markdown prompt per lens.",
-      "default": "Augi/Lenses"
+      "default": "OpenAugi/AGENT/lenses"
     },
     "logFolder": {
       "type": "string",
       "title": "Agent log folder",
       "description": "Where Augi keeps one Agent Log per anchor: the companion note agents write (context, questions, chats, saved notes). Your own note is never written.",
-      "default": "Augi/Agent-Logs"
+      "default": "OpenAugi/Agent-Logs"
     },
     "lensPicks": {
       "type": "string",
       "title": "Lens picks",
-      "description": "Lens names to list first, comma separated. Empty lists every lens in the folder. A lens with augi: true in its frontmatter is always listed.",
+      "description": "Lens names to list first, comma separated. Only these are listed when set. Empty lists every lens with trigger: on-demand (the OpenAugi lens contract), or every lens when none has a trigger.",
       "default": ""
     }
   }

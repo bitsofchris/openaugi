@@ -46,10 +46,10 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
   return {
     home,
     notes,
-    context: within(notes, options.contextNote || 'Augi/Context.md', home),
-    board: within(notes, options.boardNote || 'Augi/Board.md', home),
-    lenses: within(notes, options.lensFolder || 'Augi/Lenses', home),
-    trails: within(notes, options.logFolder || options.trailFolder || 'Augi/Agent-Logs', home),
+    context: within(notes, options.contextNote || 'OpenAugi/AGENT/Slowly Changing Context.md', home),
+    board: within(notes, options.boardNote || 'Kanban.md', home),
+    lenses: within(notes, options.lensFolder || 'OpenAugi/AGENT/lenses', home),
+    trails: within(notes, options.logFolder || options.trailFolder || 'OpenAugi/Agent-Logs', home),
     claudeDir: `${home}/.claude/projects`,
     codexDir: `${home}/.codex/sessions`,
     editor: options.editor || 'obsidian',
@@ -121,9 +121,9 @@ export const obsidianConfigs = (home: string, appData: string): string[] => [
 
 // The setup steps after the folder, in order, with what each one is for.
 export const STEPS: { field: string; title: string; why: string; starter: string }[] = [
-  { field: 'boardNote', title: 'Your board', why: 'The Kanban note your projects live on. Its cards become the anchors you pick from.', starter: 'Augi/Board.md' },
-  { field: 'contextNote', title: 'Your context note', why: 'A note about you and this season: what you are focused on and how you like to work.', starter: 'Augi/Context.md' },
-  { field: 'lensFolder', title: 'Your lens folder', why: 'A folder of saved prompts, one note each. They show under Run a lens.', starter: 'Augi/Lenses' },
+  { field: 'boardNote', title: 'Your board', why: 'The Kanban note your projects live on. Its cards become the anchors you pick from.', starter: 'Kanban.md' },
+  { field: 'contextNote', title: 'Your context note', why: 'A note about you and this season: what you are focused on and how you like to work.', starter: 'OpenAugi/AGENT/Slowly Changing Context.md' },
+  { field: 'lensFolder', title: 'Your lens folder', why: 'A folder of saved prompts, one note each. They show under Run a lens.', starter: 'OpenAugi/AGENT/lenses' },
 ]
 
 // Search output (one path per line, newest first) as paths inside the notes folder, the first few.
@@ -183,7 +183,10 @@ export const starterLens = (): string =>
     '---',
     'name: focus-check',
     "description: Am I working on the thing that matters, and what's the next step?",
-    'augi: true',
+    "scope: The anchor's note and Agent Log, my context note, and any coding session handed over.",
+    'trigger: on-demand',
+    'target: chat — answers in the conversation and writes nothing.',
+    'kind: personal',
     '---',
     '',
     '# Focus check',
@@ -304,28 +307,27 @@ export const embedFor = (note: string): string =>
 
 export const hasEmbedOf = (text: string, note: string): boolean => text.includes(`![[${logName(note)}`)
 
-// True when a lens file's frontmatter says `augi: true`.
-export const isAugiLens = (text: string): boolean => {
+// True when a lens runs when asked: `trigger: on-demand` in its frontmatter (the OpenAugi lens contract).
+export const isOnDemand = (text: string): boolean => {
   const front = text.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? ''
 
-  return /^augi:\s*true\s*$/m.test(front)
+  return /^trigger:[ \t]*on-demand[ \t]*(#.*)?$/m.test(front)
 }
 
-// The lens menu: the picks in their order, then any file marked for Augi.
-// With no picks set, every lens in the folder.
-export const lensNames = (files: string[], marked: string[]): string[] => {
-  if (P.picks.length === 0) {
-    return [...files].sort()
+// The lens menu: the picks in their order. With no picks, every on-demand lens,
+// or every file when none declares a trigger.
+export const lensNames = (files: string[], onDemand: string[]): string[] => {
+  if (P.picks.length > 0) {
+    return P.picks.filter(name => files.includes(name))
   }
-  const extra = marked.filter(name => !P.picks.includes(name)).sort()
 
-  return [...P.picks.filter(name => files.includes(name)), ...extra]
+  return [...(onDemand.length > 0 ? onDemand : files)].sort()
 }
 
 export const newLensDraft = (typed: string): string =>
   [
     DRAFT_HEAD,
-    `- New lens: write it as a markdown file in "${P.lenses}/", modelled on a lens already there: frontmatter with name, description and \`augi: true\`, then what it reads and how it answers.`,
+    `- New lens: write it as a markdown file in "${P.lenses}/" that follows the OpenAugi lens contract (lens-template.md beside the lens folder, if it's there): frontmatter with name, description, scope, \`trigger: on-demand\`, target and \`kind: personal\`, then what it reads and how it answers.`,
     '- Ask me what you need first: the question it answers, and what it reads. Keep it short enough to answer in about six lines.',
     'When it is written, tell me its name and that Augi shows it after refresh.',
     `What it should do: ${typed}`,
@@ -1133,9 +1135,9 @@ async function load($: EngineInterface): Promise<void> {
       texts.set(file.name.slice(0, -3), await $.fs.read(`${P.lenses}/${file.name}`))
     }
   }
-  const marked = [...texts].filter(([, text]) => isAugiLens(text)).map(([name]) => name)
+  const onDemand = [...texts].filter(([, text]) => isOnDemand(text)).map(([name]) => name)
 
-  for (const name of lensNames([...texts.keys()], marked)) {
+  for (const name of lensNames([...texts.keys()], onDemand)) {
     next.lenses.push({ name, path: `${P.lenses}/${name}.md`, description: descriptionFrom(texts.get(name) ?? '') })
   }
 
@@ -1765,7 +1767,7 @@ export const register: Register = (on, options) => {
           </Box>
         ))}
         {shown.setupOpen && (
-          <Input key="set-logFolder" label="  agent log folder" value={settings.logFolder || settings.trailFolder || ''} placeholder="Augi/Agent-Logs" onSubmit={value => setOption($, 'logFolder', value)} />
+          <Input key="set-logFolder" label="  agent log folder" value={settings.logFolder || settings.trailFolder || ''} placeholder="OpenAugi/Agent-Logs" onSubmit={value => setOption($, 'logFolder', value)} />
         )}
         {shown.setupOpen && (
           <Input key="set-lensPicks" label="  lenses to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />

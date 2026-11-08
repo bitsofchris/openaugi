@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { addChat, embedFor, hasEmbedOf, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, isAugiLens, kanbanCards, lensNames, newLensDraft, onePerCodexRun, outcomeFrom, parseTrail, setHidden, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
+import { addChat, embedFor, hasEmbedOf, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, isOnDemand, kanbanCards, lensNames, newLensDraft, onePerCodexRun, outcomeFrom, parseTrail, setHidden, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
   plugin: 'augi',
@@ -116,20 +116,26 @@ test('typed words survive, an earlier draft does not', async () => {
   expect(typedFrom(buildDraft([SESSION_PIN], ALL_ON, null, 'keep me'))).toBe('keep me')
 })
 
-test('a lens joins the menu only when its frontmatter says augi: true', async () => {
-  expect(isAugiLens('---\nname: x\naugi: true\n---\nbody')).toBe(true)
-  expect(isAugiLens('---\nname: x\n---\naugi: true')).toBe(false)
-  expect(isAugiLens('no frontmatter')).toBe(false)
+test('a lens is on demand when its frontmatter says trigger: on-demand', async () => {
+  expect(isOnDemand('---\nname: x\ntrigger: on-demand\n---\nbody')).toBe(true)
+  expect(isOnDemand('---\nname: x\ntrigger: scheduled\n---\nbody')).toBe(false)
+  expect(isOnDemand('---\nname: x\n---\ntrigger: on-demand')).toBe(false)
+  expect(isOnDemand('no frontmatter')).toBe(false)
 })
 
-test('the menu keeps the picks in order, then marked lenses, once each', async () => {
+test('the menu is the picks in order; with none, the on-demand lenses, or every lens', async () => {
   const files = ['zeta', 'echoes', 'execution-focus', 'weekly-reflection']
-  expect(lensNames(files, ['zeta', 'echoes'])).toEqual(['execution-focus', 'echoes', 'zeta'])
+  expect(lensNames(files, ['zeta', 'echoes'])).toEqual(['execution-focus', 'echoes'])
+  configure(resolvePaths({ ...OPTIONS, lensPicks: '' }, '/Users/t'))
+  expect(lensNames(files, ['zeta', 'echoes'])).toEqual(['echoes', 'zeta'])
+  expect(lensNames(files, [])).toEqual(['echoes', 'execution-focus', 'weekly-reflection', 'zeta'])
+  configure(resolvePaths(OPTIONS, '/Users/t'))
 })
 
-test('a new-lens draft asks for augi: true and keeps what was typed', async () => {
+test('a new-lens draft asks for the lens contract and keeps what was typed', async () => {
   const text = newLensDraft('check my tests')
-  expect(text.includes('augi: true')).toBe(true)
+  expect(text.includes('trigger: on-demand')).toBe(true)
+  expect(text.includes('augi: true')).toBe(false)
   expect(text.endsWith('What it should do: check my tests')).toBe(true)
 })
 
@@ -419,7 +425,7 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
 test('settings resolve inside the notes folder, with ~ and absolute paths', async () => {
   const paths = resolvePaths({ notesFolder: '~/Notes/', boardNote: '/elsewhere/Board.md', lensPicks: ' a, ,b ' }, '/Users/t')
   expect(paths.notes).toBe('/Users/t/Notes')
-  expect(paths.context).toBe('/Users/t/Notes/Augi/Context.md')
+  expect(paths.context).toBe('/Users/t/Notes/OpenAugi/AGENT/Slowly Changing Context.md')
   expect(paths.board).toBe('/elsewhere/Board.md')
   expect(paths.picks).toEqual(['a', 'b'])
   expect(paths.editor).toBe('obsidian')
@@ -437,7 +443,7 @@ test('setup lists what is missing, the notes folder first', async () => {
   const paths = resolvePaths({ notesFolder: '/n' }, '/h')
   const none = setupItems(paths, new Set())
   expect(none.map(item => item.ok)).toEqual([false, false, false, false])
-  const some = setupItems(paths, new Set(['/n', '/n/Augi/Lenses']))
+  const some = setupItems(paths, new Set(['/n', '/n/OpenAugi/AGENT/lenses']))
   expect(some.filter(item => !item.ok).map(item => item.field)).toEqual(['contextNote', 'boardNote'])
   expect(setupItems(resolvePaths({}, '/h'), new Set(['']))[0]?.ok).toBe(false)
 })
@@ -529,7 +535,7 @@ test('after the folder, setup walks the steps: found notes, a starter, or skip',
     store.delete(e.key)
     return { value: undefined }
   })
-  on('fs.exists', (_, e) => ({ value: e.path === '/v' || written.has(e.path) || (e.path === '/v/Augi/Lenses' && written.has('/v/Augi/Lenses/focus-check.md')) }))
+  on('fs.exists', (_, e) => ({ value: e.path === '/v' || written.has(e.path) || (e.path === '/v/OpenAugi/AGENT/lenses' && written.has('/v/OpenAugi/AGENT/lenses/focus-check.md')) }))
   on('fs.read', (_, e) => ({ value: written.get(e.path) ?? '' }))
   on('fs.write', (_, e) => {
     written.set(e.path, e.text)
@@ -570,8 +576,8 @@ test('after the folder, setup walks the steps: found notes, a starter, or skip',
   expect(await ui.find({ key: 'set-contextNote' })).toBeTruthy()
   expect(await ui.find({ key: 'found-0' })).toBeFalsy()
   await ui.press({ key: 'use-starter' })
-  expect([...written.keys()]).toEqual(['/v/Augi/Context.md'])
-  expect(made.includes('/v/Augi/Agent-Logs')).toBe(true)
+  expect([...written.keys()]).toEqual(['/v/OpenAugi/AGENT/Slowly Changing Context.md'])
+  expect(made.includes('/v/OpenAugi/Agent-Logs')).toBe(true)
   expect(await ui.find({ key: 'set-lensFolder' })).toBeTruthy()
   await ui.press({ key: 'use-starter' })
   expect(await ui.find({ key: 'anchor-menu' })).toBeTruthy()
