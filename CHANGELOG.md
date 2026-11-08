@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.3.0 — 2026-11-08
+
+**Upgrading from 0.2.x — two things change by default:**
+
+1. `openai` is an extra. If your config uses OpenAI embeddings, install with
+   `pip install "openaugi[openai]"` (from a checkout: `uv sync --extra openai`).
+   A plain `uv sync` removes it.
+2. `openaugi up` no longer launches agents unless `[tasks] auto_dispatch = true`.
+   If your config already has a `[tasks]` table, add the key there — a second
+   `[tasks]` header is invalid TOML.
+
+Your `config.toml` is otherwise read as before; only `openaugi init` writes it,
+and it now asks before replacing it and keeps a backup.
+
 **`experiments/` moved out of the repo.** `embedding_research/` and the
 archived knowledge-explorer now live in the private research repo (copied
 from `3b42a0f`); nothing in the package used them.
