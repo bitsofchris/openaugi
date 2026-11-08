@@ -307,22 +307,10 @@ export const embedFor = (note: string): string =>
 
 export const hasEmbedOf = (text: string, note: string): boolean => text.includes(`![[${logName(note)}`)
 
-// True when a lens runs when asked: `trigger: on-demand` in its frontmatter (the OpenAugi lens contract).
-export const isOnDemand = (text: string): boolean => {
-  const front = text.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? ''
-
-  return /^trigger:[ \t]*on-demand[ \t]*(#.*)?$/m.test(front)
-}
-
-// The lens menu: the picks in their order. With no picks, every on-demand lens,
-// or every file when none declares a trigger.
-export const lensNames = (files: string[], onDemand: string[]): string[] => {
-  if (P.picks.length > 0) {
-    return P.picks.filter(name => files.includes(name))
-  }
-
-  return [...(onDemand.length > 0 ? onDemand : files)].sort()
-}
+// The lens menu: the picks in their order (the lens picks setting is the only filter).
+// With no picks, every lens in the folder.
+export const lensNames = (files: string[]): string[] =>
+  P.picks.length > 0 ? P.picks.filter(name => files.includes(name)) : [...files].sort()
 
 export const newLensDraft = (typed: string): string =>
   [
@@ -1135,9 +1123,7 @@ async function load($: EngineInterface): Promise<void> {
       texts.set(file.name.slice(0, -3), await $.fs.read(`${P.lenses}/${file.name}`))
     }
   }
-  const onDemand = [...texts].filter(([, text]) => isOnDemand(text)).map(([name]) => name)
-
-  for (const name of lensNames([...texts.keys()], onDemand)) {
+  for (const name of lensNames([...texts.keys()])) {
     next.lenses.push({ name, path: `${P.lenses}/${name}.md`, description: descriptionFrom(texts.get(name) ?? '') })
   }
 

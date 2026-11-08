@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { addChat, embedFor, hasEmbedOf, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, isOnDemand, kanbanCards, lensNames, newLensDraft, onePerCodexRun, outcomeFrom, parseTrail, setHidden, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
+import { addChat, embedFor, hasEmbedOf, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensNames, newLensDraft, onePerCodexRun, outcomeFrom, parseTrail, setHidden, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
   plugin: 'augi',
@@ -116,19 +116,11 @@ test('typed words survive, an earlier draft does not', async () => {
   expect(typedFrom(buildDraft([SESSION_PIN], ALL_ON, null, 'keep me'))).toBe('keep me')
 })
 
-test('a lens is on demand when its frontmatter says trigger: on-demand', async () => {
-  expect(isOnDemand('---\nname: x\ntrigger: on-demand\n---\nbody')).toBe(true)
-  expect(isOnDemand('---\nname: x\ntrigger: scheduled\n---\nbody')).toBe(false)
-  expect(isOnDemand('---\nname: x\n---\ntrigger: on-demand')).toBe(false)
-  expect(isOnDemand('no frontmatter')).toBe(false)
-})
-
-test('the menu is the picks in order; with none, the on-demand lenses, or every lens', async () => {
+test('the menu is the picks in order; with none, every lens', async () => {
   const files = ['zeta', 'echoes', 'execution-focus', 'weekly-reflection']
-  expect(lensNames(files, ['zeta', 'echoes'])).toEqual(['execution-focus', 'echoes'])
+  expect(lensNames(files)).toEqual(['execution-focus', 'echoes'])
   configure(resolvePaths({ ...OPTIONS, lensPicks: '' }, '/Users/t'))
-  expect(lensNames(files, ['zeta', 'echoes'])).toEqual(['echoes', 'zeta'])
-  expect(lensNames(files, [])).toEqual(['echoes', 'execution-focus', 'weekly-reflection', 'zeta'])
+  expect(lensNames(files)).toEqual(['echoes', 'execution-focus', 'weekly-reflection', 'zeta'])
   configure(resolvePaths(OPTIONS, '/Users/t'))
 })
 

@@ -56,7 +56,7 @@
     "lensPicks": {
       "type": "string",
       "title": "Lens picks",
-      "description": "Lens names to list first, comma separated. Only these are listed when set. Empty lists every lens with trigger: on-demand (the OpenAugi lens contract), or every lens when none has a trigger.",
+      "description": "Lens names to show, comma separated, in this order. Empty shows every lens in the lens folder.",
       "default": ""
     }
   }
