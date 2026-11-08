@@ -18,6 +18,7 @@ from openaugi.agent_files import (
     PERSONAL_OPEN,
     PersonalRegionError,
     engine_templates,
+    is_note_template,
     iter_templates,
     read_kind,
     split_frontmatter,
@@ -123,6 +124,9 @@ def test_every_shipped_template_declares_kind_engine(rel, text):
     if Path(rel).name in NON_AGENT_TEMPLATES:
         assert read_kind(text) is None, f"{rel} is code-read data, not an agent file"
         return
+    if is_note_template(rel):
+        assert read_kind(text) is None, f"{rel}: a note template's frontmatter is the note's"
+        return
     assert read_kind(text) == ENGINE, f"{rel}: templates ship only engine files"
 
 
@@ -138,3 +142,10 @@ def test_init_copies_exactly_the_engine_templates():
     assert "augi-agent.md" in copied
     assert "lenses/distill.md" in copied
     assert not copied & NON_AGENT_TEMPLATES
+    assert {"templates/PMOC.md", "templates/Task.md"} <= copied
+
+
+def test_note_templates_are_recognised_by_folder():
+    assert is_note_template("templates/PMOC.md")
+    assert not is_note_template("pmoc.md")
+    assert not is_note_template("lenses/templates.md")

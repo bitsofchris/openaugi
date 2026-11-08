@@ -227,8 +227,14 @@ Try the lens-only version for a week before asking the engine for anything.
 (vault path from the openaugi config, or `--vault`) → commit the template.
 `--check` reports drift and is the pre-push habit. Which files `init` copies is
 decided by the templates themselves: every `.md` under `templates/` that
-declares `kind: engine` (`src/openaugi/agent_files.py`). The one template
-without a kind is `task-template.md`, which the code hydrates and never copies.
+declares `kind: engine` (`src/openaugi/agent_files.py`). Two exceptions carry
+no kind: `augi-zzz-task.md`, the dispatched task file the code hydrates and
+never copies; and the **note templates** under `templates/templates/` (twin of
+the vault's `AGENT/templates/`: `PMOC.md`, `Task.md`), the starting shape of the
+user's own notes. Their frontmatter belongs to the notes made from them, so the
+folder marks them engine; they ship and are copied verbatim. They are the
+contract an interface (the Augi pane) reads: `outcome:`, `# Next`, `# Journal`,
+and the embed of the note's Agent Log (`pmoc.md`).
 
 **Reference docs follow the same line.** `docs/reference/` describes the engine
 in its current state; dated rulings and vault-specific incidents stay in the

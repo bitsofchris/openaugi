@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**The PMOC and Task note templates ship, and the task file template is
+`augi-zzz-task.md`.** The vault's `AGENT/templates/PMOC.md` and `Task.md` (an
+`outcome:`, `# Next` checkboxes, `# Journal`, and a collapsed embed of the
+note's Agent Log) are now engine templates, recognised by folder rather than a
+`kind:` line, synced and copied by `openaugi init` verbatim. `pmoc.md` and
+`augi-agent.md` describe the Agent Log companion in `OpenAugi/Agent-Logs/`;
+`kanban.md` no longer names one user's board path. `task-template.md` is
+renamed `augi-zzz-task.md` so it is not mistaken for the Task note template.
+
 **The board's Short from today takes the `short` route.** A proposal whose
 key starts with a route verb (`propose:short-<kebab>`) is written by the board
 janitor exactly as `zzz short: …` is: `route:` / `repo:` / `remote_control:`

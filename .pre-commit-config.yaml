@@ -3,6 +3,8 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        # Note templates keep their trailing spaces: they are where the cursor lands.
+        exclude: ^src/openaugi/templates/templates/
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files

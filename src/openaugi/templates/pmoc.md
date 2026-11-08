@@ -20,7 +20,7 @@ Rule of thumb: **if it will have a second dated entry, it is a PMOC.** If it is 
 
 | Kind | Note | Lives | Card | Tag |
 |---|---|---|---|---|
-| **Task note** — a thread with an end state but not yet a project | `OpenAugi/Notes/YYYY-MM-DD - <what it is>.md` — end state, their words, what exists, what is missing, smallest next step. No Journal, no header. | OpenAugi/Notes | Backlog, its AMOC column | none |
+| **Task note** — a thread with an end state but not yet a project | Their own task notes use `templates/Task.md`: `outcome:` up top, `# Next` checkboxes, `# Journal`, and the Agent Log embed at the end. One an agent drafts is `OpenAugi/Notes/YYYY-MM-DD - <what it is>.md`: end state, their words, what exists, what is missing, smallest next step. | Theirs: wherever they put it. Drafted: OpenAugi/Notes | Board or Backlog, its AMOC column | `#note-type/task`, `#status/active` while worked |
 | **PMOC** — active, will have a second dated entry | `_private/3-MOCs and Projects/PMOC - <Outcome>.md` in the format below | 3-MOCs and Projects | Board (or Backlog if inactive) | `#status/active` / `inactive` |
 
 The same pass makes both: clarify the end state, run the PMOC check, assemble context, find related, write the next step. A task note **promotes** to a PMOC the day it gets pulled onto the Board and needs a second entry: the PMOC is created with the dated note as its first Context source, the note stays where it is, the card is moved. *Task note* is the note; *task file* (`OpenAugi/Tasks/TASK-*.md`) is the dispatched unit that may work on it. Never rewrite the dated note into a PMOC in place; the date is the record of when the thread started. Examples: [[2026-09-13 - Link notes to coding sessions]] is a task note; [[PMOC - Lens Scheduler - The Augi Task Loop]] is a PMOC because it will take several entries.
@@ -40,6 +40,10 @@ outcome: <the sentence that, when true, closes this PMOC>
 
 <anything they want to say to themselves goes here, above the Journal — their space, never written by an agent>
 
+# Next
+
+- [ ] <the open steps, one checkbox each>
+
 # Journal
 
 ### YYYY-MM-DD — created
@@ -47,6 +51,11 @@ outcome: <the sentence that, when true, closes this PMOC>
 <The synthesized next step: the smallest thing that moves toward the outcome, and the one open question if there is one. This is the first left-off line: what they, the weekly reflection, and any agent resuming the work read first.>
 
 *(Augi: this block was #ai-generated)*
+
+# Agent Log
+
+> [!abstract]- Agent Log
+> ![[Agent Log - PMOC - <Name>]]
 
 # Context
 
@@ -66,6 +75,8 @@ outcome: <the sentence that, when true, closes this PMOC>
 
 <Every note read during creation, one line each, grouped loosely.>
 ```
+
+**Their note and its Agent Log.** Every anchor (a PMOC or a task note) has one companion, `OpenAugi/Agent-Logs/Agent Log - <note name>.md`, 1:1 by name. The note is theirs: `outcome:`, `# Next`, `# Journal`. Agents write the Agent Log freely: `## Context` (links to sub-notes and decisions worth keeping, one line each on why), `## Questions`, `## Chats`, `## Saved`. A task's Agent Log links up to its PMOC's. The Agent Log is not a section of their note: the note ends with a collapsed callout that embeds the companion, so it reads as one note in their editor while nothing writes into their file. They add that embed themselves (the templates have it). Agents add to the note's Journal only when asked, as a dated block with the Augi marker. Templates: `OpenAugi/AGENT/templates/Task.md` and `PMOC.md`; the user copies them into their editor's templates folder.
 
 **Journal comes first.** Everything assembled at creation sits under one `# Context` H1 with H2 sections, below the journal, so it never gets in the way of the left-off. Newest entry on top. Each later entry is `### YYYY-MM-DD` (their) or `### YYYY-MM-DD — <what happened>` with the Augi marker (agent). The closing entry is `### YYYY-MM-DD — done` and states which outcome sentence became true; they flip the tag to `#status/inactive` and ticks the Board card.
 
