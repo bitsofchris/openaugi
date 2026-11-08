@@ -96,6 +96,16 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
     return dict(DEFAULT_CONFIG)
 
 
+def auto_dispatch_enabled(config: dict[str, Any] | None) -> bool:
+    """Whether `openaugi up` launches agents for pending tasks by itself.
+
+    Off unless `[tasks] auto_dispatch = true`. With it off, `zzz:` lines still
+    become task files, and `openaugi tasks` is how one gets launched — no
+    background process ever starts an agent from note text on its own.
+    """
+    return bool((config or {}).get("tasks", {}).get("auto_dispatch", False))
+
+
 def resolve_vault_path(
     explicit: str | Path | None = None,
     config: dict[str, Any] | None = None,

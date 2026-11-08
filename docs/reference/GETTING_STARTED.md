@@ -45,7 +45,21 @@ The vault path may use `~` (`~/Documents/vault`) — it is expanded to an absolu
 
 ## Run
 
-Two processes, and it matters which is which.
+Pick one of two ways. `openaugi init` asks which you want.
+
+### On demand (default) — nothing runs in the background
+
+```bash
+openaugi ingest            # index the vault; re-run whenever you want it fresh
+openaugi search "budget"   # search from the terminal
+openaugi tasks             # review zzz: tasks; `openaugi tasks run 1` launches one
+```
+
+No watcher and no daemon. An agent starts only when you run
+`openaugi tasks run`, after you have seen its instruction. See
+[Task dispatch § On demand](task-dispatch.md#on-demand-openaugi-tasks).
+
+### Background service — `openaugi up`
 
 ```bash
 openaugi up        # the service — leave it running
@@ -56,7 +70,7 @@ Does four things:
 1. **Syncs your vault** — incremental ingest (skips unchanged files via content hash)
 2. **Starts file watcher** — watches for `.md` changes, debounces (30s default), re-ingests automatically
 3. **Dispatches zzz instructions** — blocks with `zzz:` lines get written as task files to `OpenAugi/Tasks/`
-4. **Launches agents** — task watcher picks up pending task files and launches Claude Code agents in named tmux sessions
+4. **Launches agents** — only with `[tasks] auto_dispatch = true` (or `--agent`): the task watcher picks up pending task files and launches Claude Code agents in named tmux sessions. Otherwise they wait for `openaugi tasks run`
 
 **It does not serve MCP.** That is `openaugi serve`, and it is what you
 register with your client (see [Register with Claude](#register-with-claude)).
@@ -77,7 +91,8 @@ new one each time it starts, and only the first can hold the lock.
 
 ```bash
 openaugi up --serve        # both, for a single terminal with one client
-openaugi up --no-agent     # disable task dispatch (watcher only)
+openaugi up --agent        # launch agents this run, whatever auto_dispatch says
+openaugi up --no-agent     # never launch agents this run (watcher only)
 openaugi up --debounce 10  # faster watcher response (default 30s)
 ```
 
@@ -129,11 +144,12 @@ The MCP server supports HTTP transport with OAuth authentication for remote acce
 
 | Command | What |
 |---------|------|
-| `openaugi init` | Configure embedding model, API key, vault path |
-| `openaugi up` | **The service, one per vault:** ingest + watcher + zzz dispatch + task agent. Does not serve MCP |
+| `openaugi init` | Guided setup: vault path, search mode, task mode |
+| `openaugi tasks` | Sync the vault and list `zzz:` tasks; `tasks show <#>`, `tasks run <#>` |
+| `openaugi up` | **The service, one per vault:** ingest + watcher + zzz → task files; launches agents only with `[tasks] auto_dispatch = true`. Does not serve MCP |
 | `openaugi up --serve` | Also serve MCP in the foreground (single terminal, one client) |
-| `openaugi up --no-agent` | Same but without task dispatch (no tmux agent sessions) |
-| `openaugi task-dispatch` | Task dispatch only (standalone) |
+| `openaugi up --agent` / `--no-agent` | Override `auto_dispatch` for this run |
+| `openaugi task-dispatch` | Task launcher only (standalone, foreground) |
 | `openaugi ingest` | One-off ingest without serving |
 | `openaugi serve` | **The MCP interface, one per client** (stdio or HTTP). Register this with Claude |
 | `openaugi watch` | File watcher only |

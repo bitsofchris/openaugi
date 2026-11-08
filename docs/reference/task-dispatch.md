@@ -13,7 +13,49 @@ Write `zzz: <instruction>` in your notes. The file watcher ingests the block, th
 > the next [review pass](review-pass.md) reads it while routing. Third
 > token: `qqq` on its own line splits blocks at ingest.
 
-Task dispatch runs as part of `openaugi up` by default. Pass `--no-agent` to disable it. You can also run it standalone with `openaugi task-dispatch`.
+**Launching is opt-in.** Out of the box nothing starts an agent by itself:
+`zzz:` lines become task files, and you launch them with `openaugi tasks`
+(see [On demand](#on-demand-openaugi-tasks)). To have `openaugi up` launch
+them automatically, set this in `~/.openaugi/config.toml` (or answer
+"Automatic" in `openaugi init`):
+
+```toml
+[tasks]
+auto_dispatch = true
+```
+
+`openaugi up --agent` / `--no-agent` overrides the setting for one run. You can
+also run the launcher standalone with `openaugi task-dispatch`.
+
+## On demand: `openaugi tasks`
+
+No background process. Each command is one deliberate step:
+
+```bash
+openaugi tasks              # sync the vault, list what's waiting (= tasks list)
+openaugi tasks show 1       # read task #1 in full
+openaugi tasks run 1        # show its instruction, confirm, launch it in tmux
+openaugi tasks run 1 --yes  # skip the confirmation
+openaugi tasks list --all   # include done / duplicate / superseded
+```
+
+`openaugi tasks` runs an incremental ingest first and turns any `zzz:` written
+since the last sync into a task file, with no settle window (you are looking
+right now, and nothing launches without you). `openaugi ingest` queues `zzz:`
+too, with the usual settle window.
+
+`run` shows the instruction and asks before launching, because a task's text
+comes from a note, and a note can hold text you didn't write — something
+pasted from an email or a shared doc. The launch itself is the same as the
+watcher's: duplicate ledger, hydration, augi-agent brief, detached tmux
+session, `tmux attach -t <task_id>`.
+
+**First ingest skips history.** On a fresh database every block is new, so
+every `zzz:` ever written would become a task at once. `ingest`, `tasks` and
+`up` skip those on the first run and say how many; only instructions written
+after setup become tasks. Code: `queue_from_ingest` in
+[pipeline/dispatch.py](../../src/openaugi/pipeline/dispatch.py), `list_tasks` /
+`run_task` in [agents/task_watcher.py](../../src/openaugi/agents/task_watcher.py).
 
 **`openaugi up` is single-instance.** It holds an advisory lock
 (`~/.openaugi/up.lock`) for its lifetime; a second one prints who has it and
@@ -37,7 +79,7 @@ atomic claim on the task file itself.
 
 ## When NOT to use this
 
-- You don't want subprocesses spawning `claude` sessions on your machine unattended — pass `--no-agent` to `openaugi up`.
+- You don't want subprocesses spawning `claude` sessions on your machine unattended — leave `[tasks] auto_dispatch` off (the default) and use `openaugi tasks run`.
 - You don't have `tmux` or the `claude` CLI installed — the watcher fails loudly at startup if either is missing.
 
 ## The flow

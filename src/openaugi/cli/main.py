@@ -204,6 +204,54 @@ def init():
     console.print("  openaugi serve           # MCP server only (for Claude Desktop)")
 
 
+def _ingest_vault(vault_path: str, store, config: dict) -> tuple[dict, bool]:
+    """Incremental Layer 0 with the config's vault rules. Returns (result, first_ingest).
+
+    `first_ingest` is true when the database held no blocks before this run —
+    the one ingest where every `zzz:` in the vault looks new.
+    """
+    from openaugi.pipeline.runner import run_layer0
+
+    first_ingest = store.get_stats()["total_blocks"] == 0
+    vault_cfg = config.get("vault", {})
+    result = run_layer0(
+        vault_path,
+        store,
+        exclude_patterns=vault_cfg.get("exclude_patterns"),
+        max_workers=vault_cfg.get("max_workers", 4),
+        source_rules=vault_cfg.get("source_rules"),
+        provenance_rules=vault_cfg.get("provenance_rules"),
+    )
+    return result, first_ingest
+
+
+def _queue_zzz(
+    result: dict, store, vault_path: str, settle: float, first_ingest: bool
+) -> tuple[list[Path], int]:
+    """queue_from_ingest that never fails the command calling it."""
+    from openaugi.pipeline.dispatch import queue_from_ingest
+
+    try:
+        return queue_from_ingest(result, store, vault_path, settle, first_ingest)
+    except Exception as e:
+        logging.getLogger(__name__).error("zzz queueing failed: %s", e, exc_info=True)
+        console.print(f"[yellow]⚠️  Could not queue zzz: tasks:[/yellow] {e}")
+        return [], 0
+
+
+def _report_zzz(written: list[Path], skipped: int) -> None:
+    if skipped:
+        console.print(
+            f"[dim]⏭️  Skipped {skipped} zzz: line(s) already in the vault before setup — "
+            "only new ones become tasks[/dim]"
+        )
+    if written:
+        console.print(
+            f"📋 {len(written)} new task(s) waiting — review and launch with "
+            "[cyan]openaugi tasks[/cyan]"
+        )
+
+
 @app.command()
 def ingest(
     path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
@@ -214,7 +262,6 @@ def ingest(
     _setup_logging(verbose)
 
     from openaugi.config import load_config, resolve_vault_path
-    from openaugi.pipeline.runner import run_layer0
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
@@ -230,27 +277,21 @@ def ingest(
     store = SQLiteStore(db_path)
 
     try:
-        exclude = config.get("vault", {}).get("exclude_patterns")
-        workers = config.get("vault", {}).get("max_workers", 4)
-        source_rules = config.get("vault", {}).get("source_rules")
-        provenance_rules = config.get("vault", {}).get("provenance_rules")
-
         console.print(f"[bold]Ingesting vault:[/bold] {vault_path}")
         console.print(f"[bold]Database:[/bold] {db_path}")
 
-        result = run_layer0(
-            vault_path,
-            store,
-            exclude_patterns=exclude,
-            max_workers=workers,
-            source_rules=source_rules,
-            provenance_rules=provenance_rules,
-        )
+        result, first_ingest = _ingest_vault(vault_path, store, config)
 
         stats = result["stats"]
         console.print(
             f"\n[green]Done.[/green] {stats['total_blocks']} blocks, {stats['total_links']} links"
         )
+
+        # zzz: lines become task files here too, so a vault with no watcher
+        # running still has them waiting for `openaugi tasks`.
+        from openaugi.pipeline.watcher import _zzz_settle
+
+        _report_zzz(*_queue_zzz(result, store, vault_path, _zzz_settle(config), first_ingest))
 
         # Layer 1: embedding (optional — requires sentence-transformers or openai)
         from openaugi.models import EmbeddingsDisabled
@@ -1022,8 +1063,13 @@ def up(
         None, "--auth", help="Auth provider for remote access (e.g. cloudflare)"
     ),
     debounce: float = typer.Option(30.0, "--debounce", "-d", help="Watcher debounce seconds"),
-    no_agent: bool = typer.Option(
-        False, "--no-agent", help="Disable task dispatch (watcher + MCP only, no agent sessions)"
+    agent: bool | None = typer.Option(
+        None,
+        "--agent/--no-agent",
+        help=(
+            "Launch agents for pending tasks automatically. "
+            "Default: [tasks] auto_dispatch in config (off unless set)"
+        ),
     ),
     serve_mcp: bool = typer.Option(
         False,
@@ -1081,7 +1127,6 @@ def up(
         raise typer.Exit(0) from None
 
     from openaugi.config import load_config, resolve_vault_path
-    from openaugi.pipeline.runner import run_layer0
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
@@ -1113,27 +1158,22 @@ def up(
     err.print(f"[bold]Code:[/bold] {running[:12] if running else 'not a git checkout'}")
 
     try:
-        exclude = config.get("vault", {}).get("exclude_patterns")
-        workers = config.get("vault", {}).get("max_workers", 4)
-        source_rules = config.get("vault", {}).get("source_rules")
-        provenance_rules = config.get("vault", {}).get("provenance_rules")
-        result = run_layer0(
-            vault_path,
-            store,
-            exclude_patterns=exclude,
-            max_workers=workers,
-            source_rules=source_rules,
-            provenance_rules=provenance_rules,
-        )
+        result, first_ingest = _ingest_vault(vault_path, store, config)
         stats = result["stats"]
         err.print(
             f"  {stats['total_blocks']} blocks, {stats['total_links']} links "
             f"({result['blocks_added']} new, {result['blocks_removed']} removed)"
         )
 
-        # Dispatch any zzz instructions from initial ingest
+        # Dispatch any zzz instructions from initial ingest — except on a
+        # fresh database, where every zzz: ever written looks new.
         new_blocks = result.get("new_data_blocks", [])
-        if new_blocks:
+        if first_ingest:
+            from openaugi.pipeline.dispatch import zzz_blocks
+
+            if skipped := len(zzz_blocks(new_blocks)):
+                err.print(f"  [dim]Skipped {skipped} zzz: line(s) from before setup[/dim]")
+        elif new_blocks:
             from openaugi.pipeline.dispatch import dispatch_zzz_blocks
 
             dispatched = dispatch_zzz_blocks(new_blocks, vault_path)
@@ -1161,8 +1201,19 @@ def up(
     start_watcher_thread(vault_path, db_path, config, debounce_seconds=debounce)
     err.print(f"\n[bold]Watcher:[/bold] debounce={debounce}s")
 
-    # Step 3: Task dispatch (picks up pending task files → tmux agents)
-    if not no_agent:
+    # Step 3: Task dispatch (picks up pending task files → tmux agents).
+    # Opt-in: without it, zzz: still becomes a task file and the user
+    # launches it with `openaugi tasks run`.
+    from openaugi.config import auto_dispatch_enabled
+
+    if agent is None:
+        agent = auto_dispatch_enabled(config)
+    if not agent:
+        err.print(
+            "[bold]Agent:[/bold] manual — tasks wait in OpenAugi/Tasks/ for "
+            "`openaugi tasks run` ([tasks] auto_dispatch = true to launch automatically)"
+        )
+    else:
         from openaugi.agents.task_watcher import watch_tasks
 
         dispatch_thread = threading.Thread(
@@ -1703,6 +1754,205 @@ def task_dispatch(
     except FileNotFoundError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1) from None
+
+
+# ── Tasks on demand ────────────────────────────────────────────────
+#
+# `zzz:` dispatch without a background process. `openaugi tasks` syncs the
+# vault, lists what is waiting, and launches what you pick — after showing you
+# the instruction, because a task's text came from a note and a note may hold
+# text you did not write. See docs/reference/task-dispatch.md § On demand.
+
+tasks_app = typer.Typer(
+    help="Review and launch zzz: tasks by hand — no background process.",
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
+app.add_typer(tasks_app, name="tasks")
+
+_TASK_STATUS_LABEL = {
+    "pending": "⏳ pending",
+    "active": "▶️  active",
+    "done": "✅ done",
+    "duplicate": "♻️  duplicate",
+    "superseded": "↪️  superseded",
+}
+
+
+def _tasks_context(path: str | None) -> tuple[dict, str, Path]:
+    """(config, vault_path, tasks_dir), or exit with the init hint."""
+    from openaugi.agents.task_watcher import DEFAULT_TASKS_FOLDER
+    from openaugi.config import load_config, resolve_vault_path
+
+    config = load_config()
+    vault_path = resolve_vault_path(path, config)
+    if not vault_path:
+        console.print("[red]No vault path configured.[/red] Run [cyan]openaugi init[/cyan] first.")
+        raise typer.Exit(1)
+    return config, vault_path, Path(vault_path) / DEFAULT_TASKS_FOLDER
+
+
+def _sync_tasks(config: dict, vault_path: str, db: str | None) -> None:
+    """Pick up zzz: lines written since the last sync and write their task files.
+
+    Settle is 0 here: the user is looking right now, and nothing launches
+    without them, so there is no half-typed instruction to protect.
+    """
+    from openaugi.store.sqlite import SQLiteStore
+
+    store = SQLiteStore(db or str(_default_db()))
+    try:
+        with console.status("🔄 Checking your vault for new zzz: lines…"):
+            result, first_ingest = _ingest_vault(vault_path, store, config)
+            written, skipped = _queue_zzz(result, store, vault_path, 0.0, first_ingest)
+    finally:
+        store.close()
+    _report_zzz(written, skipped)
+
+
+def _print_task_table(tasks: list) -> None:
+    from openaugi.agents.task_watcher import TaskSummary
+
+    table = Table(box=None, pad_edge=False, show_header=True, header_style="dim")
+    table.add_column("#", justify="right", style="bold")
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Task", overflow="fold")
+    table.add_column("Instruction", style="dim", overflow="ellipsis", max_width=60)
+    t: TaskSummary
+    for i, t in enumerate(tasks, 1):
+        label = _TASK_STATUS_LABEL.get(t.status, t.status)
+        table.add_row(str(i), label, t.title, t.instruction or "—")
+    console.print(table)
+
+
+def _pick_task(tasks: list, ref: str):
+    """A task by its number in the list, its task id, or a unique part of its filename."""
+    if ref.isdigit():
+        n = int(ref)
+        if 1 <= n <= len(tasks):
+            return tasks[n - 1]
+        console.print(f"[red]No task #{n}.[/red] Run [cyan]openaugi tasks[/cyan] to see the list.")
+        raise typer.Exit(1)
+    exact = [t for t in tasks if ref in (t.task_id, t.path.stem)]
+    if exact:
+        return exact[0]
+    partial = [t for t in tasks if ref.lower() in t.path.stem.lower()]
+    if len(partial) == 1:
+        return partial[0]
+    what = "matches several tasks" if partial else "matches no task"
+    console.print(f"[red]'{ref}' {what}.[/red] Use the number from [cyan]openaugi tasks[/cyan].")
+    raise typer.Exit(1)
+
+
+@tasks_app.callback()
+def tasks_main(ctx: typer.Context):
+    """With no subcommand: same as `openaugi tasks list`."""
+    if ctx.invoked_subcommand is None:
+        tasks_list(path=None, db=None, show_all=False, no_sync=False)
+
+
+@tasks_app.command("list")
+def tasks_list(
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    show_all: bool = typer.Option(False, "--all", "-a", help="Include finished tasks"),
+    no_sync: bool = typer.Option(False, "--no-sync", help="Skip checking the vault first"),
+):
+    """List tasks waiting for you (syncs the vault first)."""
+    from openaugi.agents.task_watcher import list_tasks
+
+    config, vault_path, tasks_dir = _tasks_context(path)
+    if not no_sync:
+        _sync_tasks(config, vault_path, db)
+
+    tasks = list_tasks(tasks_dir, include_finished=show_all)
+    pending = sum(t.status == "pending" for t in tasks)
+    active = sum(t.status == "active" for t in tasks)
+    console.print(f"\n[bold]📋 Tasks[/bold]  [dim]{pending} pending · {active} active[/dim]\n")
+    if not tasks:
+        console.print("  Nothing waiting. Write [cyan]zzz: <instruction>[/cyan] in any note")
+        console.print("  and it shows up here on the next [cyan]openaugi tasks[/cyan].\n")
+        return
+    _print_task_table(tasks)
+    console.print()
+    if pending:
+        console.print("  [dim]Read one:[/dim]    openaugi tasks show [bold]<#>[/bold]")
+        console.print("  [dim]Launch one:[/dim]  openaugi tasks run [bold]<#>[/bold]")
+    if active:
+        console.print("  [dim]Attach:[/dim]      tmux attach -t [bold]<task id>[/bold]")
+    console.print()
+
+
+@tasks_app.command("show")
+def tasks_show(
+    ref: str = typer.Argument(..., help="Task number from `openaugi tasks`, or its id"),
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    show_all: bool = typer.Option(False, "--all", "-a", help="Number against the --all list"),
+):
+    """Print a task file in full."""
+    from rich.markdown import Markdown
+
+    from openaugi.agents.task_watcher import list_tasks, parse_note
+
+    _, _, tasks_dir = _tasks_context(path)
+    task = _pick_task(list_tasks(tasks_dir, include_finished=show_all), ref)
+    _, body = parse_note(task.path.read_text())
+    label = _TASK_STATUS_LABEL.get(task.status, task.status)
+    console.print(f"\n[dim]{task.path}[/dim]  {label}\n")
+    console.print(Markdown(body))
+
+
+@tasks_app.command("run")
+def tasks_run(
+    ref: str | None = typer.Argument(None, help="Task number from `openaugi tasks`, or its id"),
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Launch without asking"),
+    repos_note: str | None = typer.Option(
+        None, "--repos-note", help="Repo map note (default: OpenAugi/AGENT/Repos.md)"
+    ),
+):
+    """Launch one pending task as a Claude Code agent in tmux."""
+    from openaugi.agents.task_watcher import list_tasks, run_task
+
+    _, vault_path, tasks_dir = _tasks_context(path)
+    tasks = list_tasks(tasks_dir)
+    pending = [t for t in tasks if t.status == "pending"]
+    if not pending:
+        console.print("✨ No pending tasks. [dim](openaugi tasks syncs new zzz: lines)[/dim]")
+        return
+
+    if ref is None:
+        if len(pending) == 1:
+            task = pending[0]
+        else:
+            _print_task_table(tasks)
+            task = _pick_task(tasks, str(typer.prompt("\nWhich task? (#)")))
+    else:
+        task = _pick_task(tasks, ref)
+
+    if task.status != "pending":
+        console.print(f"[yellow]'{task.title}' is {task.status}, not pending.[/yellow]")
+        if task.task_id:
+            console.print(f"  Attach: [cyan]tmux attach -t {task.task_id}[/cyan]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold]🤖 {task.title}[/bold]")
+    console.print(f"   [dim]Instruction:[/dim] {task.instruction or '(none)'}")
+    console.print(f"   [dim]File:[/dim] {task.path}\n")
+    if not yes and not typer.confirm("Launch a Claude Code agent for this task?", default=True):
+        console.print("[dim]Left pending.[/dim]")
+        return
+
+    try:
+        task_id = run_task(task.path, vault_path, repos_note=repos_note)
+    except FileNotFoundError as e:
+        console.print(f"[red]❌ {e}[/red]")
+        raise typer.Exit(1) from None
+    if task_id is None:
+        console.print("[yellow]♻️  Same instruction already ran — marked duplicate.[/yellow]")
+        return
+    console.print(f"🚀 Launched [bold]{task_id}[/bold]")
+    console.print(f"   Watch it:  [cyan]tmux attach -t {task_id}[/cyan]\n")
 
 
 # ── Service management ─────────────────────────────────────────────
