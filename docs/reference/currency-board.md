@@ -101,6 +101,13 @@ exception is `yes:` / `no:` on a question: those words are how the board worded
 the answer, so they stay in the confirmation and are not a reason. Text with no
 separator (`- [x] no not this week`) still does not match.
 
+**An older board cannot re-dispatch.** A `do` on a board older than the key's
+latest logged answer writes no task and no log row. The line becomes
+`✓ do (already answered on <date>) - note`, so it is not read again. A `do` on the
+same or a newer board dispatches as usual. A key with no logged answer has nothing
+to compare against, so an old tick on it still dispatches when its board is next
+touched.
+
 ## Every move carries its context
 
 A move the reader cannot *start* is a failed move, however well phrased. Each

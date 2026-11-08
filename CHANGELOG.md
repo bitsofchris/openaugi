@@ -6,7 +6,8 @@
 now` used to be ignored silently, so a `do` never dispatched and a `no` was never
 recorded. Text after a ticked label now counts as that answer's `reason`, merges
 with any `aaa:` line, and stays on the rewritten line. Routing and echo boxes are
-unchanged.
+unchanged. A `do` on a board older than the key's latest answer no longer
+dispatches a second task.
 
 **The board's Short from today takes the `short` route.** A proposal whose
 key starts with a route verb (`propose:short-<kebab>`) is written by the board

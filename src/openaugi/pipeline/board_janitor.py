@@ -502,49 +502,58 @@ def _process_proposals(
     Returns the number of proposals answered on this call.
     """
     answered = 0
+    decisions = decisions_from_log(vault_path, source=source, vocabulary=_VALID_PROPOSAL_STATES)
     for key, proposal in parse_proposals(text).items():
         if proposal["answer"] is None:
             continue
-        task_name = ""
-        if proposal["answer"] == "dispatched":
-            tasks_dir = vault_path / TASKS_FOLDER
-            tasks_dir.mkdir(parents=True, exist_ok=True)
-            task_path = tasks_dir / f"{task_prefix}-{day}-{key}.md"
-            if task_path.exists():
-                # Already written and possibly already hydrated into a TASK-*
-                # file; writing again would launch the same agent twice.
-                logger.info(f"Board janitor: proposal {key!r} already dispatched")
-            else:
-                task_path.write_text(
-                    build_proposal_task(
-                        key,
-                        proposal,
-                        vault_path=vault_path,
-                        day=day,
-                        board_stem=board_path.stem,
-                        source=task_source,
-                        origin=origin,
-                    ),
-                    encoding="utf-8",
-                )
-                logger.info(f"Board janitor: proposal {key!r} dispatched → {task_path.name}")
-            task_name = task_path.name
-        append_feedback(
-            vault_path,
-            {
-                "ts": now(),
-                "source": source,
-                "board": day,
-                "item": key,
-                "title": proposal["title"],
-                "signal": proposal["answer"],
-                "reason": proposal["reason"],
-                "task_file": task_name,
-            },
-        )
-        confirmation = (
-            f"- ✓ do → `{task_name}`" if proposal["answer"] == "dispatched" else "- ✓ no"
-        )
+        # A key can be offered on several boards, and task paths carry the date,
+        # so nothing downstream would catch a late-synced older tick: it would
+        # launch a second agent on a stale brief and rewind the latest decision.
+        newer = (decisions.get(key) or {}).get("answered_on", "")
+        if proposal["answer"] == "dispatched" and newer > day:
+            logger.info(f"Board janitor: proposal {key!r} already answered on {newer}; skipping")
+            confirmation = f"- ✓ do (already answered on {newer})"
+        else:
+            task_name = ""
+            if proposal["answer"] == "dispatched":
+                tasks_dir = vault_path / TASKS_FOLDER
+                tasks_dir.mkdir(parents=True, exist_ok=True)
+                task_path = tasks_dir / f"{task_prefix}-{day}-{key}.md"
+                if task_path.exists():
+                    # Already written and possibly already hydrated into a TASK-*
+                    # file; writing again would launch the same agent twice.
+                    logger.info(f"Board janitor: proposal {key!r} already dispatched")
+                else:
+                    task_path.write_text(
+                        build_proposal_task(
+                            key,
+                            proposal,
+                            vault_path=vault_path,
+                            day=day,
+                            board_stem=board_path.stem,
+                            source=task_source,
+                            origin=origin,
+                        ),
+                        encoding="utf-8",
+                    )
+                    logger.info(f"Board janitor: proposal {key!r} dispatched → {task_path.name}")
+                task_name = task_path.name
+            append_feedback(
+                vault_path,
+                {
+                    "ts": now(),
+                    "source": source,
+                    "board": day,
+                    "item": key,
+                    "title": proposal["title"],
+                    "signal": proposal["answer"],
+                    "reason": proposal["reason"],
+                    "task_file": task_name,
+                },
+            )
+            confirmation = (
+                f"- ✓ do → `{task_name}`" if proposal["answer"] == "dispatched" else "- ✓ no"
+            )
         if proposal["note"]:
             confirmation += f" - {proposal['note']}"
         lines[proposal["answer_line"]] = f"{proposal['indent']}{confirmation}"

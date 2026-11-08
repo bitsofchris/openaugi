@@ -960,3 +960,84 @@ def test_rebuilding_state_alone_does_not_act_on_an_annotated_tick(annotated, vau
         (vault / "OpenAugi" / "Tasks").iterdir()
     )
     assert annotated.read_text(encoding="utf-8") == ANNOTATED_BOARD
+
+
+# ── An older board's `do` against a newer answer ───────────────────────────
+
+
+def _offer(vault, day, box, key="explain-experiments"):
+    path = vault / "OpenAugi" / "Board" / f"{day} - Board.md"
+    path.write_text(
+        f"""# Board — {day}
+
+## Augi could run these
+
+- **Explain the two experiments** `research`
+    ↳ Read the email and explain it plainly.
+    - {box}
+    <!-- propose:{key} -->
+""",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _tasks(vault):
+    folder = vault / "OpenAugi" / "Tasks"
+    return sorted(p.name for p in folder.iterdir()) if folder.exists() else []
+
+
+def test_an_older_do_cannot_dispatch_what_a_newer_board_answered(vault):
+    newer = _offer(vault, "2026-09-30", "[x] do")
+    assert sync_board(newer, vault) == 1
+    recorded = load_state(vault)["proposals"]["explain-experiments"]
+    rows = len(_log_lines(vault))
+
+    older = _offer(vault, "2026-09-29", "[x] do - I could reply to them after this")
+    assert sync_board(older, vault) == 1
+
+    assert _tasks(vault) == ["board-2026-09-30-explain-experiments.md"]
+    assert len(_log_lines(vault)) == rows
+    after = load_state(vault)["proposals"]["explain-experiments"]
+    assert after["answered_on"] == "2026-09-30"
+    assert after["state"] == recorded["state"] == "dispatched"
+    assert after["reason"] == recorded["reason"] == ""
+    assert (
+        "    - ✓ do (already answered on 2026-09-30) - I could reply to them after this\n"
+        in older.read_text(encoding="utf-8")
+    )
+    # The rewritten line is never read as a tick again.
+    assert sync_board(older, vault) == 0
+    assert _tasks(vault) == ["board-2026-09-30-explain-experiments.md"]
+
+
+def test_an_older_do_cannot_dispatch_what_a_newer_board_declined(vault):
+    sync_board(_offer(vault, "2026-09-30", "[x] no"), vault)
+    sync_board(_offer(vault, "2026-09-29", "[x] do"), vault)
+    assert _tasks(vault) == []
+    assert declined_proposals(vault)["explain-experiments"]["answered_on"] == "2026-09-30"
+
+
+def test_a_newer_do_still_dispatches_after_an_older_answer(vault):
+    sync_board(_offer(vault, "2026-09-29", "[x] do"), vault)
+    sync_board(_offer(vault, "2026-09-30", "[x] do"), vault)
+    assert _tasks(vault) == [
+        "board-2026-09-29-explain-experiments.md",
+        "board-2026-09-30-explain-experiments.md",
+    ]
+    answered = load_state(vault)["proposals"]["explain-experiments"]["answered_on"]
+    assert answered == "2026-09-30"
+
+
+def test_a_same_board_do_still_dispatches_after_a_change_of_mind(vault):
+    path = _offer(vault, "2026-09-30", "[x] no")
+    sync_board(path, vault)
+    _offer(vault, "2026-09-30", "[x] do")
+    assert sync_board(path, vault) == 1
+    assert _tasks(vault) == ["board-2026-09-30-explain-experiments.md"]
+    assert load_state(vault)["proposals"]["explain-experiments"]["state"] == "dispatched"
+
+
+def test_an_old_do_with_no_logged_answer_still_dispatches(vault):
+    sync_board(_offer(vault, "2026-09-04", "[x] do - still wanted"), vault)
+    assert _tasks(vault) == ["board-2026-09-04-explain-experiments.md"]
