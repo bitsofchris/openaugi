@@ -1,7 +1,7 @@
 {
-  "name": "augi",
-  "version": "0.10.0",
-  "description": "Augi, the OpenAugi pane beside your agent chat: anchor on a Kanban project or task, pin its context (notes, sessions, artifacts, links), run lenses, and keep its Agent Log of context, questions, chats and saved notes. Drafts only; you press enter.",
+  "name": "augi-ui",
+  "version": "0.11.0",
+  "description": "augi-ui, the OpenAugi pane beside your agent chat: anchor on a Kanban project or task, pin its context (notes, sessions, artifacts, links), run lenses, and keep its Agent Log of context, questions, chats and saved notes. Drafts only; you press enter.",
   "types": "./types/index.d.ts",
   "userConfig": {
     "notesFolder": {

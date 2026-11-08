@@ -7,11 +7,11 @@
 vault; they move to `tests/fixtures/queries/`. Saved queries themselves
 (`openaugi query`, `list_queries`, `run_query`, `/api/queries`) are unchanged.
 
-**Augi, a Claude Code pane, lives in `ui/claude/`.** The plugin that sits beside
+**augi-ui, a Claude Code pane, lives in `augi-ui/`.** The plugin that sits beside
 the chat — anchor on a board card, pick what the chat reads, run a lens, keep
 an Agent Log per anchor — moved into this repo, and the repo is now a plugin
-marketplace: `/plugin install augi --marketplace bitsofchris/openaugi`, then
-`/augi`. It drafts prompts only. See `docs/reference/augi-pane.md`.
+marketplace: `/plugin install augi-ui --marketplace bitsofchris/openaugi`, then
+`/augi`. It drafts prompts only. See `docs/reference/augi-ui.md`.
 
 **The PMOC and Task note templates ship, and the task file template is
 `augi-zzz-task.md`.** The vault's `AGENT/templates/PMOC.md` and `Task.md` (an

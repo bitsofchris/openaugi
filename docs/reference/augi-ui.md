@@ -1,14 +1,14 @@
 ---
-name: augi-pane
-description: Augi, the Claude Code pane over an OpenAugi vault — anchor on a board card, pick the context a chat gets, run lenses, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
+name: augi-ui
+description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, pick the context a chat gets, run lenses, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
 ---
 
-# Augi — the pane beside your agent chat
+# augi-ui — the pane beside your agent chat
 
 ## When to use
 
 You work with an agent (Claude Code, in the terminal or the desktop app) and
-your projects, context and lenses live in a folder of markdown notes. Augi
+your projects, context and lenses live in a folder of markdown notes. augi-ui
 keeps that folder one click away from the chat: pick what you are working on,
 choose what the agent should read, run a saved lens, and see the chats and
 questions that belong to that project.
@@ -19,17 +19,17 @@ search the notes through its MCP tools.
 ## Install
 
 ```
-/plugin install augi --marketplace bitsofchris/openaugi
+/plugin install augi-ui --marketplace bitsofchris/openaugi
 ```
 
 Then `/augi` opens the pane. For development, load the folder directly:
-`claude --plugin-dir ui/claude`, or set `CLAUDE_CODE_PLUGIN_DIRS` to that path
+`claude --plugin-dir augi-ui`, or set `CLAUDE_CODE_PLUGIN_DIRS` to that path
 in `~/.claude/settings.json` so the desktop app loads it too.
 
 ## How it works
 
 **Setup.** The first `/augi` walks through settings (stored by Claude Code, also
-in `/config` under `augi`; `/augi setup` runs it again):
+in `/config` under `augi-ui`; `/augi setup` runs it again):
 
 | Setting | What it is | Default |
 |---|---|---|
@@ -62,11 +62,11 @@ skipped. Starters are never written over an existing file.
 
 ## Where the code lives
 
-- `ui/claude/hooks/register.tsx` — the whole plugin: pure functions
+- `augi-ui/hooks/register.tsx` — the whole plugin: pure functions
   (settings, board, Agent Log, sessions, draft) and the Claude Code hooks and
   pane that call them.
-- `ui/claude/hooks/register.test.tsx` — unit tests for the pure functions and
-  mounted-pane tests for the flows. Run `claude plugin test ui/claude`.
+- `augi-ui/hooks/register.test.tsx` — unit tests for the pure functions and
+  mounted-pane tests for the flows. Run `claude plugin test augi-ui`.
 - `.claude-plugin/marketplace.json` — makes this repo a plugin marketplace.
 
 The pure functions are the part a future non-Claude interface (a standalone

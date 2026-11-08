@@ -98,11 +98,11 @@ src/openaugi/
 ```
 
 ```
-ui/claude/                 # Augi — the Claude Code plugin (TypeScript) over the vault (docs/reference/augi-pane.md)
+augi-ui/                   # augi-ui — the Claude Code plugin (TypeScript) over the vault (docs/reference/augi-ui.md)
 ├── .claude-plugin/plugin.json   # name, settings (userConfig)
 ├── hooks/register.tsx           # pure functions + hooks + the pane
-└── hooks/register.test.tsx      # `claude plugin test ui/claude`
-.claude-plugin/marketplace.json  # this repo as a plugin marketplace: /plugin install augi --marketplace bitsofchris/openaugi
+└── hooks/register.test.tsx      # `claude plugin test augi-ui`
+.claude-plugin/marketplace.json  # this repo as a plugin marketplace: /plugin install augi-ui --marketplace bitsofchris/openaugi
 ```
 
 ## Key Flows
@@ -325,7 +325,7 @@ format (`name:`/`description:` frontmatter) so they're scannable.
 - [docs/reference/agentic-kb-field-guide.md](docs/reference/agentic-kb-field-guide.md) — The portable ruleset: what building this hardened or simplified from the "agent + janitor + flat folder" starting advice; transplantable to any agentic knowledge base.
 - [docs/reference/reading-queue.md](docs/reference/reading-queue.md) — Reading queue: notes flagged `reading_queue: true` pushed to Readwise Reader under a daily cap, highlights harvested back onto the note that produced them. Manual commands, nothing scheduled.
 - [docs/reference/pings.md](docs/reference/pings.md) — Pings: phone check-ins appended to the daily note as `- [HH:MM] <kind>: key=value …` lines, `scripts/ping_stats.py` cross-tabs them (kinds, target key and vocabulary come from the vault lens that invokes it, never from the code)
-- [docs/reference/augi-pane.md](docs/reference/augi-pane.md) — **Augi, the pane beside the agent chat:** a Claude Code plugin in `ui/claude/` — anchor on a board card, pick a chat's context, run lenses, keep an Agent Log per anchor. Install, settings, keys, where the code lives.
+- [docs/reference/augi-ui.md](docs/reference/augi-ui.md) — **augi-ui, the pane beside the agent chat:** a Claude Code plugin in `augi-ui/` — anchor on a board card, pick a chat's context, run lenses, keep an Agent Log per anchor. Install, settings, keys, where the code lives.
 - [docs/reference/privacy-guard.md](docs/reference/privacy-guard.md) — Privacy guard: the pre-commit hook that refuses private vocabulary (word list in the vault, never the repo) and notebooks with outputs
 - [docs/reference/user-guide.md](docs/reference/user-guide.md) — Day-to-day manual: entry points, the loop, trust rules, triggering a pass, lens system in brief. Chronological build history stays in this file's STATUS header, not there.
 - [docs/reference/augi-log-routing.md](docs/reference/augi-log-routing.md) — **Routing rows in the Augi Log (PAUSED 2026-09-04; replaced the review pass for daily capture):** verbs, the master box, what each verb writes, undo, the feedback record. Design record: [docs/plans/augi-log-routing.md](docs/plans/augi-log-routing.md)

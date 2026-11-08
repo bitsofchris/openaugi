@@ -216,7 +216,7 @@ export const EMPTY_TRAIL: Trail = { questions: [], chats: [], saved: [], pins: [
 
 
 const swatch = atom(
-  { plugin: 'augi', key: 'swatch' } as const,
+  { plugin: 'augi-ui', key: 'swatch' } as const,
   {
     setup: [],
     vaults: [],
@@ -239,12 +239,12 @@ const swatch = atom(
   { shape: 'swatch-9' },
 )
 const picks = atom(
-  { plugin: 'augi', key: 'picks' } as const,
+  { plugin: 'augi-ui', key: 'picks' } as const,
   { aboutMe: true, openAugi: true, project: true } as Picks,
   { shape: 'picks-3' },
 )
 const view = atom(
-  { plugin: 'augi', key: 'view' } as const,
+  { plugin: 'augi-ui', key: 'view' } as const,
   { anchorsOpen: false, contextOpen: false, sessionsOpen: false, lensesOpen: false, showHidden: false, setupOpen: false, inOpen: true, doneOpen: false } as View,
   { shape: 'view-4' },
 )
@@ -1389,7 +1389,7 @@ async function startOver($: EngineInterface): Promise<void> {
 // Writes one of Augi's settings. A change reloads the module with it.
 async function setOption($: EngineInterface, field: string, value: string): Promise<void> {
   const rows = await $.config.list()
-  const row = rows.find(one => one.key === `augi.${field}`) ?? rows.find(one => one.key.startsWith('augi') && one.key.endsWith(`.${field}`))
+  const row = rows.find(one => one.key === `augi-ui.${field}`) ?? rows.find(one => one.key.startsWith('augi-ui') && one.key.endsWith(`.${field}`))
   if (!row) {
     await $.ui.toast(`Couldn't find Augi's ${field} setting. Set it in /config.`)
 

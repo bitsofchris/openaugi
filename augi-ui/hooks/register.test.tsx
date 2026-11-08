@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import { addChat, embedFor, hasEmbedOf, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensNames, newLensDraft, onePerCodexRun, outcomeFrom, parseTrail, setHidden, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
-  plugin: 'augi',
+  plugin: 'augi-ui',
   component: 'Pane',
   requestId: 'augi',
   props: {
@@ -450,7 +450,7 @@ test('with no notes folder the pane is the setup screen, and entering one writes
   on('store.get', () => ({ value: undefined }))
   on('store.set', () => ({ value: undefined }))
   on('fs.exists', () => ({ value: false }))
-  on('config.list', () => ({ value: [{ key: 'augi.notesFolder', label: 'Notes folder', kind: 'text', value: '', provider: { plugin: 'augi', tier: 'user' }, isLocked: false }] }))
+  on('config.list', () => ({ value: [{ key: 'augi-ui.notesFolder', label: 'Notes folder', kind: 'text', value: '', provider: { plugin: 'augi-ui', tier: 'user' }, isLocked: false }] }))
   on('config.set', (_, e) => {
     set.push({ key: e.key, value: e.value })
     return { value: e.value }
@@ -465,7 +465,7 @@ test('with no notes folder the pane is the setup screen, and entering one writes
   }
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.input({ key: 'set-notesFolder', text: '~/Notes' })
-  expect(set).toEqual([{ key: 'augi.notesFolder', value: '~/Notes' }])
+  expect(set).toEqual([{ key: 'augi-ui.notesFolder', value: '~/Notes' }])
   await ui.unmount()
 })
 
@@ -494,7 +494,7 @@ test('the setup screen offers the Obsidian vaults that still exist, and picking 
   on('store.get', () => ({ value: undefined }))
   on('fs.exists', (_, e) => ({ value: [CONFIG, '/Users/t/Notes'].includes(e.path) }))
   on('fs.read', () => ({ value: JSON.stringify({ vaults: { a: { path: '/Users/t/Gone', ts: 2 }, b: { path: '/Users/t/Notes', ts: 1, open: true } } }) }))
-  on('config.list', () => ({ value: [{ key: 'augi.notesFolder', label: 'Notes folder', kind: 'text', value: '', provider: { plugin: 'augi', tier: 'user' }, isLocked: false }] }))
+  on('config.list', () => ({ value: [{ key: 'augi-ui.notesFolder', label: 'Notes folder', kind: 'text', value: '', provider: { plugin: 'augi-ui', tier: 'user' }, isLocked: false }] }))
   on('config.set', (_, e) => {
     set.push({ key: e.key, value: e.value })
     return { value: e.value }
@@ -505,7 +505,7 @@ test('the setup screen offers the Obsidian vaults that still exist, and picking 
   expect(await ui.find({ key: 'vault-0' })).toBeTruthy()
   expect(await ui.find({ key: 'vault-1' })).toBeFalsy()
   await ui.press({ key: 'vault-0' })
-  expect(set).toEqual([{ key: 'augi.notesFolder', value: '/Users/t/Notes' }])
+  expect(set).toEqual([{ key: 'augi-ui.notesFolder', value: '/Users/t/Notes' }])
   await ui.unmount()
 })
 
@@ -534,7 +534,7 @@ test('after the folder, setup walks the steps: found notes, a starter, or skip',
     return { value: undefined }
   })
   on('fs.list', () => ({ value: [] }))
-  on('config.list', () => ({ value: ['boardNote', 'contextNote', 'lensFolder', 'notesFolder'].map(field => ({ key: `augi.${field}`, label: field, kind: 'text', value: '', provider: { plugin: 'augi', tier: 'user' }, isLocked: false })) }))
+  on('config.list', () => ({ value: ['boardNote', 'contextNote', 'lensFolder', 'notesFolder'].map(field => ({ key: `augi-ui.${field}`, label: field, kind: 'text', value: '', provider: { plugin: 'augi-ui', tier: 'user' }, isLocked: false })) }))
   on('config.set', (_, e) => {
     set.push({ key: e.key, value: e.value })
     return { value: e.value }
@@ -561,7 +561,7 @@ test('after the folder, setup walks the steps: found notes, a starter, or skip',
   expect(await ui.find({ key: 'found-1' })).toBeTruthy()
   expect(await ui.find({ key: 'found-2' })).toBeFalsy()
   await ui.press({ key: 'found-0' })
-  expect(set).toEqual([{ key: 'augi.boardNote', value: 'Plans/Kanban.md' }])
+  expect(set).toEqual([{ key: 'augi-ui.boardNote', value: 'Plans/Kanban.md' }])
 
   await ui.press({ key: 'skip-step' })
   expect(store.get('skipped')).toEqual(['boardNote'])

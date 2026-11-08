@@ -54,6 +54,6 @@ export type View = {
 
 declare module 'claude-code' {
   interface PluginState {
-    augi: { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View> }
   }
 }
