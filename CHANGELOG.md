@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**Dead code removed.** `openaugi explore` (it pointed at a moved experiment
+and pip-installed unpinned packages at runtime), `cluster-explore-within`, the
+archived knowledge-explorer app, `pipeline/vault_render.py`, the unused
+content-only embedding writer, `scripts/plot_umaps.py`,
+`scripts/purge_worktree_blocks.py` and the `ollama` extra. All of it is in git
+history. `cluster-explore` and `scripts/migrate_container_augi_id.py` stay.
+
 **`openaugi init` is a guided, three-question setup.** Vault (with a note
 count), search mode (keyword-only by default, or local / OpenAI embeddings,
 showing which are installed), and task mode (manual by default, or automatic
