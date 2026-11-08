@@ -153,14 +153,14 @@ upgraded.
 The format of a task file is the **one contract** between the writer (`pipeline/dispatch.py`, or you manually, or a mobile capture) and the reader (the task watcher). It lives in exactly one place:
 
 ```
-src/openaugi/templates/task-template.md
+src/openaugi/templates/augi-zzz-task.md
 ```
 
 Change that file and `test_task_template_hydrates_cleanly` in [tests/test_task_watcher.py](../tests/test_task_watcher.py) breaks until the watcher keeps up.
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  src/openaugi/templates/task-template.md             │ ◀── THE contract
+│  src/openaugi/templates/augi-zzz-task.md             │ ◀── THE contract
 │  (annotated, literal example)                        │
 └──────────────────────────────────────────────────────┘
          ▲                              ▲
@@ -221,7 +221,7 @@ Process the user instruction(s) above in the context of the source block.
 
 Hydration also adds a `## Session` section (the `tmux attach` line) just above the `## Results` heading, and appends `## Results` if there is none. Both are matched as whole heading lines, so a body that mentions `## Results` in a sentence is left as written.
 
-See [src/openaugi/templates/task-template.md](../../src/openaugi/templates/task-template.md) for the annotated authoritative version.
+See [src/openaugi/templates/augi-zzz-task.md](../../src/openaugi/templates/augi-zzz-task.md) for the annotated authoritative version.
 
 ## The Repos.md map
 
@@ -340,6 +340,6 @@ Save it, wait ~30s (the settle window), and it dispatches. Useful for mobile cap
 - [docs/taxonomy.md](taxonomy.md) — the taxonomy that defines `workstream` values and disambiguates the `status:` frontmatter field from the `status/*` tag facet on blocks
 - [src/openaugi/agents/task_watcher.py](../../src/openaugi/agents/task_watcher.py) — the watcher implementation
 - [src/openaugi/pipeline/dispatch.py](../../src/openaugi/pipeline/dispatch.py) — the zzz dispatch hook (writer side)
-- [src/openaugi/templates/task-template.md](../../src/openaugi/templates/task-template.md) — the authoritative task file format
+- [src/openaugi/templates/augi-zzz-task.md](../../src/openaugi/templates/augi-zzz-task.md) — the authoritative task file format
 - [src/openaugi/templates/augi-agent.md](../../src/openaugi/templates/augi-agent.md) — the agent skill file template (factory default, copied to vault on init)
 - [tests/test_task_watcher.py](../tests/test_task_watcher.py) — unit + contract tests
