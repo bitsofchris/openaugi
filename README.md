@@ -140,6 +140,18 @@ Cluster assignments land in each data_block's metadata (`cluster_assignments.{pa
 
 ---
 
+## Augi in Claude Code
+
+A pane beside your agent chat: anchor on a project from your board, choose
+what the chat reads, run a lens, and keep an Agent Log per project. It works
+on any folder of markdown notes; with OpenAugi running, chats can search them.
+
+```
+/plugin install augi --marketplace bitsofchris/openaugi
+```
+
+Then type `/augi`. Details: [docs/reference/augi-pane.md](docs/reference/augi-pane.md).
+
 ## Documentation
 
 - **[User Guide](docs/reference/user-guide.md)** — day-to-day manual: entry points, the capture-to-view loop, trust rules, triggering a pass, the lens system in brief

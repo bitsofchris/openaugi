@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**Augi, a Claude Code pane, lives in `ui/claude/`.** The plugin that sits beside
+the chat — anchor on a board card, pick what the chat reads, run a lens, keep
+an Agent Log per anchor — moved into this repo, and the repo is now a plugin
+marketplace: `/plugin install augi --marketplace bitsofchris/openaugi`, then
+`/augi`. It drafts prompts only. See `docs/reference/augi-pane.md`.
+
 **The board's Short from today takes the `short` route.** A proposal whose
 key starts with a route verb (`propose:short-<kebab>`) is written by the board
 janitor exactly as `zzz short: …` is: `route:` / `repo:` / `remote_control:`

@@ -1,0 +1,63 @@
+{
+  "name": "augi",
+  "version": "0.9.0",
+  "description": "Augi, the OpenAugi pane beside your agent chat: anchor on a Kanban project or task, pin its context (notes, sessions, artifacts, links), run lenses, and keep its Agent Log of context, questions, chats and saved notes. Drafts only; you press enter.",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "notesFolder": {
+      "type": "string",
+      "title": "Notes folder",
+      "description": "The folder that holds your markdown notes (an Obsidian vault or any folder). An absolute path; ~ is allowed.",
+      "default": ""
+    },
+    "editor": {
+      "type": "string",
+      "title": "Editor",
+      "description": "What opens a note when you press it in the pane. custom uses the command below.",
+      "default": "obsidian",
+      "options": [
+        "obsidian",
+        "vscode",
+        "cursor",
+        "system",
+        "custom"
+      ]
+    },
+    "editorCommand": {
+      "type": "string",
+      "title": "Custom editor command",
+      "description": "Used when the editor is custom. {file} is replaced by the note's path, e.g. zed {file}.",
+      "default": ""
+    },
+    "contextNote": {
+      "type": "string",
+      "title": "Context note",
+      "description": "Who you are, your season focus and your projects, inside the notes folder. The first bold line under a heading with 'season' or 'focus' becomes your focus line.",
+      "default": "Augi/Context.md"
+    },
+    "boardNote": {
+      "type": "string",
+      "title": "Board note",
+      "description": "A Kanban-style board inside the notes folder. Each open card that links a note can be your anchor.",
+      "default": "Augi/Board.md"
+    },
+    "lensFolder": {
+      "type": "string",
+      "title": "Lens folder",
+      "description": "A folder of lens notes inside the notes folder: one markdown prompt per lens.",
+      "default": "Augi/Lenses"
+    },
+    "logFolder": {
+      "type": "string",
+      "title": "Agent log folder",
+      "description": "Where Augi keeps one Agent Log per anchor: the companion note agents write (context, questions, chats, saved notes). Your own note is never written.",
+      "default": "Augi/Agent-Logs"
+    },
+    "lensPicks": {
+      "type": "string",
+      "title": "Lens picks",
+      "description": "Lens names to list first, comma separated. Empty lists every lens in the folder. A lens with augi: true in its frontmatter is always listed.",
+      "default": ""
+    }
+  }
+}
