@@ -36,8 +36,6 @@ dependencies = [
     # import broke. Depend on what you import.
     "httpx>=0.27,<1",
     "numpy>=1.26",
-    "openai>=1.0",
-    "tiktoken>=0.7",
     "sqlite-vec>=0.1.6",
     "watchdog>=4.0",
     "pyyaml>=6.0",
@@ -49,8 +47,12 @@ Repository = "https://github.com/bitsofchris/openaugi"
 Issues = "https://github.com/bitsofchris/openaugi/issues"
 
 [project.optional-dependencies]
+# Embedding providers are opt-in. A bare install has none and searches by
+# keyword, title, tag and links; `openaugi init` says which extra a choice needs.
 local = ["sentence-transformers>=3.0"]
-openai = []  # kept for backwards compat, openai is now a core dependency
+# OpenAI embeddings and the optional LLM judge. tiktoken counts tokens for the
+# OpenAI embedding adapter only.
+openai = ["openai>=1.0", "tiktoken>=0.7"]
 ollama = ["httpx>=0.27"]
 remote = [
     "PyJWT>=2.8",
@@ -60,6 +62,7 @@ remote = [
 all = [
     "sentence-transformers>=3.0",
     "openai>=1.0",
+    "tiktoken>=0.7",
     "httpx>=0.27",
 ]
 dev = [

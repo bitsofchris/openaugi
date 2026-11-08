@@ -21,7 +21,8 @@ You've built years of thinking in Obsidian, Google, ChatGPT — ideas, decisions
 ## Quick Start
 
 ```bash
-pip install openaugi
+pip install openaugi              # keyword + link search, nothing leaves your machine
+# optional semantic search:  pip install "openaugi[local]"  or  "openaugi[openai]"
 
 # Configure and run
 openaugi init    # one-time: vault path, embedding model, API key

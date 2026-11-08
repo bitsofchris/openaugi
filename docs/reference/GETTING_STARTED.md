@@ -13,11 +13,16 @@ Everything you need to install, configure, and run OpenAugi with Claude.
 pip install openaugi
 ```
 
-For local embeddings (free, no API key needed):
+A bare install has **no embedding provider**: it searches by keyword, title,
+tag, date and links, and nothing leaves your machine. Add semantic search with
+one extra:
 
 ```bash
-pip install "openaugi[local]"
+pip install "openaugi[local]"    # sentence-transformers, on-device (pulls in PyTorch)
+pip install "openaugi[openai]"   # OpenAI embeddings; note text is sent to OpenAI
 ```
+
+From a source checkout with uv: `uv sync --extra openai` (or `--extra local`).
 
 ### Install from source (development)
 
