@@ -827,27 +827,6 @@ class SQLiteStore:
             )
         self.conn.commit()
 
-    def get_blocks_needing_content_only_embeddings(self, kind: str = "data_block") -> list[Block]:
-        """Get blocks that need content_only_embedding (column IS NULL but content exists)."""
-        rows = self.conn.execute(
-            """SELECT id, kind, content, summary, embedding, source, title,
-                      tags, block_time, occurred_at, metadata, content_hash, ingested_at
-               FROM blocks
-               WHERE kind = ? AND content_only_embedding IS NULL AND content IS NOT NULL""",
-            (kind,),
-        ).fetchall()
-        return [_row_to_block(r) for r in rows]
-
-    def update_content_only_embeddings(self, embeddings: dict[str, bytes]) -> None:
-        """Batch update content_only_embedding blobs. {block_id: blob}."""
-        if not embeddings:
-            return
-        self.conn.executemany(
-            "UPDATE blocks SET content_only_embedding = ? WHERE id = ?",
-            [(blob, bid) for bid, blob in embeddings.items()],
-        )
-        self.conn.commit()
-
     def get_blocks_by_ids(self, block_ids: list[str]) -> dict[str, Block]:
         """Fetch full blocks for a list of block IDs in a single query.
 
