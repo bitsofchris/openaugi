@@ -6,7 +6,9 @@ A judgment item that is a question instead carries boxes named by its answers
 (`- [ ] yes: …` / `- [ ] no: …`), which map to done / not-doing.
 Ticking one IS the command — the same precedent the echo janitor follows.
 An optional `aaa:` line under the boxes is the comment channel: free text
-explaining *why*, which the next board must honor literally.
+explaining *why*, which the next board must honor literally. Text typed after a
+ticked label (`- [x] no - not this week`) is the same channel, and lands in the
+same `reason`.
 
 A board also *proposes*: at the bottom sit two-button offers (`do` / `no`) for
 tasks augi would run for the user. Ticking `do` writes a pending task file into
@@ -54,9 +56,11 @@ from pathlib import Path
 
 from openaugi.pipeline.dispatch import load_routes, match_route
 from openaugi.pipeline.writeback import (
+    NOTE_SEP,
     aaa_re,
     append_feedback,
     box_re,
+    merge_reason,
     now,
     read_feedback,
     ticked,
@@ -70,11 +74,14 @@ STATE_FILE = f"{BOARD_FOLDER}/.board-state.json"
 #: `<!-- item:some-stable-key -->`, optionally inside a callout (`> ` prefix).
 _ITEM_RE = re.compile(r"^\s*>?\s*<!-- item:(?P<key>[a-z0-9][a-z0-9-]*) -->\s*$")
 #: `- [x] not doing` at any indent, optionally inside a callout.
-_BOX_RE = box_re("done", "not doing", "someday", callout=True)
+_BOX_RE = box_re("done", "not doing", "someday", callout=True, note=True)
 #: `- [x] yes: archive them` — a question's answer boxes. The text after the
-#: colon is the answer as the board worded it; only the leading word maps.
+#: colon is the answer as the board worded it; only the leading word maps. Any
+#: other separator on a ticked box (`- [x] no - not this week`) is the user's
+#: own note, because a board never words an answer that way.
 _ANSWER_BOX_RE = re.compile(
-    r"^(?P<pre>\s*>?\s*)- \[(?P<mark>[ xX])\] (?P<label>yes|no)(?::\s*(?P<text>.*?))?\s*$"
+    r"^(?P<pre>\s*>?\s*)- \[(?P<mark>(?P<on>[xX])|[ ])\] (?P<label>yes|no)"
+    rf"(?::\s*(?P<text>.*?)|(?(on){NOTE_SEP}(?P<note>.*?)))?\s*$"
 )
 #: `aaa: because it can wait until October`
 _AAA_RE = aaa_re(callout=True)
@@ -100,7 +107,7 @@ _NOTE_END_RE = re.compile(r"^\s{0,3}(?:#{1,6}\s|---\s*$|\*Everything else)")
 #: `<!-- propose:sweep-stale-drift -->` — a task augi offers to run.
 _PROPOSE_RE = re.compile(r"^\s*>?\s*<!-- propose:(?P<key>[a-z0-9][a-z0-9-]*) -->\s*$")
 #: `- [x] do` / `- [ ] no` — the two buttons under a proposal.
-_PROPOSE_BOX_RE = box_re("do", "no", callout=True)
+_PROPOSE_BOX_RE = box_re("do", "no", callout=True, note=True)
 
 _STATES = {"done": "done", "not doing": "not-doing", "someday": "someday"}
 #: A question is answered in its own words, but decided in the same vocabulary.
@@ -211,6 +218,7 @@ def parse_items(text: str) -> dict[str, dict]:
             "indent": "",
             "confirmation": "",
         }
+        note = ""
         # The boxes and the aaa: line sit between the title and this marker.
         for offset in range(1, min(_LOOKBACK, idx) + 1):
             pos = idx - offset
@@ -227,10 +235,14 @@ def parse_items(text: str) -> dict[str, dict]:
                     if label in _ANSWER_STATES:
                         worded = box.groupdict().get("text")
                         item["confirmation"] = f"{label}: {worded}" if worded else label
+                    if note := box.group("note") or "":
+                        shown = item["confirmation"] or item["answer"]
+                        item["confirmation"] = f"{shown} - {note}"
             elif aaa := _AAA_RE.match(lines[pos]):
                 item["reason"] = aaa.group("reason")
             elif _TITLE_RE.match(lines[pos]):
                 break
+        item["reason"] = merge_reason(note, item["reason"])
         items[key] = item
     return items
 
@@ -372,6 +384,7 @@ def parse_proposals(text: str) -> dict[str, dict]:
             "box_lines": [],
             "answer_line": None,
             "indent": "",
+            "note": "",
         }
         first_box = idx
         # Everything belonging to this proposal lies between its title and its
@@ -387,11 +400,13 @@ def parse_proposals(text: str) -> dict[str, dict]:
                     item["answer"] = _PROPOSE_STATES[box.group("label")]
                     item["answer_line"] = pos
                     item["indent"] = box.group("pre")
+                    item["note"] = box.group("note") or ""
             elif (aaa := _AAA_RE.match(lines[pos])) and not seen_aaa:
                 # The comment channel is the line between the boxes and the
                 # marker; a scan that now reaches the body must not be fooled
                 # by prose that happens to start `aaa:`.
                 item["reason"], seen_aaa = aaa.group("reason"), True
+        item["reason"] = merge_reason(item["note"], item["reason"])
         if title_line is not None:
             body = [_unquote(raw) for raw in lines[title_line + 1 : first_box]]
             item["body"] = "\n".join(part for part in body if part).strip()
@@ -530,6 +545,8 @@ def _process_proposals(
         confirmation = (
             f"- ✓ do → `{task_name}`" if proposal["answer"] == "dispatched" else "- ✓ no"
         )
+        if proposal["note"]:
+            confirmation += f" - {proposal['note']}"
         lines[proposal["answer_line"]] = f"{proposal['indent']}{confirmation}"
         for pos in proposal["box_lines"]:
             if pos != proposal["answer_line"]:

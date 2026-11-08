@@ -83,6 +83,10 @@ def read_feedback(vault_path: Path, *, source: str | None = None) -> Iterator[di
 _CALLOUT = r"(?P<pre>\s*>?\s*)"
 #: A trailing ` — why this one` annotation the surface renders but never reads.
 _SUFFIX = r"(?: — .*)?"
+#: What separates a ticked label from a note typed after it. A bare hyphen needs
+#: a space before it, so `no-go` is not `no`; a label running straight into more
+#: letters (`done`, `nope`, `not doing`) never reaches a separator at all.
+NOTE_SEP = r"(?:\s*[:,;–—]|\s+-+)\s*"
 
 
 def box_re(
@@ -90,6 +94,7 @@ def box_re(
     callout: bool = False,
     suffix: bool = False,
     multiline: bool = False,
+    note: bool = False,
 ) -> re.Pattern[str]:
     """`- [x] done` — one checkbox, with the caller's vocabulary.
 
@@ -101,10 +106,20 @@ def box_re(
     `callout` allows the `> ` prefix a board line carries; `suffix` allows a
     trailing ` — …` annotation; `multiline` anchors per line for `finditer`
     over a block of text rather than a single line.
+
+    `note` lets a *ticked* box carry free text after its label (`- [x] no - not
+    this week`), exposed as the `note` group, which is None when there is none.
+    An unticked box with text after it is not an answer, so it does not match.
     """
     pre = _CALLOUT if callout else r"(?P<pre>)"
     label = "|".join(re.escape(one) for one in labels) if labels else ".+?"
-    pattern = rf"^{pre}- \[(?P<mark>[ xX])\] (?P<label>{label})"
+    if note:
+        pattern = (
+            rf"^{pre}- \[(?P<mark>(?P<on>[xX])|[ ])\] (?P<label>{label})"
+            rf"(?(on)(?:{NOTE_SEP}(?P<note>.*?))?)"
+        )
+    else:
+        pattern = rf"^{pre}- \[(?P<mark>[ xX])\] (?P<label>{label})"
     pattern += (_SUFFIX if suffix else "") + r"\s*$"
     return re.compile(pattern, re.MULTILINE if multiline else 0)
 
@@ -112,6 +127,13 @@ def box_re(
 def ticked(match: re.Match[str]) -> bool:
     """True when this box was ticked. `[x]` and `[X]` both count."""
     return match.group("mark").lower() == "x"
+
+
+def merge_reason(note: str | None, aaa: str | None) -> str:
+    """One reason from a note typed on the tick and an `aaa:` line: both, in
+    the order they sit on the page, and just once if they say the same thing."""
+    parts = [part for part in (note, aaa) if part]
+    return "; ".join(dict.fromkeys(parts))
 
 
 def aaa_re(

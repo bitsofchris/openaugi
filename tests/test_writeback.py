@@ -13,6 +13,7 @@ from openaugi.pipeline.writeback import (
     aaa_re,
     append_feedback,
     box_re,
+    merge_reason,
     now,
     read_feedback,
     ticked,
@@ -93,6 +94,53 @@ class TestBoxGrammar:
         )
         assert pattern.match("- [ ] memory").group("label") == "memory"
 
+    @pytest.mark.parametrize(
+        ("line", "expected"),
+        [
+            ("- [x] no - not this week", "not this week"),
+            ("- [x] no -- not this week", "not this week"),
+            ("- [x] no — not this week", "not this week"),
+            ("- [x] no—not this week", "not this week"),
+            ("- [x] no – not this week", "not this week"),
+            ("- [x] no: not this week", "not this week"),
+            ("- [x] no, not this week", "not this week"),
+            ("- [X] no; not this week  ", "not this week"),
+            ("- [x] no", None),
+        ],
+    )
+    def test_note_is_captured_after_any_separator(self, line, expected):
+        match = box_re("do", "no", note=True).match(line)
+        assert match and match.group("label") == "no"
+        assert match.group("note") == expected
+        assert ticked(match)
+
+    def test_a_separator_with_nothing_after_it_is_a_bare_tick(self):
+        match = box_re("no", note=True).match("- [x] no - ")
+        assert match and not match.group("note")
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "- [x] done",
+            "- [x] nope",
+            "- [x] not doing",
+            "- [x] no-go",
+            "- [x] do it",
+            "- [x] nope - x",
+        ],
+    )
+    def test_a_note_never_widens_the_label(self, line):
+        assert box_re("do", "no", note=True).match(line) is None
+
+    def test_an_unticked_box_cannot_carry_a_note(self):
+        pattern = box_re("do", "no", note=True)
+        assert pattern.match("- [ ] do - not picked yet") is None
+        assert not ticked(pattern.match("- [ ] do"))
+
+    def test_without_the_flag_trailing_text_still_does_not_match(self):
+        assert box_re("no").match("- [x] no - not this week") is None
+        assert box_re(suffix=True).match("- [x] link [[X]] — why").group("label") == "link [[X]]"
+
     def test_multiline_finds_every_box_in_a_body(self):
         body = "some text\n- [ ] memory\n- [x] new note\nmore text\n"
         found = [(m.group("label"), ticked(m)) for m in box_re(multiline=True).finditer(body)]
@@ -155,3 +203,18 @@ class TestTheJanitorsShareOneLog:
         rows = list(read_feedback(tmp_path))
         assert len(rows) == 2
         assert {row["source"] for row in rows} == {"currency-board", "routing"}
+
+
+class TestMergeReason:
+    def test_either_side_alone_is_kept_as_written(self):
+        assert merge_reason("from the tick", "") == "from the tick"
+        assert merge_reason(None, "from the aaa") == "from the aaa"
+
+    def test_both_are_kept_in_page_order(self):
+        assert merge_reason("from the tick", "from the aaa") == "from the tick; from the aaa"
+
+    def test_the_same_words_twice_are_kept_once(self):
+        assert merge_reason("same", "same") == "same"
+
+    def test_nothing_is_empty(self):
+        assert merge_reason("", None) == ""

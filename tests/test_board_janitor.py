@@ -816,3 +816,147 @@ def test_other_proposals_keep_the_vault_working_dir_when_routes_exist(short_boar
     assert f"working_dir: {vault}" in body
     assert "route:" not in body
     assert "The proposal text is the brief" in body
+
+
+# ── A note typed after a ticked label ──────────────────────────────────────
+
+ANNOTATED_BOARD = """# Board — 2026-09-30 (Wednesday)
+
+## Needs your judgment (2 of 3)
+
+- **Add the line to the card?** — from the journal
+    - [ ] yes: make that edit
+    - [x] no - not sure this belongs on that card
+    <!-- item:card-edit -->
+- **Pull the three numbers** `quick · 5m`
+    - [ ] done
+    - [x] not doing: it can wait
+    - [ ] someday
+    aaa: until open enrollment
+    <!-- item:numbers -->
+
+## Augi could run these
+
+- **Explain the two experiments** `research`
+    ↳ Read the email and explain it plainly.
+    - [x] do - I could reply to them after this
+    - [ ] no
+    <!-- propose:explain-experiments -->
+- **Sweep the stale drift** `quick`
+    ↳ Archive whatever has gone quiet.
+    - [ ] do
+    - [x] no — already gone
+    aaa: and it stays gone
+    <!-- propose:sweep-drift -->
+"""
+
+
+@pytest.fixture
+def annotated(vault):
+    path = vault / "OpenAugi" / "Board" / "2026-09-30 - Board.md"
+    path.write_text(ANNOTATED_BOARD, encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    "box",
+    [
+        "- [x] done - it took a minute",
+        "- [x] done: it took a minute",
+        "- [x] done — it took a minute",
+    ],
+)
+def test_three_box_labels_take_a_note(box):
+    text = f"- **Thing**\n    {box}\n    - [ ] not doing\n    - [ ] someday\n    <!-- item:k -->\n"
+    item = parse_items(text)["k"]
+    assert item["answer"] == "done"
+    assert item["reason"] == "it took a minute"
+
+
+@pytest.mark.parametrize(
+    ("box", "answer"), [("not doing - later", "not-doing"), ("someday - later", "someday")]
+)
+def test_multiword_and_parking_labels_take_a_note(box, answer):
+    text = f"- **Thing**\n    - [x] {box}\n    <!-- item:k -->\n"
+    assert parse_items(text)["k"]["answer"] == answer
+
+
+@pytest.mark.parametrize("line", ["- [x] nope - later", "- [x] no-go", "- [x] doing it"])
+def test_a_note_never_turns_another_word_into_an_answer(line):
+    text = f"- **Thing**\n    {line}\n    <!-- item:k -->\n    <!-- propose:p -->\n"
+    assert parse_items(text)["k"]["answer"] is None
+    assert parse_proposals(text)["p"]["answer"] is None
+
+
+def test_board_worded_colon_text_stays_wording_not_a_reason():
+    text = "- **Thing?**\n    - [x] no: keep Thursday\n    <!-- item:k -->\n"
+    item = parse_items(text)["k"]
+    assert item["answer"] == "not-doing"
+    assert item["reason"] == ""
+    assert item["confirmation"] == "no: keep Thursday"
+
+
+def test_an_unticked_box_with_text_after_it_survives_the_rewrite(vault):
+    path = vault / "OpenAugi" / "Board" / "2026-09-30 - Board.md"
+    path.write_text(
+        "- **Thing?**\n    - [x] yes\n    - [ ] no - only thinking aloud\n    <!-- item:k -->\n",
+        encoding="utf-8",
+    )
+    assert parse_items(path.read_text(encoding="utf-8"))["k"]["answer"] == "done"
+    sync_board(path, vault)
+    assert "only thinking aloud" in path.read_text(encoding="utf-8")
+
+
+def test_annotated_item_ticks_are_recorded_with_the_note_as_reason(annotated, vault):
+    assert sync_board(annotated, vault) == 4
+    items = load_state(vault)["items"]
+    assert items["card-edit"]["state"] == "not-doing"
+    assert items["card-edit"]["reason"] == "not sure this belongs on that card"
+    # A note and an aaa: line on the same item are both kept.
+    assert items["numbers"]["state"] == "not-doing"
+    assert items["numbers"]["reason"] == "it can wait; until open enrollment"
+
+
+def test_the_note_survives_in_the_rewritten_item_lines(annotated, vault):
+    sync_board(annotated, vault)
+    after = annotated.read_text(encoding="utf-8")
+    assert "    - ✓ no - not sure this belongs on that card\n" in after
+    assert "    - ✓ not-doing - it can wait\n" in after
+    assert "make that edit" not in after
+
+
+def test_annotated_do_dispatches_and_carries_the_note_into_the_brief(annotated, vault):
+    sync_board(annotated, vault)
+    name = "board-2026-09-30-explain-experiments.md"
+    task = (vault / "OpenAugi" / "Tasks" / name).read_text(encoding="utf-8")
+    assert "Note on it: I could reply to them after this" in task
+    after = annotated.read_text(encoding="utf-8")
+    assert f"    - ✓ do → `{name}` - I could reply to them after this\n" in after
+    proposals = load_state(vault)["proposals"]
+    assert proposals["explain-experiments"]["state"] == "dispatched"
+    assert proposals["explain-experiments"]["reason"] == "I could reply to them after this"
+
+
+def test_annotated_no_declines_and_keeps_both_reasons(annotated, vault):
+    sync_board(annotated, vault)
+    assert not (vault / "OpenAugi" / "Tasks" / "board-2026-09-30-sweep-drift.md").exists()
+    assert "    - ✓ no - already gone\n" in annotated.read_text(encoding="utf-8")
+    declined = declined_proposals(vault)
+    assert declined["sweep-drift"]["reason"] == "already gone; and it stays gone"
+
+
+def test_an_annotated_tick_is_processed_only_once(annotated, vault):
+    assert sync_board(annotated, vault) == 4
+    rows = len(_log_lines(vault))
+    assert sync_board(annotated, vault) == 0
+    assert len(_log_lines(vault)) == rows
+
+
+def test_rebuilding_state_alone_does_not_act_on_an_annotated_tick(annotated, vault):
+    state = rebuild_state(vault)
+    assert state["items"]["card-edit"]["state"] == "open"
+    assert state["proposals"]["explain-experiments"]["state"] == "open"
+    assert not (vault / "OpenAugi" / "Tasks").exists() or not list(
+        (vault / "OpenAugi" / "Tasks").iterdir()
+    )
+    assert annotated.read_text(encoding="utf-8") == ANNOTATED_BOARD

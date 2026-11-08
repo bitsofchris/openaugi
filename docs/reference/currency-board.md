@@ -91,6 +91,16 @@ match / bad match).
 `aaa:` is already the review pass's instruction grammar, so neither needs a new
 parser or a trip outside Obsidian.
 
+**A note typed on the tick counts too.** `- [x] no - not this week` is that
+answer, with the text as its `reason`. Any of ` - `, ` -- `, `—`, `–`, `:`, `,` or
+`;` separates the two; the label must end at the separator, so `nope` and `no-go`
+are not `no`. The note stays on the rewritten line (`✓ no - not this week`,
+``✓ do → `task.md` - not this week``) and a `do` note reaches the task's brief. A
+note and an `aaa:` line on the same item are both kept, as `note; aaa`. The one
+exception is `yes:` / `no:` on a question: those words are how the board worded
+the answer, so they stay in the confirmation and are not a reason. Text with no
+separator (`- [x] no not this week`) still does not match.
+
 ## Every move carries its context
 
 A move the reader cannot *start* is a failed move, however well phrased. Each

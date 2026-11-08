@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**A board tick can carry a note.** `- [x] do - after Friday` and `- [x] no: not
+now` used to be ignored silently, so a `do` never dispatched and a `no` was never
+recorded. Text after a ticked label now counts as that answer's `reason`, merges
+with any `aaa:` line, and stays on the rewritten line. Routing and echo boxes are
+unchanged.
+
 **The board's Short from today takes the `short` route.** A proposal whose
 key starts with a route verb (`propose:short-<kebab>`) is written by the board
 janitor exactly as `zzz short: …` is: `route:` / `repo:` / `remote_control:`
