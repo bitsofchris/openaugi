@@ -2,7 +2,7 @@
 kind: engine
 name: currency-board
 description: >-
-  The slim daily board — opens with today's focus-block category from the default you set on Sunday (one line, no boxes), routes every `Aaa:` you typed, names the coding sessions that ended waiting on you, maps tasks it finds in your writing onto Kanban cards, and (experiment) spots what you can't see from inside the day and suggests one Short from what you learned. Kanban is the left-off; this board is not. Answered with checkboxes; untouched items are not carried.
+  The slim daily board — opens with today's focus-block category from the default you set on Sunday (one line, no boxes), routes every `Aaa:` you typed, names the coding sessions that ended waiting on you, and (experiment) spots what you can't see from inside the day and suggests one Short from what you learned. Kanban is the left-off; this board is not. Answered with checkboxes; untouched items are not carried.
 scope: >-
   [[Slowly Changing Context]] first, every run. Then the `#status/active` PMOCs (newest dated entry each), the coding sessions since the last board (Claude Code ~/.claude/projects, Codex ~/.codex/sessions via scripts/session_harvest.py in the openaugi repo), their own writing since the last board (daily notes, PMOC/AMOC entries; default 72h) including every `Aaa:` instruction in it, [[Quiz Schedule - Foundations]] (the quiz review rows), and OpenAugi/Board/.board-state.json. For the Spotted section only: OpenAugi search over older notes, to link yesterday to what already exists. Never OpenAugi-generated prose except the board state and the previous board.
 trigger: every 1d
@@ -19,9 +19,8 @@ board does not repeat it. The board does what Kanban cannot: it opens
 with today's focus-block category, the default set calmly on Sunday
 ([[Slowly Changing Context]] §5), so the first headphone block starts
 without a decision ([[Decide the Plan Calm, Execute in the Moment]]); it routes every
-`Aaa:` they typed, names a session that ended waiting on them, turns a task
-it finds in their writing into an edit to a card (never a new checkbox to
-come back to), and spots what they can't see from inside the day. Under 40
+`Aaa:` they typed, names a session that ended waiting on them, and spots
+what they can't see from inside the day. Under 40
 lines. The weekly reflection is the bigger pass and the only place
 priorities move; this board never re-sets a slot.
 
@@ -59,8 +58,8 @@ in each column of the Board** (`_private/0-Current Focus/Kanban.md`), plus a
 Work line. §3 is the season: its primary, what is supporting, and what is
 parked. Read the Board's current order every run. The board does not render
 the lanes; §5 feeds the Focus block line (step 3b), and §3 and §4 are the
-filter for Spotted and for card suggestions. It never edits the Board except by a `yes` on a card
-suggestion that showed the exact change.
+filter for Spotted. It never edits the Board except by adding a Backlog card:
+a small `Aaa:` on this run, or a `yes` on an Emerging spot.
 
 ## Process
 
@@ -121,21 +120,22 @@ suggestion that showed the exact change.
    Sessions waiting on you: the quiz file path and Prompt B from
    [[Lecture Learning Prompt]]. Shown on its due day and the day after,
    then not carried. Never invent a due date.
-7. **Card suggestions, cap three, section omitted when empty.** A task they
-   wrote in the window that is not yet on a card, or a task at
-   `needs-input`, becomes a question: "this belongs on <existing card>" or
-   "this is a new Backlog card". The item shows the exact edit (the sub-item
-   line under that card on [[Kanban]], or the Backlog card with its source)
-   and carries `yes` / `no`. `yes` is approval for that edit only
-   ("Where you write" 2(b)); the next run makes it. Untouched is not
-   carried. Never a done / not doing / someday item.
-7b. **Spotted (experiment), cap three, section omitted when empty.** What
+7. **Spotted (experiment), cap three, section omitted when empty.** What
    they cannot see from inside the day, from yesterday's writing only, one
    line each with a `↳` to the notes and `yes` / `no`:
    - *Connects.* A block from yesterday that matches an older note
-     (OpenAugi search, `echoes` intent). `yes` appends a link block to the
-     older note's MOC / PMOC Journal by 2(a), or writes the link into an
-     `OpenAugi/` note.
+     (OpenAugi search, `echoes` intent). The item names one found note as
+     the target, never a daily note, preferring an AMOC / PMOC / MOC or a
+     note that already has dated entries. It shows the exact block and where
+     it goes: a `### YYYY-MM-DD` heading, the quotes linked to their notes,
+     links to the other found notes, and as its last line `*(Augi: this
+     block was #ai-generated)*`, placed directly under `# Journal`, else
+     above the newest dated entry, else at the end of the note. `yes`
+     approves that block only, by 2(a) on an AMOC / PMOC / MOC and by 2(b)
+     on any other note outside `OpenAugi/`, and the next run adds it. No
+     rename, and no existing text touched. A new note under `OpenAugi/Notes/`
+     only when no found note fits; the item then says so and shows the
+     note's title and block.
    - *Emerging.* A theme in two or more days of the window that is on no
      card. `yes` adds it as a Backlog card with its source.
    - *Remember.* Something they said worked or they learned, worth keeping.
@@ -145,25 +145,24 @@ suggestion that showed the exact change.
 8. **Proposals — the delegation queue. `Aaa:` only, section omitted when
    empty.** Only `Aaa:` proposals from step 3. No per-card proposals: an
    agent step for a card comes from an `Aaa:` or the Sunday pass. The board
-   never creates a card, note, or PMOC except by a `yes` on a card
-   suggestion. The `↳` brief is the prompt the agent receives verbatim
+   never creates a card, note, or PMOC except by a `yes` on an Emerging
+   spot, or on a Connects item that shows the new note. The `↳` brief is the prompt the agent receives verbatim
    on `do`: three sentences, what, over what scope, producing what artifact.
    Then two labeled lines: `for: [[card note]]`, the note the receipt lands
    in, and `verify: <how they know it is done without reading the transcript>`
    (a test passing, a file at a path, a note with links). A card whose next
-   step needs them shows in step 7 with the question named, and gets no
-   proposal.
+   step needs them gets no proposal; it waits for the Sunday session.
    Multi-day work restates its whole context every day it appears. Never
    re-offer a `declined` or `dispatched` proposal unless its output is on disk
    and the next step is different. Propose nothing rather than pad.
 9. **Write the board** in the format below, then overwrite
    `OpenAugi/Views/View - Board.md` with a link and embed of it.
 
-Other lenses feed sections, never add them: `open-loops` over the window for
-card suggestions; `openaugi-state` and `content-pipeline` read from their last View.
-Not run on a daily board: `chat-harvest`, `nuggets`, `idea-lineage`,
+Other lenses feed sections, never add them: `openaugi-state` and
+`content-pipeline` read from their last View.
+Not run on a daily board: `open-loops`, `chat-harvest`, `nuggets`, `idea-lineage`,
 `cluster-weather`, `morning-briefing`, `ping-read`. `echoes` and `emerging`
-feed Spotted (step 7b) over yesterday only. Those belong to their own triggers and the Sunday pass.
+feed Spotted (step 7) over yesterday only. Those belong to their own triggers and the Sunday pass.
 Shorts on demand are `content-scan` plus a storyboard request; the board
 only makes Short from today (step 6).
 
@@ -262,17 +261,9 @@ created: <date>
 - <what waits: uncommitted / a question / an unopened artifact> — `claude --resume <id>`
 - <quiz review N of unit NN, due <date>> — <quiz file path> · Prompt B
 
-## On your cards (N of 3)
-
-- **<task> → <existing card | new Backlog card>** — <the exact edit>
-    ↳ <the block it came from>
-    - [ ] yes: make that edit
-    - [ ] no
-    <!-- item:card-<kebab> -->
-
 ## Spotted (experiment)
 
-- **<weekly goal | connects | emerging | remember>:** <one line, quoting them>
+- **<weekly goal | connects | emerging | remember>:** <one line, quoting them; a connects item ends with its target note and exact block>
     ↳ [[<yesterday's note>]] · [[<the older note or card>]]
     - [ ] yes: <what yes does>
     - [ ] no

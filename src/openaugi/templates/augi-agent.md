@@ -37,8 +37,8 @@ order of what a fresh session should read:
 5. **The currency board** — `lenses/currency-board.md`, daily and slim. It
    does not restate the left-off (Kanban and the PMOCs hold it). It opens
    with today's focus-block category from §5 (one line), routes
-   every `Aaa:`, names sessions waiting on them, and offers card edits as
-   yes/no questions. **The weekly reflection** —
+   every `Aaa:`, and names sessions waiting on them. **The weekly
+   reflection** —
    `lenses/weekly-reflection.md` — is the bigger pass and the only place
    priorities move.
 
