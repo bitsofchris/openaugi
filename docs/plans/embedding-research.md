@@ -1,4 +1,7 @@
-> **Deprecated** — moved to [`experiments/embedding_research/README.md`](../../experiments/embedding_research/README.md). Implementation scripts live there. This doc is kept as a reference artifact.
+> **Deprecated** — the implementation scripts and `FINDINGS.md` moved to the private
+> research repo (`openaugi-private/experiments/from-openaugi/embedding_research/`) on
+> 2026-11-08; before that they were `experiments/embedding_research/` here (last at
+> `3b42a0f`). This doc is kept as a reference artifact.
 
 # Matryoshka Embedding Probe Experiment
 

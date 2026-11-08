@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+**`experiments/` moved out of the repo.** `embedding_research/` and the
+archived knowledge-explorer now live in the private research repo (copied
+from `3b42a0f`); nothing in the package used them.
+
 **Dead code removed.** `openaugi explore` (it pointed at a moved experiment
 and pip-installed unpinned packages at runtime), `cluster-explore-within`, the
 archived knowledge-explorer app, `pipeline/vault_render.py`, the unused

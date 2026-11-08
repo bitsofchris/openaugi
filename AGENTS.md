@@ -54,8 +54,9 @@ lives in the vault.
    `/Users/<name>/…`. The vault's folder name comes from the openaugi config
    or `$OPENAUGI_VAULT`, never a literal in a script.
 5. **No notebook outputs, no data dumps.** Clear outputs before committing.
-   Exports (chat history, Readwise, sqlite files) never enter the tree, not
-   even under `experiments/`.
+   Exports (chat history, Readwise, sqlite files) never enter the tree.
+   Research experiments live in the private research repo, not here (there
+   is no `experiments/` folder since 2026-11-08).
 6. **No vault output.** Cluster contents, routing decisions, real note
    titles, board items, session handoffs → `docs/scratch/` (gitignored).
 7. **The hook has the last word.** `scripts/check_private_vocab.py` runs at
