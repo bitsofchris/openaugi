@@ -53,7 +53,6 @@ local = ["sentence-transformers>=3.0"]
 # OpenAI embeddings and the optional LLM judge. tiktoken counts tokens for the
 # OpenAI embedding adapter only.
 openai = ["openai>=1.0", "tiktoken>=0.7"]
-ollama = ["httpx>=0.27"]
 remote = [
     "PyJWT>=2.8",
     "cryptography>=42",

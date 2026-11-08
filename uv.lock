@@ -1104,9 +1104,6 @@ dev = [
 local = [
     { name = "sentence-transformers" },
 ]
-ollama = [
-    { name = "httpx" },
-]
 openai = [
     { name = "openai" },
     { name = "tiktoken" },
@@ -1122,7 +1119,6 @@ requires-dist = [
     { name = "cryptography", marker = "extra == 'remote'", specifier = ">=42" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "httpx", marker = "extra == 'all'", specifier = ">=0.27" },
-    { name = "httpx", marker = "extra == 'ollama'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'remote'", specifier = ">=0.27" },
     { name = "mcp", specifier = ">=1.0,<2" },
     { name = "numpy", specifier = ">=1.26" },
@@ -1145,7 +1141,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12" },
     { name = "watchdog", specifier = ">=4.0" },
 ]
-provides-extras = ["local", "openai", "ollama", "remote", "all", "dev"]
+provides-extras = ["local", "openai", "remote", "all", "dev"]
 
 [[package]]
 name = "packaging"
