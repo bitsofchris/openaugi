@@ -194,7 +194,10 @@ not inside the question: question-card previews do not reach them.
    it; talk until it is, and let it shape the card order. It ends with
    one agreed bottleneck and one experiment against it. Write them under
    the draft's outside view as **Agreed** (the bottleneck and the
-   experiment), at most three lines, in their words. Then one question on
+   experiment), at most three lines, in their words, and rewrite the §4
+   *This week's experiment* line in [[Slowly Changing Context]] to the
+   experiment, one line, dated this Sunday (the board quotes it every
+   morning). Then one question on
    the focus blocks: show the draft's Focus blocks table and §5's default
    schedule, and ask *keep* or a shift drafted from the mix and the
    override reasons (which weekday moves to which category); on a shift,

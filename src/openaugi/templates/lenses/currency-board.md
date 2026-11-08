@@ -2,7 +2,7 @@
 kind: engine
 name: currency-board
 description: >-
-  The slim daily board — opens with today's focus-block category from the default you set on Sunday (one line, no boxes), routes every `Aaa:` you typed, names the coding sessions that ended waiting on you, and (experiment) spots what you can't see from inside the day and suggests one Short from what you learned. Kanban is the left-off; this board is not. Answered with checkboxes; untouched items are not carried.
+  The slim daily board — opens with today's focus-block category from the default you set on Sunday and this week's experiment (one line each, no boxes), routes every `Aaa:` you typed, names the coding sessions that ended waiting on you, and (experiment) spots what you can't see from inside the day and suggests one Short from what you learned. Kanban is the left-off; this board is not. Answered with checkboxes; untouched items are not carried.
 scope: >-
   [[Slowly Changing Context]] first, every run. Then the `#status/active` PMOCs (newest dated entry each), the coding sessions since the last board (Claude Code ~/.claude/projects, Codex ~/.codex/sessions via scripts/session_harvest.py in the openaugi repo), their own writing since the last board (daily notes, PMOC/AMOC entries; default 72h) including every `Aaa:` instruction in it, [[Quiz Schedule - Foundations]] (the quiz review rows), and OpenAugi/Board/.board-state.json. For the Spotted section only: OpenAugi search over older notes, to link yesterday to what already exists. Never OpenAugi-generated prose except the board state and the previous board.
 trigger: every 1d
@@ -107,7 +107,10 @@ a small `Aaa:` on this run, or a `yes` on an Emerging spot.
    in the same form: *"No default focus block today."* The board never
    picks the thing inside the category, never guesses at work it cannot
    see, and never comments on yesterday's block; overrides and the week's
-   mix are read on Sunday.
+   mix are read on Sunday. When §4 has a *This week's experiment* line, a
+   second line follows, quoting it: *"This week: <the experiment>."* A
+   reminder only: the board never checks, counts or comments on whether
+   they did it; Sunday reads that.
 4. **Sessions waiting on you.** From the transcripts changed since the last
    board, take only the end state. List a session only if it ended with
    something uncommitted, a question to them, or a finished artifact they
@@ -247,6 +250,7 @@ created: <date>
 # Board — YYYY-MM-DD (Weekday)
 
 *First focus block: **<category>** (<weekday>). Headphones on.*
+*This week: <the experiment, quoted from §4>.*
 
 ## Your instructions
 
