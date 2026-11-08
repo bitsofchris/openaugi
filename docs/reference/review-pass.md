@@ -21,9 +21,9 @@ description: The write-back loop — routes new blocks into containers via augi_
 3. This doc — *concepts only*: why the pass works the way it does. If you
    find procedure here that's also in the template, delete it here.
 
-Design record with full rationale: [docs/plans/review-pass-v1.md](../plans/review-pass-v1.md);
+Design record with full rationale: `docs/plans/review-pass-v1.md` (removed; in git history);
 v2 refinements (unified registry rule, tiers, reference handling):
-[docs/plans/review-pass-v2-workstreams.md](../plans/review-pass-v2-workstreams.md).
+`docs/plans/review-pass-v2-workstreams.md` (removed; in git history).
 
 ## The frame in one paragraph
 
@@ -65,7 +65,7 @@ container and a block the agent routed there are the same fact: member of
 that container. Routing a block to its own source note is a no-op
 (`already_home`), and `get_members` returns the unified list with each
 member marked contained/routed. Design record:
-[views-as-rendered-queries.md](../plans/views-as-rendered-queries.md).
+`docs/plans/views-as-rendered-queries.md` (removed; in git history).
 
 Both live in the DB only, which is why routing costs nothing and is always
 correctable: the user's files never change.

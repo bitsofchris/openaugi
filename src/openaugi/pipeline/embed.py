@@ -10,7 +10,7 @@ short/ambiguous chunks more context for retrieval (e.g. a block from a "Trading
 Journal" note would embed with that anchor). We removed it because it caused all
 blocks from the same document to cluster together — the title signal dominated
 over the block's actual semantic content, making topic clusters look like
-document clusters. See docs/plans/embedding-strategy.md for the full analysis.
+document clusters. See docs/plans/embedding-strategy.md (in git history) for the full analysis.
 """
 
 from __future__ import annotations

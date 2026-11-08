@@ -1,1 +1,3 @@
-See [AGENTS.md](AGENTS.md) — single source of truth for repo/agent instructions (project conventions, doc locations, where things live, quick reference, architecture pointers). Keep instructions there so Claude Code and other agents never drift out of sync.
+@AGENTS.md
+
+<!-- AGENTS.md is the single source of truth for repo and agent instructions, shared with other agents. The line above imports it into every Claude Code session; keep instructions there, not here. -->

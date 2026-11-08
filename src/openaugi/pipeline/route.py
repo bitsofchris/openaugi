@@ -6,7 +6,8 @@ day's Augi Log under `## Routing`. The user answers with checkboxes and
 `aaa:` lines; nothing is applied until they tick the day's master box
 (`- [ ] process this log`), which `routing_janitor.py` acts on.
 
-Design: docs/plans/augi-log-routing.md. The framing that drove it (2026-09-02): "the
+Design: docs/plans/augi-log-routing.md (in git history). The framing that drove it
+(2026-09-02): "the
 augi log — it's the routing decisions as I go ... you can just suggest where
 to stick things or what to merge with based on my hints and I confirm it
 there. Here's how you learn me."

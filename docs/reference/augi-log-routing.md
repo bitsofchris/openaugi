@@ -5,7 +5,7 @@ description: The Augi Log as the capture/routing surface. Every new human daily-
 
 # Augi Log routing — "where does this block live?"
 
-> **PAUSED 2026-09-04.** This feature is turned off in `~/.openaugi/config.toml` — matches were too coarse to be useful. See [docs/plans/augi-log-paused.md](../plans/augi-log-paused.md) for the state at pause, the reasons, and the resume plan. What is described below is how it works when enabled.
+> **PAUSED 2026-09-04.** This feature is turned off in `~/.openaugi/config.toml` — matches were too coarse to be useful. See `docs/plans/augi-log-paused.md` (removed; in git history) for the state at pause, the reasons, and the resume plan. What is described below is how it works when enabled.
 
 ## When to use this doc
 
@@ -15,7 +15,7 @@ description: The Augi Log as the capture/routing surface. Every new human daily-
 - You want to know what the feature writes, and where, before enabling extend
 
 Design record with the decisions and their rationale:
-[docs/plans/augi-log-routing.md](../plans/augi-log-routing.md).
+`docs/plans/augi-log-routing.md` (removed; in git history).
 
 ## The problem it solves
 

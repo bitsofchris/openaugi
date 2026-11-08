@@ -3,7 +3,7 @@
 Thin protocol layer so users can swap embedding/LLM providers
 without touching engine code.
 
-See docs/plans/m0.md § Model Abstraction.
+See docs/plans/m0.md (in git history) § Model Abstraction.
 """
 
 from __future__ import annotations

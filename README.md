@@ -136,7 +136,7 @@ openaugi cluster              # write context_block:cluster nodes + a run snapsh
 openaugi cluster-weather      # growth/death report vs the previous snapshot (--json for agents)
 ```
 
-Configured as named passes in `~/.openaugi/config.toml`. Both shipped passes are **document-level k-means** (each document mean-pooled to one vector — long transcripts get one vote, not 150): a coarse pass (dims=96, k=10) surfaces life areas, and a `concepts` pass (dims=1536, k=8 within each area) surfaces the recurring ideas inside them. Block-level HDBSCAN was tested and retired — long documents dominate density and everything else becomes noise (see [clustering-findings](docs/plans/clustering-findings.md)).
+Configured as named passes in `~/.openaugi/config.toml`. Both shipped passes are **document-level k-means** (each document mean-pooled to one vector — long transcripts get one vote, not 150): a coarse pass (dims=96, k=10) surfaces life areas, and a `concepts` pass (dims=1536, k=8 within each area) surfaces the recurring ideas inside them. Block-level HDBSCAN was tested and retired — long documents dominate density and everything else becomes noise (see `docs/plans/clustering-findings.md` (removed; in git history)).
 
 Every committed run also records a **snapshot** (cluster membership per pass), and `openaugi cluster-weather` diffs the latest snapshot against one a window ago — which clusters grew, shrank, were born, or died, plus recent writing activity per cluster. This feeds the **cluster-weather lens**: say "apply lens cluster-weather" and the agent turns the report into Dashboard nominations ("*AI distillation service* grew +8 notes in 14d — distill it into a note?").
 

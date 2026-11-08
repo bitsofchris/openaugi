@@ -17,8 +17,7 @@ links  (from_id, to_id, kind, weight, metadata)  — PK: (from_id, to_id, kind)
 ```
 
 Sidecars: `meta` (key-value, review-pass high-water mark), `recaps`
-(per-container view-synthesis cache, staleness-hashed — see
-[docs/plans/views-as-rendered-queries.md](docs/plans/views-as-rendered-queries.md)),
+(per-container view-synthesis cache, staleness-hashed),
 `vec_blocks`/`blocks_fts` (derived indexes).
 
 **Block kinds:** data_block, context_block:document, context_block:tag
@@ -159,7 +158,7 @@ adapters present it (docs/reference/query-layer.md):
 The Streams subsystem (StreamManager + `make_stream`/`update_stream`/
 `get_stream_context`/`list_streams`) and the chat-capture tools
 (`write_snip`/`write_thread`) were removed on 2026-07-06 — superseded by the
-review-pass derived views (see [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)).
+review-pass derived views (see [docs/reference/review-pass.md](docs/reference/review-pass.md)).
 
 ### ZZZ Dispatch (zzz → task file → agent)
 
@@ -219,7 +218,7 @@ across restarts: a block id dispatched once never dispatches again.
 Per-block `zzz:` lines are extracted by the vault adapter into
 `metadata["zzz_instructions"]` (a list, one item per line; stripped from
 the clean content). Blocks are split on `###` headers and `qqq` markers
-(case-insensitive) — see [docs/plans/zzz-instructions.md](docs/plans/zzz-instructions.md).
+(case-insensitive) — see [docs/reference/splitter.md](docs/reference/splitter.md).
 
 The agent's behavior is governed by the vault's `OpenAugi/AGENT/` files (the
 source of truth), not the Python code. `src/openaugi/templates/` holds the
@@ -243,16 +242,14 @@ hub_score = w_in * ln(1 + inbound_links) + w_out * ln(1 + outbound_links) + w_en
 
 ## Design Decisions
 
-See [docs/plans/m0.md](docs/plans/m0.md) § Key Design Decisions for full rationale.
-
 - **SQLite over DuckDB**: WAL mode concurrent writes. DuckDB is single-writer.
 - **sqlite-vec over FAISS**: KNN via `vec0` virtual table — everything in one file, no separate index management. Embeddings normalized on write so L2 distance ≡ cosine.
 - **Content hash as block identity**: `hash(source_path + content_hash)` — stable across section reordering.
 - **Tags as blocks**: First-class graph nodes. Hub scoring, traversal, entity resolution work uniformly.
 - **Default local embeddings**: sentence-transformers, no API key. Users upgrade via config.
-- **Proactive echo** *(PAUSED 2026-09-04 — see [docs/plans/augi-log-paused.md](docs/plans/augi-log-paused.md))*: the one pass that runs unasked — new daily-note blocks are matched against the user's own prior writing and, when it would genuinely help, appended to a dated Augi Log with promote/feedback checkboxes. Post-ingest hook in the watcher, sibling of zzz dispatch. See [docs/reference/proactive-echo.md](docs/reference/proactive-echo.md).
+- **Proactive echo** *(PAUSED 2026-09-04)*: the one pass that runs unasked — new daily-note blocks are matched against the user's own prior writing and, when it would genuinely help, appended to a dated Augi Log with promote/feedback checkboxes. Post-ingest hook in the watcher, sibling of zzz dispatch. See [docs/reference/proactive-echo.md](docs/reference/proactive-echo.md).
 - **`get_context` dedup + MMR**: Over-fetches 3× candidates, collapses near-duplicates via cosine grouping, re-ranks for diversity before returning. See [docs/reference/MCP_SERVER.md](docs/reference/MCP_SERVER.md) for tuning.
-- **Augi Log routing** *(PAUSED 2026-09-04 — see [docs/plans/augi-log-paused.md](docs/plans/augi-log-paused.md))*: the capture/routing surface. Every new human daily-note block gets one row proposing where it lives (extend / link / file under / new note / memory / hold); the user answers with checkboxes and `aaa:` lines, ticks the day's master box, and `routing_janitor.py` applies the log — DB links, or an append-only newest-first insert into the target note for extend. Every answer is logged to teach later proposals. See [docs/reference/augi-log-routing.md](docs/reference/augi-log-routing.md).
+- **Augi Log routing** *(PAUSED 2026-09-04)*: the capture/routing surface. Every new human daily-note block gets one row proposing where it lives (extend / link / file under / new note / memory / hold); the user answers with checkboxes and `aaa:` lines, ticks the day's master box, and `routing_janitor.py` applies the log — DB links, or an append-only newest-first insert into the target note for extend. Every answer is logged to teach later proposals. See [docs/reference/augi-log-routing.md](docs/reference/augi-log-routing.md).
 
 - **Currency board**: the one surface that promises to be current — everything else stays append-only truth. A scheduled daily board (left off → next moves → ≤3 judgment items → drift), answered with done/not-doing/someday checkboxes that `board_janitor.py` appends to the feedback log and projects into the state the next board must honor (the board build only ever reads it). Its last build step is the **chat harvest**: `scripts/session_harvest.py` slices yesterday's human turns out of the local Claude/Codex transcripts and the `chat-harvest` lens offers at most one note worth keeping, as a two-box proposal carrying the drafted note in full. See [docs/reference/currency-board.md](docs/reference/currency-board.md).
 
@@ -315,12 +312,12 @@ Service management (macOS): `openaugi service install/uninstall/status` — laun
 - **openaugi-obsidian-plugin** — Obsidian-side capture/context tooling.
 - **openaugi-private** — parked; not a source of decisions.
 
-## Docs & plans
+## Docs
 
-Docs live in three tiers: **`docs/reference/`** — durable "how it works"
-manuals (the reference docs linked below); **`docs/plans/`** — design
-records and active plans (→ `docs/plans/done/` when shipped);
-**`docs/scratch/`** — gitignored throwaway. Reference docs use the skill
+Docs live in two tiers: **`docs/reference/`** — durable "how it works"
+manuals (the reference docs linked below); **`docs/scratch/`** — gitignored
+throwaway. Plans are not kept in the repo (they live in the user's notes);
+the old `docs/plans/` is in git history. Reference docs use the skill
 format (`name:`/`description:` frontmatter) so they're scannable.
 
 - [docs/reference/core-principles.md](docs/reference/core-principles.md) — **The skeleton (read first when designing):** capture grammar, truth/index/cache/render layer model, trust model, promotion — the four invariants everything else hangs on.
@@ -330,16 +327,8 @@ format (`name:`/`description:` frontmatter) so they're scannable.
 - [docs/reference/augi-ui.md](docs/reference/augi-ui.md) — **augi-ui, the pane beside the agent chat:** a Claude Code plugin in `augi-ui/` — anchor on a board card, pick a chat's context, run lenses, keep an Agent Log per anchor. Install, settings, keys, where the code lives.
 - [docs/reference/privacy-guard.md](docs/reference/privacy-guard.md) — Privacy guard: the pre-commit hook that refuses private vocabulary (word list in the vault, never the repo) and notebooks with outputs
 - [docs/reference/user-guide.md](docs/reference/user-guide.md) — Day-to-day manual: entry points, the loop, trust rules, triggering a pass, lens system in brief. Chronological build history stays in this file's STATUS header, not there.
-- [docs/reference/augi-log-routing.md](docs/reference/augi-log-routing.md) — **Routing rows in the Augi Log (PAUSED 2026-09-04; replaced the review pass for daily capture):** verbs, the master box, what each verb writes, undo, the feedback record. Design record: [docs/plans/augi-log-routing.md](docs/plans/augi-log-routing.md)
-- [docs/reference/review-pass.md](docs/reference/review-pass.md) — **The write-back loop (superseded for daily capture by Augi Log routing, 2026-09-03; `apply_routing` and the registry rule still apply):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass. Per-container view FILES were retired 2026-08-17 — recaps are `write_recap` rows. Design record: [docs/plans/review-pass-v1.md](docs/plans/review-pass-v1.md)
+- [docs/reference/augi-log-routing.md](docs/reference/augi-log-routing.md) — **Routing rows in the Augi Log (PAUSED 2026-09-04; replaced the review pass for daily capture):** verbs, the master box, what each verb writes, undo, the feedback record.
+- [docs/reference/review-pass.md](docs/reference/review-pass.md) — **The write-back loop (superseded for daily capture by Augi Log routing, 2026-09-03; `apply_routing` and the registry rule still apply):** augi_tags, capture grammar (qqq/zzz/aaa), running a pass. Per-container view FILES were retired 2026-08-17 — recaps are `write_recap` rows.
 - [docs/reference/records.md](docs/reference/records.md) — **The collection store + the test for a new MCP tool:** three generic tools for agent workflow state. Schemas live in the caller's prompt, policy in the caller's config, only mechanism in a tool. Read before adding any tool.
 - [docs/reference/recap-spec.md](docs/reference/recap-spec.md) — **What a recap contains:** only what scrolling can't give you — cross-month patterns, contradictions, unanswered questions, what's gone quiet. Not what-moved, not member lists.
-- [docs/plans/m2-feature-roadmap.md](docs/plans/m2-feature-roadmap.md) — Post-launch roadmap (Ship → Show → Adapt → Deepen → Differentiate → Lenses → Expand)
-- [docs/plans/phase3-adapters.md](docs/plans/phase3-adapters.md) — Phase 3: multi-source ingest adapters (ChatGPT, Readwise, Research, LlamaIndex bridge)
-- [docs/plans/done/heartbeat.md](docs/plans/done/heartbeat.md) — (shipped, then replaced by zzz dispatch) Heartbeat design history
-- [docs/plans/capture-tag-stream-loop.md](docs/plans/capture-tag-stream-loop.md) — Phase 4: capture → tag → stream incremental pipeline
-- [docs/plans/from-capture-to-jarvis.md](docs/plans/from-capture-to-jarvis.md) — Longer-horizon vision (layers 1–4)
-- [docs/plans/future-work.md](docs/plans/future-work.md) — Deferred features
 - [docs/reference/clustering.md](docs/reference/clustering.md) — Clustering feature: config format, data model, cluster weather (snapshots + diffs), SQL queries, param tuning guide
-- [docs/plans/hierarchical-embeddings.md](docs/plans/hierarchical-embeddings.md) — Design rationale: two-pass strategy, matryoshka truncation, bridge detection
-- [docs/plans/done/](docs/plans/done/) — Shipped milestone plans (M0, M1)

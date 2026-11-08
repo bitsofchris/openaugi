@@ -1,6 +1,6 @@
 """Golden corpus for the query layer — deterministic DB + case matrix.
 
-The read-tool refactor (docs/plans/query-layer.md step 1) needs a contract:
+The read-tool refactor (docs/plans/query-layer.md step 1, in git history) needs a contract:
 the MCP wire format must stay BYTE-stable while the query semantics move
 from mcp/server.py into query/. This module is that contract's fixture:
 

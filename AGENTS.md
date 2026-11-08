@@ -6,10 +6,11 @@ You the agent are constantly improving your ability to work in this codebase - d
 
 # Where to resume (new session entry point)
 
-1. **Start at [docs/plans/master-plan.md](docs/plans/master-plan.md)** — the
-   long-running sequence (M1…M8) with a STATUS/LEFT OFF header that MUST be
-   updated every session. Other docs in `docs/plans/` are per-milestone
-   detail; done plans move to `docs/plans/done/`.
+1. **Plans and the left-off state live in the user's notes, not this repo.**
+   The repo keeps no plans (the old `docs/plans/`, master plan included, is in
+   git history). Start from the note or task the session was given; if there
+   is none, ask what to pick up. Read [ARCHITECTURE.md](ARCHITECTURE.md) for
+   the system map.
 2. **System manual for the write-back loop:** [docs/reference/review-pass.md](docs/reference/review-pass.md)
    (augi_tags, routing, capture grammar, views).
 3. **Vault-side entry** (the user's daily driver): `View - Dashboard.md` under
@@ -79,9 +80,7 @@ message.
 | What | Lives in | Notes |
 |---|---|---|
 | System map / entry point | [ARCHITECTURE.md](ARCHITECTURE.md) | Keep current, links to everything else |
-| Active plans | `docs/plans/*.md` | Per-milestone detail |
-| **Left-off state** | [docs/plans/master-plan.md](docs/plans/master-plan.md) STATUS/LEFT OFF header | Update every session — this is the resume point |
-| Completed plans | `docs/plans/done/` | Move here when shipped |
+| Plans, left-off state | The user's notes (Obsidian), not this repo | The old `docs/plans/` is in git history |
 | Feature/system reference docs | `docs/reference/*.md` (e.g. `review-pass.md`, `clustering.md`, `lenses.md`) | Durable "how it works" manuals. **New reference docs go here, never `docs/` root.** Skill format: `name:`/`description:` frontmatter |
 | Agent skill files (runtime) | `<vault>/OpenAugi/AGENT/` | Vault copy is the source of truth, see below |
 | Agent skill templates (seed) | `src/openaugi/templates/` | Written by `scripts/sync_templates.py` from the vault's `kind: engine` files; copied on `openaugi init`; not read at runtime |
@@ -89,12 +88,11 @@ message.
 | Debug logs | `~/.openaugi/logs/openaugi.log` | Rotated, DEBUG level |
 
 **Docs layout (convention — keep it this way).** Everything under `docs/`
-is one of three tiers: **`reference/`** = durable manuals for how a
-subsystem works (the tier ARCHITECTURE.md links); **`plans/`** = design
-records and active plans, moved to `plans/done/` when shipped;
-**`scratch/`** = gitignored throwaway. When you add a doc, pick the tier
-first — a "how X works" manual is `reference/`, a "here's what we'll
-build" is `plans/`. Never drop a reference doc at `docs/` root.
+is one of two tiers: **`reference/`** = durable manuals for how a
+subsystem works (the tier ARCHITECTURE.md links); **`scratch/`** =
+gitignored throwaway. Plans and design records are not kept in the repo:
+they live in the user's notes, and the why of a change goes in its commit
+message and the CHANGELOG. Never drop a reference doc at `docs/` root.
 
 # After shipping a feature: update the Command Deck (required)
 
@@ -247,7 +245,8 @@ Load Claude Code's built-in `plugin-authoring` skill before changing
 `docs/reference/augi-ui.md` § Developing applies it to this folder.
 
 # Document as you go
-Plans go in docs/plans folder. Move them to docs/plans/done/ when done.
+Plans are tracked in the user's notes, not in this repo. When behavior
+changes, update the reference doc and the CHANGELOG in the same pass.
 
 ARCHITECTURE.md is the overall entry point map into the codebase - keep this up-to-date and walk the other docs.
 

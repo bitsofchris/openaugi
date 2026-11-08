@@ -3,7 +3,7 @@
 Complements test_query_engine (golden-corpus semantics) with a small
 purpose-built store where provenance is stamped, so both the explicit
 `provenance=[...]` keep-list and the `[retrieval] exclude_provenance`
-default can be pinned. See docs/plans/query-provenance-and-dates.md.
+default can be pinned. See docs/plans/query-provenance-and-dates.md (in git history).
 """
 
 from __future__ import annotations

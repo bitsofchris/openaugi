@@ -10,7 +10,7 @@ heading/qqq/zzz parsing. The `openaugi split` CLI is a thin wrapper over
 `split_file`.
 
 See [docs/reference/splitter.md](../../../docs/reference/splitter.md) for usage from agents and
-[docs/plans/zzz-instructions.md](../../../docs/plans/zzz-instructions.md) for
+`docs/plans/zzz-instructions.md` (removed; in git history) for
 the `zzz:` convention.
 
 ## Public API

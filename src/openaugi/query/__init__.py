@@ -1,7 +1,7 @@
 """The query layer — one engine, thin adapters.
 
 All deterministic read semantics live here (see
-docs/plans/query-layer.md). MCP, HTTP, and the CLI are presentation
+docs/plans/query-layer.md (in git history)). MCP, HTTP, and the CLI are presentation
 adapters over `engine`; `QuerySpec` is the serializable query object and
 the saved-query file format.
 

@@ -48,7 +48,7 @@ store_centroid = true
 # Lens 1B — Concept/idea clusters within each life area
 # Document-level k-means, like the coarse pass: block-level HDBSCAN gave 100%
 # noise on the live DB (long docs dominate density — see
-# docs/plans/clustering-findings.md). dims=1536 finds sub-topic structure
+# docs/plans/clustering-findings.md (in git history)). dims=1536 finds sub-topic structure
 # within a shared life area.
 [[clustering.passes]]
 id = "concepts"
@@ -375,4 +375,4 @@ Key functions:
 
 Passes with `parent_pass` always execute after their parent (topological sort). Multiple passes with `scope=all` and no parent can run in any order.
 
-See [docs/plans/hierarchical-embeddings.md](../plans/hierarchical-embeddings.md) for the full design rationale.
+See `docs/plans/hierarchical-embeddings.md` (removed; in git history) for the full design rationale.

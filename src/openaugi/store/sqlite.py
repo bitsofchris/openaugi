@@ -3,7 +3,7 @@
 Two core tables (blocks, links) plus a vec0 virtual table for semantic search.
 WAL mode for concurrent reads while the pipeline writes.
 
-See docs/plans/m0.md § Data Model for the canonical schema.
+See docs/plans/m0.md (in git history) § Data Model for the canonical schema.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS meta (
 # log is computed at render time (get_container_members); the recap is the
 # expensive part, cached per container with the membership hash it was
 # generated against so staleness is visible. See
-# docs/plans/views-as-rendered-queries.md §2.
+# docs/plans/views-as-rendered-queries.md (in git history) §2.
 _RECAPS_DDL = """
 CREATE TABLE IF NOT EXISTS recaps (
     container_id TEXT PRIMARY KEY REFERENCES blocks(id) ON DELETE CASCADE,
@@ -204,7 +204,7 @@ class SQLiteStore:
     def _apply_migrations(self, c: sqlite3.Connection) -> None:
         """Apply additive schema migrations that are safe to re-run."""
         # content_only_embedding: stores block content embedded without the title
-        # prefix. Used for clustering experiments — see docs/plans/embedding-strategy.md.
+        # prefix. Used for clustering experiments — see docs/plans/embedding-strategy.md (in git history).
         cols = {row[1] for row in c.execute("PRAGMA table_info(blocks)").fetchall()}
         if "content_only_embedding" not in cols:
             c.execute("ALTER TABLE blocks ADD COLUMN content_only_embedding BLOB")
