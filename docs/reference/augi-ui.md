@@ -22,9 +22,7 @@ search the notes through its MCP tools.
 /plugin install augi-ui --marketplace bitsofchris/openaugi
 ```
 
-Then `/augi` opens the pane. For development, load the folder directly:
-`claude --plugin-dir augi-ui`, or set `CLAUDE_CODE_PLUGIN_DIRS` to that path
-in `~/.claude/settings.json` so the desktop app loads it too.
+Then `/augi` opens the pane.
 
 ## How it works
 
@@ -59,6 +57,33 @@ skipped. Starters are never written over an existing file.
 - **Agent Log**: per anchor, a companion note that holds the pinned context,
   open questions and the chats started from the pane. The user's own note is
   never written; `⧉` copies an embed line to paste into it.
+
+## Developing
+
+The authority is Claude Code's own guide to writing plugins, the built-in
+`plugin-authoring` skill (ask Claude to load it). It ships with Claude Code and
+matches the installed version, so it is not copied here. What it says, applied
+to this folder:
+
+- **Load the working folder.** `claude --plugin-dir augi-ui` in a terminal. The
+  desktop app takes no flag: set `CLAUDE_CODE_PLUGIN_DIRS` to the folder's
+  absolute path in the `env` block of `~/.claude/settings.json`, plus
+  `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` so desktop sessions reload on save
+  (terminal sessions always do). Settings are read under `pluginConfigs`
+  `augi-ui@inline`.
+- **Check.** `claude plugin validate augi-ui` (manifest and module, as the
+  engine reads them; run it at the repo root to check the marketplace file
+  too), `claude plugin test augi-ui`, and `claude --debug` for any hook the
+  engine skipped and why.
+- **Type-check.** `tsc -p augi-ui`, against the types the engine writes to
+  `augi-ui/.claude-plugin/types/` when it loads the plugin (git-ignored by
+  the engine's own `.gitignore` there).
+- **Before sharing.** The guide's secret scan over the folder, then a read of
+  every shipped file for keys, internal URLs, other people's data or employer
+  code. The repo's privacy hook also runs on every commit
+  (`docs/reference/privacy-guard.md`).
+- **Release.** Bump `version` in `augi-ui/.claude-plugin/plugin.json` and push
+  `main`; an installed copy changes only with a new version or commit.
 
 ## Where the code lives
 

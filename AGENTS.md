@@ -240,6 +240,11 @@ and the embed of the note's Agent Log (`pmoc.md`).
 in its current state; dated rulings and vault-specific incidents stay in the
 vault's AGENT files (inside personal regions) or in `docs/scratch/`.
 
+# Working on augi-ui
+Load Claude Code's built-in `plugin-authoring` skill before changing
+`augi-ui/`; it is the authoritative guide for Claude Code plugins.
+`docs/reference/augi-ui.md` § Developing applies it to this folder.
+
 # Document as you go
 Plans go in docs/plans folder. Move them to docs/plans/done/ when done.
 
