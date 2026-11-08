@@ -70,7 +70,7 @@ Consequences:
   it's really in.
 - Render surfaces own nothing: same query API whether the pixels are in
   an Obsidian pane or the mobile app
-  (see [../plans/views-as-rendered-queries.md](../plans/views-as-rendered-queries.md)).
+  (see `docs/plans/views-as-rendered-queries.md` (removed; in git history)).
 
 ### The other axis: bronze / silver / gold — canonicity
 
@@ -163,5 +163,5 @@ How a cadence is declared instead: [lenses.md](lenses.md) "Scheduling".
 - [user-guide.md](user-guide.md) — the day-to-day manual built on these principles
 - [review-pass.md](review-pass.md) — the write-back loop (grammar + routing in practice)
 - [data-model.md](data-model.md) — the index layer in detail
-- [../plans/views-as-rendered-queries.md](../plans/views-as-rendered-queries.md) — the cache/render split, design in flight
+- `docs/plans/views-as-rendered-queries.md` (removed; in git history) — the cache/render split, design in flight
 - [../vision/values.md](../vision/values.md) — the project values these principles implement

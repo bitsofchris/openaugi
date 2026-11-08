@@ -8,7 +8,7 @@ every case in the matrix against the MCP read tools, and writes the raw
 outputs to tests/fixtures/golden/query_golden.json.
 
 Regenerate ONLY when the MCP wire format is meant to change — the whole
-point of the file is that refactors (docs/plans/query-layer.md) keep it
+point of the file is that refactors (docs/plans/query-layer.md, in git history) keep it
 byte-identical. Say why in the commit when you do.
 """
 

@@ -1,6 +1,6 @@
 ---
 name: user-guide
-description: Day-to-day manual for using OpenAugi — entry points, the capture-to-view loop, the five trust rules, how to trigger a pass, and the lens system in brief. Durable reference, kept current; chronological build history lives in docs/plans/master-plan.md, not here.
+description: Day-to-day manual for using OpenAugi — entry points, the capture-to-view loop, the five trust rules, how to trigger a pass, and the lens system in brief. Durable reference, kept current.
 ---
 
 # User Guide
@@ -8,9 +8,8 @@ description: Day-to-day manual for using OpenAugi — entry points, the capture-
 ## When to use this doc
 
 You want to know where to look, how the loop works, or how to trigger
-something — without reading code or the build history. For "what's next /
-what shipped when," go to [docs/plans/master-plan.md](../plans/master-plan.md)
-instead — that STATUS header is the chronological record; this doc is not.
+something — without reading code or the build history. For what shipped
+when, read the CHANGELOG; what's next is tracked in the user's notes.
 
 The design commitments underneath everything here — the capture grammar,
 the truth/index/cache/render layer model, the trust model, promotion —
@@ -26,7 +25,7 @@ you're designing or changing the system rather than just using it.
 | Any thread | The AMOC/PMOC/MOC note itself | Your head + your journal + the transcluded view (recap + remote-capture feed) |
 | On your phone | OpenAugi Mobile (augi app) | Capture → bridge writes to your real vault → ingest treats it like any note. `zzz:` in a block dispatches a task |
 | Obsidian palette | Augi commands (plugin) | "Run review pass" / "Process dashboard" / "Distill selection" — each writes a pending task file |
-| Repo / next Claude session | `CLAUDE.md` → [master-plan.md](../plans/master-plan.md) | The milestone sequence with a STATUS header updated every session |
+| Repo / next Claude session | `CLAUDE.md` → `AGENTS.md` | Where things live; plans are in the user's notes |
 | How does X work? | [review-pass.md](review-pass.md) | The write-back loop manual: tags vs links, grammar, running a pass |
 | Debugging | `~/.openaugi/logs/openaugi.log` | Ingest/MCP crashes |
 
@@ -130,17 +129,14 @@ decision: no web app.** The two owned surfaces are the mobile app and
 Obsidian (vault files are the API); the plugin stays a thin task-file
 writer. **M8 (data lake) is open**: the source-attribution firewall
 (`[vault.source_rules]`, `source/*` tags) and the idea-lineage lens
-shipped; Google Drive import and the curator are next. Full history and
-what's next right now: [master-plan.md](../plans/master-plan.md) STATUS
-header — read that first in any new session.
+shipped; Google Drive import and the curator are next. Full history: the
+CHANGELOG.
 
 ## Related docs
 
 - [core-principles.md](core-principles.md) — **the skeleton**: capture grammar, truth/index/cache/render, trust model, promotion — the four invariants under everything in this guide (read first when designing, not just using)
-- [master-plan.md](../plans/master-plan.md) — the sequence + STATUS header (start every session here)
 - [lenses.md](lenses.md) — lens spec format, apply/create mechanics, output modes
 - [currency-board.md](currency-board.md) — the scheduled board you read at re-entry, its checkbox contract, and the janitor that makes the next board honor your answers
 - [review-pass.md](review-pass.md) — the write-back loop manual
 - [data-model.md](data-model.md) — blocks, links, `routed_to`, taxonomy
 - [clustering.md](clustering.md) — clustering + cluster weather
-- [docs/plans/from-capture-to-jarvis.md](../plans/from-capture-to-jarvis.md) — longer-horizon vision

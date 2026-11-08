@@ -564,9 +564,8 @@ Always regenerate `View - Dashboard.md` (same folder):
   report prose (usually "What moved"), right where it's relevant — the
   Dashboard has no dumping ground. Honesty is a property of the report,
   not a section of it.
-- Permanent footer: `*How this works: docs/review-pass.md in the openaugi
-  repo · design record: docs/plans/review-pass-v1.md · agent instructions:
-  OpenAugi/AGENT/review-pass.md*` — the Dashboard is the discovery surface;
+- Permanent footer: `*How this works: docs/reference/review-pass.md in the
+  openaugi repo · agent instructions: OpenAugi/AGENT/review-pass.md*` — the Dashboard is the discovery surface;
   this line keeps the docs findable without remembering them.
 
 ## The pass, step by step

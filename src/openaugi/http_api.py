@@ -1,6 +1,6 @@
 """HTTP read adapter — plain JSON /api/* routes on the MCP daemon.
 
-The third adapter over the query engine (docs/plans/query-layer.md §3):
+The third adapter over the query engine (docs/plans/query-layer.md §3, in git history):
 UIs (mobile bridge /views, the block explorer) get the SAME semantics as
 MCP without the session handshake, and with FULL block content — the
 500-char summary truncation is agent presentation and never applies here.

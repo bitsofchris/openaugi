@@ -1,6 +1,6 @@
 """Context pack — the machine-readable sidecar for mobile capture assist.
 
-Part of the M3 read contract (docs/plans/master-plan.md): the review pass
+Part of the M3 read contract (docs/plans/master-plan.md, in git history): the review pass
 emits `<vault>/OpenAugi/context-pack.json`; the mobile bridge serves it to
 the phone at `GET /context-pack`. The shape is pinned by the mobile repo's
 `shared/contract.ts` `ContextPack` type:

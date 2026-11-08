@@ -85,4 +85,4 @@ The backend reads `cluster_assignments` from block metadata (written by the clus
 
 ## Related
 
-- [hierarchical-embeddings.md](../../docs/plans/hierarchical-embeddings.md) — the clustering plan this visualizes
+- `docs/plans/hierarchical-embeddings.md` (removed; in git history) — the clustering plan this visualizes

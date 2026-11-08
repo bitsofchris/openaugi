@@ -10,7 +10,7 @@ short/ambiguous chunks more context for retrieval (e.g. a block from a "Trading
 Journal" note would embed with that anchor). We removed it because it caused all
 blocks from the same document to cluster together — the title signal dominated
 over the block's actual semantic content, making topic clusters look like
-document clusters. See docs/plans/embedding-strategy.md for the full analysis.
+document clusters. See docs/plans/embedding-strategy.md (in git history) for the full analysis.
 """
 
 from __future__ import annotations
@@ -172,7 +172,7 @@ def run_embed_content_only(
     """Embed all blocks that need content-only embeddings (no title prefix).
 
     Writes to the content_only_embedding column. Used for clustering experiments —
-    see docs/plans/embedding-strategy.md.
+    see docs/plans/embedding-strategy.md (in git history).
     """
     blocks = store.get_blocks_needing_content_only_embeddings(kind="data_block")
     if not blocks:

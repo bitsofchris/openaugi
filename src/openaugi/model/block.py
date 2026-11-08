@@ -3,7 +3,7 @@
 Everything is a block: documents, entries, tags, clusters, summaries.
 Structure lives in the links, not in the schema.
 
-See docs/plans/m0.md for the canonical schema.
+See docs/plans/m0.md (in git history) for the canonical schema.
 """
 
 from __future__ import annotations

@@ -5,7 +5,7 @@ Source of truth for `tests/fixtures/contracts/context-pack.sample.json`: it is
 produced by running the REAL context-pack builder over the deterministic corpus
 in `tests.contract_corpus`, so the sample can never drift from the builder's
 actual output shape. Run this whenever the ContextPack contract changes, then
-run the sync script in the mobile repo (see docs/plans/task-contract-fixtures.md
+run the sync script in the mobile repo (see docs/plans/task-contract-fixtures.md (in git history)
 and README "Contract fixtures").
 
     .venv/bin/python scripts/gen_contract_fixtures.py

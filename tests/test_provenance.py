@@ -4,7 +4,7 @@ Resolution order (first match wins): explicit `provenance/*` tag in the text,
 [vault.provenance_rules] path globs, the closed set of AI/source tags, then
 `human`. Backfill applies the same rule to rows already in the DB and reports,
 without relabelling, blocks whose title matches a pattern the user names.
-See docs/plans/query-provenance-and-dates.md.
+See docs/plans/query-provenance-and-dates.md (in git history).
 """
 
 from __future__ import annotations

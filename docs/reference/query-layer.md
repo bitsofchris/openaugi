@@ -79,6 +79,6 @@ Mounted on the daemon (`openaugi serve --transport streamable-http`) — one pro
 
 ## Related
 
-- [docs/plans/query-layer.md](../plans/query-layer.md) — the design record and implementation ledger
-- [views-as-rendered-queries](../plans/views-as-rendered-queries.md) — step 5 lands on the saved-query format
+- `docs/plans/query-layer.md` (removed; in git history) — the design record and implementation ledger
+- `docs/plans/views-as-rendered-queries.md` (removed; in git history) — step 5 lands on the saved-query format
 - [MCP_SERVER.md](MCP_SERVER.md) — the agent-facing tool reference

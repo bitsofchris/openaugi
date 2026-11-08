@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**`docs/plans/` is gone; plans live in the user's notes.** The design
+records, roadmap and master plan (with its STATUS / LEFT OFF header) are
+removed and kept in git history. AGENTS.md and ARCHITECTURE.md no longer
+point a new session at a master plan; the docs layout is two tiers,
+`reference/` and gitignored `scratch/`. Code comments, tests and reference
+docs that cited a plan now say it is in git history. The review-pass
+Dashboard footer drops the design-record link.
+
 **The board's Short from today takes the `short` route.** A proposal whose
 key starts with a route verb (`propose:short-<kebab>`) is written by the board
 janitor exactly as `zzz short: …` is: `route:` / `repo:` / `remote_control:`

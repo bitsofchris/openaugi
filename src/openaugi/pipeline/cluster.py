@@ -5,7 +5,7 @@ context_block:cluster nodes linked to their member data_blocks.
 Passes can scope to "all" data_blocks or "within" the member set
 of a parent pass's clusters, forming a hierarchy.
 
-See docs/plans/hierarchical-embeddings.md for full design.
+See docs/plans/hierarchical-embeddings.md (in git history) for full design.
 """
 
 from __future__ import annotations

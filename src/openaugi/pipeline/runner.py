@@ -8,7 +8,7 @@ Incremental ingestion uses two levels of hashing:
 - Level 2 (block): within a changed file, diff entry content hashes —
   keep unchanged entries (preserving embeddings), insert new, delete removed
 
-See docs/plans/m0.md § Incremental Ingestion Strategy.
+See docs/plans/m0.md (in git history) § Incremental Ingestion Strategy.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@
 
 Every MCP read tool's raw JSON output over the deterministic corpus must be
 BYTE-identical to tests/fixtures/golden/query_golden.json. This is the
-contract that lets docs/plans/query-layer.md move query semantics out of
+contract that lets docs/plans/query-layer.md (in git history) move query semantics out of
 mcp/server.py into query/ without the wire format drifting.
 
 If a test here fails, either the refactor changed behavior (fix the code)

@@ -1,6 +1,6 @@
 """HTTP adapter contract tests — /api/* on the MCP daemon.
 
-Pins the adapter contract from docs/plans/query-layer.md step 4:
+Pins the adapter contract from docs/plans/query-layer.md (in git history) step 4:
 - route ↔ engine parity (same spec → same ids)
 - /api/* NEVER truncates content (the 500-char cut is MCP presentation)
 - read-only surface (no mutating routes exist)

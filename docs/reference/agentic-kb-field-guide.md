@@ -196,4 +196,4 @@ database textbook has them.
 
 - [core-principles.md](core-principles.md) — the four invariants, OpenAugi-specific and in full
 - [review-pass.md](review-pass.md) — the write-back loop these rules run inside
-- [../plans/views-as-rendered-queries.md](../plans/views-as-rendered-queries.md) — design record behind rules 1 and 6
+- `docs/plans/views-as-rendered-queries.md` (removed; in git history) — design record behind rules 1 and 6

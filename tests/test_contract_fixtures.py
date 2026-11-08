@@ -5,7 +5,7 @@ today only lenient parsers and convention enforce them. The golden fixtures in
 `tests/fixtures/contracts/` are the SHARED source of truth (mobile vendors
 copies via `scripts/sync-contract-fixtures.sh`); this module pins openaugi's
 side of each so a generator/parser change here can't silently drift from the
-phone. See docs/plans/task-contract-fixtures.md and the "Contract fixtures"
+phone. See docs/plans/task-contract-fixtures.md (in git history) and the "Contract fixtures"
 section of the README.
 
 The three contracts:

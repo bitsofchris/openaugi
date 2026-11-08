@@ -1,6 +1,6 @@
 """Saved queries — named QuerySpecs as markdown files in the vault.
 
-The lens principle applied to retrieval (docs/plans/query-layer.md §2):
+The lens principle applied to retrieval (docs/plans/query-layer.md §2, in git history):
 a saved query is a named, described QuerySpec living at
 `<vault>/OpenAugi/AGENT/queries/<name>.md`, beside AGENT/lenses/. The
 vault filesystem is the API — users edit these in Obsidian, agents and
