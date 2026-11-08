@@ -72,6 +72,34 @@ class RunResult(BaseModel):
     reference_block_count: int = 0
 
 
+SEMANTIC_OFF_NOTE = (
+    "Embeddings are off in this install, so this ran as a keyword search: every "
+    "word must match. Use 1-3 distinctive terms, or title/tag/date filters."
+)
+
+
+def resolve_semantic(spec, get_model):
+    """Pair a spec with the embedding model its mode needs.
+
+    Returns `(spec, model, note)`. Non-semantic specs get no model. A semantic
+    spec gets `get_model()`, unless embeddings are turned off — then it comes
+    back as its keyword twin (the query text searched by FTS) with a note the
+    caller shows, so a keyword-only install answers instead of erroring.
+    """
+    from openaugi.models import EmbeddingsDisabled
+
+    if spec.mode != "semantic":
+        return spec, None, None
+    try:
+        return spec, get_model(), None
+    except EmbeddingsDisabled:
+        return (
+            spec.model_copy(update={"keyword": spec.query, "query": None}),
+            None,
+            SEMANTIC_OFF_NOTE,
+        )
+
+
 def run(store: SQLiteStore, spec, embedding_model=None, config: dict | None = None) -> RunResult:
     """Execute a QuerySpec. Raises EmptyQuerySpec when nothing was asked.
 

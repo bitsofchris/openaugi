@@ -81,7 +81,7 @@ def register_api_routes(
                 "Empty query: provide query, keyword, title, or at least one filter.", 400
             )
         store = get_store()
-        model = get_embedding_model() if spec.mode == "semantic" else None
+        spec, model, note = engine.resolve_semantic(spec, get_embedding_model)
         result = engine.run(store, spec, embedding_model=model)
 
         routes = store.get_routed_container_titles([b.id for b in result.blocks])
@@ -104,6 +104,8 @@ def register_api_routes(
             payload["next_offset"] = result.next_offset
             payload["reference_documents"] = result.reference_documents
             payload["reference_block_count"] = result.reference_block_count
+        if note:
+            payload["note"] = note
         return _json_response(payload)
 
     def _execute_saved(name: str) -> Response:

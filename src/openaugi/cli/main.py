@@ -253,6 +253,8 @@ def ingest(
         )
 
         # Layer 1: embedding (optional — requires sentence-transformers or openai)
+        from openaugi.models import EmbeddingsDisabled
+
         try:
             from openaugi.models import get_embedding_model
             from openaugi.pipeline.embed import run_embed
@@ -263,10 +265,13 @@ def ingest(
                 console.print(f"[green]Embedded {count} blocks[/green]")
             else:
                 console.print("[dim]All blocks already embedded[/dim]")
+        except EmbeddingsDisabled:
+            console.print("[dim]🔤 Embeddings off — keyword, title, tag and link search[/dim]")
         except ImportError as e:
             console.print(
                 f"[yellow]Skipping embeddings:[/yellow] {e}\n"
-                "Install with: pip install openaugi[local]"
+                "Run 'openaugi init' to pick a search mode, or install an extra: "
+                'pip install "openaugi[local]"'
             )
     finally:
         store.close()
@@ -510,11 +515,19 @@ def re_embed(
     _setup_logging(verbose)
 
     from openaugi.config import load_config
-    from openaugi.models import get_embedding_model
+    from openaugi.models import embeddings_enabled, get_embedding_model
     from openaugi.pipeline.embed import run_embed
     from openaugi.store.sqlite import SQLiteStore
 
     config = load_config()
+    if not embeddings_enabled(config.get("models", {}).get("embedding")):
+        # Check before reset_embeddings: wiping vectors and then failing to
+        # build new ones would leave the DB worse than we found it.
+        console.print(
+            '[yellow]Embeddings are off ([models.embedding] provider = "none").[/yellow] '
+            "Run 'openaugi init' to choose a provider first."
+        )
+        raise typer.Exit(1)
     db_path = db or str(_default_db())
     store = SQLiteStore(db_path)
 
@@ -1295,10 +1308,12 @@ def _run_and_print_spec(store, spec) -> None:
     from openaugi.models import get_embedding_model
     from openaugi.query import engine
 
-    model = None
-    if spec.mode == "semantic":
-        config = load_config()
-        model = get_embedding_model(config.get("models", {}).get("embedding"))
+    def _model():
+        return get_embedding_model(load_config().get("models", {}).get("embedding"))
+
+    spec, model, note = engine.resolve_semantic(spec, _model)
+    if note:
+        console.print(f"[dim]🔤 {note}[/dim]")
 
     result = engine.run(store, spec, embedding_model=model)
 
