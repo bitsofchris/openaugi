@@ -1,0 +1,13 @@
+{
+  "name": "openaugi",
+  "owner": {
+    "name": "OpenAugi"
+  },
+  "plugins": [
+    {
+      "name": "augi-ui",
+      "source": "./augi-ui",
+      "description": "augi-ui, the OpenAugi pane beside your agent chat: anchor on a project, pick its context, run lenses, keep an Agent Log."
+    }
+  ]
+}

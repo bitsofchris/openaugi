@@ -26,6 +26,7 @@ from openaugi.agent_files import (
     NON_AGENT_TEMPLATES,
     PERSONAL,
     PersonalRegionError,
+    is_note_template,
     iter_templates,
     read_kind,
     to_template,
@@ -54,6 +55,17 @@ def plan(vault: Path, templates: Path = TEMPLATES) -> dict[str, list[str]]:
         rel = f.relative_to(agent_dir).as_posix()
         text = f.read_text(encoding="utf-8")
         kind = read_kind(text)
+        if is_note_template(rel):
+            # Shipped verbatim: its frontmatter is the note's, not a kind.
+            seen_engine.add(rel)
+            dest = templates / rel
+            if not dest.exists():
+                out["new"].append(rel)
+            elif dest.read_text(encoding="utf-8") != text:
+                out["drift"].append(rel)
+            else:
+                out["unchanged"].append(rel)
+            continue
         if kind == PERSONAL:
             out["personal"].append(rel)
             continue
@@ -76,7 +88,7 @@ def plan(vault: Path, templates: Path = TEMPLATES) -> dict[str, list[str]]:
     for rel, text in iter_templates(templates):
         if rel in seen_engine or Path(rel).name in NON_AGENT_TEMPLATES:
             continue
-        if read_kind(text) == ENGINE and rel not in seen_engine:
+        if (read_kind(text) == ENGINE or is_note_template(rel)) and rel not in seen_engine:
             out["orphan_template"].append(rel)
     return out
 
@@ -87,11 +99,14 @@ def write(vault: Path, templates: Path = TEMPLATES) -> list[str]:
     written: list[str] = []
     for f in sorted(agent_dir.rglob("*.md")):
         text = f.read_text(encoding="utf-8")
-        if read_kind(text) != ENGINE:
-            continue
         rel = f.relative_to(agent_dir).as_posix()
+        if is_note_template(rel):
+            shipped = text
+        elif read_kind(text) == ENGINE:
+            shipped = to_template(text)
+        else:
+            continue
         dest = templates / rel
-        shipped = to_template(text)
         if dest.exists() and dest.read_text(encoding="utf-8") == shipped:
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)

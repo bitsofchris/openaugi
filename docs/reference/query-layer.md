@@ -51,7 +51,7 @@ query:
 Optional prose about when to use this.
 ```
 
-Relative-date tokens resolve at **run** time (never stored resolved): `-<N>d` (N days ago), `today`, and `$review-mark` (`after_ingested` only — the review-pass high-water mark; epoch before the first pass, so the first run is a backfill). Seeds shipped by `openaugi init`: `dashboard-task-shelf`, `review-queue`, `today`.
+Relative-date tokens resolve at **run** time (never stored resolved): `-<N>d` (N days ago), `today`, and `$review-mark` (`after_ingested` only — the review-pass high-water mark; epoch before the first pass, so the first run is a backfill). `openaugi init` ships no saved queries; a vault starts with none. Examples live in `tests/fixtures/queries/`.
 
 Execute via MCP `run_query(name)` / `list_queries()`, HTTP `GET /api/queries/{name}/results` or `POST /api/query {"saved": name}`, CLI `openaugi query <name>` (bare `openaugi query` lists). The reader is lenient: unparseable files are skipped with a warning, never a crash.
 

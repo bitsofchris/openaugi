@@ -28,12 +28,11 @@ def golden_db(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def vault_with_queries(tmp_path: Path) -> Path:
-    import importlib.resources
 
     vault = tmp_path / "vault"
     folder = saved.queries_dir(vault)
     folder.mkdir(parents=True)
-    templates = importlib.resources.files("openaugi") / "templates" / "queries"
+    templates = Path(__file__).parent / "fixtures" / "queries"
     for entry in templates.iterdir():
         (folder / entry.name).write_text(entry.read_text(encoding="utf-8"))
     return vault

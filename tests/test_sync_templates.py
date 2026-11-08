@@ -42,7 +42,7 @@ def test_plan_classifies_every_outcome(tmp_path: Path):
     templates = tmp_path / "templates"
     templates.mkdir()
     (templates / "orphan.md").write_text("---\nkind: engine\n---\nold\n")
-    (templates / "task-template.md").write_text("---\nstatus: pending\n---\n")
+    (templates / "augi-zzz-task.md").write_text("---\nstatus: pending\n---\n")
     report = sync.plan(vault, templates)
     assert report["new"] == ["a.md"]
     assert report["personal"] == ["p.md"]
@@ -77,3 +77,18 @@ def test_main_check_exits_nonzero_on_missing_kind(tmp_path: Path, monkeypatch, c
     (tmp_path / "templates").mkdir()
     assert sync.main(["--check", "--vault", str(vault)]) == 1
     assert "no_kind" in capsys.readouterr().out
+
+
+NOTE = "---\noutcome: \n---\n#note-type/pmoc\n\n# Next\n\n- [ ] \n"
+
+
+def test_note_templates_ship_verbatim_without_a_kind(tmp_path: Path):
+    vault = _vault(tmp_path, {"a.md": ENGINE, "templates/PMOC.md": NOTE})
+    templates = tmp_path / "templates"
+    templates.mkdir()
+    report = sync.plan(vault, templates)
+    assert not report["no_kind"]
+    assert sorted(report["new"]) == ["a.md", "templates/PMOC.md"]
+    assert sorted(sync.write(vault, templates)) == ["a.md", "templates/PMOC.md"]
+    assert (templates / "templates" / "PMOC.md").read_text() == NOTE
+    assert sync.plan(vault, templates)["unchanged"] == ["a.md", "templates/PMOC.md"]

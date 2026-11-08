@@ -40,7 +40,19 @@ PERSONAL_CLOSE = "%% /personal %%"
 #: Files under ``templates/`` that are engine data but not agent files — they
 #: are read by the code (``dispatch.py`` hydrates the task template) and never
 #: copied into a vault's ``AGENT/`` folder.
-NON_AGENT_TEMPLATES = frozenset({"task-template.md"})
+NON_AGENT_TEMPLATES = frozenset({"augi-zzz-task.md"})
+
+#: Note templates: the starting shape of the user's own notes (a PMOC, a task
+#: note), which they copy into their editor's templates folder. Their
+#: frontmatter belongs to the notes made from them, so they carry no ``kind:``;
+#: the folder marks them engine instead. Shipped and copied verbatim.
+NOTE_TEMPLATES_DIR = "templates/"
+
+
+def is_note_template(rel: str) -> bool:
+    """True for a note template — a file under ``AGENT/templates/``."""
+    return rel.startswith(NOTE_TEMPLATES_DIR)
+
 
 _FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL)
 _KIND_RE = re.compile(r"^kind:[ \t]*([A-Za-z]+)[ \t]*(?:#.*)?$", re.MULTILINE)
@@ -151,4 +163,8 @@ def engine_templates(
     root: Path | Traversable | None = None,
 ) -> list[tuple[str, str]]:
     """The templates ``openaugi init`` copies into ``<vault>/OpenAugi/AGENT/``."""
-    return [(rel, text) for rel, text in iter_templates(root) if read_kind(text) == ENGINE]
+    return [
+        (rel, text)
+        for rel, text in iter_templates(root)
+        if read_kind(text) == ENGINE or is_note_template(rel)
+    ]

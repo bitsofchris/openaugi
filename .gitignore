@@ -16,6 +16,10 @@ storage/
 !experiments/**/tsconfig*.json
 !tests/fixtures/contracts/*.json
 !tests/fixtures/golden/*.json
+!.claude-plugin/marketplace.json
+!augi-ui/.claude-plugin/plugin.json
+!augi-ui/hooks/hooks.json
+!augi-ui/tsconfig.json
 notes_network.html
 knowledge-explorer/*.html
 .playwright-mcp/

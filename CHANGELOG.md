@@ -9,6 +9,26 @@ with any `aaa:` line, and stays on the rewritten line. Routing and echo boxes ar
 unchanged. A `do` on a board older than the key's latest answer no longer
 dispatches a second task.
 
+**`openaugi init` no longer seeds saved queries.** The three query templates
+(`dashboard-task-shelf`, `review-queue`, `today`) were never used in a real
+vault; they move to `tests/fixtures/queries/`. Saved queries themselves
+(`openaugi query`, `list_queries`, `run_query`, `/api/queries`) are unchanged.
+
+**augi-ui, a Claude Code pane, lives in `augi-ui/`.** The plugin that sits beside
+the chat — anchor on a board card, pick what the chat reads, run a lens, keep
+an Agent Log per anchor — moved into this repo, and the repo is now a plugin
+marketplace: `/plugin install augi-ui --marketplace bitsofchris/openaugi`, then
+`/augi`. It drafts prompts only. See `docs/reference/augi-ui.md`.
+
+**The PMOC and Task note templates ship, and the task file template is
+`augi-zzz-task.md`.** The vault's `AGENT/templates/PMOC.md` and `Task.md` (an
+`outcome:`, `# Next` checkboxes, `# Journal`, and a collapsed embed of the
+note's Agent Log) are now engine templates, recognised by folder rather than a
+`kind:` line, synced and copied by `openaugi init` verbatim. `pmoc.md` and
+`augi-agent.md` describe the Agent Log companion in `OpenAugi/Agent-Logs/`;
+`kanban.md` no longer names one user's board path. `task-template.md` is
+renamed `augi-zzz-task.md` so it is not mistaken for the Task note template.
+
 **The board's Short from today takes the `short` route.** A proposal whose
 key starts with a route verb (`propose:short-<kebab>`) is written by the board
 janitor exactly as `zzz short: …` is: `route:` / `repo:` / `remote_control:`
