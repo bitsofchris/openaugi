@@ -44,11 +44,17 @@ skipped. Starters are never written over an existing file.
 
 **The pane.**
 
-- **Anchor** (`a`): a linked card from the board — a project or a task. Its
-  open sub-items show as tasks; `p` opens the note you write, `k` the Agent Log.
+- **Anchor** (`a`): a linked card from the board — a project or a task. The
+  anchor belongs to the chat session: a new session opens with none, and a
+  reload or `claude --resume` of the session keeps it (`$.store`, keyed by
+  session id). Choosing one records this chat in its Agent Log. Its open
+  sub-items show as tasks; `p` opens the note you write, `k` the Agent Log, and
+  `◇` buttons open its newest three pinned artifacts.
 - **Context**: what the next chat is told to read — the anchor's notes, pinned
-  notes, files, links and coding sessions (`h` pins a recent Claude or Codex
-  session), the context note and board (`m`), and OpenAugi search (`o`).
+  artifacts (listed first), notes, files, links and coding sessions (a
+  collapsed menu pins a recent Claude or Codex session), the context note and
+  board (`m`), and OpenAugi search. An artifact the chat publishes is pinned
+  ticked; one published before an anchor was chosen is pinned when it is.
 - **Draft** (`n`): fills the prompt with that context. Nothing is sent until
   the user presses enter.
 - **Lenses (saved prompts)** (`l`): run a lens with the same context; `+ new lens`
@@ -57,9 +63,10 @@ skipped. Starters are never written over an existing file.
   Every lens in the lens folder is listed; the `lensPicks` setting narrows and orders
   the menu. Lenses follow the OpenAugi lens contract (`OpenAugi/AGENT/lens-template.md`).
 - **Agent Log**: per anchor, a companion note that holds the pinned context,
-  open questions and the chats started from the pane. Its first line links the
-  user's own note (so the note shows it as a backlink); that note is never
-  written. An older log is tidied (title and seen box dropped) when the pane next writes it.
+  open questions and every chat anchored on it (titled `chat` until a draft
+  sent from the pane names it). Its first line links the user's own note (so
+  the note shows it as a backlink); that note is never written. An older log is
+  tidied (title and seen box dropped) when the pane next writes it.
 
 ## Developing
 

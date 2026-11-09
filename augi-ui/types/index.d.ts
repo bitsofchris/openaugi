@@ -38,6 +38,10 @@ export type Swatch = {
   sessions: Session[]
   loadedAt: number
 }
+// An artifact this chat published: its URL and the title it was published under.
+export type MadeArtifact = { url: string; title: string }
+// What this chat has published, for the session `session` (a /clear starts a new list).
+export type Made = { session: string; artifacts: MadeArtifact[] }
 export type Picks = { aboutMe: boolean; openAugi: boolean; project: boolean }
 export type View = {
   anchorsOpen: boolean
@@ -52,6 +56,6 @@ export type View = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made> }
   }
 }

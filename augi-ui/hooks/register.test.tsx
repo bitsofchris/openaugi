@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { addChat, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
+import { addChat, anchorArtifacts, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
   plugin: 'augi-ui',
@@ -372,7 +372,7 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
   expect(await ui.find({ key: 'card-PMOC - Garden' })).toBeFalsy()
   await ui.press({ key: 'anchor-menu' })
   await ui.press({ key: 'card-PMOC - Garden' })
-  expect(store.get('anchor')).toBe('PMOC - Garden')
+  expect(store.get('anchors')).toEqual([['own-session', 'PMOC - Garden']])
   expect(await ui.find({ key: 'copy-embed' })).toBeFalsy()
   expect(await ui.find({ text: 'Plant the beds' })).toBeTruthy()
   expect([...written.keys()].some(path => path.includes('Trail - '))).toBe(false)
@@ -589,7 +589,7 @@ test('after the folder, setup walks the steps: found notes, a starter, or skip',
 
 test('pin context on an anchor: paste, search, tick, copy a link, unpin, and what a pane chat publishes', { options: OPTIONS }, async ($, on) => {
   const written = new Map<string, string>()
-  const store = new Map<string, unknown>([['anchor', 'PMOC - Garden']])
+  const store = new Map<string, unknown>([['anchors', [['own-session', 'PMOC - Garden']]]])
   const copied: string[] = []
   on('env.get', () => ({ value: '/Users/t' }))
   on('command.register', () => ({ value: { command: 'augi' } }))
@@ -648,16 +648,15 @@ test('pin context on an anchor: paste, search, tick, copy a link, unpin, and wha
   await ui.press({ key: 'pin-drop-file-/r/docs/ARCH.md' })
   expect(pinsNow().map(pin => pin.target)).toEqual(['Sprinkler Benchmarks'])
 
-  // Not a pane chat yet: a published artifact is not pinned.
-  await $.tool.call({ tool: 'Artifact', file_path: '/s/page.html', title: 'Cache explainer' })
-  expect(pinsNow().length).toBe(1)
-  // Once a draft from the pane is sent, this session is on the trail and its artifacts pin, unticked.
+  // An anchored chat's published artifact pins ticked; a read of another does not pin.
   await ui.press({ key: 'draft' })
   expect(filled[0]?.includes('- Note: "/v/Notes/Sprinkler Benchmarks.md"')).toBe(true)
   await $.prompt.submit({ text: filled[0] ?? '' })
   await $.tool.call({ tool: 'Artifact', file_path: '/s/page.html', title: 'Cache explainer' })
   await $.tool.call({ tool: 'Artifact', action: 'read', url: 'https://claude.ai/artifact/zzz-9' })
-  expect(pinsNow().slice(1)).toEqual([{ on: false, kind: 'artifact', target: 'https://claude.ai/artifact/abc-1', label: 'Cache explainer' }])
+  expect(pinsNow().slice(1)).toEqual([{ on: true, kind: 'artifact', target: 'https://claude.ai/artifact/abc-1', label: 'Cache explainer' }])
+  // Artifacts sort first in the context card.
+  expect((await ui.find({ key: 'pin-tick-artifact-https://claude.ai/artifact/abc-1' }))).toBeTruthy()
   // A new note it writes in the vault pins too; a file outside the vault or an edit of one there does not.
   await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/New Idea.md', content: 'x' })
   await $.tool.call({ tool: 'Write', file_path: '/tmp/scratch.md', content: 'x' })
@@ -747,5 +746,118 @@ test('a new lens is written once from its name, opened in the editor, and listed
   expect(written.size).toBe(writes)
   expect(written.has('/v/lenses/echoes.md')).toBe(false)
   expect(ran.some(argv => argv.join(' ') === `open obsidian://open?path=${encodeURIComponent('/v/lenses/echoes.md')}`)).toBe(true)
+  await ui.unmount()
+})
+
+test('a placeholder chat title takes the draft title once; a real title stays', async () => {
+  const text = addChat(trailTemplate('X', '2026-11-08'), { id: 's1', when: '2026-11-08 10:00', title: 'chat', hidden: false })
+  const named = retitleChat(text, 's1', 'echoes: why slow')
+  expect(parseTrail(named).chats[0]?.title).toBe('echoes: why slow')
+  expect(retitleChat(named, 's1', 'later')).toBe(named)
+  expect(retitleChat(text, 's2', 'other')).toBe(text)
+  const hidden = retitleChat(setHidden(text, 's1', true), 's1', 'named')
+  expect(parseTrail(hidden).chats[0]).toEqual({ id: 's1', when: '2026-11-08 10:00', title: 'named', hidden: true })
+})
+
+test('session anchors keep the latest per session, the most recent last, capped', async () => {
+  const one = withAnchor([], 'a', 'PMOC - Garden')
+  const two = withAnchor(one, 'b', 'PMOC - Birdhouse')
+  expect(withAnchor(two, 'a', 'TASK - Plant')).toEqual([['b', 'PMOC - Birdhouse'], ['a', 'TASK - Plant']])
+  expect(withAnchor(two, 'a', null)).toEqual([['b', 'PMOC - Birdhouse']])
+  expect(withAnchor(two, 'c', 'X', 2)).toEqual([['b', 'PMOC - Birdhouse'], ['c', 'X']])
+  expect(anchorPairs('PMOC - Garden')).toEqual([])
+  expect(anchorPairs([['a', 'N'], ['b'], 3])).toEqual([['a', 'N']])
+})
+
+test('artifacts: a republished url takes its new title; the anchor card shows the newest three; the context list puts them first', async () => {
+  const a = { url: 'https://claude.ai/artifact/a', title: 'A' }
+  expect(withArtifact(withArtifact([a], { url: 'https://claude.ai/artifact/b', title: 'B' }), { ...a, title: 'A2' }).map(one => one.title)).toEqual(['A2', 'B'])
+  const art = (n: number) => ({ on: true, kind: 'artifact', target: `https://claude.ai/artifact/${n}`, label: String(n) }) as const
+  const note = { on: true, kind: 'note', target: 'N', label: 'N' } as const
+  expect(anchorArtifacts([art(1), note, art(2), art(3), art(4)]).map(pin => pin.label)).toEqual(['4', '3', '2'])
+  expect(artifactsFirst([note, art(1), SESSION_PIN, art(2)]).map(pin => pin.label)).toEqual(['1', '2', 'N', SESSION_PIN.label])
+})
+
+test('a new session opens with no anchor; anchoring logs the chat, pins its artifacts ticked, and a sent draft names the chat', { options: OPTIONS }, async ($, on) => {
+  const written = new Map<string, string>()
+  // An old global anchor and another session's anchor are not this session's.
+  const store = new Map<string, unknown>([['anchor', 'PMOC - Garden'], ['anchors', [['other-session', 'PMOC - Garden']]]])
+  let session = 'new-session'
+  let url = 'https://claude.ai/artifact/early-1'
+  const opened: string[][] = []
+  on('env.get', () => ({ value: '/Users/t' }))
+  on('command.register', () => ({ value: { command: 'augi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('session.id', () => ({ value: session }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 8, 9, 30).getTime() }))
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.set', (_, e) => {
+    store.set(e.key, e.value)
+    return { value: undefined }
+  })
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md'].includes(e.path) || e.path.endsWith('Kanban.md') || written.has(e.path) }))
+  on('fs.read', (_, e) => ({ value: written.get(e.path) ?? (e.path.endsWith('Kanban.md') ? BOARD_TEXT : '') }))
+  on('fs.write', (_, e) => {
+    written.set(e.path, e.text)
+    return { value: undefined }
+  })
+  on('fs.list', () => ({ value: [] }))
+  on('process.run', (_, e) => {
+    if (e.argv[0] === 'open') {
+      opened.push(e.argv)
+    }
+    return { value: { exitCode: 0, stdout: e.argv[0] === 'find' && e.argv.includes('PMOC - Garden.md') ? '/v/PMOC - Garden.md\n' : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('tool.call', () => ({ result: { url } as never, text: `published ${url}` }))
+  const filled: string[] = []
+  on('prompt.read', () => ({ value: { text: 'explain the cache', cursor: 0 } }))
+  on('prompt.fill', (_, e) => {
+    filled.push(e.text)
+    return { isFilled: true }
+  })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  const logNow = () => parseTrail(written.get(trailPath('PMOC - Garden')) ?? '')
+
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  expect(await ui.find({ key: 'open-trail' })).toBeFalsy()
+  expect(await ui.find({ key: 'add-this-chat' })).toBeFalsy()
+
+  // Published before anchoring: remembered and shown dimly, written nowhere.
+  await $.tool.call({ tool: 'Artifact', file_path: '/s/early.html', title: 'Early plan' })
+  expect(written.size).toBe(0)
+  expect(await ui.find({ text: '◇ Early plan' })).toBeTruthy()
+
+  await ui.press({ key: 'anchor-menu' })
+  await ui.press({ key: 'card-PMOC - Garden' })
+  expect(store.get('anchors')).toEqual([['other-session', 'PMOC - Garden'], ['new-session', 'PMOC - Garden']])
+  expect(logNow().chats).toEqual([{ id: 'new-session', when: '2026-11-08 09:30', title: 'chat', hidden: false }])
+  expect(logNow().pins).toEqual([{ on: true, kind: 'artifact', target: 'https://claude.ai/artifact/early-1', label: 'Early plan' }])
+  expect(await ui.find({ key: 'anchor-artifact-https://claude.ai/artifact/early-1' })).toBeTruthy()
+  await ui.press({ key: 'anchor-artifact-https://claude.ai/artifact/early-1' })
+  expect(opened).toEqual([['open', 'https://claude.ai/artifact/early-1']])
+
+  // Published after anchoring: pinned ticked, and first in the anchor card.
+  url = 'https://claude.ai/artifact/late-2'
+  await $.tool.call({ tool: 'Artifact', file_path: '/s/late.html', title: 'Late plan' })
+  expect(logNow().pins.map(pin => [pin.target, pin.on])).toEqual([['https://claude.ai/artifact/early-1', true], ['https://claude.ai/artifact/late-2', true]])
+  expect((await ui.find({ key: 'anchor-artifact-https://claude.ai/artifact/late-2' }))?.text).toMatch(/◇ Late plan/)
+
+  // A draft sent later names the chat; the ticked artifacts go in it.
+  await ui.press({ key: 'draft' })
+  expect(filled[0]?.includes('https://claude.ai/artifact/late-2')).toBe(true)
+  await $.prompt.submit({ text: filled[0] ?? '' })
+  expect(logNow().chats.map(chat => chat.title)).toEqual(['explain the cache'])
+
+  // Another session opens with no anchor; this one's comes back when the session does.
+  session = 'third-session'
+  await ui.press({ key: 'refresh' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  expect(await ui.find({ text: '◇ Early plan' })).toBeFalsy()
+  session = 'new-session'
+  await ui.press({ key: 'refresh' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
   await ui.unmount()
 })
