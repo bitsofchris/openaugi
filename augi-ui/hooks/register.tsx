@@ -308,7 +308,7 @@ const underOutcome = (body: string): string => {
       if (isIn) {
         return ''
       }
-      isIn = /^outcome\b/i.test(heading[1])
+      isIn = /^outcome\b/i.test(heading[1] ?? '')
       continue
     }
     if (isIn && line.trim() && !/^\s*(?:<!--|%%)/.test(line)) {
@@ -435,7 +435,7 @@ export const nextFrom = (text: string): SubItem[] => {
     }
     const task = level ? line.match(/^\s*- \[ \] (.*\S.*)$/) : null
     if (task) {
-      tasks.push(subItem(task[1]))
+      tasks.push(subItem(task[1] ?? ''))
     }
   }
 
@@ -515,7 +515,7 @@ export const kanbanCards = (text: string): Card[] => {
     }
     const task = line.match(/^\t- \[ \] (.+)$/)
     if (current && task) {
-      current.tasks.push(subItem(task[1]))
+      current.tasks.push(subItem(task[1] ?? ''))
     }
   }
 
@@ -1175,8 +1175,8 @@ export const retitleChat = (text: string, id: string, title: string): string =>
     .map(line => {
       const found = line.match(CHAT_LINE)
 
-      return found && found[3] === id && found[2].trim() === CHAT_PLACEHOLDER
-        ? chatLine({ when: found[1], title, id, hidden: Boolean(found[4]) })
+      return found && found[3] === id && (found[2] ?? '').trim() === CHAT_PLACEHOLDER
+        ? chatLine({ when: found[1] ?? '', title, id, hidden: Boolean(found[4]) })
         : line
     })
     .join('\n')
