@@ -249,8 +249,8 @@ test('a new-task draft asks the chat to fill in the note and its Agent Log, and 
   const text = newTaskDraft('/v/Fix the gate.md', '/v/Notes/Agent Log - Fix the gate.md', 'Fix the gate')
   expect(text.startsWith('Context for this chat:\n')).toBe(true)
   expect(text.includes('"/v/Fix the gate.md"')).toBe(true)
-  expect(text.includes('`outcome:`')).toBe(true)
-  expect(text.includes('`# Next`')).toBe(true)
+  expect(text.includes('headings in the note, not frontmatter')).toBe(true)
+  expect(text.includes('Next checkboxes')).toBe(true)
   expect(text.includes('## Context in its Agent Log "/v/Notes/Agent Log - Fix the gate.md"')).toBe(true)
   expect(chatTitleFrom(text)).toBe('fill in the new task Fix the gate')
 })
@@ -261,6 +261,10 @@ test('the outcome comes from the note frontmatter', async () => {
   expect(outcomeFrom('---\noutcome: \nstatus: active\n---\n**Outcome:** the sprinkler serves a day in 1s\n')).toBe('the sprinkler serves a day in 1s')
   expect(outcomeFrom('#area/x\n\nOutcome: a mod I use daily.\n# Journal')).toBe('a mod I use daily.')
   expect(outcomeFrom('# Journal\nno outcome here')).toBe('')
+  // A template that keeps the outcome under a heading wins over the frontmatter line.
+  expect(outcomeFrom('---\noutcome: old\n---\n### Outcome\n\nThe gate latches.\n\n### Verify\n\nPush it.\n')).toBe('The gate latches.')
+  expect(outcomeFrom('##### Outcome\n- [[The gate]] latches\n# Next')).toBe('The gate latches')
+  expect(outcomeFrom('---\noutcome: kept\n---\n### Outcome\n\n### Verify\nPush it.\n')).toBe('kept')
 })
 
 test('a trail note starts empty, takes chats newest first, once each', async () => {

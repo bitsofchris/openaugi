@@ -68,7 +68,7 @@ skipped. Starters are never written over an existing file.
   or no `Up:` line, `jira:` in the frontmatter), adds `- [ ] [[<title>]]` to the board after
   the anchor's card and its sub-items (else at the end of the first column),
   pins this chat's transcript to the new task's Agent Log, anchors on it, and
-  leaves an unsent draft asking the chat to fill in `outcome:`, `# Next` and the
+  leaves an unsent draft asking the chat to fill in the note's own outcome, verify and Next sections and the
   Agent Log's `## Context` (with Jira on and no key typed, also to find the
   task's issue). It never writes over a note that already exists.
 - **Jira** (optional): the pane never calls Jira itself, because Jira MCP servers

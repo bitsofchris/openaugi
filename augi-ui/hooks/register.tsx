@@ -299,15 +299,36 @@ export const descriptionFrom = (text: string): string => {
   return found.trim()
 }
 
-// The outcome: `outcome:` in the frontmatter, else an `Outcome:` line in the body
-// (`**Outcome:**` too). An empty frontmatter value falls through to the body.
+// The first line of text under a heading named Outcome (any level), up to the next heading.
+const underOutcome = (body: string): string => {
+  let isIn = false
+  for (const line of body.split('\n')) {
+    const heading = line.match(/^#{1,6}\s+(.+?)\s*$/)
+    if (heading) {
+      if (isIn) {
+        return ''
+      }
+      isIn = /^outcome\b/i.test(heading[1])
+      continue
+    }
+    if (isIn && line.trim() && !/^\s*(?:<!--|%%)/.test(line)) {
+      return plain(line.replace(/^\s*(?:[-*]\s+)?(?:\[[ x]\]\s+)?/, ''))
+    }
+  }
+
+  return ''
+}
+
+// The outcome: the text under the note's Outcome heading (where a task template keeps
+// it), else `outcome:` in the frontmatter, else an `Outcome:` line in the body
+// (`**Outcome:**` too). An empty one falls through to the next.
 export const outcomeFrom = (text: string): string => {
   const front = text.match(/^---\n([\s\S]*?)\n---/)
   const fromFront = (front?.[1] ?? '').match(/^outcome:[ \t]*(?:>-?[ \t]*\n[ \t]+)?(.+)$/m)?.[1] ?? ''
   const body = front ? text.slice(front[0].length) : text
   const fromBody = body.match(/^[ \t]*(?:\*\*)?outcome(?:\*\*)?[ \t]*:[ \t]*(?:\*\*)?[ \t]*(.+)$/im)?.[1] ?? ''
 
-  return (fromFront.trim() || fromBody.trim()).replace(/^"|"$/g, '')
+  return (underOutcome(body) || fromFront.trim() || fromBody.trim()).replace(/^"|"$/g, '')
 }
 
 // A scratchpad entry as a Journal line: `- HH:MM text`, further lines indented under it.
@@ -717,7 +738,7 @@ export const newTaskDraft = (notePath: string, logPath: string, name: string, ji
   [
     DRAFT_HEAD,
     `- A task note was just made from this chat: "${notePath}".`,
-    "- From what this chat has done, fill in its `outcome:` line and its `# Next` checkboxes. This once you may write that note: I'm asking.",
+    "- From what this chat has done, fill in the sections the note already has for its outcome and how to verify it (headings in the note, not frontmatter, unless the note only has an `outcome:` line) and its Next checkboxes. Add no headings the note doesn't have. This once you may write that note: I'm asking.",
     `- Put the context worth keeping (decisions, files, links) under ## Context in its Agent Log "${logPath}", one line each on why it matters.`,
     ...(jira ? jiraFindSteps('this task', jira.project, jira.server) : []),
     'Reply in a few lines with what you wrote.',
