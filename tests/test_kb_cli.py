@@ -44,7 +44,12 @@ def _point_at_test_db(db: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(out_vault))
     # Keyword-only, whatever ~/.openaugi/config.toml on this machine says: the
     # default provider (sentence-transformers) is not installed in CI.
-    keyword_only = _merge(DEFAULT_CONFIG, {"models": {"embedding": {"provider": "none"}}})
+    # Sync off: these tests read a DB built from the fixture vault while writes
+    # go to an empty vault; sync-before-read has its own tests (test_kb_sync.py).
+    keyword_only = _merge(
+        DEFAULT_CONFIG,
+        {"models": {"embedding": {"provider": "none"}}, "kb": {"auto_sync": False}},
+    )
     monkeypatch.setattr(srv, "load_config", lambda *a, **k: keyword_only)
     srv._store = None
     srv._embedding_model = None

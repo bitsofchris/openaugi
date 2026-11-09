@@ -37,6 +37,13 @@ DEFAULT_CONFIG = {
         ],
         "max_workers": 4,
     },
+    "kb": {
+        # `openaugi kb` refreshes the index (incremental ingest, plus embeddings
+        # if configured) before answering when the last refresh is older than
+        # this. Skipped while `openaugi up` runs — its watcher keeps it fresh.
+        "auto_sync": True,
+        "sync_after_seconds": 60,
+    },
     "hub": {
         "weights": {"in_links": 0.5, "out_links": 0.3, "entry_count": 0.2},
     },

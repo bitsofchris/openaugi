@@ -175,12 +175,28 @@ def _call_tool(name: str, arguments: dict) -> Any:
     return "".join(getattr(block, "text", "") for block in result)
 
 
+# Set by the `kb` group callback from --no-sync. Module state because the
+# generated commands are built once and shared.
+_state = {"sync": True}
+
+
+def _sync_index() -> None:
+    """Refresh a stale index before answering (pipeline/kb_sync.py). Never fails the call."""
+    if not _state["sync"]:
+        return
+    from openaugi.pipeline.kb_sync import sync_before_read
+
+    server = _server()
+    sync_before_read(server._get_db_path(), server._get_vault_path(), server.load_config())
+
+
 def _make_command(
     name: str, description: str | None, params: list[_Param], run: Callable[[dict], Any]
 ):
     by_name = {p.name: p for p in params}
 
     def callback(**values):
+        _sync_index()
         read_stdin = _stdin_reader()
         arguments = {}
         for key, value in values.items():
@@ -270,6 +286,15 @@ How to search:
 Results are summaries. Read full content:
   openaugi kb get-block --block-id ID
   openaugi kb get-blocks --block-ids ID1 --block-ids ID2
+Every result carries its source_path. For the exact current text of a note
+the user may be editing right now, open that file.
+
+\b
+Freshness: before answering, a call re-indexes the notes that changed when
+the index is over a minute old (about a second; config [kb]
+sync_after_seconds, auto_sync). It is skipped while `openaugi up` runs, since
+its watcher keeps the index fresh. Pass --no-sync to answer from the index
+as it is.
 
 \b
 Writing (lands only under the vault's OpenAugi/ folder):
@@ -296,11 +321,15 @@ kb_app = typer.Typer(
 def kb_main(
     db: str | None = typer.Option(None, "--db", help="Database path (default ~/.openaugi)"),
     vault: str | None = typer.Option(None, "--vault", help="Vault path (default: config)"),
+    no_sync: bool = typer.Option(
+        False, "--no-sync", help="Answer from the index as it is; skip the freshness check"
+    ),
 ):
     # FastMCP logs at INFO on import; an agent reading this output wants the
     # JSON and real problems only.
     for name in ("mcp", "httpx", "httpcore", "openai", "openaugi"):
         logging.getLogger(name).setLevel(logging.WARNING)
+    _state["sync"] = not no_sync
     if db:
         os.environ["OPENAUGI_DB"] = db
     if vault:

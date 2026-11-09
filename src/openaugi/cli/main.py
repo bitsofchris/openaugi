@@ -129,19 +129,10 @@ def _ingest_vault(vault_path: str, store, config: dict) -> tuple[dict, bool]:
     `first_ingest` is true when the database held no blocks before this run —
     the one ingest where every `zzz:` in the vault looks new.
     """
-    from openaugi.pipeline.runner import run_layer0
+    from openaugi.pipeline.runner import run_layer0_from_config
 
     first_ingest = store.get_stats()["total_blocks"] == 0
-    vault_cfg = config.get("vault", {})
-    result = run_layer0(
-        vault_path,
-        store,
-        exclude_patterns=vault_cfg.get("exclude_patterns"),
-        max_workers=vault_cfg.get("max_workers", 4),
-        source_rules=vault_cfg.get("source_rules"),
-        provenance_rules=vault_cfg.get("provenance_rules"),
-    )
-    return result, first_ingest
+    return run_layer0_from_config(vault_path, store, config), first_ingest
 
 
 def _queue_zzz(

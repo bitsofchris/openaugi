@@ -376,7 +376,7 @@ def next_steps(search: SearchMode, auto: bool) -> list[tuple[str, str]]:
         ]
     else:
         steps += [
-            ("openaugi ingest", "index your vault — run it again whenever you want it fresh"),
+            ("openaugi ingest", "index your vault once; kb calls keep it fresh after that"),
             ('openaugi kb get-context --query "budget"', "what an agent sees: JSON, then exit"),
         ]
     return steps

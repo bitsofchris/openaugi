@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.2 — 2026-11-09
+
+**A Light install keeps its own index fresh.** Before answering, an
+`openaugi kb` call re-indexes the notes that changed when the index is over
+a minute old: the same incremental ingest as `openaugi ingest`, about half a
+second to a second on a vault of several thousand notes, so an agent reads
+the vault as it is now with nothing running in the background. A burst of
+calls pays it once and concurrent calls never both sync. It is skipped while
+`openaugi up` runs, never fails a read, and launches nothing (new `zzz:`
+lines are queued as `ingest` queues them). The first `kb` call on a vault
+that was never ingested indexes it. Tune with `[kb] auto_sync` and
+`sync_after_seconds`; `openaugi kb --no-sync` skips it for one call.
+
 ## 0.4.1 — 2026-11-09
 
 **Upgrading from 0.3.x:** nothing to change. An existing config keeps working
