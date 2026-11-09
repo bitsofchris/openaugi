@@ -20,6 +20,8 @@ export type Options = {
   // The one flat folder every new task note goes to; empty means the notes folder's root.
   taskFolder: string
   lensPicks: string
+  // `no` keeps the pane closed until /augi; anything else opens it with each new chat.
+  openOnStart: string
   // Jira, all optional: the project key or board quoted into drafts, the site's base URL
   // (only to open an issue in the browser), and the MCP server's name as /mcp lists it.
   jiraProject: string
@@ -246,6 +248,8 @@ const SESSION_KEYS = 'abcde'
 // No `p`: it opens the anchor's note while the lens menu is open.
 const EDIT_KEYS = 'qwtyui'
 const PANE = 'augi'
+// How often an open pane checks whether another chat changed its anchor's files.
+const SYNC_MS = 10000
 // Augi's face (an otter, for old times' sake) on surfaces that draw Svg (desktop, editor, phone); the terminal skips it.
 const AUGI_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="14" cy="16" r="7" fill="#8a5a3b"/><circle cx="50" cy="16" r="7" fill="#8a5a3b"/><circle cx="14" cy="16" r="3.5" fill="#5e3b25"/><circle cx="50" cy="16" r="3.5" fill="#5e3b25"/><circle cx="32" cy="34" r="24" fill="#a06a45"/><ellipse cx="32" cy="43" rx="15" ry="11" fill="#e8cfb0"/><circle cx="23" cy="30" r="3.2" fill="#2b1a10"/><circle cx="41" cy="30" r="3.2" fill="#2b1a10"/><circle cx="24" cy="29" r="1" fill="#fff"/><circle cx="42" cy="29" r="1" fill="#fff"/><ellipse cx="32" cy="38" rx="4.5" ry="3" fill="#2b1a10"/><path d="M32 41v3M28 46q4 3 8 0" stroke="#2b1a10" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M20 41l-9-2M20 44l-9 1M44 41l9-2M44 44l9 1" stroke="#5e3b25" stroke-width="1" stroke-linecap="round"/></svg>'
 const DRAFT_HEAD = 'Context for this chat:'
@@ -1861,6 +1865,56 @@ async function setSessionAnchor($: EngineInterface, note: string | null): Promis
 
 // Anchors this session on `note`: the pane (when it has loaded) shows it, and what the
 // chat already published is pinned to it, ticked. The caller records the chat.
+// When the board, the anchor's note and its Agent Log were last changed, as one string.
+async function anchorStamp($: EngineInterface, note: string, notePath: string): Promise<string> {
+  const stamps: string[] = []
+  for (const path of [P.board, trailPath(note), notePath]) {
+    let at = 0
+    try {
+      at = path && (await $.fs.exists(path)) ? (await $.fs.stat(path)).mtimeMs : 0
+    } catch {
+      at = 0
+    }
+    stamps.push(String(at))
+  }
+
+  return stamps.join('|')
+}
+
+// What the pane last saw of those files. Another chat on the same anchor writes the same
+// Agent Log; this is how this chat's pane notices and reads it again.
+let seenStamp = ''
+let anchorWatch: { cancel: () => void } | null = null
+
+// Reads the board and the anchor again when one of its files changed since the pane
+// last looked. Three stats when nothing changed.
+export async function resync($: EngineInterface): Promise<void> {
+  const { anchor, notePath, loadedAt } = await read($, swatch)
+  if (!anchor || loadedAt <= 1) {
+    return
+  }
+  const stamp = await anchorStamp($, anchor.note, notePath)
+  if (stamp === seenStamp) {
+    return
+  }
+  seenStamp = stamp
+  const cards = kanbanCards(await readOr($, P.board))
+  const found = await loadAnchor($, cards)
+  await update($, swatch, old => (old.anchor?.note === anchor.note ? { ...old, cards, ...found, hits: old.hits } : old))
+}
+
+// Checks the anchor's files every few seconds while the pane is open in this process.
+function watchAnchor($: EngineInterface): void {
+  try {
+    anchorWatch?.cancel()
+    anchorWatch = $.clock.every(SYNC_MS, () => {
+      resync($).catch(() => undefined)
+    })
+  } catch {
+    anchorWatch = null
+  }
+}
+
 async function anchorSession($: EngineInterface, note: string): Promise<void> {
   await setSessionAnchor($, note)
   const { cards, loadedAt } = await read($, swatch)
@@ -2490,6 +2544,17 @@ export const register: Register = (on, options) => {
     if ((await read($, swatch)).loadedAt > 0) {
       await load($)
     }
+    // A new interactive chat opens with the pane beside it, unless that is turned off.
+    // Never in the way of the session starting: a failure here only skips the pane.
+    try {
+      if (e.isInteractive && e.surface && settings.openOnStart !== 'no') {
+        await load($)
+        await $.ui.open({ id: PANE, title: 'Augi' })
+        watchAnchor($)
+      }
+    } catch {
+      // The pane stays closed; /augi opens it.
+    }
 
     return next(e)
   })
@@ -2519,6 +2584,7 @@ export const register: Register = (on, options) => {
     }
     await load($)
     await $.ui.open({ id: PANE, title: 'Augi' })
+    watchAnchor($)
 
     return { text: 'Augi is open. Pick an anchor, tick its context, then draft a prompt or run a lens. It only drafts; you press enter.' }
   })
@@ -2536,6 +2602,9 @@ export const register: Register = (on, options) => {
         await $.ui.toast(`Augi couldn't record this chat: ${String(error)}`)
       }
     }
+
+    // Sending a prompt is a good moment to catch up with what other chats wrote.
+    resync($).catch(() => undefined)
 
     return next(e)
   })
@@ -3049,6 +3118,9 @@ export const register: Register = (on, options) => {
         )}
         {shown.setupOpen && (
           <Input key="set-jiraServer" label="  MCP server" value={settings.jiraServer ?? ''} placeholder="as /mcp lists it; empty looks for one" onSubmit={value => setOption($, 'jiraServer', value)} />
+        )}
+        {shown.setupOpen && (
+          <Button key="set-openOnStart" plain label={`  ${mark(settings.openOnStart !== 'no')} open Augi with every new chat`} onPress={() => setOption($, 'openOnStart', settings.openOnStart === 'no' ? 'yes' : 'no')} />
         )}
         {shown.setupOpen && (
           <Input key="set-lensPicks" label="  lenses to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />

@@ -1904,3 +1904,63 @@ test('files this chat touched: listed newest first, opened in the right editor, 
   expect(await rowOf('/r/src/new.ts')).toMatch(/^ {2}src\/new\.ts new open/)
   await ui.unmount()
 })
+
+// padHooks without the events a test wants to answer itself.
+const except = (on: On, names: string[]): On => ((name: string, ...rest: unknown[]) => (names.includes(name) ? undefined : (on as unknown as (...args: unknown[]) => unknown)(name, ...rest))) as unknown as On
+
+test('another chat writes the anchor log: this pane reads it again when the file changed, and not otherwise', { options: OPTIONS }, async ($, on) => {
+  const written = new Map<string, string>()
+  const store = new Map<string, unknown>([['anchors', [['own-session', 'PMOC - Garden']]]])
+  padHooks(except(on, ['fs.read']), store, written, [])
+  let mtime = 1
+  let reads = 0
+  on('fs.stat', () => ({ value: { kind: 'file', size: 1, mtimeMs: mtime, isLink: false } }))
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  on('fs.read', (_, e) => {
+    reads += e.path.includes('Agent Log - ') ? 1 : 0
+    return { value: written.get(e.path) ?? (e.path.endsWith('Kanban.md') ? BOARD_TEXT : '') }
+  })
+
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.input({ key: 'capture-0', text: 'mine' })
+  const log = trailPath('PMOC - Garden')
+  // The other chat parks a question in the same log.
+  written.set(log, addQuestion(written.get(log) ?? '', { when: '2022-01-05 10:00', text: 'from the other chat', done: false }))
+  mtime = 2
+  await $.prompt.submit({ text: 'hello' })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(await ui.find({ text: 'from the other chat' })).toBeTruthy()
+  // Nothing changed since: the log is not read again.
+  const before = reads
+  await $.prompt.submit({ text: 'hello again' })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(reads).toBe(before)
+  await ui.unmount()
+})
+
+test('a new interactive chat opens the pane; openOnStart no, or a headless start, leaves it closed', { options: OPTIONS }, async ($, on) => {
+  let opened = 0
+  padHooks(except(on, ['ui.open']), new Map(), new Map(), [])
+  on('ui.open', () => {
+    opened += 1
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/r', surface: null, isInteractive: false })
+  expect(opened).toBe(0)
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  expect(opened).toBe(1)
+})
+
+test('with openOnStart no, a new chat does not open the pane', { options: { ...OPTIONS, openOnStart: 'no' } }, async ($, on) => {
+  let opened = 0
+  padHooks(except(on, ['ui.open']), new Map(), new Map(), [])
+  on('ui.open', () => {
+    opened += 1
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  expect(opened).toBe(0)
+})

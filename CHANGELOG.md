@@ -57,6 +57,12 @@ task's draft asks the chat to fill Outcome and Verify, and a Jira key on a
 note without frontmatter is a `Jira: KEY` line under `Up:` rather than a
 frontmatter field. The PMOC template keeps its shape.
 
+**augi-ui: the pane opens with each chat and follows its anchor.** A new
+interactive chat opens the pane (`openOnStart`, `no` to turn it off). An open
+pane re-reads the board, the anchor's note and its Agent Log when one of them
+changed, checked every ten seconds and when a prompt is sent, so chats sharing
+an anchor see each other's changes.
+
 **augi-ui: the pane is two sections.** "This chat" has the anchor, its
 questions and chats, and the scratchpad. "Anywhere" has the context picker
 (renamed from Project context: it pulls from the whole notes folder), the

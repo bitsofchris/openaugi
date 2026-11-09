@@ -43,11 +43,18 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `jiraSite` | Optional. The Jira site's base URL (`https://example.atlassian.net`), only to open a linked issue in the browser | — |
 | `jiraServer` | Optional. The Jira MCP server's name as `/mcp` lists it; empty looks for a likely one | — |
 | `lensPicks` | Lenses listed first, comma separated; empty lists all | — |
+| `openOnStart` | `yes` opens the pane when a new interactive chat starts; `no` keeps it closed until `/augi` | `yes` |
 
 Each missing file can be created as a starter, pointed at an existing note, or
 skipped. Starters are never written over an existing file.
 
 **The pane.**
+
+It opens with each new interactive chat (turn that off with `openOnStart`, or
+the switch under Setup). An open pane follows its anchor's files: every ten
+seconds, and when a prompt is sent, it checks whether the board, the anchor's
+note or its Agent Log changed and reads them again if so, so two chats on one
+anchor see each other's questions, pins and tasks without a refresh.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
 chat is attached to: the anchor card, its questions, chats and saved notes, the

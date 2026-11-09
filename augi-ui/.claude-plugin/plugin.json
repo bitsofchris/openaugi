@@ -93,6 +93,16 @@
       "title": "Lens picks",
       "description": "Lens names to show, comma separated, in this order. Empty shows every lens in the lens folder.",
       "default": ""
+    },
+    "openOnStart": {
+      "type": "string",
+      "title": "Open with every new chat",
+      "description": "yes opens the Augi pane when a new interactive chat starts; no keeps it closed until you type /augi.",
+      "default": "yes",
+      "options": [
+        "yes",
+        "no"
+      ]
     }
   }
 }
