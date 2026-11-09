@@ -29,8 +29,6 @@ export type Swatch = {
   outcome: string
   // Open checkboxes under the note's Next heading.
   next: string[]
-  // Whether the note already embeds its Agent Log.
-  hasEmbed: boolean
   trail: Trail
   // Where each pinned note was found, by name.
   pinPaths: Record<string, string>

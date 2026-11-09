@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { addChat, embedFor, hasEmbedOf, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensNames, newLensDraft, onePerCodexRun, outcomeFrom, parseTrail, setHidden, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
+import { addChat, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
   plugin: 'augi-ui',
@@ -124,11 +124,16 @@ test('the menu is the picks in order; with none, every lens', async () => {
   configure(resolvePaths(OPTIONS, '/Users/t'))
 })
 
-test('a new-lens draft asks for the lens contract and keeps what was typed', async () => {
-  const text = newLensDraft('check my tests')
-  expect(text.includes('trigger: on-demand')).toBe(true)
-  expect(text.includes('augi: true')).toBe(false)
-  expect(text.endsWith('What it should do: check my tests')).toBe(true)
+test('a new lens is a file-safe name and a skeleton in the lens contract', async () => {
+  expect(lensFileName('  check my tests.md ')).toBe('check-my-tests')
+  expect(lensFileName('a/b: [[c]]#d')).toBe('a-b-c-d')
+  expect(lensFileName('  ..  ')).toBe('')
+  const text = newLensSkeleton('check-my-tests')
+  expect(text.startsWith('---\nname: check-my-tests\ndescription: ')).toBe(true)
+  for (const line of ['trigger: on-demand', 'target: chat — answers in the conversation and writes nothing.', 'kind: personal', '# check-my-tests', 'Paste the prompt here.']) {
+    expect(text.split('\n').includes(line)).toBe(true)
+  }
+  expect(text.includes('scope: ')).toBe(true)
 })
 
 test('toggled adds and removes', async () => {
@@ -170,7 +175,9 @@ test('the outcome comes from the note frontmatter', async () => {
 
 test('a trail note starts empty, takes chats newest first, once each', async () => {
   const empty = trailTemplate('PMOC - Garden', '2026-11-08')
-  expect(empty.includes('- [ ] seen')).toBe(true)
+  expect(empty.includes('seen')).toBe(false)
+  expect(empty.includes('\n# ')).toBe(false)
+  expect(empty.split('---\n')[2]?.split('\n')[1]?.startsWith('Human note: [[PMOC - Garden]]. ')).toBe(true)
   expect(parseTrail(empty)).toEqual({ questions: [], chats: [], saved: [], pins: [] })
 
   const one = addChat(empty, { id: 's1', when: '2026-11-08 10:00', title: 'echoes: why slow', hidden: false })
@@ -366,7 +373,7 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
   await ui.press({ key: 'anchor-menu' })
   await ui.press({ key: 'card-PMOC - Garden' })
   expect(store.get('anchor')).toBe('PMOC - Garden')
-  expect(await ui.find({ key: 'copy-embed' })).toBeTruthy()
+  expect(await ui.find({ key: 'copy-embed' })).toBeFalsy()
   expect(await ui.find({ text: 'Plant the beds' })).toBeTruthy()
   expect([...written.keys()].some(path => path.includes('Trail - '))).toBe(false)
   // The anchor card opens the human and agent notes; overall context lives under Setup.
@@ -669,11 +676,76 @@ test('Next lists the open checkboxes under the Next heading only', async () => {
   expect(nextFrom('# Journal\n- [ ] a')).toEqual([])
 })
 
-test('the Agent Log is named for its note, and the embed is a collapsed callout the note can hold', async () => {
+test('the Agent Log is named for its note and links it first, with no title or seen box', async () => {
   expect(logName('PMOC - A/B')).toBe('Agent Log - PMOC - A-B')
-  const embed = embedFor('PMOC - Garden')
-  expect(embed).toBe('# Agent Log\n\n> [!abstract]- Agent Log\n> ![[Agent Log - PMOC - Garden]]\n')
-  expect(hasEmbedOf(`# Journal\n${embed}`, 'PMOC - Garden')).toBe(true)
-  expect(hasEmbedOf('# Journal', 'PMOC - Garden')).toBe(false)
-  expect(trailTemplate('PMOC - Garden', '2026-11-08').includes('# Agent Log - PMOC - Garden')).toBe(true)
+  const log = trailTemplate('PMOC - Garden', '2026-11-08')
+  expect(log.includes('# Agent Log - PMOC - Garden')).toBe(false)
+  expect(log.includes('type: document\n')).toBe(true)
+  expect(log.includes('created: 2026-11-08\n---\n\nHuman note: [[PMOC - Garden]]. Context lines')).toBe(true)
+})
+
+const OLD_INTRO = 'Project: [[PMOC - Garden]], embedded there under # Agent Log. Context lines are `- [x] [[note]] · why it matters` (ticked goes into the next draft). Hidden chats stay listed, marked `(hidden)`.'
+
+test('an older Agent Log loses its title and seen box, gains the note link, and keeps its sections', async () => {
+  const sections = ['## Context', '', '- [x] [[A note]] · why', '', '## Questions', '', '- [x] 2022-01-04 10:00 · q', '', '## Chats', '', '## Saved', '']
+  const old = ['---', 'type: document', 'description: d', 'created: 2022-01-04', '---', '', '# Agent Log - PMOC - Garden', '', '- [x] seen', '', OLD_INTRO, '', ...sections].join('\n')
+  const tidy = tidyTrail(old, 'PMOC - Garden')
+  expect(tidy).toBe(trailTemplate('PMOC - Garden', '2022-01-04').replace(/description: .*/, 'description: d').split('## Context')[0] + sections.join('\n'))
+  expect(tidyTrail(tidy, 'PMOC - Garden')).toBe(tidy)
+  expect(parseTrail(tidy)).toEqual(parseTrail(old))
+  expect(tidyTrail(trailTemplate('PMOC - Garden', '2022-01-04'), 'PMOC - Garden')).toBe(trailTemplate('PMOC - Garden', '2022-01-04'))
+
+  // A moved trail and a log with no link line get the link line; a seen line inside a section stays.
+  const trail = tidyTrail('# Trail - PMOC - Garden\n\n## Chats\n- [ ] seen it\n', 'PMOC - Garden')
+  expect(trail.startsWith('Human note: [[PMOC - Garden]]. ')).toBe(true)
+  expect(trail.endsWith('\n\n## Chats\n- [ ] seen it\n')).toBe(true)
+  const bare = tidyTrail('---\ntype: document\n---\n## Chats\n', 'PMOC - Garden')
+  expect(bare.startsWith('---\ntype: document\n---\n\nHuman note: [[PMOC - Garden]]. ')).toBe(true)
+  expect(bare.endsWith('\n\n## Chats\n')).toBe(true)
+})
+
+test('a new lens is written once from its name, opened in the editor, and listed', { options: { ...OPTIONS, lensPicks: '' } }, async ($, on) => {
+  const written = new Map<string, string>()
+  const ran: string[][] = []
+  on('env.get', () => ({ value: '/Users/t' }))
+  on('command.register', () => ({ value: { command: 'augi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 8, 9, 30).getTime() }))
+  on('store.get', () => ({ value: undefined }))
+  on('session.id', () => ({ value: 'own-session' }))
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/lenses/echoes.md', '/v/AGENT/Slowly Changing Context.md'].includes(e.path) || e.path.endsWith('Kanban.md') || written.has(e.path) }))
+  on('fs.read', (_, e) => ({ value: written.get(e.path) ?? (e.path.endsWith('Kanban.md') ? BOARD_TEXT : 'description: Have I\n') }))
+  on('fs.write', (_, e) => {
+    written.set(e.path, e.text)
+    return { value: undefined }
+  })
+  on('fs.list', (_, e) => {
+    const file = (name: string) => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false })
+    const names = ['echoes.md', ...[...written.keys()].filter(path => path.startsWith('/v/lenses/')).map(path => path.slice('/v/lenses/'.length))]
+
+    return { value: e.path.endsWith('/lenses') ? names.map(file) : [] }
+  })
+  on('process.run', (_, e) => {
+    ran.push(e.argv)
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('prompt.fill', () => ({ isFilled: true }))
+
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'lens-menu' }))?.text).toMatch(/Lenses \(saved prompts\) · 1/)
+  await ui.press({ key: 'lens-menu' })
+  await ui.input({ key: 'new-lens-1', text: 'check my tests' })
+  expect(written.get('/v/lenses/check-my-tests.md')).toBe(newLensSkeleton('check-my-tests'))
+  expect(ran.some(argv => argv.join(' ') === `open obsidian://open?path=${encodeURIComponent('/v/lenses/check-my-tests.md')}`)).toBe(true)
+  expect(await ui.find({ key: 'check-my-tests' })).toBeTruthy()
+
+  // A name that's there already just opens that lens; nothing is written over it.
+  const writes = written.size
+  await ui.input({ key: 'new-lens-2', text: 'echoes' })
+  expect(written.size).toBe(writes)
+  expect(written.has('/v/lenses/echoes.md')).toBe(false)
+  expect(ran.some(argv => argv.join(' ') === `open obsidian://open?path=${encodeURIComponent('/v/lenses/echoes.md')}`)).toBe(true)
+  await ui.unmount()
 })
