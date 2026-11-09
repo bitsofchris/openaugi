@@ -1193,6 +1193,19 @@ test('jira: in the frontmatter is added, replaced or removed, every other byte a
   expect(withJira(withJira(flat, 'PROJ-1'), '')).toBe(flat)
   expect(withJira(withJira('# Next\n', 'PROJ-1'), '')).toBe('# Next\n')
   expect(jiraFrom(withJira(flat, 'PROJ-1'))).toBe('PROJ-1')
+  // A line of the user's own that starts with Jira: is not the link, and is never written over.
+  const prose = 'Up: [[PMOC - Garden]]\n\n# Journal\nJira: waiting on access\n'
+  expect(jiraFrom(prose)).toBe('')
+  expect(withJira(prose, 'PROJ-1')).toBe('Up: [[PMOC - Garden]]\nJira: PROJ-1\n\n# Journal\nJira: waiting on access\n')
+  expect(withJira(withJira(prose, 'PROJ-1'), '')).toBe(prose)
+  // Frontmatter without the field but a key line in the body: that line is the link.
+  const mixed = '---\na: 1\n---\nUp: [[X]]\nJira: PROJ-1\n'
+  expect(withJira(mixed, 'PROJ-2')).toBe('---\na: 1\n---\nUp: [[X]]\nJira: PROJ-2\n')
+  expect(withJira(mixed, '')).toBe('---\na: 1\n---\nUp: [[X]]\n')
+  expect(taskNoteName('.NET: upgrade')).toBe('NET- upgrade')
+  // A one-column board with no archive: the card stays above the Kanban settings block.
+  const settings = '## Doing\n\n- [ ] [[A]]\n\n\n%% kanban:settings\n```\n{}\n```\n%%'
+  expect(insertCard(settings, 'B', null)).toBe('## Doing\n\n- [ ] [[A]]\n- [ ] [[B]]\n\n\n%% kanban:settings\n```\n{}\n```\n%%')
   expect(jiraFrom(withJira(note, 'PROJ-1'))).toBe('PROJ-1')
 })
 
@@ -1428,6 +1441,9 @@ test('a kept side answer goes under its question, indented; the questions parse 
   // A question not in the log, or an empty answer, changes nothing.
   expect(addAnswer(log, { ...older, when: '2022-01-04 08:00' }, 'x')).toBe(log)
   expect(addAnswer(log, older, ' \n ')).toBe(log)
+  // Lines someone else put under a question are not an aside: a keep leaves them.
+  const noted = '## Questions\n\n- [ ] 2022-01-05 09:30 · q\n\t- tried the hose\n'
+  expect(addAnswer(noted, { when: '2022-01-05 09:30', text: 'q', done: false }, 'No.')).toBe('## Questions\n\n- [ ] 2022-01-05 09:30 · q\n  - aside: No.\n\t- tried the hose\n')
 })
 
 // A vault with PMOC - Garden (a Next item and a parked question) and PMOC - Birdhouse on the board.

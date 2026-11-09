@@ -531,6 +531,8 @@ export const jiraFrom = (text: string): string => {
   return fromFront || (body.match(/^Jira:[ \t]*(\S+)[ \t]*$/m)?.[1] ?? '')
 }
 
+// A body line that links the note's issue: a key and nothing else.
+const JIRA_LINE = /^Jira:[ \t]*\S+[ \t]*$/
 const JIRA_KEY = /^[A-Z][A-Z0-9]+-\d+$/
 const JIRA_URL = /^https?:\/\/\S*\/browse\/([A-Z][A-Z0-9]+-\d+)(?:[/?#]\S*)?$/
 
@@ -562,7 +564,7 @@ export const parseNewTask = (typed: string): { title: string; jira: string } => 
 
 // A title as a note name: nothing a file name or a wikilink can't hold.
 export const taskNoteName = (title: string): string =>
-  title.replace(/[\\/:]/g, '-').replace(/[*?"<>|#^[\]]/g, '').replace(/\s+/g, ' ').trim()
+  title.replace(/[\\/:]/g, '-').replace(/[*?"<>|#^[\]]/g, '').replace(/\s+/g, ' ').trim().replace(/^[.\s]+/, '')
 
 // The shipped task template (templates/Task.md), for a notes folder without its own.
 export const TASK_TEMPLATE = [
@@ -603,29 +605,31 @@ export const taskNoteText = (template: string, name: string, today: string, up: 
 // under the `Up:` line when there is one, else first. Every other byte stays as it was.
 export const withJira = (text: string, key: string): string => {
   const front = text.match(/^---\n([\s\S]*?\n)?---(?=\n|$)/)
-  if (front) {
-    const fields = front[1] ?? ''
-    const has = /^jira:.*$/m.test(fields)
-    const next = !key ? fields.replace(/^jira:.*\n/m, '') : has ? fields.replace(/^jira:.*$/m, `jira: ${key}`) : `${fields}jira: ${key}\n`
-
-    return `---\n${next}---${text.slice(front[0].length)}`
-  }
-  if (!text) {
-    return key ? `Jira: ${key}\n` : text
-  }
-  const lines = text.split('\n')
-  const at = lines.findIndex(line => /^Jira:/.test(line))
-  if (at >= 0 && key) {
-    lines[at] = `Jira: ${key}`
+  let fields = front?.[1] ?? ''
+  const hasField = Boolean(front) && /^jira:.*$/m.test(fields)
+  const lines = text.slice(front ? front[0].length : 0).split('\n')
+  // Only a line that is a key and nothing else is the link; `Jira: waiting on…` is the user's prose.
+  const at = lines.findIndex(line => JIRA_LINE.test(line))
+  if (!key) {
+    fields = fields.replace(/^jira:.*\n/m, '')
+    if (at >= 0) {
+      // With a blank line on both sides (or first, then a blank), one blank goes too.
+      lines.splice(at, lines[at + 1] === '' && (at === 0 || lines[at - 1] === '') ? 2 : 1)
+    }
+  } else if (hasField) {
+    fields = fields.replace(/^jira:.*$/m, `jira: ${key}`)
   } else if (at >= 0) {
-    // With a blank line on both sides (or first, then a blank), one blank goes too.
-    lines.splice(at, lines[at + 1] === '' && (at === 0 || lines[at - 1] === '') ? 2 : 1)
-  } else if (key) {
+    lines[at] = `Jira: ${key}`
+  } else if (front) {
+    fields = `${fields}jira: ${key}\n`
+  } else if (!text) {
+    return `Jira: ${key}\n`
+  } else {
     const up = lines.findIndex(line => /^Up:/.test(line))
     lines.splice(up + 1, 0, ...(up >= 0 ? [`Jira: ${key}`] : [`Jira: ${key}`, '']))
   }
 
-  return lines.join('\n')
+  return `${front ? `---\n${fields}---` : ''}${lines.join('\n')}`
 }
 
 // Where an issue opens in the browser.
@@ -697,7 +701,8 @@ export const jiraUpdateDraft = (notePath: string, note: string, logPath: string,
 // every other line stays as it was.
 export const insertCard = (board: string, note: string, anchor: string | null): string => {
   const lines = board.split('\n')
-  const archive = lines.findIndex(line => line === '***')
+  // Cards end at the archive, or at the Kanban plugin's settings block on a board with no archive.
+  const archive = lines.findIndex(line => line === '***' || /^%% kanban:settings/.test(line))
   const end = archive >= 0 ? archive : lines.length
   const card = `- [ ] [[${note}]]`
   const at = anchor === null ? -1 : lines.findIndex((line, index) => index < end && /^- \[.\] /.test(line) && linkName(line) === anchor)
@@ -924,9 +929,13 @@ export const addAnswer = (text: string, one: Question, answer: string): string =
   if (at < 0 || said.length === 0) {
     return text
   }
+  // Only an earlier kept answer is replaced; other lines under the question stay.
   let end = at + 1
-  while (end < lines.length && /^\s+\S/.test(lines[end] ?? '')) {
+  if (/^  - aside: /.test(lines[end] ?? '')) {
     end += 1
+    while (end < lines.length && /^ {4}\s*\S/.test(lines[end] ?? '')) {
+      end += 1
+    }
   }
   lines.splice(at + 1, end - at - 1, ...said.map((line, index) => (index === 0 ? `  - aside: ${line.trim()}` : `    ${line}`)))
 
@@ -1690,7 +1699,7 @@ async function linkJira($: EngineInterface, typed: string): Promise<void> {
 async function findInJira($: EngineInterface): Promise<void> {
   const { anchor, notePath } = await read($, swatch)
   if (anchor) {
-    await $.prompt.fill({ text: findInJiraDraft(notePath, anchor.note, (await jiraAsk($)) ?? { project: P.jiraProject, server: P.jiraServer }), mode: 'replace' })
+    await fillOver($, findInJiraDraft(notePath, anchor.note, (await jiraAsk($)) ?? { project: P.jiraProject, server: P.jiraServer }))
   }
 }
 
@@ -1708,7 +1717,7 @@ async function updateJira($: EngineInterface): Promise<void> {
     return
   }
   const ask = (await jiraAsk($)) ?? { project: P.jiraProject, server: P.jiraServer }
-  await $.prompt.fill({ text: jiraUpdateDraft(notePath, anchor.note, trailPath(anchor.note), jira, ask), mode: 'replace' })
+  await fillOver($, jiraUpdateDraft(notePath, anchor.note, trailPath(anchor.note), jira, ask))
 }
 
 // The note this chat session is anchored on, if any.
@@ -1776,21 +1785,39 @@ async function draftText($: EngineInterface, lens: Lens | null, about?: string):
   return buildDraft(withPaths(trail.pins ?? [], pinPaths), choice, lens, typed, await anchorNow($))
 }
 
+// Fills the prompt box with a pane draft. A prompt the user was typing is not lost:
+// it goes to the clipboard first.
+async function fillOver($: EngineInterface, text: string): Promise<void> {
+  let had = ''
+  try {
+    had = (await $.prompt.read()).text ?? ''
+  } catch {
+    had = ''
+  }
+  if (had.trim() && !had.startsWith(DRAFT_HEAD) && !had.startsWith('/btw ')) {
+    await $.ui.copy({ text: had })
+    await $.ui.toast('Your unsent prompt was copied to the clipboard.')
+  }
+  await $.prompt.fill({ text, mode: 'replace' })
+}
+
 async function draft($: EngineInterface, lens: Lens | null, about?: string): Promise<void> {
   await $.prompt.fill({ text: await draftText($, lens, about), mode: 'replace' })
 }
 
 // The same draft, copied to start a new chat with; the prompt box is left alone.
 async function copyDraft($: EngineInterface): Promise<void> {
-  const copied = await $.ui.copy({ text: await draftText($, null) })
-  await $.ui.toast(copied.isCopied ? 'Copied: paste it into a new chat. Sent there, it anchors that chat here too.' : `Couldn't copy the draft (${copied.reason}).`)
+  const text = await draftText($, null)
+  const copied = await $.ui.copy({ text })
+  const anchors = anchorFromDraft(text) ? 'Sent there, it anchors that chat here too.' : 'It names no anchor (the project notes are unticked or none is picked), so that chat stays unanchored.'
+  await $.ui.toast(copied.isCopied ? `Copied: paste it into a new chat. ${anchors}` : `Couldn't copy the draft (${copied.reason}).`)
 }
 
 // A side answer to a parked question: /btw when this session has it (filled, not sent),
 // else a low-effort fork of this chat, its answer shown under the question to keep or drop.
 async function aside($: EngineInterface, one: Question): Promise<void> {
   if ((await read($, asides)).btw) {
-    await $.prompt.fill({ text: `/btw ${one.text}`, mode: 'replace' })
+    await fillOver($, `/btw ${one.text}`)
 
     return
   }
@@ -1959,7 +1986,10 @@ async function writeTrail($: EngineInterface, note: string, change: (text: strin
   const text = change(base)
 
   if (text !== old) {
-    await $.process.run(['mkdir', '-p', P.trails])
+    // Only a first write needs the folder: nothing sits between an existing log's read and its write.
+    if (!old) {
+      await $.process.run(['mkdir', '-p', P.trails])
+    }
     await $.fs.write(path, text)
   }
   await update($, swatch, current => (current.anchor?.note === note ? { ...current, trail: parseTrail(text) } : current))
@@ -2099,7 +2129,7 @@ async function newTask($: EngineInterface, typed: string): Promise<void> {
   }
   // A typed key is already linked: the draft asks for no search then.
   const ask = jira ? null : await jiraAsk($)
-  await $.prompt.fill({ text: newTaskDraft(path, trailPath(name), name, ask), mode: 'replace' })
+  await fillOver($, newTaskDraft(path, trailPath(name), name, ask))
 }
 
 // `open` is macOS; elsewhere the same argument goes to xdg-open.
@@ -2243,6 +2273,9 @@ export const register: Register = (on, options) => {
     const ended = await next(e)
     if (e.reason === 'clear' || e.reason === 'resume') {
       await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
+      // The scratchpad and unkept side answers were that chat's; they don't follow into the next.
+      await update($, pad, () => [])
+      await update($, asides, old => ({ ...old, answers: [] }))
     }
 
     return ended
