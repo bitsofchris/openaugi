@@ -205,3 +205,21 @@ def _get_known_doc_hashes(store: SQLiteStore) -> dict[str, str]:
         for b in docs
         if b.content_hash and b.metadata.get("source_path")
     }
+
+
+def run_layer0_from_config(vault_path: str | Path, store: SQLiteStore, config: dict) -> dict:
+    """run_layer0 with the config's [vault] rules — what every caller passes.
+
+    Shared by `openaugi ingest`, `openaugi up` and `openaugi kb`'s sync, so an
+    index refreshed from any of them honours the same exclude/source/provenance
+    rules.
+    """
+    vault_cfg = config.get("vault", {})
+    return run_layer0(
+        vault_path,
+        store,
+        exclude_patterns=vault_cfg.get("exclude_patterns"),
+        max_workers=vault_cfg.get("max_workers", 4),
+        source_rules=vault_cfg.get("source_rules"),
+        provenance_rules=vault_cfg.get("provenance_rules"),
+    )

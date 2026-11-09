@@ -35,7 +35,7 @@ openaugi kb get-context --query "what did I decide about pricing"
 |  | 🪶 **Light** (default) | ⚡ **Full** |
 |---|---|---|
 | How agents reach your notes | `openaugi kb <tool>` — a shell call that answers in JSON and exits | `openaugi serve`, an MCP server ([register with Claude](docs/reference/GETTING_STARTED.md#register-with-claude)) |
-| Index freshness | you run `openaugi ingest` | `openaugi up` watches the vault |
+| Index freshness | each `kb` call re-indexes changed notes when the index is over a minute old | `openaugi up` watches the vault |
 | `zzz:` tasks | wait until you launch one (`openaugi tasks run`) | `openaugi up` launches an agent for each |
 | Runs in the background | nothing | `openaugi up`, plus one `serve` per client |
 
@@ -51,12 +51,14 @@ background process (a work laptop, say):
 ```bash
 uv tool install openaugi                          # or: pipx install openaugi
 openaugi init --search none --mode light          # keyword search, nothing leaves the machine
-openaugi ingest                                   # re-run when you want the index fresh
+openaugi ingest                                   # first index (kb calls keep it fresh after)
 openaugi kb get-context --query "roadmap"         # what your agent will run
 ```
 
 Nothing is registered with Claude and nothing stays running: each `openaugi kb`
-call is a short process that answers in JSON and exits. Your agent's writes
+call is a short process that answers in JSON and exits. Before answering, it
+re-indexes the notes that changed if the index is over a minute old (about a
+second), so the agent reads your vault as it is now. Your agent's writes
 land only under `<vault>/OpenAugi/`.
 
 ### Full: two processes, and why

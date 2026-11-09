@@ -39,6 +39,24 @@ class AlreadyRunning(RuntimeError):
         super().__init__(f"another instance is already running{f' (pid {pid})' if pid else ''}")
 
 
+def is_held(name: str, lock_dir: Path | None = None) -> bool:
+    """Whether another process holds the named lock right now. Never blocks.
+
+    Probes by taking the lock and letting it go at once, so it can only say
+    "held" for a live holder — a lock file left by a dead process reads free.
+    """
+    lock_path = (lock_dir or Path.home() / ".openaugi") / f"{name}.lock"
+    if not lock_path.exists():
+        return False
+    with open(lock_path, "a+") as fd:
+        try:
+            fcntl.flock(fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
+    return False
+
+
 def acquire(name: str, lock_dir: Path | None = None) -> Path:
     """Take the named lock for the rest of this process, or raise.
 

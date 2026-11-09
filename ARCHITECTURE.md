@@ -58,6 +58,7 @@ src/openaugi/
 │   └── vault.py          # Obsidian vault → blocks + links (wraps splitter)
 ├── pipeline/              # Data plane — transforms on blocks + zzz dispatch
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
+│   ├── kb_sync.py         # sync before read: `openaugi kb` re-indexes changed notes when the index is stale
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
 │   ├── dispatch.py        # Post-ingest: zzz instructions → task files in OpenAugi/Tasks/
 │   ├── augi_log.py        # The shared per-day Augi Log: sections, eligibility gate, heartbeat
@@ -140,7 +141,8 @@ adapters present it (docs/reference/query-layer.md):
     pagination hints)     k ≤ 500)
           ↑
    cli/kb.py — `openaugi kb <tool>`: the MCP tools themselves, generated
-   from the registry and run through FastMCP.call_tool, no server process
+   from the registry and run through FastMCP.call_tool, no server process;
+   pipeline/kb_sync.py re-indexes changed notes first when the index is stale
 
   engine functions:
   → run(QuerySpec): title/keyword/semantic/browse dispatch + filters

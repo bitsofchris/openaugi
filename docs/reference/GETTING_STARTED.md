@@ -71,10 +71,30 @@ Pick one of two ways. `openaugi init` asks which you want.
 ### 🪶 Light (default) — the CLI only
 
 ```bash
-openaugi ingest                                  # index; re-run whenever you want it fresh
+openaugi ingest                                  # first index; kb calls keep it fresh after
 openaugi kb get-context --query "budget"         # what an agent runs: JSON out, then exit
 openaugi kb --help                               # the agent's guide and every tool
 ```
+
+**Freshness without a watcher.** Before answering, an `openaugi kb` call
+re-indexes the notes that changed if the last refresh is over a minute old —
+the same incremental ingest as `openaugi ingest` (changed files only; about
+half a second to a second on a vault of several thousand notes, plus
+embeddings for changed sections if you configured them). A burst of calls
+pays it once; concurrent calls never both sync. It is skipped while `openaugi
+up` runs (the watcher keeps the index fresh), never fails a read, and
+launches nothing — new `zzz:` lines are queued as `ingest` queues them. Tune
+or turn off in `~/.openaugi/config.toml`:
+
+```toml
+[kb]
+auto_sync = true          # false: answer from the index as it is
+sync_after_seconds = 60   # refresh when the index is older than this
+```
+
+`openaugi kb --no-sync <tool>` skips it for one call. Every result carries its
+`source_path`, so an agent can open the file itself for the exact text of a note
+being edited right now.
 
 No server, no watcher, no daemon: nothing is running between calls. Every MCP
 tool is an `openaugi kb` command with the same arguments and the same JSON —
