@@ -1,6 +1,7 @@
+import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
-import { addChat, anchorArtifacts, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
+import { addChat, addJournalEntry, anchorArtifacts, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
   plugin: 'augi-ui',
@@ -859,5 +860,115 @@ test('a new session opens with no anchor; anchoring logs the chat, pins its arti
   session = 'new-session'
   await ui.press({ key: 'refresh' })
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  await ui.unmount()
+})
+
+test('a scratchpad entry lands under its day in the Journal, every other line as it was', async () => {
+  const at = (when: string, text: string) => ({ when, text })
+  // Oldest first: a new day goes last; the same day takes the entry as its last line.
+  const oldestFirst = ['---', 'outcome: x', '# Journal', '---', '# Next', '- [ ] a', '', '# Journal', '', '### 2022-01-03', '- one', '', '### 2022-01-04', '- two', '', '# Agent Log', '']
+  const once = addJournalEntry(oldestFirst.join('\n'), at('2022-01-05 09:30', 'water the beds'))
+  expect(once).toBe([...oldestFirst.slice(0, 14), '', '### 2022-01-05', '- 09:30 water the beds', '', '# Agent Log', ''].join('\n'))
+  const twice = addJournalEntry(once, at('2022-01-05 10:15', 'then the pots'))
+  expect(twice.split('\n').filter(line => line === '### 2022-01-05').length).toBe(1)
+  expect(twice.includes('- 09:30 water the beds\n- 10:15 then the pots\n\n# Agent Log')).toBe(true)
+  expect(addJournalEntry(oldestFirst.join('\n'), at('2022-01-03 08:00', 'early'))).toBe(
+    [...oldestFirst.slice(0, 11), '- 08:00 early', ...oldestFirst.slice(11)].join('\n'),
+  )
+  // Newest first: a new day goes on top, at the level the note uses.
+  const newestFirst = ['## journal', '#### 2022-01-04 Tue', '- two', '#### 2022-01-03', '- one']
+  expect(addJournalEntry(newestFirst.join('\n'), at('2022-01-05 09:30', 'x'))).toBe(
+    ['## journal', '#### 2022-01-05', '- 09:30 x', '', ...newestFirst.slice(1)].join('\n'),
+  )
+  // A dated heading after the Journal section is not the Journal's.
+  const after = ['# Journal', '', '# Later', '### 2022-01-05', '- not this']
+  expect(addJournalEntry(after.join('\n'), at('2022-01-05 09:30', 'x'))).toBe(
+    ['# Journal', '', '### 2022-01-05', '- 09:30 x', '', '# Later', '### 2022-01-05', '- not this'].join('\n'),
+  )
+  // An empty day heading (the template's) takes the line right under it.
+  expect(addJournalEntry('# Journal\n\n### 2022-01-05\n\n\n# Agent Log', at('2022-01-05 09:30', 'x'))).toBe('# Journal\n\n### 2022-01-05\n- 09:30 x\n\n\n# Agent Log')
+  // No Journal: one goes above the Agent Log heading, else at the end.
+  expect(addJournalEntry('---\na: 1\n---\n# Next\n- [ ] a\n# Agent Log\n> embed', at('2022-01-05 09:30', 'x'))).toBe(
+    '---\na: 1\n---\n# Next\n- [ ] a\n\n# Journal\n\n### 2022-01-05\n- 09:30 x\n\n# Agent Log\n> embed',
+  )
+  expect(addJournalEntry('# Next\n- [ ] a\n', at('2022-01-05 09:30', 'x'))).toBe('# Next\n- [ ] a\n\n# Journal\n\n### 2022-01-05\n- 09:30 x\n')
+  expect(addJournalEntry('', at('2022-01-05 09:30', 'x'))).toBe('# Journal\n\n### 2022-01-05\n- 09:30 x\n')
+  // Several lines stay one entry; an empty one changes nothing.
+  expect(addJournalEntry('# Journal', at('2022-01-05 09:30', 'first\n\nsecond  '))).toBe('# Journal\n\n### 2022-01-05\n- 09:30 first\n  second')
+  expect(addJournalEntry('# Journal', at('2022-01-05 09:30', '  \n'))).toBe('# Journal')
+})
+
+// The engine calls a pane with no anchor or one anchored on PMOC - Garden; the clock moves a minute a call.
+const padHooks = (on: On, store: Map<string, unknown>, written: Map<string, string>, toasts: string[]): void => {
+  let minute = 30
+  on('env.get', () => ({ value: '/Users/t' }))
+  on('command.register', () => ({ value: { command: 'augi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.toast', (_, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('session.id', () => ({ value: 'own-session' }))
+  on('clock.now', () => ({ value: new Date(2022, 0, 5, 9, minute++).getTime() }))
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.set', (_, e) => {
+    store.set(e.key, e.value)
+    return { value: undefined }
+  })
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md'].includes(e.path) || e.path.endsWith('Kanban.md') || written.has(e.path) }))
+  on('fs.read', (_, e) => ({ value: written.get(e.path) ?? (e.path.endsWith('Kanban.md') ? BOARD_TEXT : '') }))
+  on('fs.write', (_, e) => {
+    written.set(e.path, e.text)
+    return { value: undefined }
+  })
+  on('fs.list', () => ({ value: [] }))
+  on('process.run', (_, e) => ({
+    value: { exitCode: 0, stdout: e.argv[0] === 'find' && e.argv.includes('PMOC - Garden.md') ? '/v/PMOC - Garden.md\n' : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+  }))
+}
+
+test('the scratchpad keeps notes for this chat, newest first; with no anchor nothing can be saved', { options: OPTIONS }, async ($, on) => {
+  const written = new Map<string, string>()
+  padHooks(on, new Map(), written, [])
+
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.input({ key: 'pad-input-0', text: 'check the hose' })
+  await ui.input({ key: 'pad-input-1', text: 'buy seeds' })
+  expect((await ui.find({ key: 'pad-row-0' }))?.text).toMatch(/buy seeds/)
+  expect((await ui.find({ key: 'pad-row-1' }))?.text).toMatch(/check the hose/)
+  expect(await ui.find({ key: 'pad-save-0' })).toBeFalsy()
+  expect(await ui.find({ key: 'pad-save-all' })).toBeFalsy()
+  expect(await ui.find({ text: 'Pick an anchor to save these to its Human Notes.' })).toBeTruthy()
+  await ui.press({ key: 'pad-drop-0' })
+  expect((await ui.find({ key: 'pad-row-0' }))?.text).toMatch(/check the hose/)
+  expect(await ui.find({ key: 'pad-row-1' })).toBeFalsy()
+  expect(written.size).toBe(0)
+  await ui.unmount()
+})
+
+test('with an anchor, → notes puts the entry in the note\'s Journal and takes it off the pad', { options: OPTIONS }, async ($, on) => {
+  const note = '---\noutcome: x\n---\n# Next\n- [ ] a\n\n# Journal\n\n### 2022-01-04\n- 08:00 older\n\n# Agent Log\n'
+  const written = new Map<string, string>([['/v/PMOC - Garden.md', note]])
+  const toasts: string[] = []
+  padHooks(on, new Map<string, unknown>([['anchors', [['own-session', 'PMOC - Garden']]]]), written, toasts)
+
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.input({ key: 'pad-input-0', text: 'keep this one' })
+  await ui.input({ key: 'pad-input-1', text: 'a passing thought' })
+  expect(await ui.find({ key: 'pad-save-all' })).toBeTruthy()
+  // The user edits the note in their editor meanwhile: the save reads it fresh.
+  const edited = note.replace('- 08:00 older', '- 08:00 older\n- 08:05 typed in the editor')
+  written.set('/v/PMOC - Garden.md', edited)
+  const time = (await ui.find({ key: 'pad-row-1' }))?.text.match(/\d\d:\d\d/)?.[0]
+  await ui.press({ key: 'pad-save-1' })
+  expect(written.get('/v/PMOC - Garden.md')).toBe(
+    edited.replace('- 08:05 typed in the editor\n', `- 08:05 typed in the editor\n\n### 2022-01-05\n- ${time} keep this one\n`),
+  )
+  expect(toasts).toEqual(["Saved to PMOC - Garden's Journal"])
+  expect((await ui.find({ key: 'pad-row-0' }))?.text).toMatch(/a passing thought/)
+  expect(await ui.find({ key: 'pad-row-1' })).toBeFalsy()
+  expect(await ui.find({ key: 'pad-save-all' })).toBeFalsy()
   await ui.unmount()
 })

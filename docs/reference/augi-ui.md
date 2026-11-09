@@ -62,11 +62,16 @@ skipped. Starters are never written over an existing file.
   there) and opens it in your editor to paste the prompt.
   Every lens in the lens folder is listed; the `lensPicks` setting narrows and orders
   the menu. Lenses follow the OpenAugi lens contract (`OpenAugi/AGENT/lens-template.md`).
+- **Scratchpad**: notes to self for this chat only, kept in session state (gone
+  with the session). `→ notes` adds one to the anchor's own note as `- HH:MM text`
+  under its `# Journal`, beneath that day's dated heading (made if missing); with
+  no anchor the entries just stay on the pad. This is the one place the pane
+  writes the user's own note: only on their press, only their own words.
 - **Agent Log**: per anchor, a companion note that holds the pinned context,
   open questions and every chat anchored on it (titled `chat` until a draft
   sent from the pane names it). Its first line links the user's own note (so
-  the note shows it as a backlink); that note is never written. An older log is
-  tidied (title and seen box dropped) when the pane next writes it.
+  the note shows it as a backlink); agents never write that note (the pane does only for a
+  saved scratchpad entry). An older log is tidied (title and seen box dropped) when the pane next writes it.
 
 ## Developing
 
