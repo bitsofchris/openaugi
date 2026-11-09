@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run the same checks as CI locally. Run before pushing.
+# Run the same checks as CI locally. Run before pushing. Tests are hermetic
+# (tests/conftest.py): your ~/.openaugi config never affects them.
 # Usage: ./scripts/check.sh
 
 set -e
