@@ -55,6 +55,12 @@ picker (pull notes, files, links and sessions from anywhere in the notes
 folder), the lenses, and setup.
 
 - **Anchor** (`a`): a linked card from the board — a project or a task. The
+  menu lists each card's linked sub-items (`\t- [ ] [[Child task]]`) indented
+  under it, and any of them can be the anchor too: it anchors in its parent's
+  column with `under <parent>` as its detail and no tasks of its own. A stored
+  anchor that is neither a card nor a linked sub-item (a pasted draft named it,
+  or it left the board) still anchors, bare, while a note of that name is in the
+  notes folder; with no such note the pane shows no anchor. The
   anchor belongs to the chat session: a new session opens with none, and a
   reload or `claude --resume` of the session keeps it (`$.store`, keyed by
   session id). Choosing one records this chat in its Agent Log. The card shows
@@ -66,17 +72,32 @@ folder), the lenses, and setup.
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note
   you write, `k` the Agent Log, and `◇` buttons open its newest three pinned
   artifacts.
-- **New task** (`＋ task`, with or without an anchor): type a title, optionally
-  with a Jira key or issue link at either end. The pane writes the note into
-  `taskFolder`, one flat folder whatever the anchor (hierarchy is the `Up:`
-  link), from `OpenAugi/AGENT/templates/Task.md` in the notes folder (else a
-  built-in copy of the shipped one: date and title filled, `Up: [[<anchor>]]`
-  or no `Up:` line, a `Jira: KEY` line under it), adds `- [ ] [[<title>]]` to the board after
-  the anchor's card and its sub-items (else at the end of the first column),
-  pins this chat's transcript to the new task's Agent Log, anchors on it, and
-  leaves an unsent draft asking the chat to fill in the note's own outcome, verify and Next sections and the
-  Agent Log's `## Context` (with Jira on and no key typed, also to find the
-  task's issue). It never writes over a note that already exists.
+- **New task** (two buttons in the Anchor card): `＋ new task` (always) and
+  `＋ sub-task of <anchor>` (with an anchor). No field that makes a file is open
+  until one is pressed: it opens a title field and `cancel`; an empty title or
+  `cancel` makes nothing. A title may carry a Jira key or issue link at either
+  end. The note goes into `taskFolder`, one flat folder whatever the anchor
+  (hierarchy is the `Up:` link, never where the file sits; with `taskFolder`
+  empty, the notes folder's root, and the toast says Setup changes it), from
+  `OpenAugi/AGENT/templates/Task.md` in the notes folder (else a built-in copy
+  of the shipped one: date and title filled, a `Jira: KEY` line under `Up:`).
+  A **new task** is standalone: no `Up:` line, a top-level `- [ ] [[<title>]]`
+  card at the end of the first column. A **sub-task** hangs off the anchor:
+  `Up: [[<anchor>]]`, a linked sub-item `\t- [ ] [[<title>]]` as the last of
+  the anchor card's indented lines (`insertSubItem`; an anchor that is itself a
+  sub-item gets it beside it under the same card; an anchor not on the board
+  gets a top-level card at the end of the first column, and the toast says
+  which), and the anchor pinned, ticked, in the child's Agent Log so the two
+  share context. Either way this chat's transcript is pinned there too, the
+  board is read back into the pane, and **the chat's anchor and prompt box are
+  left alone**. A `✓ just made` row then offers: `open` (the note in the
+  editor), `define here` (an unsent draft in this chat's box asking it to fill
+  in the note's Outcome and Verify and the Agent Log's `## Context`, and with
+  Jira on and no key typed to find the task's issue; a half-typed prompt goes to
+  the clipboard first), `copy for a new chat` (a context draft whose project
+  line names the new task, so pasting it into a fresh chat anchors that chat on
+  it), `anchor on it`, and `dismiss`. The row is this chat's: `/clear` and a
+  resume drop it. It never writes over a note that already exists.
 - **Jira** (optional): the pane never calls Jira itself, because Jira MCP servers
   differ in name and tools. It does the deterministic part and drafts the rest
   for the chat, which uses whatever Jira tools it has; nothing is created or

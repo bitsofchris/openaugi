@@ -1,7 +1,7 @@
 import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
-import { findInJiraDraft, insertCard, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, withJira } from './register'
+import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, withJira } from './register'
 import { addAnswer, addChat, addJournalEntry, anchorFromDraft,anchorArtifacts, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
@@ -212,6 +212,45 @@ test('a new card goes after its anchor card and sub-items, else at the end of th
   const filled = insertCard(empty, 'Fix the gate', null)
   expect(filled).toBe('---\n\nkanban-plugin: board\n\n---\n\n## Todo\n\n- [ ] [[Fix the gate]]\n\n\n## Doing\n\n- [ ] [[A]]\n')
   expect(kanbanCards(filled)[0]).toEqual({ column: 'Todo', note: 'Fix the gate', detail: '', tasks: [] })
+})
+
+test('a sub-item goes last under its parent card, beside a parent that is a sub-item, nowhere for a parent off the board', async () => {
+  const item = '\t- [ ] [[Fix the gate]]'
+  const under = insertSubItem(MANY_COLUMNS, 'Fix the gate', 'PMOC - Garden')
+  expect(under.split('\n').indexOf(item)).toBe(MANY_COLUMNS.split('\n').indexOf('\t[[Some related note]]') + 1)
+  expect(without(under, item)).toBe(MANY_COLUMNS)
+  expect(under.includes('- [ ] [[PMOC - Garden]] — the main project ^abc123\n\t- [ ] Plant the beds ^def456\n')).toBe(true)
+  expect(kanbanCards(under)[0]?.tasks).toEqual([{ text: 'Plant the beds', note: null }, { text: 'Fix the gate', note: 'Fix the gate' }])
+
+  // A card with no sub-items takes it right under its line.
+  const none = insertSubItem(MANY_COLUMNS, 'Fix the gate', 'PMOC - Birdhouse')
+  expect(none.split('\n').indexOf(item)).toBe(MANY_COLUMNS.split('\n').indexOf('- [ ] [[PMOC - Birdhouse]]') + 1)
+  expect(without(none, item)).toBe(MANY_COLUMNS)
+
+  // A parent that is a linked sub-item: beside it, under the same card.
+  const beside = insertSubItem(MANY_COLUMNS, 'Fix the gate', 'Dig the hole')
+  expect(beside.split('\n').indexOf(item)).toBe(MANY_COLUMNS.split('\n').indexOf('\t- [ ] [[Dig the hole]]') + 1)
+  expect(without(beside, item)).toBe(MANY_COLUMNS)
+  expect(kanbanCards(beside).find(card => card.note === 'PMOC - Pond')?.tasks.map(task => task.note)).toEqual(['Dig the hole', 'Fix the gate'])
+
+  // Off the board, or only in the archive: nothing changes.
+  for (const parent of ['Archived thing', 'Not on the board']) {
+    expect(insertSubItem(MANY_COLUMNS, 'Fix the gate', parent)).toBe(MANY_COLUMNS)
+  }
+  for (const board of [under, none, beside]) {
+    expect(board.slice(board.indexOf('***'))).toBe(MANY_COLUMNS.slice(MANY_COLUMNS.indexOf('***')))
+  }
+  // Above the Kanban settings block on a board with no archive.
+  const settings = '## Doing\n\n- [ ] [[A]]\n\n\n%% kanban:settings\n```\n{}\n```\n%%'
+  expect(insertSubItem(settings, 'B', 'A')).toBe('## Doing\n\n- [ ] [[A]]\n\t- [ ] [[B]]\n\n\n%% kanban:settings\n```\n{}\n```\n%%')
+})
+
+test('an anchor is a top-level card, else a linked sub-item shaped as a card under its parent', async () => {
+  const cards = kanbanCards(MANY_COLUMNS)
+  expect(anchorCard(cards, 'PMOC - Pond')).toBe(cards[2])
+  expect(anchorCard(cards, 'Dig the hole')).toEqual({ column: 'Next', note: 'Dig the hole', detail: 'under PMOC - Pond', tasks: [] })
+  expect(anchorCard(cards, 'Plant the beds')).toBe(null)
+  expect(anchorCard(cards, 'Archived thing')).toBe(null)
 })
 
 test('a typed task gives its title and any Jira key or issue link at either end', async () => {
@@ -1080,84 +1119,203 @@ test('with an anchor, → notes puts the entry in the note\'s Journal and takes 
   await ui.unmount()
 })
 
-test('a new task from the pane: note from the template, card after the anchor, chat pinned, anchored, draft in the box; linked sub-items open their note', { options: OPTIONS }, async ($, on) => {
-  const written = new Map<string, string>()
-  const store = new Map<string, unknown>([['anchors', [['own-session', 'PMOC - Garden']]]])
-  const filled: string[] = []
-  const ran: string[][] = []
-  const toasts: string[] = []
+// A vault anchored on PMOC - Garden, with this chat's transcript; `notes` are files by path,
+// found by name. `session.id` reads `session.id` each call.
+const taskHooks = (on: On, anchors: [string, string][], notes: Record<string, string>, session = { id: 'own-session' }) => {
   const transcript = '/Users/t/.claude/projects/-r-garden/own-session.jsonl'
-  const known: Record<string, string> = { 'PMOC - Garden.md': '/v/PMOC - Garden.md', 'Child task.md': '/v/Child task.md' }
+  const written = new Map<string, string>()
+  const store = new Map<string, unknown>([['anchors', anchors]])
+  const got = { written, store, transcript, filled: [] as string[], copied: [] as string[], ran: [] as string[][], toasts: [] as string[] }
   on('env.get', () => ({ value: '/Users/t' }))
   on('command.register', () => ({ value: { command: 'augi' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.toast', (_, e) => {
-    toasts.push(e.text)
+    got.toasts.push(e.text)
     return { value: undefined }
   })
-  on('session.id', () => ({ value: 'own-session' }))
+  on('ui.copy', (_, e) => {
+    got.copied.push(e.text)
+    return { value: { isCopied: true } }
+  })
+  on('session.id', () => ({ value: session.id }))
   on('clock.now', () => ({ value: new Date(2026, 10, 8, 9, 30).getTime() }))
   on('store.get', (_, e) => ({ value: store.get(e.key) }))
   on('store.set', (_, e) => {
     store.set(e.key, e.value)
     return { value: undefined }
   })
-  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/v/Kanban.md', '/Users/t/.claude/projects', transcript].includes(e.path) || written.has(e.path) }))
-  on('fs.read', (_, e) => ({
-    value: written.get(e.path)
-      ?? (e.path === '/v/Kanban.md' ? BOARD_TEXT
-        : e.path === '/v/PMOC - Garden.md' ? '---\noutcome: It loads fast.\njira: PROJ-1\n---\n# Next\n- [ ] Plant the beds\n- [ ] [[Child task]] wire it\n# Journal\n'
-        : ''),
-  }))
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/v/Kanban.md', '/Users/t/.claude/projects', transcript].includes(e.path) || written.has(e.path) || e.path in notes }))
+  on('fs.read', (_, e) => ({ value: written.get(e.path) ?? (e.path === '/v/Kanban.md' ? BOARD_TEXT : notes[e.path] ?? '') }))
   on('fs.write', (_, e) => {
     written.set(e.path, e.text)
     return { value: undefined }
   })
   on('fs.list', (_, e) => ({ value: e.path === '/Users/t/.claude/projects' ? [{ name: '-r-garden', kind: 'dir', size: 0, mtimeMs: 0, isLink: false }] : [] }))
   on('process.run', (_, e) => {
-    ran.push(e.argv)
+    got.ran.push(e.argv)
     const name = e.argv[0] === 'find' ? e.argv[e.argv.indexOf('-name') + 1] ?? '' : ''
-    const found = name ? known[name] ?? [...written.keys()].find(path => path.endsWith(`/${name}`)) ?? '' : ''
+    const found = name ? [...Object.keys(notes), ...written.keys()].find(path => path.endsWith(`/${name}`)) ?? '' : ''
 
     return { value: { exitCode: 0, stdout: found ? `${found}\n` : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
-  on('prompt.read', () => ({ value: { text: '', cursor: 0 } }))
+  on('prompt.read', () => ({ value: { text: 'half a thought', cursor: 0 } }))
   on('prompt.fill', (_, e) => {
-    filled.push(e.text)
+    got.filled.push(e.text)
     return { isFilled: true }
   })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
 
+  return got
+}
+
+const GARDEN_WITH_CHILD = '---\noutcome: It loads fast.\njira: PROJ-1\n---\n# Next\n- [ ] Plant the beds\n- [ ] [[Child task]] wire it\n# Journal\n'
+const GARDEN_PLAIN = '---\noutcome: It loads fast.\n---\n# Next\n- [ ] Plant the beds\n'
+
+test('a sub-item that links a note opens it; one without a link is plain text', { options: OPTIONS }, async ($, on) => {
+  const got = taskHooks(on, [['own-session', 'PMOC - Garden']], { '/v/PMOC - Garden.md': GARDEN_WITH_CHILD, '/v/Child task.md': '' })
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ text: '🔗 PROJ-1' })).toBeTruthy()
-
-  // A sub-item that links a note opens it; one without a link is plain text.
   await ui.press({ key: 'anchor-details' })
   expect(await ui.find({ text: 'Plant the beds' })).toBeTruthy()
   await ui.press({ key: 'task-Child task wire it' })
-  expect(ran.some(argv => argv[0] === 'open' && argv[1] === `obsidian://open?path=${encodeURIComponent('/v/Child task.md')}`)).toBe(true)
+  expect(got.ran.some(argv => argv[0] === 'open' && argv[1] === `obsidian://open?path=${encodeURIComponent('/v/Child task.md')}`)).toBe(true)
+  await ui.unmount()
+})
 
-  await ui.input({ key: 'new-task-2', text: 'Fix the gate PROJ-123' })
-  const note = written.get('/v/Fix the gate.md') ?? ''
+test('no task field is open until a button opens it; ＋ new task makes a standalone note and card, leaving the anchor and the prompt box; the just-made row', { options: OPTIONS }, async ($, on) => {
+  const got = taskHooks(on, [['own-session', 'PMOC - Garden']], { '/v/PMOC - Garden.md': GARDEN_PLAIN })
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'task-new' })).toBeTruthy()
+  expect((await ui.find({ key: 'task-sub' }))?.text).toMatch(/sub-task of PMOC - Garden/)
+  expect((await ui.findAll({ type: 'Input' })).some(one => /^task-title/.test(String(one.key ?? '')))).toBe(false)
+  // Typing a thought where the old field was makes nothing.
+  try {
+    await ui.input({ key: 'task-title-new', text: 'a stray thought' })
+  } catch {
+    // no such field
+  }
+  expect(got.written.size).toBe(0)
+
+  // cancel, and an empty title, make nothing.
+  await ui.press({ key: 'task-new' })
+  expect(await ui.find({ key: 'task-title-new' })).toBeTruthy()
+  await ui.press({ key: 'task-cancel' })
+  expect(await ui.find({ key: 'task-title-new' })).toBeFalsy()
+  await ui.press({ key: 'task-new' })
+  await ui.input({ key: 'task-title-new', text: '   ' })
+  expect(got.written.size).toBe(0)
+  expect(await ui.find({ key: 'task-title-new' })).toBeFalsy()
+
+  await ui.press({ key: 'task-new' })
+  await ui.input({ key: 'task-title-new', text: 'Fix the gate PROJ-123' })
+  const note = got.written.get('/v/Fix the gate.md') ?? ''
+  expect(note.includes('Up:')).toBe(false)
   expect(note.includes('Jira: PROJ-123')).toBe(true)
-  expect(note.includes('Up: [[PMOC - Garden]]')).toBe(true)
   expect(note.includes('### 2026-11-08')).toBe(true)
-  expect(note.includes('### Outcome')).toBe(true)
-  const board = written.get('/v/Kanban.md') ?? ''
-  expect(board.split('\n').indexOf('- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT.split('\n').indexOf('\t- [ ] [[PMOC - Birdhouse]]') + 1)
+  const board = got.written.get('/v/Kanban.md') ?? ''
   expect(without(board, '- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT)
-  expect(store.get('anchors')).toEqual([['own-session', 'Fix the gate']])
-  expect((await ui.find({ key: 'anchor-menu' }))?.text?.includes('Fix the gate')).toBe(true)
-  expect(parseTrail(written.get(trailPath('Fix the gate')) ?? '').pins).toEqual([
-    { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' },
+  expect(board.split('\n').indexOf('- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT.split('\n').indexOf('\t- [ ] not a task of any card') + 1)
+  expect(kanbanCards(board).find(card => card.note === 'Fix the gate')?.column).toBe('Ideas')
+  expect(parseTrail(got.written.get(trailPath('Fix the gate')) ?? '').pins).toEqual([
+    { on: true, kind: 'session', target: got.transcript, label: 'the chat this task came from' },
   ])
-  expect(filled).toEqual([newTaskDraft('/v/Fix the gate.md', trailPath('Fix the gate'), 'Fix the gate')])
+  expect(anchorOf(got.store, 'own-session')).toBe('PMOC - Garden')
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  expect(got.filled).toEqual([])
+  expect(await ui.find({ key: 'task-title-new' })).toBeFalsy()
+  expect(got.toasts.some(text => text.includes('/v/Fix the gate.md') && text.includes('Setup → new task folder'))).toBe(true)
+
+  // The just-made row.
+  expect(await ui.find({ text: '✓ just made: Fix the gate' })).toBeTruthy()
+  await ui.press({ key: 'made-open' })
+  expect(got.ran.some(argv => argv[0] === 'open' && argv[1] === `obsidian://open?path=${encodeURIComponent('/v/Fix the gate.md')}`)).toBe(true)
+  await ui.press({ key: 'made-define' })
+  expect(got.filled).toEqual([newTaskDraft('/v/Fix the gate.md', trailPath('Fix the gate'), 'Fix the gate')])
+  // The half-typed prompt went to the clipboard first.
+  expect(got.copied).toEqual(['half a thought'])
+  await ui.press({ key: 'made-copy' })
+  expect(got.filled.length).toBe(1)
+  expect(anchorFromDraft(got.copied[1] ?? '')).toBe('Fix the gate')
+  expect(got.copied[1]?.includes('"/v/Fix the gate.md"')).toBe(true)
+  expect(got.copied[1]?.includes(got.transcript)).toBe(true)
+  await ui.press({ key: 'made-anchor' })
+  expect(anchorOf(got.store, 'own-session')).toBe('Fix the gate')
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/Fix the gate/)
+  expect(await ui.find({ key: 'made-anchor' })).toBeFalsy()
+  await ui.press({ key: 'made-dismiss' })
+  expect(await ui.find({ text: '✓ just made: Fix the gate' })).toBeFalsy()
 
   // The same title again writes nothing.
-  await ui.input({ key: 'new-task-3', text: 'Fix the gate' })
-  expect(toasts.some(text => text.includes('already there'))).toBe(true)
-  expect(written.get('/v/Kanban.md')).toBe(board)
-  expect(filled.length).toBe(1)
+  await ui.press({ key: 'task-new' })
+  await ui.input({ key: 'task-title-new', text: 'Fix the gate' })
+  expect(got.toasts.some(text => text.includes('already there'))).toBe(true)
+  expect(got.written.get('/v/Kanban.md')).toBe(board)
+  await ui.unmount()
+})
+
+test('＋ sub-task makes a note Up the anchor, a linked sub-item under its card, the anchor pinned in its log; the anchor stays', { options: OPTIONS }, async ($, on) => {
+  const got = taskHooks(on, [['own-session', 'PMOC - Garden']], { '/v/PMOC - Garden.md': GARDEN_PLAIN })
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'task-sub' })
+  await ui.press({ key: 'task-cancel' })
+  expect(got.written.size).toBe(0)
+  await ui.press({ key: 'task-sub' })
+  await ui.input({ key: 'task-title-sub', text: 'Fix the gate' })
+  expect(got.written.get('/v/Fix the gate.md')?.startsWith('Up: [[PMOC - Garden]]\n')).toBe(true)
+  const item = '\t- [ ] [[Fix the gate]]'
+  const board = got.written.get('/v/Kanban.md') ?? ''
+  expect(board.split('\n').indexOf(item)).toBe(BOARD_TEXT.split('\n').indexOf('\t- [ ] [[PMOC - Birdhouse]]') + 1)
+  expect(without(board, item)).toBe(BOARD_TEXT)
+  expect(parseTrail(got.written.get(trailPath('Fix the gate')) ?? '').pins).toEqual([
+    { on: true, kind: 'note', target: 'PMOC - Garden', label: 'PMOC - Garden' },
+    { on: true, kind: 'session', target: got.transcript, label: 'the chat this task came from' },
+  ])
+  expect(anchorOf(got.store, 'own-session')).toBe('PMOC - Garden')
+  expect(got.filled).toEqual([])
+  expect(got.toasts.some(text => text.includes("under PMOC - Garden's card"))).toBe(true)
+  // The board was read back: the new sub-item is among the anchor's open tasks.
+  await ui.press({ key: 'anchor-details' })
+  expect(await ui.find({ key: 'task-Fix the gate' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('a linked sub-item chosen from the anchor menu becomes the anchor, its outcome shown; a stored anchor off the board still shows', { options: OPTIONS }, async ($, on) => {
+  const notes = { '/v/PMOC - Garden.md': GARDEN_PLAIN, '/v/PMOC - Birdhouse.md': '---\noutcome: Birds move in.\n---\n', '/v/Loose note.md': '### Outcome\n\nIt is tidy.\n' }
+  const session = { id: 'own-session' }
+  const got = taskHooks(on, [['own-session', 'PMOC - Garden'], ['loose', 'Loose note'], ['gone', 'Gone note']], notes, session)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'anchor-menu' })
+  expect((await ui.find({ key: 'card-sub-PMOC - Garden-PMOC - Birdhouse' }))?.text).toMatch(/○ PMOC - Birdhouse/)
+  expect(await ui.find({ key: 'card-sub-PMOC - Garden-Plant the beds' })).toBeFalsy()
+  await ui.press({ key: 'card-sub-PMOC - Garden-PMOC - Birdhouse' })
+  expect(anchorOf(got.store, 'own-session')).toBe('PMOC - Birdhouse')
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
+  await ui.press({ key: 'anchor-details' })
+  expect(await ui.find({ text: '🎯 Birds move in.' })).toBeTruthy()
+  expect(await ui.find({ text: 'under PMOC - Garden' })).toBeTruthy()
+  expect(parseTrail(got.written.get(trailPath('PMOC - Birdhouse')) ?? '').chats.map(chat => chat.id)).toEqual(['own-session'])
+
+  // Not on the board, but a note of that name exists: a bare anchor.
+  session.id = 'loose'
+  await ui.press({ key: 'refresh' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/Loose note/)
+  expect(await ui.find({ text: '🎯 It is tidy.' })).toBeTruthy()
+  expect(await ui.find({ key: 'open-note' })).toBeTruthy()
+  // A sub-task of an anchor off the board: Up the anchor, its own card at the end of the first column, and the toast says so.
+  await ui.press({ key: 'task-sub' })
+  await ui.input({ key: 'task-title-sub', text: 'Sweep up' })
+  expect(got.written.get('/v/Sweep up.md')?.startsWith('Up: [[Loose note]]\n')).toBe(true)
+  expect(without(got.written.get('/v/Kanban.md') ?? '', '- [ ] [[Sweep up]]')).toBe(BOARD_TEXT)
+  expect(got.toasts.some(text => text.includes('Loose note is not on the board'))).toBe(true)
+  expect(anchorOf(got.store, 'loose')).toBe('Loose note')
+  // No such note anywhere: no anchor.
+  session.id = 'gone'
+  await ui.press({ key: 'refresh' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
   await ui.unmount()
 })
 
@@ -1385,9 +1543,13 @@ test('a new task goes to the task folder even when the anchor note sits in a sub
   const got = jiraHooks(on, GARDEN_NOTE, [])
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.input({ key: 'new-task-2', text: 'Fix the gate' })
+  await ui.press({ key: 'task-sub' })
+  await ui.input({ key: 'task-title-sub', text: 'Fix the gate' })
   expect(got.written.has('/v/Tasks/Fix the gate.md')).toBe(true)
   expect(got.written.get('/v/Tasks/Fix the gate.md')?.includes('Up: [[PMOC - Garden]]')).toBe(true)
+  expect(got.toasts.some(text => text.includes('Setup → new task folder'))).toBe(false)
+  expect(got.filled).toEqual([])
+  await ui.press({ key: 'made-define' })
   expect(got.filled).toEqual([newTaskDraft('/v/Tasks/Fix the gate.md', trailPath('Fix the gate'), 'Fix the gate', { project: 'PROJ', server: '' })])
   await ui.unmount()
 })
@@ -1396,9 +1558,11 @@ test('with no task folder, a new task goes to the notes root, never beside the a
   const got = jiraHooks(on, GARDEN_NOTE, [])
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.input({ key: 'new-task-2', text: 'Fix the gate' })
+  await ui.press({ key: 'task-sub' })
+  await ui.input({ key: 'task-title-sub', text: 'Fix the gate' })
   expect(got.written.has('/v/Fix the gate.md')).toBe(true)
   expect(got.written.has('/v/Projects/Fix the gate.md')).toBe(false)
+  await ui.press({ key: 'made-define' })
   expect(got.filled).toEqual([newTaskDraft('/v/Fix the gate.md', trailPath('Fix the gate'), 'Fix the gate')])
   await ui.unmount()
 })

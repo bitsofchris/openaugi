@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AsideAnswer, Asides, Card, Chat, Lens, Made, MadeArtifact, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Trail, View } from '../types'
+import type { AsideAnswer, Asides, Card, Chat, JustMade, Lens, Made, MadeArtifact, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -267,8 +267,8 @@ const picks = atom(
 )
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
-  { anchorsOpen: false, contextOpen: false, sessionsOpen: false, lensesOpen: false, showHidden: false, setupOpen: false, inOpen: true, doneOpen: false, detailsOpen: false } as View,
-  { shape: 'view-5' },
+  { anchorsOpen: false, contextOpen: false, sessionsOpen: false, lensesOpen: false, showHidden: false, setupOpen: false, inOpen: true, doneOpen: false, detailsOpen: false, taskMode: '' } as View,
+  { shape: 'view-6' },
 )
 const made = atom(
   { plugin: 'augi-ui', key: 'made' } as const,
@@ -283,6 +283,10 @@ const pad = atom({ plugin: 'augi-ui', key: 'pad' } as const, [] as PadEntry[], {
 // Side answers to parked questions, and whether /btw exists: session state, so an
 // answer not kept goes with the session.
 const asides = atom({ plugin: 'augi-ui', key: 'asides' } as const, { btw: false, answers: [] } as Asides, { shape: 'asides-1' })
+
+// The task this chat just made: session state, cleared by its dismiss and on clear or resume.
+const NO_TASK: JustMade = { note: '', path: '', jira: '' }
+const justMade = atom({ plugin: 'augi-ui', key: 'justMade' } as const, NO_TASK, { shape: 'just-made-1' })
 
 // The first bold line under a heading that names the season or focus,
 // e.g. "Primary: the metrics data factory."
@@ -743,6 +747,63 @@ export const insertCard = (board: string, note: string, anchor: string | null): 
 
   return lines.join('\n')
 }
+
+// Puts `\t- [ ] [[note]]` on the board as a linked sub-item of `parent`: the last of the
+// parent card's indented lines. A parent that is itself a linked sub-item of a card gets
+// the new one beside it, under the same card, after the parent's own deeper lines. A
+// parent not on the board (or only in the archive) changes nothing: the caller decides.
+// Never in the archive or the Kanban settings block; every other line stays as it was.
+export const insertSubItem = (board: string, note: string, parent: string): string => {
+  const lines = board.split('\n')
+  const archive = lines.findIndex(line => line === '***' || /^%% kanban:settings/.test(line))
+  const end = archive >= 0 ? archive : lines.length
+  const item = `\t- [ ] [[${note}]]`
+  const card = lines.findIndex((line, index) => index < end && /^- \[.\] /.test(line) && linkName(line) === parent)
+  if (card >= 0) {
+    let after = card + 1
+    while (after < end && /^\s+\S/.test(lines[after] ?? '')) {
+      after += 1
+    }
+    lines.splice(after, 0, item)
+
+    return lines.join('\n')
+  }
+  // A linked sub-item: an indented checkbox under a top-level card.
+  let isUnderCard = false
+  for (let at = 0; at < end; at += 1) {
+    const line = lines[at] ?? ''
+    if (/^- /.test(line) || /^#/.test(line)) {
+      isUnderCard = /^- \[.\] /.test(line)
+      continue
+    }
+    if (isUnderCard && /^\t- \[.\] /.test(line) && linkName(line) === parent) {
+      let after = at + 1
+      while (after < end && /^\t\s+\S/.test(lines[after] ?? '')) {
+        after += 1
+      }
+      lines.splice(after, 0, item)
+
+      return lines.join('\n')
+    }
+  }
+
+  return board
+}
+
+// What a note anchors as: its top-level card; else, for a linked sub-item of a card, a
+// card-shaped value in the parent's column (`under <parent>`, no tasks of its own); else null.
+export const anchorCard = (cards: Card[], note: string): Card | null => {
+  const card = cards.find(one => one.note === note)
+  if (card) {
+    return card
+  }
+  const parent = cards.find(one => one.tasks.some(task => task.note === note))
+
+  return parent ? subCard(parent, note) : null
+}
+
+// A linked sub-item of `parent` as an anchor.
+export const subCard = (parent: Card, note: string): Card => ({ column: parent.column, note, detail: `under ${parent.note}`, tasks: [] })
 
 // The prompt a new task leaves in the box, unsent: the chat fills in the note's
 // Outcome and Verify from what it has done, and keeps the context in the Agent Log.
@@ -1497,11 +1558,17 @@ async function moveOldTrail($: EngineInterface, note: string): Promise<void> {
 // Reads the anchored card's note and Agent Log; the rest of the pane stays as it was.
 async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'jira' | 'trail' | 'pinPaths' | 'hits'>> {
   const chosen = await sessionAnchor($)
-  const anchor = cards.find(card => card.note === chosen) ?? null
+  let anchor = chosen ? anchorCard(cards, chosen) : null
+  // A note not on the board (a pasted draft named it, or it left the board) still
+  // anchors, bare, while a note of that name is in the notes folder.
+  const bare = chosen && !anchor ? await notePathOf($, chosen) : ''
+  if (chosen && bare) {
+    anchor = { column: '', note: chosen, detail: '', tasks: [] }
+  }
   if (!anchor) {
     return { anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }
   }
-  const notePath = await notePathOf($, anchor.note)
+  const notePath = bare || (await notePathOf($, anchor.note))
   const noteText = notePath ? await $.fs.read(notePath) : ''
   await moveOldTrail($, anchor.note)
   const trail = parseTrail(await readOr($, trailPath(anchor.note)))
@@ -2089,14 +2156,18 @@ async function ownTranscript($: EngineInterface): Promise<string> {
   return ''
 }
 
-// A new task from this chat: the note from the template, its card on the board, this
-// chat pinned to its Agent Log, the task anchored, and a draft (unsent) that asks the
-// chat to fill it in. Never writes over a note that is there.
-async function newTask($: EngineInterface, typed: string): Promise<void> {
+// A new task from this chat, on the user's press: the note from the template, and on the
+// board either a top-level card at the end of the first column ('new', standalone, no
+// `Up:`) or a linked sub-item under the anchor's card ('sub', `Up:` the anchor, the anchor
+// pinned in its Agent Log so the two share context). This chat's transcript is pinned to
+// it too. The chat's anchor and its prompt box are left alone: the just-made row offers
+// the next step. Never writes over a note that is there.
+async function newTask($: EngineInterface, typed: string, mode: 'new' | 'sub'): Promise<void> {
+  await update($, view, old => ({ ...old, taskMode: '' }))
   const { title, jira } = parseNewTask(typed)
   const name = taskNoteName(title)
   if (!name) {
-    await $.ui.toast('Type a title for the new task.')
+    await $.ui.toast('No title: no task made.')
 
     return
   }
@@ -2105,7 +2176,12 @@ async function newTask($: EngineInterface, typed: string): Promise<void> {
 
     return
   }
-  const { anchor } = await read($, swatch)
+  const parent = mode === 'sub' ? ((await read($, swatch)).anchor?.note ?? null) : null
+  if (mode === 'sub' && !parent) {
+    await $.ui.toast('Pick an anchor first: a sub-task hangs off it. Nothing made.')
+
+    return
+  }
   // One flat folder: hierarchy is the `Up:` link, never where the file sits.
   const path = `${P.tasks}/${name}.md`
   if ((await $.fs.exists(path)) || (await notePathOf($, name))) {
@@ -2114,22 +2190,68 @@ async function newTask($: EngineInterface, typed: string): Promise<void> {
     return
   }
   const template = (await readOr($, `${P.notes}/OpenAugi/AGENT/templates/Task.md`)) || TASK_TEMPLATE
-  await writeNew($, path, taskNoteText(template, name, stamp(await $.clock.now()).slice(0, 10), anchor?.note ?? null, jira))
-  const board = insertCard(await $.fs.read(P.board), name, anchor?.note ?? null)
+  await writeNew($, path, taskNoteText(template, name, stamp(await $.clock.now()).slice(0, 10), parent, jira))
+  const old = await $.fs.read(P.board)
+  let board = parent ? insertSubItem(old, name, parent) : old
+  let where = ''
+  if (!parent) {
+    board = insertCard(old, name, null)
+    where = 'a card at the end of the first column'
+  } else if (board === old) {
+    // A bare anchor (not on the board): its own card, so the task is not lost.
+    board = insertCard(old, name, null)
+    where = `${parent} is not on the board, so a card at the end of the first column`
+  } else {
+    const holder = kanbanCards(old).find(one => one.note === parent || one.tasks.some(task => task.note === parent))
+    where = !holder || holder.note === parent ? `under ${parent}'s card` : `under ${holder.note}'s card, beside ${parent}`
+  }
   await $.fs.write(P.board, board)
   const cards = kanbanCards(board)
-  await update($, swatch, old => ({ ...old, cards }))
+  await update($, swatch, current => ({ ...current, cards, anchor: current.anchor ? (anchorCard(cards, current.anchor.note) ?? current.anchor) : null }))
   const transcript = await ownTranscript($)
-  if (transcript) {
-    await writeTrail($, name, text => addPin(text, { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' }))
-  }
-  const card = cards.find(one => one.note === name)
-  if (card) {
-    await chooseAnchor($, card)
+  await writeTrail($, name, text => {
+    const withParent = parent ? addPin(text, { on: true, kind: 'note', target: parent, label: parent }) : text
+
+    return transcript ? addPin(withParent, { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' }) : withParent
+  })
+  await update($, justMade, () => ({ note: name, path, jira }))
+  const folder = settings.taskFolder?.trim() ? '' : " New tasks go to the notes folder's root: Setup → new task folder changes it."
+  await $.ui.toast(`Made ${name} at ${path}; on the board: ${where}.${folder}`)
+}
+
+// The just-made task's draft for this chat's prompt box (unsent): fill in the note.
+async function defineHere($: EngineInterface): Promise<void> {
+  const one = await read($, justMade)
+  if (!one.note) {
+    return
   }
   // A typed key is already linked: the draft asks for no search then.
-  const ask = jira ? null : await jiraAsk($)
-  await fillOver($, newTaskDraft(path, trailPath(name), name, ask))
+  const ask = one.jira ? null : await jiraAsk($)
+  await fillOver($, newTaskDraft(one.path, trailPath(one.note), one.note, ask))
+}
+
+// A context draft anchored on the just-made task, copied: pasted into a new chat, it
+// anchors that chat on the task (anchorFromDraft). The prompt box is left alone.
+async function copyForNewChat($: EngineInterface): Promise<void> {
+  const one = await read($, justMade)
+  if (!one.note) {
+    return
+  }
+  const pins = parseTrail(await readOr($, trailPath(one.note))).pins
+  const choice = { ...(await read($, picks)), project: true }
+  const text = buildDraft(pins, choice, null, '', { note: one.note, notePath: one.path, trail: trailPath(one.note) })
+  const copied = await $.ui.copy({ text })
+  await $.ui.toast(copied.isCopied ? `Copied: paste it into a new chat to work on ${one.note} there; it anchors that chat on it.` : `Couldn't copy the draft (${copied.reason}).`)
+}
+
+// Makes the just-made task this chat's anchor.
+async function anchorOnMade($: EngineInterface): Promise<void> {
+  const one = await read($, justMade)
+  if (!one.note) {
+    return
+  }
+  const { cards } = await read($, swatch)
+  await chooseAnchor($, anchorCard(cards, one.note) ?? { column: '', note: one.note, detail: '', tasks: [] })
 }
 
 // `open` is macOS; elsewhere the same argument goes to xdg-open.
@@ -2276,6 +2398,8 @@ export const register: Register = (on, options) => {
       // The scratchpad and unkept side answers were that chat's; they don't follow into the next.
       await update($, pad, () => [])
       await update($, asides, old => ({ ...old, answers: [] }))
+      await update($, justMade, () => NO_TASK)
+      await update($, view, old => ({ ...old, taskMode: '' }))
     }
 
     return ended
@@ -2366,6 +2490,9 @@ export const register: Register = (on, options) => {
     const shown = await read($, view)
     const ownArtifacts = await sessionArtifacts($)
     const jotted = await read($, pad)
+    const madeTask = await read($, justMade)
+    // A sub-task field needs an anchor; with none it reads as closed.
+    const taskMode = shown.taskMode === 'sub' && !anchor ? '' : (shown.taskMode ?? '')
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
     const arrow = (isOpen: boolean): string => (isOpen ? '▾' : '▸')
     const flip = (key: keyof View) => () => update($, view, old => ({ ...old, [key]: !old[key] }))
@@ -2466,7 +2593,12 @@ export const register: Register = (on, options) => {
           <Box key={`column-${column}`} flexDirection="column">
             <Text dimColor>  {column}</Text>
             {list.map(card => (
-              <Button key={`card-${card.note}`} plain label={`    ${anchor?.note === card.note ? '●' : '○'} ${card.note}`} onPress={() => chooseAnchor($, card)} />
+              <Box key={`card-box-${card.note}`} flexDirection="column">
+                <Button key={`card-${card.note}`} plain label={`    ${anchor?.note === card.note ? '●' : '○'} ${card.note}`} onPress={() => chooseAnchor($, card)} />
+                {card.tasks.map(task => task.note).filter((note): note is string => Boolean(note)).map(note => (
+                  <Button key={`card-sub-${card.note}-${note}`} plain label={`        ${anchor?.note === note ? '●' : '○'} ${note}`} onPress={() => chooseAnchor($, subCard(card, note))} />
+                ))}
+              </Box>
             ))}
           </Box>
         ))}
@@ -2520,13 +2652,40 @@ export const register: Register = (on, options) => {
             onSubmit={value => capture($, value)}
           />
         )}
-        <Input
-          key={`new-task-${cards.length}`}
-          label="＋ task "
-          placeholder="new task from this chat (add PROJ-123 to link Jira): Enter creates it"
-          submitLabel="create"
-          onSubmit={value => newTask($, value)}
-        />
+        {taskMode === '' && (
+          <Box key="task-buttons" flexDirection="row">
+            <Button key="task-new" label="＋ new task" onPress={() => update($, view, old => ({ ...old, taskMode: 'new' }))} />
+            {anchor && <Text dimColor> </Text>}
+            {anchor && (
+              <Button key="task-sub" label={`＋ sub-task of ${anchor.note.length <= 32 ? anchor.note : `${anchor.note.slice(0, 31)}…`}`} onPress={() => update($, view, old => ({ ...old, taskMode: 'sub' }))} />
+            )}
+          </Box>
+        )}
+        {taskMode !== '' && (
+          <Box key="task-form" flexDirection="column">
+            <Input
+              key={`task-title-${taskMode}`}
+              label={taskMode === 'sub' ? '＋ sub-task ' : '＋ new task '}
+              placeholder={taskMode === 'sub' ? `title (add PROJ-123 to link Jira): Enter makes it under ${anchor?.note ?? 'the anchor'}` : 'title (add PROJ-123 to link Jira): Enter makes a standalone task'}
+              submitLabel="create"
+              autoFocus
+              onSubmit={value => newTask($, value, taskMode)}
+            />
+            <Button key="task-cancel" plain label="  cancel" onPress={() => update($, view, old => ({ ...old, taskMode: '' }))} />
+          </Box>
+        )}
+        {madeTask.note && (
+          <Box key="just-made" flexDirection="column">
+            <Text dimColor>{`✓ just made: ${madeTask.note}`}</Text>
+            <Box flexDirection="row">
+              <Button key="made-open" label="open" onPress={() => openNote($, madeTask.path)} />
+              <Button key="made-define" label="define here" onPress={() => defineHere($)} />
+              <Button key="made-copy" label="copy for a new chat" onPress={() => copyForNewChat($)} />
+              {anchor?.note !== madeTask.note && <Button key="made-anchor" label="anchor on it" onPress={() => anchorOnMade($)} />}
+              <Button key="made-dismiss" plain label=" dismiss" onPress={() => update($, justMade, () => NO_TASK)} />
+            </Box>
+          </Box>
+        )}
         </Box>
 
         <Box key="card-trail" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="success" display={anchor ? 'flex' : 'none'}>
