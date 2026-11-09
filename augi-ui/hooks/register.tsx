@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Card, Chat, Lens, Picks, Pin, PinKind, Question, Session, SetupItem, Swatch, Trail, View } from '../types'
+import type { Card, Chat, Lens, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -15,6 +15,8 @@ export type Options = {
   logFolder: string
   // The old name for logFolder, still read.
   trailFolder: string
+  // Where a new task note goes; empty means beside the anchor's note.
+  taskFolder: string
   lensPicks: string
 }
 export type Paths = {
@@ -24,6 +26,8 @@ export type Paths = {
   board: string
   lenses: string
   trails: string
+  // Empty when the setting is: a new task goes beside the anchor's note.
+  tasks: string
   claudeDir: string
   codexDir: string
   editor: string
@@ -50,6 +54,7 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
     board: within(notes, options.boardNote || 'Kanban.md', home),
     lenses: within(notes, options.lensFolder || 'OpenAugi/AGENT/lenses', home),
     trails: within(notes, options.logFolder || options.trailFolder || 'OpenAugi/Agent-Logs', home),
+    tasks: options.taskFolder?.trim() ? within(notes, options.taskFolder, home) : '',
     claudeDir: `${home}/.claude/projects`,
     codexDir: `${home}/.codex/sessions`,
     editor: options.editor || 'obsidian',
@@ -228,6 +233,7 @@ const swatch = atom(
     notePath: '',
     outcome: '',
     next: [],
+    jira: '',
     hasEmbed: false,
     trail: EMPTY_TRAIL,
     pinPaths: {},
@@ -236,7 +242,7 @@ const swatch = atom(
     sessions: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-9' },
+  { shape: 'swatch-10' },
 )
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
@@ -277,8 +283,8 @@ export const outcomeFrom = (text: string): string => {
 
 // The open checkboxes under the note's Next heading (# or ##), up to the next heading
 // at that level or above.
-export const nextFrom = (text: string): string[] => {
-  const tasks: string[] = []
+export const nextFrom = (text: string): SubItem[] => {
+  const tasks: SubItem[] = []
   let level = 0
 
   for (const line of text.split('\n')) {
@@ -294,7 +300,7 @@ export const nextFrom = (text: string): string[] => {
     }
     const task = level ? line.match(/^\s*- \[ \] (.*\S.*)$/) : null
     if (task) {
-      tasks.push(plain(task[1]))
+      tasks.push(subItem(task[1]))
     }
   }
 
@@ -330,6 +336,9 @@ const linkName = (text: string): string | null => {
 const plain = (text: string): string =>
   text.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2').replace(/\[\[([^\]]+)\]\]/g, '$1').replace(/\s+/g, ' ').trim()
 
+// A checkbox's text, keeping the note its first wikilink points at.
+const subItem = (text: string): SubItem => ({ text: plain(text), note: linkName(text) })
+
 // The open cards above the Archive that link a note, each with its open sub-items.
 export const kanbanCards = (text: string): Card[] => {
   const cards: Card[] = []
@@ -359,12 +368,159 @@ export const kanbanCards = (text: string): Card[] => {
     }
     const task = line.match(/^\t- \[ \] (.+)$/)
     if (current && task) {
-      current.tasks.push(plain(task[1]))
+      current.tasks.push(subItem(task[1]))
     }
   }
 
   return cards
 }
+
+// The `jira:` key in a note's frontmatter, or empty.
+export const jiraFrom = (text: string): string => {
+  const front = text.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? ''
+
+  return (front.match(/^jira:[ \t]*(.*)$/m)?.[1] ?? '').trim().replace(/^["']|["']$/g, '')
+}
+
+const JIRA_KEY = /^[A-Z][A-Z0-9]+-\d+$/
+const JIRA_URL = /^https?:\/\/\S*\/browse\/([A-Z][A-Z0-9]+-\d+)(?:[/?#]\S*)?$/
+
+// What was typed for a new task: a Jira key or issue URL at its start or end is
+// taken out of the title and kept as the key.
+export const parseNewTask = (typed: string): { title: string; jira: string } => {
+  const words = typed.trim().split(/\s+/).filter(Boolean)
+  const keyOf = (word: string | undefined): string => {
+    const bare = (word ?? '').replace(/^[([<]+|[)\]>:,;.]+$/g, '')
+
+    return JIRA_KEY.test(bare) ? bare : (bare.match(JIRA_URL)?.[1] ?? '')
+  }
+  let jira = keyOf(words[words.length - 1])
+  if (jira) {
+    words.pop()
+  } else {
+    jira = keyOf(words[0])
+    if (jira) {
+      words.shift()
+    }
+  }
+
+  return { title: words.join(' ').replace(/^[\s:—–-]+|[\s:—–-]+$/g, ''), jira }
+}
+
+// A title as a note name: nothing a file name or a wikilink can't hold.
+export const taskNoteName = (title: string): string =>
+  title.replace(/[\\/:]/g, '-').replace(/[*?"<>|#^[\]]/g, '').replace(/\s+/g, ' ').trim()
+
+// The shipped task template (templates/Task.md), for a notes folder without its own.
+export const TASK_TEMPLATE = [
+  '---',
+  'outcome: ',
+  'status: active',
+  '---',
+  '#note-type/task #area/ #status/active',
+  '',
+  'Up: [[PMOC - ]]',
+  '',
+  '# Next',
+  '',
+  '- [ ] ',
+  '',
+  '# Journal',
+  '',
+  '### {{date:YYYY-MM-DD}}',
+  '',
+  '',
+  '',
+  '# Agent Log',
+  '',
+  '> [!abstract]- Agent Log',
+  '> ![[Agent Log - {{title}}]]',
+  '',
+].join('\n')
+
+// A new task note from a template: date and title filled, `Up:` pointing at the anchor
+// (the line gone without one), and `jira:` in the frontmatter when there is a key.
+export const taskNoteText = (template: string, name: string, today: string, up: string | null, jira: string): string => {
+  const lines = template.replace(/\{\{date(?::YYYY-MM-DD)?\}\}/g, today).replace(/\{\{title\}\}/g, name).split('\n')
+  const at = lines.findIndex(line => /^Up:/.test(line))
+  if (at >= 0 && up) {
+    lines[at] = `Up: [[${up}]]`
+  } else if (at >= 0) {
+    // With a blank line on both sides, one of them goes too.
+    lines.splice(at, lines[at + 1] === '' && (at === 0 || lines[at - 1] === '') ? 2 : 1)
+  }
+  const text = lines.join('\n')
+  if (!jira) {
+    return text
+  }
+  const front = text.match(/^---\n([\s\S]*?\n)?---/)
+  if (!front) {
+    return `---\njira: ${jira}\n---\n${text}`
+  }
+  const body = front[1] ?? ''
+  const fields = /^jira:.*$/m.test(body) ? body.replace(/^jira:.*$/m, `jira: ${jira}`) : `${body}jira: ${jira}\n`
+
+  return `---\n${fields}---${text.slice(front[0].length)}`
+}
+
+// Puts `- [ ] [[note]]` on the board as a top-level card: after the anchor's card and
+// its sub-items, else at the end of the first column's cards. Never in the archive;
+// every other line stays as it was.
+export const insertCard = (board: string, note: string, anchor: string | null): string => {
+  const lines = board.split('\n')
+  const archive = lines.findIndex(line => line === '***')
+  const end = archive >= 0 ? archive : lines.length
+  const card = `- [ ] [[${note}]]`
+  const at = anchor === null ? -1 : lines.findIndex((line, index) => index < end && /^- \[.\] /.test(line) && linkName(line) === anchor)
+  if (at >= 0) {
+    let after = at + 1
+    while (after < end && /^\s+\S/.test(lines[after] ?? '')) {
+      after += 1
+    }
+    lines.splice(after, 0, card)
+
+    return lines.join('\n')
+  }
+  const column = lines.findIndex((line, index) => index < end && line.startsWith('## '))
+  if (column < 0) {
+    lines.splice(end, 0, ...(end > 0 && lines[end - 1] !== '' ? [''] : []), card, '')
+
+    return lines.join('\n')
+  }
+  let last = column + 1
+  while (last < end && !lines[last]?.startsWith('## ')) {
+    last += 1
+  }
+  last -= 1
+  while (last > column && (lines[last] ?? '').trim() === '') {
+    last -= 1
+  }
+  if (last === column) {
+    // An empty column: the card goes under the blank line after its heading.
+    if (lines[column + 1] === '') {
+      lines.splice(column + 2, 0, card)
+    } else {
+      lines.splice(column + 1, 0, '', card)
+    }
+
+    return lines.join('\n')
+  }
+  lines.splice(last + 1, 0, card)
+
+  return lines.join('\n')
+}
+
+// The prompt a new task leaves in the box, unsent: the chat fills in the note's
+// outcome and Next from what it has done, and keeps the context in the Agent Log.
+export const newTaskDraft = (notePath: string, logPath: string, name: string): string =>
+  [
+    DRAFT_HEAD,
+    `- A task note was just made from this chat: "${notePath}".`,
+    "- From what this chat has done, fill in its `outcome:` line and its `# Next` checkboxes. This once you may write that note: I'm asking.",
+    `- Put the context worth keeping (decisions, files, links) under ## Context in its Agent Log "${logPath}", one line each on why it matters.`,
+    'Reply in a few lines with what you wrote.',
+    `Instruction: fill in the new task ${name}`,
+  ].join('\n')
 
 // One Agent Log per anchor, 1:1 by name. (Functions keep the old word, trail.)
 const safe = (note: string): string => note.replace(/[\\/:]/g, '-')
@@ -991,11 +1147,11 @@ async function moveOldTrail($: EngineInterface, note: string): Promise<void> {
 }
 
 // Reads the anchored card's note and Agent Log; the rest of the pane stays as it was.
-async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'hasEmbed' | 'trail' | 'pinPaths' | 'hits'>> {
+async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'jira' | 'hasEmbed' | 'trail' | 'pinPaths' | 'hits'>> {
   const chosen = await $.store.get(ANCHOR_KEY)
   const anchor = cards.find(card => card.note === chosen) ?? null
   if (!anchor) {
-    return { anchor: null, notePath: '', outcome: '', next: [], hasEmbed: false, trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }
+    return { anchor: null, notePath: '', outcome: '', next: [], jira: '', hasEmbed: false, trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }
   }
   const notePath = await notePathOf($, anchor.note)
   const noteText = notePath ? await $.fs.read(notePath) : ''
@@ -1011,6 +1167,7 @@ async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatc
     notePath,
     outcome: outcomeFrom(noteText),
     next: nextFrom(noteText),
+    jira: jiraFrom(noteText),
     hasEmbed: hasEmbedOf(noteText, anchor.note),
     trail,
     pinPaths,
@@ -1296,6 +1453,63 @@ async function capture($: EngineInterface, text: string): Promise<void> {
   await writeTrail($, anchor.note, old => addQuestion(old, { when, text: text.trim(), done: false }))
 }
 
+// This chat's own transcript, if it is under the Claude projects folder.
+async function ownTranscript($: EngineInterface): Promise<string> {
+  const id = await $.session.id()
+  if (!id || !(await $.fs.exists(P.claudeDir))) {
+    return ''
+  }
+  for (const dir of await $.fs.list(P.claudeDir)) {
+    const path = `${P.claudeDir}/${dir.name}/${id}.jsonl`
+    if (dir.kind === 'dir' && (await $.fs.exists(path))) {
+      return path
+    }
+  }
+
+  return ''
+}
+
+// A new task from this chat: the note from the template, its card on the board, this
+// chat pinned to its Agent Log, the task anchored, and a draft (unsent) that asks the
+// chat to fill it in. Never writes over a note that is there.
+async function newTask($: EngineInterface, typed: string): Promise<void> {
+  const { title, jira } = parseNewTask(typed)
+  const name = taskNoteName(title)
+  if (!name) {
+    await $.ui.toast('Type a title for the new task.')
+
+    return
+  }
+  if (!(await $.fs.exists(P.board))) {
+    await $.ui.toast(`No board at ${P.board}: set one up first.`)
+
+    return
+  }
+  const { anchor, notePath } = await read($, swatch)
+  const folder = P.tasks || (notePath ? notePath.slice(0, notePath.lastIndexOf('/')) : P.notes)
+  const path = `${folder}/${name}.md`
+  if ((await $.fs.exists(path)) || (await notePathOf($, name))) {
+    await $.ui.toast(`A note named ${name} is already there: nothing written.`)
+
+    return
+  }
+  const template = (await readOr($, `${P.notes}/OpenAugi/AGENT/templates/Task.md`)) || TASK_TEMPLATE
+  await writeNew($, path, taskNoteText(template, name, stamp(await $.clock.now()).slice(0, 10), anchor?.note ?? null, jira))
+  const board = insertCard(await $.fs.read(P.board), name, anchor?.note ?? null)
+  await $.fs.write(P.board, board)
+  const cards = kanbanCards(board)
+  await update($, swatch, old => ({ ...old, cards }))
+  const transcript = await ownTranscript($)
+  if (transcript) {
+    await writeTrail($, name, text => addPin(text, { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' }))
+  }
+  const card = cards.find(one => one.note === name)
+  if (card) {
+    await chooseAnchor($, card)
+  }
+  await $.prompt.fill({ text: newTaskDraft(path, trailPath(name), name), mode: 'replace' })
+}
+
 // `open` is macOS; elsewhere the same argument goes to xdg-open.
 async function launch($: EngineInterface, argv: string[]): Promise<void> {
   let ran: { exitCode: number | null } | null = null
@@ -1509,7 +1723,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Input, Text } = $.ui.resolve(e)
     // Svg is drawn by the desktop, editor and phone, not the terminal.
     const Svg = e.surface === 'terminal' ? null : (($.ui.resolve(e) as unknown as { Svg?: typeof Text }).Svg ?? null)
-    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, hasEmbed, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
+    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, hasEmbed, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
     const choice = await read($, picks)
     const shown = await read($, view)
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
@@ -1615,7 +1829,12 @@ export const register: Register = (on, options) => {
         {!anchor && <Text dimColor>🧭 Season: {season}</Text>}
         {anchor && anchor.detail && <Text dimColor>{anchor.detail}</Text>}
         {anchor && outcome && <Text>🎯 {outcome}</Text>}
-        {anchor && [...(next ?? []), ...anchor.tasks.filter(task => !(next ?? []).includes(task))].map(task => <Text key={`task-${task}`}>☐ {task}</Text>)}
+        {anchor && jira && <Text dimColor>🔗 {jira}</Text>}
+        {anchor && [...(next ?? []), ...anchor.tasks.filter(task => !(next ?? []).some(one => one.text === task.text))].map(task => (
+          task.note
+            ? <Button key={`task-${task.text}`} plain label={`☐ ${task.text} ↗`} onPress={() => openByName($, task.note ?? '')} />
+            : <Text key={`task-${task.text}`}>☐ {task.text}</Text>
+        ))}
         {anchor && notePath && !hasEmbed && (
           <Button key="copy-embed" plain label="  ⧉ copy the Agent Log embed for your note" onPress={() => copyEmbed($, anchor.note)} />
         )}
@@ -1635,6 +1854,13 @@ export const register: Register = (on, options) => {
             onSubmit={value => capture($, value)}
           />
         )}
+        <Input
+          key={`new-task-${cards.length}`}
+          label="＋ task "
+          placeholder="new task from this chat (add PROJ-123 to link Jira): Enter creates it"
+          submitLabel="create"
+          onSubmit={value => newTask($, value)}
+        />
         </Box>
 
         <Box key="card-context" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="remember">
@@ -1754,6 +1980,9 @@ export const register: Register = (on, options) => {
         ))}
         {shown.setupOpen && (
           <Input key="set-logFolder" label="  agent log folder" value={settings.logFolder || settings.trailFolder || ''} placeholder="OpenAugi/Agent-Logs" onSubmit={value => setOption($, 'logFolder', value)} />
+        )}
+        {shown.setupOpen && (
+          <Input key="set-taskFolder" label="  new task folder" value={settings.taskFolder ?? ''} placeholder="beside the anchor's note" onSubmit={value => setOption($, 'taskFolder', value)} />
         )}
         {shown.setupOpen && (
           <Input key="set-lensPicks" label="  lenses to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />

@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
+import { insertCard, jiraFrom, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText } from './register'
 import { addChat, embedFor, hasEmbedOf, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensNames, newLensDraft, onePerCodexRun, outcomeFrom, parseTrail, setHidden, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
@@ -157,7 +158,95 @@ test('anchors are the open linked cards above the archive, with their open sub-i
   expect(cards[0]?.column).toBe('Ideas')
   expect(cards[0]?.tasks).toEqual([])
   expect(cards[1]?.detail).toBe("the main project")
-  expect(cards[1]?.tasks).toEqual(['Plant the beds', 'PMOC - Birdhouse'])
+  expect(cards[1]?.tasks).toEqual([{ text: 'Plant the beds', note: null }, { text: 'PMOC - Birdhouse', note: 'PMOC - Birdhouse' }])
+})
+
+const MANY_COLUMNS = [
+  '---', '', 'kanban-plugin: board', '', '---', '',
+  '## Doing', '',
+  '- [ ] [[PMOC - Garden]] — the main project ^abc123',
+  '\t- [ ] Plant the beds ^def456',
+  '\t[[Some related note]]',
+  '- [ ] [[PMOC - Birdhouse]]',
+  '', '', '## Next', '',
+  '- [ ] [[PMOC - Pond]]',
+  '\t- [ ] [[Dig the hole]]',
+  '', '', '***', '', '## Archive', '', '- [ ] [[PMOC - Garden]] old copy', '- [ ] [[Archived thing]]', '',
+].join('\n')
+
+// The board with the one inserted line taken out again, to prove nothing else moved.
+const without = (text: string, line: string): string => {
+  const lines = text.split('\n')
+  lines.splice(lines.indexOf(line), 1)
+
+  return lines.join('\n')
+}
+
+test('a new card goes after its anchor card and sub-items, else at the end of the first column, never in the archive', async () => {
+  const card = '- [ ] [[Fix the gate]]'
+  const after = insertCard(MANY_COLUMNS, 'Fix the gate', 'PMOC - Garden')
+  expect(after.split('\n').indexOf(card)).toBe(MANY_COLUMNS.split('\n').indexOf('\t[[Some related note]]') + 1)
+  expect(without(after, card)).toBe(MANY_COLUMNS)
+  expect(kanbanCards(after).map(one => one.note)).toEqual(['PMOC - Garden', 'Fix the gate', 'PMOC - Birdhouse', 'PMOC - Pond'])
+  expect(kanbanCards(after)[0]?.tasks.map(one => one.text)).toEqual(['Plant the beds ^def456'])
+
+  const inNext = insertCard(MANY_COLUMNS, 'Fix the gate', 'PMOC - Pond')
+  expect(inNext.split('\n').indexOf(card)).toBe(MANY_COLUMNS.split('\n').indexOf('\t- [ ] [[Dig the hole]]') + 1)
+  expect(without(inNext, card)).toBe(MANY_COLUMNS)
+
+  for (const anchor of [null, 'Archived thing', 'Not on the board']) {
+    const first = insertCard(MANY_COLUMNS, 'Fix the gate', anchor)
+    expect(first.split('\n').indexOf(card)).toBe(MANY_COLUMNS.split('\n').indexOf('- [ ] [[PMOC - Birdhouse]]') + 1)
+    expect(without(first, card)).toBe(MANY_COLUMNS)
+    expect(first.slice(first.indexOf('***'))).toBe(MANY_COLUMNS.slice(MANY_COLUMNS.indexOf('***')))
+  }
+
+  // An empty first column takes the card under the blank line after its heading.
+  const empty = '---\n\nkanban-plugin: board\n\n---\n\n## Todo\n\n\n\n## Doing\n\n- [ ] [[A]]\n'
+  const filled = insertCard(empty, 'Fix the gate', null)
+  expect(filled).toBe('---\n\nkanban-plugin: board\n\n---\n\n## Todo\n\n- [ ] [[Fix the gate]]\n\n\n## Doing\n\n- [ ] [[A]]\n')
+  expect(kanbanCards(filled)[0]).toEqual({ column: 'Todo', note: 'Fix the gate', detail: '', tasks: [] })
+})
+
+test('a typed task gives its title and any Jira key or issue link at either end', async () => {
+  expect(parseNewTask('Fix the gate PROJ-123')).toEqual({ title: 'Fix the gate', jira: 'PROJ-123' })
+  expect(parseNewTask('PROJ-123: Fix the gate')).toEqual({ title: 'Fix the gate', jira: 'PROJ-123' })
+  expect(parseNewTask('Fix the gate (PROJ-123)')).toEqual({ title: 'Fix the gate', jira: 'PROJ-123' })
+  expect(parseNewTask('Fix the gate — https://example.atlassian.net/browse/PROJ-7?focus=1')).toEqual({ title: 'Fix the gate', jira: 'PROJ-7' })
+  expect(parseNewTask('  Fix the gate  ')).toEqual({ title: 'Fix the gate', jira: '' })
+  expect(parseNewTask('Fix PROJ-1 then the gate')).toEqual({ title: 'Fix PROJ-1 then the gate', jira: '' })
+  expect(taskNoteName('Gate: fix/oil [it] #now?')).toBe('Gate- fix-oil it now')
+})
+
+test('a task note fills the template: date, title, Up to the anchor or no Up line, and jira in the frontmatter', async () => {
+  const linked = taskNoteText(TASK_TEMPLATE, 'Fix the gate', '2022-01-04', 'PMOC - Garden', 'PROJ-123')
+  expect(linked.startsWith('---\noutcome: \nstatus: active\njira: PROJ-123\n---\n#note-type/task')).toBe(true)
+  expect(linked.includes('\nUp: [[PMOC - Garden]]\n')).toBe(true)
+  expect(linked.includes('### 2022-01-04')).toBe(true)
+  expect(linked.includes('> ![[Agent Log - Fix the gate]]')).toBe(true)
+  expect(nextFrom(linked)).toEqual([])
+  expect(outcomeFrom(linked)).toBe('')
+  expect(jiraFrom(linked)).toBe('PROJ-123')
+
+  const bare = taskNoteText(TASK_TEMPLATE, 'Fix the gate', '2022-01-04', null, '')
+  expect(bare.includes('Up:')).toBe(false)
+  expect(bare.includes('jira:')).toBe(false)
+  expect(bare.includes('#status/active\n\n# Next\n')).toBe(true)
+
+  expect(taskNoteText('# {{title}}\n', 'X', '2022-01-04', null, 'PROJ-1')).toBe('---\njira: PROJ-1\n---\n# X\n')
+  expect(taskNoteText('---\njira: \n---\n', 'X', '2022-01-04', null, 'PROJ-1')).toBe('---\njira: PROJ-1\n---\n')
+  expect(jiraFrom('---\njira: "PROJ-9"\n---\n')).toBe('PROJ-9')
+  expect(jiraFrom('jira: PROJ-9\n')).toBe('')
+})
+
+test('a new-task draft asks the chat to fill in the note and its Agent Log, and is titled as ours', async () => {
+  const text = newTaskDraft('/v/Fix the gate.md', '/v/Notes/Agent Log - Fix the gate.md', 'Fix the gate')
+  expect(text.startsWith('Context for this chat:\n')).toBe(true)
+  expect(text.includes('"/v/Fix the gate.md"')).toBe(true)
+  expect(text.includes('`outcome:`')).toBe(true)
+  expect(text.includes('`# Next`')).toBe(true)
+  expect(text.includes('## Context in its Agent Log "/v/Notes/Agent Log - Fix the gate.md"')).toBe(true)
+  expect(chatTitleFrom(text)).toBe('fill in the new task Fix the gate')
 })
 
 test('the outcome comes from the note frontmatter', async () => {
@@ -664,8 +753,13 @@ test('Next lists the open checkboxes under the Next heading only', async () => {
     '---', 'outcome: x', '---', '# Next', '', '- [ ] Plant the beds', '- [x] done already', '\t- [ ] [[PMOC - Birdhouse]]', '- [ ] ',
     '## Next detail', '- [ ] still under Next', '# Journal', '### 2026-11-08', '- [ ] a journal checkbox',
   ].join('\n')
-  expect(nextFrom(note)).toEqual(['Plant the beds', 'PMOC - Birdhouse', 'still under Next'])
-  expect(nextFrom('## Next\n- [ ] a\n## Later\n- [ ] b')).toEqual(['a'])
+  expect(nextFrom(note)).toEqual([
+    { text: 'Plant the beds', note: null },
+    { text: 'PMOC - Birdhouse', note: 'PMOC - Birdhouse' },
+    { text: 'still under Next', note: null },
+  ])
+  expect(nextFrom('## Next\n- [ ] a\n## Later\n- [ ] b')).toEqual([{ text: 'a', note: null }])
+  expect(nextFrom('# Next\n- [ ] wire [[Child|the child]] up')).toEqual([{ text: 'wire the child up', note: 'Child' }])
   expect(nextFrom('# Journal\n- [ ] a')).toEqual([])
 })
 
@@ -676,4 +770,84 @@ test('the Agent Log is named for its note, and the embed is a collapsed callout 
   expect(hasEmbedOf(`# Journal\n${embed}`, 'PMOC - Garden')).toBe(true)
   expect(hasEmbedOf('# Journal', 'PMOC - Garden')).toBe(false)
   expect(trailTemplate('PMOC - Garden', '2026-11-08').includes('# Agent Log - PMOC - Garden')).toBe(true)
+})
+
+test('a new task from the pane: note from the template, card after the anchor, chat pinned, anchored, draft in the box; linked sub-items open their note', { options: OPTIONS }, async ($, on) => {
+  const written = new Map<string, string>()
+  const store = new Map<string, unknown>([['anchor', 'PMOC - Garden']])
+  const filled: string[] = []
+  const ran: string[][] = []
+  const toasts: string[] = []
+  const transcript = '/Users/t/.claude/projects/-r-garden/own-session.jsonl'
+  const known: Record<string, string> = { 'PMOC - Garden.md': '/v/PMOC - Garden.md', 'Child task.md': '/v/Child task.md' }
+  on('env.get', () => ({ value: '/Users/t' }))
+  on('command.register', () => ({ value: { command: 'augi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.toast', (_, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('session.id', () => ({ value: 'own-session' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 8, 9, 30).getTime() }))
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.set', (_, e) => {
+    store.set(e.key, e.value)
+    return { value: undefined }
+  })
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/v/Kanban.md', '/Users/t/.claude/projects', transcript].includes(e.path) || written.has(e.path) }))
+  on('fs.read', (_, e) => ({
+    value: written.get(e.path)
+      ?? (e.path === '/v/Kanban.md' ? BOARD_TEXT
+        : e.path === '/v/PMOC - Garden.md' ? '---\noutcome: It loads fast.\njira: PROJ-1\n---\n# Next\n- [ ] Plant the beds\n- [ ] [[Child task]] wire it\n# Journal\n'
+        : ''),
+  }))
+  on('fs.write', (_, e) => {
+    written.set(e.path, e.text)
+    return { value: undefined }
+  })
+  on('fs.list', (_, e) => ({ value: e.path === '/Users/t/.claude/projects' ? [{ name: '-r-garden', kind: 'dir', size: 0, mtimeMs: 0, isLink: false }] : [] }))
+  on('process.run', (_, e) => {
+    ran.push(e.argv)
+    const name = e.argv[0] === 'find' ? e.argv[e.argv.indexOf('-name') + 1] ?? '' : ''
+    const found = name ? known[name] ?? [...written.keys()].find(path => path.endsWith(`/${name}`)) ?? '' : ''
+
+    return { value: { exitCode: 0, stdout: found ? `${found}\n` : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('prompt.read', () => ({ value: { text: '', cursor: 0 } }))
+  on('prompt.fill', (_, e) => {
+    filled.push(e.text)
+    return { isFilled: true }
+  })
+
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: '🔗 PROJ-1' })).toBeTruthy()
+
+  // A sub-item that links a note opens it; one without a link is plain text.
+  expect(await ui.find({ text: 'Plant the beds' })).toBeTruthy()
+  await ui.press({ key: 'task-Child task wire it' })
+  expect(ran.some(argv => argv[0] === 'open' && argv[1] === `obsidian://open?path=${encodeURIComponent('/v/Child task.md')}`)).toBe(true)
+
+  await ui.input({ key: 'new-task-2', text: 'Fix the gate PROJ-123' })
+  const note = written.get('/v/Fix the gate.md') ?? ''
+  expect(note.includes('jira: PROJ-123')).toBe(true)
+  expect(note.includes('Up: [[PMOC - Garden]]')).toBe(true)
+  expect(note.includes('### 2026-11-08')).toBe(true)
+  expect(note.includes('![[Agent Log - Fix the gate]]')).toBe(true)
+  const board = written.get('/v/Kanban.md') ?? ''
+  expect(board.split('\n').indexOf('- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT.split('\n').indexOf('\t- [ ] [[PMOC - Birdhouse]]') + 1)
+  expect(without(board, '- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT)
+  expect(store.get('anchor')).toBe('Fix the gate')
+  expect((await ui.find({ key: 'anchor-menu' }))?.text?.includes('Fix the gate')).toBe(true)
+  expect(parseTrail(written.get(trailPath('Fix the gate')) ?? '').pins).toEqual([
+    { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' },
+  ])
+  expect(filled).toEqual([newTaskDraft('/v/Fix the gate.md', trailPath('Fix the gate'), 'Fix the gate')])
+
+  // The same title again writes nothing.
+  await ui.input({ key: 'new-task-3', text: 'Fix the gate' })
+  expect(toasts.some(text => text.includes('already there'))).toBe(true)
+  expect(written.get('/v/Kanban.md')).toBe(board)
+  expect(filled.length).toBe(1)
+  await ui.unmount()
 })

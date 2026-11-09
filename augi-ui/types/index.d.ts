@@ -1,7 +1,10 @@
 export type Lens = { name: string; path: string; description: string }
 export type Session = { path: string; tool: 'claude' | 'codex'; repo: string; title: string; mtimeMs: number }
+// An open checkbox under a card or a note's Next heading. `note` is the first
+// wikilink's target, so a sub-item that links a child task opens it.
+export type SubItem = { text: string; note: string | null }
 // A Kanban card that links a note: the project or task an anchor points at.
-export type Card = { column: string; note: string; detail: string; tasks: string[] }
+export type Card = { column: string; note: string; detail: string; tasks: SubItem[] }
 export type Chat = { id: string; when: string; title: string; hidden: boolean }
 // A question or side quest captured from the pane, kept on the trail under ## Questions.
 export type Question = { when: string; text: string; done: boolean }
@@ -28,7 +31,9 @@ export type Swatch = {
   notePath: string
   outcome: string
   // Open checkboxes under the note's Next heading.
-  next: string[]
+  next: SubItem[]
+  // The anchor note's `jira:` frontmatter, a Jira key, or empty.
+  jira: string
   // Whether the note already embeds its Agent Log.
   hasEmbed: boolean
   trail: Trail

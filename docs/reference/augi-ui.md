@@ -37,6 +37,7 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `contextNote` | A note about the user and this season | `OpenAugi/AGENT/Slowly Changing Context.md` |
 | `lensFolder` | One markdown file per lens | `OpenAugi/AGENT/lenses` |
 | `logFolder` | One Agent Log per anchor | `OpenAugi/Agent-Logs` |
+| `taskFolder` | Where a new task note from the pane goes; empty puts it beside the anchor's note, or at the notes folder's root | — |
 | `lensPicks` | Lenses listed first, comma separated; empty lists all | — |
 
 Each missing file can be created as a starter, pointed at an existing note, or
@@ -45,7 +46,20 @@ skipped. Starters are never written over an existing file.
 **The pane.**
 
 - **Anchor** (`a`): a linked card from the board — a project or a task. Its
-  open sub-items show as tasks; `p` opens the note you write, `k` the Agent Log.
+  open sub-items and the note's `# Next` checkboxes show as tasks; one that
+  links a note (`\t- [ ] [[Child task]]`) is a button that opens it, which is
+  the whole parent/child story: the child's `Up:` line points back. A `jira:`
+  key in the note's frontmatter shows as a dim `🔗 PROJ-123` line (read only;
+  nothing calls Jira). `p` opens the note you write, `k` the Agent Log.
+- **New task** (`＋ task`, with or without an anchor): type a title, optionally
+  with a Jira key or issue link at either end. The pane writes the note from
+  `OpenAugi/AGENT/templates/Task.md` in the notes folder (else a built-in copy
+  of the shipped one: date and title filled, `Up: [[<anchor>]]` or no `Up:`
+  line, `jira:` in the frontmatter), adds `- [ ] [[<title>]]` to the board after
+  the anchor's card and its sub-items (else at the end of the first column),
+  pins this chat's transcript to the new task's Agent Log, anchors on it, and
+  leaves an unsent draft asking the chat to fill in `outcome:`, `# Next` and the
+  Agent Log's `## Context`. It never writes over a note that already exists.
 - **Context**: what the next chat is told to read — the anchor's notes, pinned
   notes, files, links and coding sessions (`h` pins a recent Claude or Codex
   session), the context note and board (`m`), and OpenAugi search (`o`).
