@@ -37,7 +37,10 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `contextNote` | A note about the user and this season | `OpenAugi/AGENT/Slowly Changing Context.md` |
 | `lensFolder` | One markdown file per lens | `OpenAugi/AGENT/lenses` |
 | `logFolder` | One Agent Log per anchor | `OpenAugi/Agent-Logs` |
-| `taskFolder` | Where a new task note from the pane goes; empty puts it beside the anchor's note, or at the notes folder's root | — |
+| `taskFolder` | The one flat folder every new task note goes to; empty is the notes folder's root. Tasks are organized by their `Up:` link, never by folder | — |
+| `jiraProject` | Optional. The Jira project key or board (`PROJ`), quoted into the Jira drafts | — |
+| `jiraSite` | Optional. The Jira site's base URL (`https://example.atlassian.net`), only to open a linked issue in the browser | — |
+| `jiraServer` | Optional. The Jira MCP server's name as `/mcp` lists it; empty looks for a likely one | — |
 | `lensPicks` | Lenses listed first, comma separated; empty lists all | — |
 
 Each missing file can be created as a starter, pointed at an existing note, or
@@ -52,18 +55,35 @@ skipped. Starters are never written over an existing file.
   sub-items and the note's `# Next` checkboxes show as tasks; one that links a
   note (`\t- [ ] [[Child task]]`) is a button that opens it, which is the whole
   parent/child story: the child's `Up:` line points back. A `jira:` key in the
-  note's frontmatter shows as a dim `🔗 PROJ-123` line (read only; nothing calls
-  Jira). `p` opens the note you write, `k` the Agent Log, and `◇` buttons open
-  its newest three pinned artifacts.
+  note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note
+  you write, `k` the Agent Log, and `◇` buttons open its newest three pinned
+  artifacts.
 - **New task** (`＋ task`, with or without an anchor): type a title, optionally
-  with a Jira key or issue link at either end. The pane writes the note from
-  `OpenAugi/AGENT/templates/Task.md` in the notes folder (else a built-in copy
-  of the shipped one: date and title filled, `Up: [[<anchor>]]` or no `Up:`
-  line, `jira:` in the frontmatter), adds `- [ ] [[<title>]]` to the board after
+  with a Jira key or issue link at either end. The pane writes the note into
+  `taskFolder`, one flat folder whatever the anchor (hierarchy is the `Up:`
+  link), from `OpenAugi/AGENT/templates/Task.md` in the notes folder (else a
+  built-in copy of the shipped one: date and title filled, `Up: [[<anchor>]]`
+  or no `Up:` line, `jira:` in the frontmatter), adds `- [ ] [[<title>]]` to the board after
   the anchor's card and its sub-items (else at the end of the first column),
   pins this chat's transcript to the new task's Agent Log, anchors on it, and
   leaves an unsent draft asking the chat to fill in `outcome:`, `# Next` and the
-  Agent Log's `## Context`. It never writes over a note that already exists.
+  Agent Log's `## Context` (with Jira on and no key typed, also to find the
+  task's issue). It never writes over a note that already exists.
+- **Jira** (optional): the pane never calls Jira itself, because Jira MCP servers
+  differ in name and tools. It does the deterministic part and drafts the rest
+  for the chat, which uses whatever Jira tools it has; nothing is created or
+  posted in Jira until the user sends a draft and says yes. Jira is on when a
+  Jira MCP server is found among the session's tools (`jiraServer`, else a
+  likely name such as `atlassian` or `jira`), `jiraProject` or `jiraSite` is
+  set, or the anchor already has a `jira:` key; otherwise the pane shows nothing
+  about it. With an anchor: unlinked, paste a key or issue link into `🔗` to
+  write `jira: KEY` into the note's frontmatter (one line, read fresh, on the
+  user's press), or `find in Jira` to draft a search that lists likely issues
+  and links the one the user picks. Linked, `🔗 KEY` opens the issue when
+  `jiraSite` is set, `unlink` removes the line, and `↑ update Jira` drafts a
+  status update from the note and Agent Log, shown first and posted as a comment
+  only on a yes. A `jira-update.md` lens in the lens folder replaces that
+  built-in wording.
 - **Context**: what the next chat is told to read — the anchor's notes, pinned
   artifacts (listed first), notes, files, links and coding sessions (a
   collapsed menu pins a recent Claude or Codex session), the context note and

@@ -1,7 +1,7 @@
 import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
-import { insertCard, jiraFrom, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText } from './register'
+import { findInJiraDraft, insertCard, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, withJira } from './register'
 import { addChat, addJournalEntry, anchorArtifacts, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
@@ -1144,5 +1144,228 @@ test('a new task from the pane: note from the template, card after the anchor, c
   expect(toasts.some(text => text.includes('already there'))).toBe(true)
   expect(written.get('/v/Kanban.md')).toBe(board)
   expect(filled.length).toBe(1)
+  await ui.unmount()
+})
+
+test('a Jira key comes from a bare key or an issue link; lowercase and other text are not keys', async () => {
+  expect(jiraKeyFrom('PROJ-123')).toBe('PROJ-123')
+  expect(jiraKeyFrom('  (PROJ-123), ')).toBe('PROJ-123')
+  expect(jiraKeyFrom('https://example.atlassian.net/browse/PROJ-7?focus=1')).toBe('PROJ-7')
+  expect(jiraKeyFrom('https://example.atlassian.net/browse/PROJ-7')).toBe('PROJ-7')
+  expect(jiraKeyFrom('proj-123')).toBe('')
+  expect(jiraKeyFrom('PROJ')).toBe('')
+  expect(jiraKeyFrom('https://example.com/issues/PROJ-7')).toBe('')
+  expect(jiraBrowseUrl('https://example.atlassian.net/', 'PROJ-7')).toBe('https://example.atlassian.net/browse/PROJ-7')
+})
+
+test('jira: in the frontmatter is added, replaced or removed, every other byte as it was', async () => {
+  const note = '---\noutcome: It loads fast.\nstatus: active\n---\n# Next\n- [ ] jira: not this one\n'
+  const added = withJira(note, 'PROJ-1')
+  expect(added).toBe('---\noutcome: It loads fast.\nstatus: active\njira: PROJ-1\n---\n# Next\n- [ ] jira: not this one\n')
+  expect(withJira(added, 'PROJ-2')).toBe(added.replace('jira: PROJ-1', 'jira: PROJ-2'))
+  expect(withJira(added, '')).toBe(note)
+  const middle = '---\njira: PROJ-1\noutcome: x\n---\nbody'
+  expect(withJira(middle, 'PROJ-9')).toBe('---\njira: PROJ-9\noutcome: x\n---\nbody')
+  expect(withJira(middle, '')).toBe('---\noutcome: x\n---\nbody')
+  // No frontmatter: one is made holding only the key; removing from none changes nothing.
+  expect(withJira('# Next\n', 'PROJ-1')).toBe('---\njira: PROJ-1\n---\n# Next\n')
+  expect(withJira('# Next\n', '')).toBe('# Next\n')
+  expect(withJira('', 'PROJ-1')).toBe('---\njira: PROJ-1\n---\n')
+  // A body rule (---) is not frontmatter.
+  expect(withJira('# A\n---\nb\n', 'PROJ-1')).toBe('---\njira: PROJ-1\n---\n# A\n---\nb\n')
+  expect(jiraFrom(withJira(note, 'PROJ-1'))).toBe('PROJ-1')
+})
+
+test('the Jira server is the one the setting names, else a likely name among the MCP tools', async () => {
+  const tools = [
+    { name: 'Read', mcp: false },
+    { name: 'mcp__openaugi__search', mcp: true },
+    { name: 'mcp__claude_ai_Atlassian__getJiraIssue', mcp: true },
+  ]
+  expect(jiraServerFrom(tools, '')).toBe('claude_ai_Atlassian')
+  expect(jiraServerFrom(tools, 'claude.ai Atlassian')).toBe('claude.ai Atlassian')
+  expect(jiraServerFrom(tools, 'jira')).toBe('')
+  expect(jiraServerFrom([{ name: 'mcp__jira__search', mcp: true }], '')).toBe('jira')
+  expect(jiraServerFrom(tools.slice(0, 2), '')).toBe('')
+})
+
+test('find in Jira drafts a search that changes nothing in Jira, with and without a project and server', async () => {
+  const both = findInJiraDraft('/v/PMOC - Garden.md', 'PMOC - Garden', { project: 'PROJ', server: 'atlassian' })
+  expect(both.startsWith('Context for this chat:\n- Anchor note: "/v/PMOC - Garden.md" (PMOC - Garden).')).toBe(true)
+  expect(both.includes('Search Jira in project PROJ using the atlassian MCP server for issues')).toBe(true)
+  expect(both.includes('up to five likely matches, one line each: KEY · summary · status')).toBe(true)
+  expect(both.includes('Do not create or change anything in Jira.')).toBe(true)
+  expect(both.includes("set `jira: <KEY>` in the note's frontmatter")).toBe(true)
+  expect(both.includes('offer to create an issue and wait for my yes')).toBe(true)
+  expect(both.endsWith('\nInstruction: find the Jira issue for PMOC - Garden')).toBe(true)
+  expect(chatTitleFrom(both)).toBe('find the Jira issue for PMOC - Garden')
+  const neither = findInJiraDraft('', 'PMOC - Garden', { project: '', server: '' })
+  expect(neither.includes('[[PMOC - Garden]] (find it in "/v")')).toBe(true)
+  expect(neither.includes('Search Jira with whatever Jira tools you have; if you have none, say so and stop for issues')).toBe(true)
+  expect(neither.includes('in project')).toBe(false)
+})
+
+test('update Jira drafts a short update shown first and posted only on a yes', async () => {
+  const text = jiraUpdateDraft('/v/PMOC - Garden.md', 'PMOC - Garden', '/v/Notes/Agent Log - PMOC - Garden.md', 'PROJ-1', { project: 'PROJ', server: 'atlassian' })
+  expect(text.startsWith('Context for this chat:\n')).toBe(true)
+  for (const part of ['`outcome:`', '`# Next`', '`# Journal`', 'Agent Log "/v/Notes/Agent Log - PMOC - Garden.md"', 'Read Jira issue PROJ-1 and its recent comments using the atlassian MCP server', 'only what is new since the last one', 'at most six lines: what moved, what is next, what is blocked', 'Show it to me first', 'comment on PROJ-1 only after I say yes', 'status only if I ask']) {
+    expect(text.includes(part)).toBe(true)
+  }
+  expect(text.endsWith('\nInstruction: update Jira PROJ-1')).toBe(true)
+  const bare = jiraUpdateDraft('/v/PMOC - Garden.md', 'PMOC - Garden', '/v/x.md', 'PROJ-1', { project: '', server: '' })
+  expect(bare.includes('with whatever Jira tools you have; if you have none, say so and stop')).toBe(true)
+})
+
+test('a new-task draft looks for the Jira issue only when asked', async () => {
+  const plain = newTaskDraft('/v/Fix the gate.md', '/v/Notes/Agent Log - Fix the gate.md', 'Fix the gate')
+  expect(plain.includes('Jira')).toBe(false)
+  const asked = newTaskDraft('/v/Fix the gate.md', '/v/Notes/Agent Log - Fix the gate.md', 'Fix the gate', { project: 'PROJ', server: '' })
+  expect(asked.includes('Search Jira in project PROJ with whatever Jira tools you have')).toBe(true)
+  expect(asked.includes('offer to create an issue and wait for my yes')).toBe(true)
+  expect(asked.split('\n').filter(line => !line.includes('Jira') && !line.includes('jira'))).toEqual(plain.split('\n'))
+  expect(asked.endsWith('Instruction: fill in the new task Fix the gate')).toBe(true)
+})
+
+const GARDEN_IN_FOLDER = '/v/Projects/PMOC - Garden.md'
+
+// A vault with the anchor's note in a subfolder; `tools` is what $.tool.list answers.
+const jiraHooks = (on: On, note: string, tools: { name: string; description: string; mcp: boolean }[], extra: string[] = []) => {
+  const written = new Map<string, string>([[GARDEN_IN_FOLDER, note]])
+  const store = new Map<string, unknown>([['anchors', [['own-session', 'PMOC - Garden']]]])
+  const got = { written, store, filled: [] as string[], ran: [] as string[][], toasts: [] as string[], sent: [] as string[] }
+  on('env.get', () => ({ value: '/Users/t' }))
+  on('command.register', () => ({ value: { command: 'augi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.toast', (_, e) => {
+    got.toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('session.id', () => ({ value: 'own-session' }))
+  on('clock.now', () => ({ value: new Date(2022, 0, 5, 9, 30).getTime() }))
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.set', (_, e) => {
+    store.set(e.key, e.value)
+    return { value: undefined }
+  })
+  on('tool.list', () => ({ value: tools }))
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/v/Kanban.md', ...extra].includes(e.path) || written.has(e.path) }))
+  on('fs.read', (_, e) => ({ value: written.get(e.path) ?? (e.path === '/v/Kanban.md' ? BOARD_TEXT : '') }))
+  on('fs.write', (_, e) => {
+    written.set(e.path, e.text)
+    return { value: undefined }
+  })
+  on('fs.list', () => ({ value: [] }))
+  on('process.run', (_, e) => {
+    got.ran.push([...e.argv])
+    const name = e.argv[0] === 'find' ? e.argv[e.argv.indexOf('-name') + 1] ?? '' : ''
+    const found = name ? [...written.keys()].find(path => path.endsWith(`/${name}`)) ?? '' : ''
+
+    return { value: { exitCode: 0, stdout: found ? `${found}\n` : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('prompt.read', () => ({ value: { text: '', cursor: 0 } }))
+  on('prompt.fill', (_, e) => {
+    got.filled.push(e.text)
+    return { isFilled: true }
+  })
+  on('prompt.submit', (_, e) => {
+    got.sent.push(e.text)
+    return { text: e.text }
+  })
+
+  return got
+}
+
+const GARDEN_NOTE = '---\noutcome: It loads fast.\n---\n# Next\n- [ ] Plant the beds\n'
+
+test('with no Jira settings, no server and an unlinked anchor, the pane draws nothing about Jira', { options: OPTIONS }, async ($, on) => {
+  jiraHooks(on, GARDEN_NOTE, [{ name: 'mcp__openaugi__search', description: 'search', mcp: true }])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'open-note' })).toBeTruthy()
+  for (const key of ['jira-link', 'jira-find', 'jira-update', 'jira-unlink', 'jira-open', 'jira-key']) {
+    expect(await ui.find({ key })).toBeFalsy()
+  }
+  await ui.unmount()
+})
+
+for (const surface of ['terminal', 'desktop'] as const) {
+  test(`with a Jira project set (${surface}): a pasted link links the anchor, find and update fill the prompt and send nothing, unlink removes it`, { options: { ...OPTIONS, jiraProject: 'PROJ' } }, async ($, on) => {
+    const got = jiraHooks(on, GARDEN_NOTE, [])
+    await $.command.run({ command: 'augi', args: '' })
+    const ui = await $.ui.mount({ ...PANE, surface })
+    expect(await ui.find({ key: 'jira-link' })).toBeTruthy()
+
+    await ui.press({ key: 'jira-find' })
+    expect(got.filled).toEqual([findInJiraDraft(GARDEN_IN_FOLDER, 'PMOC - Garden', { project: 'PROJ', server: '' })])
+
+    // The note was edited meanwhile: the link reads it fresh and changes only its frontmatter.
+    const edited = `${GARDEN_NOTE}- [ ] typed in the editor\n`
+    got.written.set(GARDEN_IN_FOLDER, edited)
+    await ui.input({ key: 'jira-link', text: 'https://example.atlassian.net/browse/PROJ-42' })
+    expect(got.written.get(GARDEN_IN_FOLDER)).toBe(withJira(edited, 'PROJ-42'))
+    expect(await ui.find({ text: '🔗 PROJ-42' })).toBeTruthy()
+    expect(await ui.find({ key: 'jira-link' })).toBeFalsy()
+    expect(await ui.find({ key: 'jira-open' })).toBeFalsy()
+
+    await ui.press({ key: 'jira-update' })
+    expect(got.filled[1]).toBe(jiraUpdateDraft(GARDEN_IN_FOLDER, 'PMOC - Garden', trailPath('PMOC - Garden'), 'PROJ-42', { project: 'PROJ', server: '' }))
+
+    await ui.press({ key: 'jira-unlink' })
+    expect(got.written.get(GARDEN_IN_FOLDER)).toBe(edited)
+    expect(await ui.find({ key: 'jira-link' })).toBeTruthy()
+
+    // Not a key: nothing written.
+    await ui.input({ key: 'jira-link', text: 'proj-42' })
+    expect(got.written.get(GARDEN_IN_FOLDER)).toBe(edited)
+    expect(got.toasts.some(text => text.startsWith('Not a Jira key'))).toBe(true)
+    expect(got.sent).toEqual([])
+    await ui.unmount()
+  })
+}
+
+test('with a Jira site set, the linked key opens the issue in the browser', { options: { ...OPTIONS, jiraSite: 'https://example.atlassian.net/' } }, async ($, on) => {
+  const got = jiraHooks(on, '---\njira: PROJ-1\n---\n# Next\n', [])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'jira-open' })
+  expect(got.ran.some(argv => argv[0] === 'open' && argv[1] === 'https://example.atlassian.net/browse/PROJ-1')).toBe(true)
+  await ui.unmount()
+})
+
+test('a jira-update lens in the lens folder writes the update draft; a found server names itself in drafts', { options: OPTIONS }, async ($, on) => {
+  const got = jiraHooks(on, '---\njira: PROJ-1\n---\n# Next\n', [{ name: 'mcp__atlassian__getJiraIssue', description: 'get', mcp: true }], ['/v/lenses/jira-update.md'])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'jira-update' })
+  expect(got.filled[0]?.includes('- Lens: read "/v/lenses/jira-update.md"')).toBe(true)
+  expect(got.filled[0]?.endsWith('Instruction: update Jira PROJ-1')).toBe(true)
+  expect(chatTitleFrom(got.filled[0] ?? '')).toBe('jira-update: update Jira PROJ-1')
+
+  await ui.press({ key: 'jira-unlink' })
+  await ui.press({ key: 'jira-find' })
+  expect(got.filled[1]?.includes('using the atlassian MCP server')).toBe(true)
+  expect(got.sent).toEqual([])
+  await ui.unmount()
+})
+
+test('a new task goes to the task folder even when the anchor note sits in a subfolder, and its draft looks for its issue', { options: { ...OPTIONS, taskFolder: 'Tasks', jiraProject: 'PROJ' } }, async ($, on) => {
+  const got = jiraHooks(on, GARDEN_NOTE, [])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.input({ key: 'new-task-2', text: 'Fix the gate' })
+  expect(got.written.has('/v/Tasks/Fix the gate.md')).toBe(true)
+  expect(got.written.get('/v/Tasks/Fix the gate.md')?.includes('Up: [[PMOC - Garden]]')).toBe(true)
+  expect(got.filled).toEqual([newTaskDraft('/v/Tasks/Fix the gate.md', trailPath('Fix the gate'), 'Fix the gate', { project: 'PROJ', server: '' })])
+  await ui.unmount()
+})
+
+test('with no task folder, a new task goes to the notes root, never beside the anchor note', { options: OPTIONS }, async ($, on) => {
+  const got = jiraHooks(on, GARDEN_NOTE, [])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.input({ key: 'new-task-2', text: 'Fix the gate' })
+  expect(got.written.has('/v/Fix the gate.md')).toBe(true)
+  expect(got.written.has('/v/Projects/Fix the gate.md')).toBe(false)
+  expect(got.filled).toEqual([newTaskDraft('/v/Fix the gate.md', trailPath('Fix the gate'), 'Fix the gate')])
   await ui.unmount()
 })

@@ -34,6 +34,8 @@ export type Swatch = {
   next: SubItem[]
   // The anchor note's `jira:` frontmatter, a Jira key, or empty.
   jira: string
+  // The Jira MCP server found among this session's tools, or empty.
+  jiraServer: string
   trail: Trail
   // Where each pinned note was found, by name.
   pinPaths: Record<string, string>

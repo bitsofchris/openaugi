@@ -56,7 +56,25 @@
     "taskFolder": {
       "type": "string",
       "title": "Task folder",
-      "description": "Where a new task note from the pane goes, inside the notes folder. Empty puts it beside the current anchor's note, or at the notes folder's root.",
+      "description": "The one folder every new task note from the pane goes to, inside the notes folder. Empty puts them at the notes folder's root. Tasks are organized by their Up: link, not by folder.",
+      "default": ""
+    },
+    "jiraProject": {
+      "type": "string",
+      "title": "Jira project",
+      "description": "Optional. The Jira project key or board your issues live in (e.g. PROJ). It is quoted into the prompts the pane drafts for finding and updating issues.",
+      "default": ""
+    },
+    "jiraSite": {
+      "type": "string",
+      "title": "Jira site",
+      "description": "Optional. Your Jira site's base URL (e.g. https://example.atlassian.net), used only to open a linked issue in the browser.",
+      "default": ""
+    },
+    "jiraServer": {
+      "type": "string",
+      "title": "Jira MCP server",
+      "description": "Optional. The Jira MCP server's name as /mcp lists it. Empty looks for a likely one (atlassian, jira). The pane never calls it; drafts name it for the chat.",
       "default": ""
     },
     "lensPicks": {

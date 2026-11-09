@@ -15,9 +15,14 @@ export type Options = {
   logFolder: string
   // The old name for logFolder, still read.
   trailFolder: string
-  // Where a new task note goes; empty means beside the anchor's note.
+  // The one flat folder every new task note goes to; empty means the notes folder's root.
   taskFolder: string
   lensPicks: string
+  // Jira, all optional: the project key or board quoted into drafts, the site's base URL
+  // (only to open an issue in the browser), and the MCP server's name as /mcp lists it.
+  jiraProject: string
+  jiraSite: string
+  jiraServer: string
 }
 export type Paths = {
   home: string
@@ -26,13 +31,16 @@ export type Paths = {
   board: string
   lenses: string
   trails: string
-  // Empty when the setting is: a new task goes beside the anchor's note.
+  // Where every new task note goes: the task folder, else the notes folder's root.
   tasks: string
   claudeDir: string
   codexDir: string
   editor: string
   editorCommand: string
   picks: string[]
+  jiraProject: string
+  jiraSite: string
+  jiraServer: string
 }
 
 const expand = (path: string, home: string): string => path.trim().replace(/^~(?=\/|$)/, home).replace(/\/+$/, '')
@@ -54,12 +62,15 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
     board: within(notes, options.boardNote || 'Kanban.md', home),
     lenses: within(notes, options.lensFolder || 'OpenAugi/AGENT/lenses', home),
     trails: within(notes, options.logFolder || options.trailFolder || 'OpenAugi/Agent-Logs', home),
-    tasks: options.taskFolder?.trim() ? within(notes, options.taskFolder, home) : '',
+    tasks: options.taskFolder?.trim() ? within(notes, options.taskFolder, home) : notes,
     claudeDir: `${home}/.claude/projects`,
     codexDir: `${home}/.codex/sessions`,
     editor: options.editor || 'obsidian',
     editorCommand: options.editorCommand ?? '',
     picks: (options.lensPicks ?? '').split(',').map(one => one.trim()).filter(Boolean),
+    jiraProject: (options.jiraProject ?? '').trim(),
+    jiraSite: (options.jiraSite ?? '').trim().replace(/\/+$/, ''),
+    jiraServer: (options.jiraServer ?? '').trim(),
   }
 }
 
@@ -239,6 +250,7 @@ const swatch = atom(
     outcome: '',
     next: [],
     jira: '',
+    jiraServer: '',
     trail: EMPTY_TRAIL,
     pinPaths: {},
     hits: [],
@@ -246,7 +258,7 @@ const swatch = atom(
     sessions: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-10' },
+  { shape: 'swatch-11' },
 )
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
@@ -495,15 +507,19 @@ export const jiraFrom = (text: string): string => {
 const JIRA_KEY = /^[A-Z][A-Z0-9]+-\d+$/
 const JIRA_URL = /^https?:\/\/\S*\/browse\/([A-Z][A-Z0-9]+-\d+)(?:[/?#]\S*)?$/
 
+// A Jira key from one word: a bare key (`PROJ-123`, capitals only) or an issue URL
+// (`…/browse/PROJ-123`), brackets and trailing punctuation dropped. Else empty.
+export const jiraKeyFrom = (text: string): string => {
+  const bare = text.trim().replace(/^[([<]+|[)\]>:,;.]+$/g, '')
+
+  return JIRA_KEY.test(bare) ? bare : (bare.match(JIRA_URL)?.[1] ?? '')
+}
+
 // What was typed for a new task: a Jira key or issue URL at its start or end is
 // taken out of the title and kept as the key.
 export const parseNewTask = (typed: string): { title: string; jira: string } => {
   const words = typed.trim().split(/\s+/).filter(Boolean)
-  const keyOf = (word: string | undefined): string => {
-    const bare = (word ?? '').replace(/^[([<]+|[)\]>:,;.]+$/g, '')
-
-    return JIRA_KEY.test(bare) ? bare : (bare.match(JIRA_URL)?.[1] ?? '')
-  }
+  const keyOf = (word: string | undefined): string => (word ? jiraKeyFrom(word) : '')
   let jira = keyOf(words[words.length - 1])
   if (jira) {
     words.pop()
@@ -560,18 +576,88 @@ export const taskNoteText = (template: string, name: string, today: string, up: 
     lines.splice(at, lines[at + 1] === '' && (at === 0 || lines[at - 1] === '') ? 2 : 1)
   }
   const text = lines.join('\n')
-  if (!jira) {
-    return text
-  }
-  const front = text.match(/^---\n([\s\S]*?\n)?---/)
+
+  return jira ? withJira(text, jira) : text
+}
+
+// The note with its `jira:` frontmatter line set to `key` (replaced, or added last),
+// or removed when `key` is empty. A note without frontmatter gets one holding only
+// that line. Every other byte stays as it was.
+export const withJira = (text: string, key: string): string => {
+  const front = text.match(/^---\n([\s\S]*?\n)?---(?=\n|$)/)
   if (!front) {
-    return `---\njira: ${jira}\n---\n${text}`
+    return key ? `---\njira: ${key}\n---\n${text}` : text
   }
   const body = front[1] ?? ''
-  const fields = /^jira:.*$/m.test(body) ? body.replace(/^jira:.*$/m, `jira: ${jira}`) : `${body}jira: ${jira}\n`
+  const has = /^jira:.*$/m.test(body)
+  const fields = !key ? body.replace(/^jira:.*\n/m, '') : has ? body.replace(/^jira:.*$/m, `jira: ${key}`) : `${body}jira: ${key}\n`
 
   return `---\n${fields}---${text.slice(front[0].length)}`
 }
+
+// Where an issue opens in the browser.
+export const jiraBrowseUrl = (site: string, key: string): string => `${site.replace(/\/+$/, '')}/browse/${key}`
+
+// Names a Jira MCP server often goes by, for finding one when the setting is empty.
+export const JIRA_SERVERS = ['atlassian', 'Atlassian', 'claude.ai Atlassian', 'jira']
+
+const serverKey = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+
+// The Jira MCP server among the session's tools (`mcp__<server>__<tool>`): the one the
+// setting names, else the first of the likely names. Empty when none is there.
+export const jiraServerFrom = (tools: { name: string; mcp: boolean }[], wanted: string): string => {
+  const servers = tools
+    .filter(tool => tool.mcp && tool.name.startsWith('mcp__'))
+    .map(tool => tool.name.slice(5).split('__')[0] ?? '')
+    .filter(Boolean)
+  const has = (name: string): string | undefined => servers.find(one => serverKey(one) === serverKey(name))
+  if (wanted.trim()) {
+    return has(wanted) ? wanted.trim() : ''
+  }
+  for (const name of JIRA_SERVERS) {
+    const found = has(name)
+    if (found) {
+      return found
+    }
+  }
+
+  return ''
+}
+
+// How a draft tells the chat which Jira to use.
+const jiraTools = (project: string, server: string): string =>
+  `${project ? ` in project ${project}` : ''}${server ? ` using the ${server} MCP server` : ' with whatever Jira tools you have; if you have none, say so and stop'}`
+
+// The find-or-offer-to-create steps, shared by "find in Jira" and a new task's draft.
+const jiraFindSteps = (what: string, project: string, server: string): string[] => [
+  `- Search Jira${jiraTools(project, server)} for issues that match ${what}. List up to five likely matches, one line each: KEY · summary · status. Do not create or change anything in Jira.`,
+  `- When I pick one, set \`jira: <KEY>\` in the note's frontmatter (this once you may write that line: I'm asking). If nothing matches, offer to create an issue and wait for my yes.`,
+]
+
+// What Jira the drafts name: the project key and the MCP server, either may be empty.
+export type JiraAsk = { project: string; server: string }
+
+// The prompt "find in Jira" leaves in the box, unsent: the chat searches Jira for the
+// anchor's issue and links the one the user picks.
+export const findInJiraDraft = (notePath: string, note: string, ask: JiraAsk): string =>
+  [
+    DRAFT_HEAD,
+    `- Anchor note: ${notePath ? `"${notePath}"` : `[[${note}]] (find it in "${P.notes}")`} (${note}). Read it; it has no Jira issue linked yet.`,
+    ...jiraFindSteps('this note', ask.project, ask.server),
+    `Instruction: find the Jira issue for ${note}`,
+  ].join('\n')
+
+// The prompt "↑ update Jira" leaves in the box, unsent, when the lens folder has no
+// jira-update lens: a short status update, shown first, posted only on a yes.
+export const jiraUpdateDraft = (notePath: string, note: string, logPath: string, key: string, ask: JiraAsk): string =>
+  [
+    DRAFT_HEAD,
+    `- Anchor note: ${notePath ? `"${notePath}"` : `[[${note}]] (find it in "${P.notes}")`} (${note}): read its \`outcome:\`, \`# Next\` and \`# Journal\`, and its Agent Log "${logPath}".`,
+    `- Read Jira issue ${key} and its recent comments${jiraTools('', ask.server)}, so the update covers only what is new since the last one.`,
+    '- Write a status update of at most six lines: what moved, what is next, what is blocked. Show it to me first.',
+    `- Post it as a comment on ${key} only after I say yes. Change the issue's status only if I ask. Don't change any files.`,
+    `Instruction: update Jira ${key}`,
+  ].join('\n')
 
 // Puts `- [ ] [[note]]` on the board as a top-level card: after the anchor's card and
 // its sub-items, else at the end of the first column's cards. Never in the archive;
@@ -622,12 +708,14 @@ export const insertCard = (board: string, note: string, anchor: string | null): 
 
 // The prompt a new task leaves in the box, unsent: the chat fills in the note's
 // outcome and Next from what it has done, and keeps the context in the Agent Log.
-export const newTaskDraft = (notePath: string, logPath: string, name: string): string =>
+// With `jira` (Jira is on and no key was typed) it also looks for the task's issue.
+export const newTaskDraft = (notePath: string, logPath: string, name: string, jira: JiraAsk | null = null): string =>
   [
     DRAFT_HEAD,
     `- A task note was just made from this chat: "${notePath}".`,
     "- From what this chat has done, fill in its `outcome:` line and its `# Next` checkboxes. This once you may write that note: I'm asking.",
     `- Put the context worth keeping (decisions, files, links) under ## Context in its Agent Log "${logPath}", one line each on why it matters.`,
+    ...(jira ? jiraFindSteps('this task', jira.project, jira.server) : []),
     'Reply in a few lines with what you wrote.',
     `Instruction: fill in the new task ${name}`,
   ].join('\n')
@@ -1450,6 +1538,7 @@ async function load($: EngineInterface): Promise<void> {
     season: anchorFrom(await readOr($, P.context)),
     cards,
     ...(await loadAnchor($, cards)),
+    jiraServer: await jiraServerNow($),
     lenses: [],
     sessions: await recentSessions($),
     loadedAt: await $.clock.now(),
@@ -1466,6 +1555,89 @@ async function load($: EngineInterface): Promise<void> {
   }
 
   await update($, swatch, () => next)
+}
+
+// The Jira MCP server this session has, read from its tool list (a plain read: nothing
+// connects, signs in or asks). `$.mcp.connect` can't tell: it connects only servers
+// this plugin's own manifest lists.
+async function jiraServerNow($: EngineInterface): Promise<string> {
+  try {
+    return jiraServerFrom(await $.tool.list(), P.jiraServer)
+  } catch {
+    return ''
+  }
+}
+
+// What the Jira drafts name, or null when Jira is off: on with a server found or named,
+// a project or site set, or a key on the anchor.
+async function jiraAsk($: EngineInterface): Promise<JiraAsk | null> {
+  const { jiraServer, jira } = await read($, swatch)
+  const server = jiraServer || P.jiraServer
+
+  return server || P.jiraProject || P.jiraSite || jira ? { project: P.jiraProject, server } : null
+}
+
+// Sets or clears `jira:` in the anchor note's frontmatter, read fresh from disk (it may
+// be open in the user's editor). Like the scratchpad's save, this is the user's own press
+// changing one line of their own note; nothing else in it changes, and Jira is not called.
+async function writeJira($: EngineInterface, key: string): Promise<void> {
+  const { anchor, notePath } = await read($, swatch)
+  if (!anchor) {
+    return
+  }
+  if (!notePath) {
+    await $.ui.toast(`No note found for ${anchor.note}: nothing linked.`)
+
+    return
+  }
+  try {
+    const old = await $.fs.read(notePath)
+    const text = withJira(old, key)
+    if (text !== old) {
+      await $.fs.write(notePath, text)
+    }
+  } catch (error) {
+    await $.ui.toast(`Couldn't write ${anchor.note}: ${String(error)}`)
+
+    return
+  }
+  await update($, swatch, old => (old.anchor?.note === anchor.note ? { ...old, jira: key } : old))
+}
+
+// A pasted key or issue link links the anchor. A site in the link is not saved as a setting.
+async function linkJira($: EngineInterface, typed: string): Promise<void> {
+  const key = jiraKeyFrom(typed)
+  if (!key) {
+    await $.ui.toast(`Not a Jira key or issue link: ${typed.trim()}`)
+
+    return
+  }
+  await writeJira($, key)
+}
+
+// Drafts (unsent) a search for the anchor's issue; the chat uses its own Jira tools.
+async function findInJira($: EngineInterface): Promise<void> {
+  const { anchor, notePath } = await read($, swatch)
+  if (anchor) {
+    await $.prompt.fill({ text: findInJiraDraft(notePath, anchor.note, (await jiraAsk($)) ?? { project: P.jiraProject, server: P.jiraServer }), mode: 'replace' })
+  }
+}
+
+// Drafts (unsent) a status update for the linked issue: a jira-update lens in the lens
+// folder when there is one, so the user can make the wording their own, else the built-in.
+async function updateJira($: EngineInterface): Promise<void> {
+  const { anchor, notePath, jira } = await read($, swatch)
+  if (!anchor || !jira) {
+    return
+  }
+  const lensPath = `${P.lenses}/jira-update.md`
+  if (await $.fs.exists(lensPath)) {
+    await draft($, { name: 'jira-update', path: lensPath, description: '' }, `update Jira ${jira}`)
+
+    return
+  }
+  const ask = (await jiraAsk($)) ?? { project: P.jiraProject, server: P.jiraServer }
+  await $.prompt.fill({ text: jiraUpdateDraft(notePath, anchor.note, trailPath(anchor.note), jira, ask), mode: 'replace' })
 }
 
 // The note this chat session is anchored on, if any.
@@ -1755,9 +1927,9 @@ async function newTask($: EngineInterface, typed: string): Promise<void> {
 
     return
   }
-  const { anchor, notePath } = await read($, swatch)
-  const folder = P.tasks || (notePath ? notePath.slice(0, notePath.lastIndexOf('/')) : P.notes)
-  const path = `${folder}/${name}.md`
+  const { anchor } = await read($, swatch)
+  // One flat folder: hierarchy is the `Up:` link, never where the file sits.
+  const path = `${P.tasks}/${name}.md`
   if ((await $.fs.exists(path)) || (await notePathOf($, name))) {
     await $.ui.toast(`A note named ${name} is already there: nothing written.`)
 
@@ -1777,7 +1949,9 @@ async function newTask($: EngineInterface, typed: string): Promise<void> {
   if (card) {
     await chooseAnchor($, card)
   }
-  await $.prompt.fill({ text: newTaskDraft(path, trailPath(name), name), mode: 'replace' })
+  // A typed key is already linked: the draft asks for no search then.
+  const ask = jira ? null : await jiraAsk($)
+  await $.prompt.fill({ text: newTaskDraft(path, trailPath(name), name, ask), mode: 'replace' })
 }
 
 // `open` is macOS; elsewhere the same argument goes to xdg-open.
@@ -2002,7 +2176,9 @@ export const register: Register = (on, options) => {
     const { Box, Button, Input, Text } = $.ui.resolve(e)
     // Svg is drawn by the desktop, editor and phone, not the terminal.
     const Svg = e.surface === 'terminal' ? null : (($.ui.resolve(e) as unknown as { Svg?: typeof Text }).Svg ?? null)
-    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
+    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
+    // Jira shows only when it is on: a server found or named, a project or site set, or a key on the anchor.
+    const isJiraOn = Boolean(jiraServer || P.jiraServer || P.jiraProject || P.jiraSite || jira)
     const choice = await read($, picks)
     const shown = await read($, view)
     const ownArtifacts = await sessionArtifacts($)
@@ -2110,7 +2286,22 @@ export const register: Register = (on, options) => {
         {!anchor && <Text dimColor>🧭 Season: {season}</Text>}
         {anchor && anchor.detail && <Text dimColor>{anchor.detail}</Text>}
         {anchor && outcome && <Text>🎯 {outcome}</Text>}
-        {anchor && jira && <Text dimColor>🔗 {jira}</Text>}
+        {anchor && jira && (
+          <Box key="jira-linked" flexDirection="row">
+            {P.jiraSite
+              ? <Button key="jira-open" plain label={`🔗 ${jira}`} onPress={() => launch($, ['open', jiraBrowseUrl(P.jiraSite, jira)])} />
+              : <Text key="jira-key" dimColor>{`🔗 ${jira}`}</Text>}
+            <Text dimColor> </Text>
+            <Button key="jira-update" label="↑ update Jira" onPress={() => updateJira($)} />
+            <Button key="jira-unlink" plain label=" unlink" onPress={() => writeJira($, '')} />
+          </Box>
+        )}
+        {anchor && !jira && isJiraOn && (
+          <Box key="jira-unlinked" flexDirection="row">
+            <Input key="jira-link" label="🔗 " placeholder="paste a Jira key or link: Enter links it to this anchor" submitLabel="link" onSubmit={value => linkJira($, value)} />
+            <Button key="jira-find" label="find in Jira" onPress={() => findInJira($)} />
+          </Box>
+        )}
         {anchor && [...(next ?? []), ...anchor.tasks.filter(task => !(next ?? []).some(one => one.text === task.text))].map(task => (
           task.note
             ? <Button key={`task-${task.text}`} plain label={`☐ ${task.text} ↗`} onPress={() => openByName($, task.note ?? '')} />
@@ -2294,7 +2485,20 @@ export const register: Register = (on, options) => {
           <Input key="set-logFolder" label="  agent log folder" value={settings.logFolder || settings.trailFolder || ''} placeholder="OpenAugi/Agent-Logs" onSubmit={value => setOption($, 'logFolder', value)} />
         )}
         {shown.setupOpen && (
-          <Input key="set-taskFolder" label="  new task folder" value={settings.taskFolder ?? ''} placeholder="beside the anchor's note" onSubmit={value => setOption($, 'taskFolder', value)} />
+          <Input key="set-taskFolder" label="  new task folder" value={settings.taskFolder ?? ''} placeholder="the notes folder's root" onSubmit={value => setOption($, 'taskFolder', value)} />
+        )}
+        {shown.setupOpen && <Text bold>  Jira (optional)</Text>}
+        {shown.setupOpen && (
+          <Text dimColor>{`  ${jiraServer ? `Jira MCP server found: ${jiraServer}.` : 'No Jira MCP server found in this session.'} The pane links notes and drafts prompts; the chat talks to Jira.`}</Text>
+        )}
+        {shown.setupOpen && (
+          <Input key="set-jiraProject" label="  project or board" value={settings.jiraProject ?? ''} placeholder="PROJ" onSubmit={value => setOption($, 'jiraProject', value)} />
+        )}
+        {shown.setupOpen && (
+          <Input key="set-jiraSite" label="  site" value={settings.jiraSite ?? ''} placeholder="https://example.atlassian.net" onSubmit={value => setOption($, 'jiraSite', value)} />
+        )}
+        {shown.setupOpen && (
+          <Input key="set-jiraServer" label="  MCP server" value={settings.jiraServer ?? ''} placeholder="as /mcp lists it; empty looks for one" onSubmit={value => setOption($, 'jiraServer', value)} />
         )}
         {shown.setupOpen && (
           <Input key="set-lensPicks" label="  lenses to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />
