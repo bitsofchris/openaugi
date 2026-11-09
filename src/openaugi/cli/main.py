@@ -1695,10 +1695,24 @@ def _pick_task(tasks: list, ref: str):
 
 
 @tasks_app.callback()
-def tasks_main(ctx: typer.Context):
-    """With no subcommand: same as `openaugi tasks list`."""
+def tasks_main(
+    ctx: typer.Context,
+    path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    show_all: bool = typer.Option(False, "--all", "-a", help="Include finished tasks"),
+    no_sync: bool = typer.Option(False, "--no-sync", help="Skip checking the vault first"),
+):
+    """With no subcommand: same as `openaugi tasks list`, and takes its options."""
     if ctx.invoked_subcommand is None:
-        tasks_list(path=None, db=None, show_all=False, no_sync=False)
+        tasks_list(path=path, db=db, show_all=show_all, no_sync=no_sync)
+        return
+    # `openaugi tasks --all show 3` would silently drop --all; say so instead.
+    if path or db or show_all or no_sync:
+        console.print(
+            f"[red]Put options after the subcommand:[/red] "
+            f"openaugi tasks {ctx.invoked_subcommand} [bold]<options>[/bold]"
+        )
+        raise typer.Exit(2)
 
 
 @tasks_app.command("list")

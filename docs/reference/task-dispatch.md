@@ -36,7 +36,7 @@ openaugi tasks              # sync the vault, list what's waiting (= tasks list)
 openaugi tasks show 1       # read task #1 in full
 openaugi tasks run 1        # show its instruction, confirm, launch it in tmux
 openaugi tasks run 1 --yes  # skip the confirmation
-openaugi tasks list --all   # include done / duplicate / superseded
+openaugi tasks --all        # include done / duplicate / superseded (= tasks list --all)
 ```
 
 `openaugi tasks` runs an incremental ingest first and turns any `zzz:` written
