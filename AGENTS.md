@@ -85,7 +85,20 @@ message.
 | Agent skill files (runtime) | `<vault>/OpenAugi/AGENT/` | Vault copy is the source of truth, see below |
 | Agent skill templates (seed) | `src/openaugi/templates/` | Written by `scripts/sync_templates.py` from the vault's `kind: engine` files; copied on `openaugi init`; not read at runtime |
 | **Scratch / drafts / session dumps** | `docs/scratch/` | **Gitignored — never commit.** Blog drafts, session handoffs, anything vault-derived |
+| **Development artifacts** (test checklists, change summaries, release notes drafts, review reports) | `docs/scratch/` | **Never the vault.** See below |
 | Debug logs | `~/.openaugi/logs/openaugi.log` | Rotated, DEBUG level |
+
+**Development work writes nothing new into the vault.** The vault is the
+user's notes, not a workspace. While developing this repo an agent never
+creates a file there for its own output: no test checklist, change summary,
+release plan, review report or handoff. Those go in `docs/scratch/`, and the
+agent hands the user the path. "Plans live in the user's notes" means the user
+keeps them there; it is not permission for an agent to file its working
+documents in the vault. The only vault edits a development session makes are
+the ones the change itself requires: the Command Deck entry (below), the
+`AGENT/` engine files and templates being changed, and a lens or note the
+user asked for by name. When unsure whether something belongs in the vault,
+it does not: write it to `docs/scratch/` and ask.
 
 **Docs layout (convention — keep it this way).** Everything under `docs/`
 is one of two tiers: **`reference/`** = durable manuals for how a
