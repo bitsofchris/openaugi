@@ -69,7 +69,12 @@ export type View = {
   detailsOpen: boolean
   // The Files card lists every touched file, not just the newest five.
   filesOpen: boolean
+  // Which new-task field is open in the Anchor card: none, a standalone task, or a sub-task of the anchor.
+  taskMode: '' | 'new' | 'sub'
 }
+// The task this chat just made, for the Anchor card's "just made" row; an empty `note` is none.
+// `jira` is the key typed with its title, if any.
+export type JustMade = { note: string; path: string; jira: string }
 // A side answer to a parked question, by the question's `when` and text: `pending`
 // while the fork runs, then the answer until it is kept in the Agent Log or dropped.
 export type AsideAnswer = { when: string; text: string; answer: string; pending: boolean }
@@ -78,6 +83,6 @@ export type Asides = { btw: boolean; answers: AsideAnswer[] }
 
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; touched: Shaped<Touched>; pad: Shaped<PadEntry[]>; asides: Shaped<Asides> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; touched: Shaped<Touched>; pad: Shaped<PadEntry[]>; asides: Shaped<Asides>; justMade: Shaped<JustMade> }
   }
 }

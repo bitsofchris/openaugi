@@ -10,14 +10,18 @@ including ones published before the anchor was picked, and the newest three
 show as buttons beside Human Notes and Agent Log. The Project context card
 lists artifacts first and loses its hotkeys except `n`.
 
-**augi-ui: a new task from a chat.** `＋ task` in the Anchor card takes a title,
-optionally with a Jira key (`PROJ-123`) or issue link. The pane writes the note
-from the Task template, adds its card to the board after the current anchor,
-sets `Up:` to the parent, pins the chat, anchors on the task and leaves an
-unsent draft asking the chat to fill in outcome, Next and context. The note
-lands in the one flat `taskFolder` (empty = the notes folder root); hierarchy
-is only the `Up:` link. A board sub-item or Next checkbox that links a note is
-a button that opens it.
+**augi-ui: a new task or a sub-task from a chat.** Two buttons in the Anchor
+card, `＋ new task` and `＋ sub-task of <anchor>`, each opening a title field
+with a cancel (no file-creating field is left open). The title may carry a
+Jira key (`PROJ-123`) or issue link. A new task is standalone: no `Up:`, a card
+at the end of the first column. A sub-task gets `Up:` to the anchor, goes on
+the board as a linked checkbox under the anchor's card, and has the parent
+pinned in its Agent Log. Notes land in the one flat `taskFolder` (empty = the
+notes folder root). Creating never moves the chat's anchor or touches the
+prompt box; a "just made" row offers open, define here (an unsent draft to
+fill Outcome and Verify), copy for a new chat, anchor on it, and dismiss. A
+linked sub-item can be picked as an anchor, and a board sub-item or Next
+checkbox that links a note is a button that opens it.
 
 **augi-ui: link an anchor to Jira, optionally.** Off until a Jira MCP server is
 found among the session's tools or one of the new settings `jiraProject`,
