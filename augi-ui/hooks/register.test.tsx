@@ -1,6 +1,7 @@
 import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
+import { anchorFiles, isListedTouch, openArgv, shortPath, touchedPin, withTouched } from './register'
 import { findInJiraDraft, insertCard, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, withJira } from './register'
 import { addAnswer, addChat, addJournalEntry, anchorFromDraft,anchorArtifacts, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
@@ -1582,5 +1583,160 @@ test('without /btw, aside forks the chat: the answer shows under the question, k
   expect(await ui.find({ text: 'Yes, it is on disk (3).' })).toBeFalsy()
   expect(await ui.find({ key: 'aside-keep-2026-11-08 09:00' })).toBeFalsy()
   expect(await ui.find({ key: 'done-2026-11-08 09:00' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('touched files: newest first, one row per path, made sticks, capped', async () => {
+  const one = (path: string, made = false) => ({ path, made })
+  const list = withTouched(withTouched(withTouched([], one('/r/a.ts', true)), one('/r/b.ts')), one('/r/a.ts'))
+  expect(list).toEqual([one('/r/a.ts', true), one('/r/b.ts')])
+  let many: { path: string; made: boolean }[] = []
+  for (let at = 0; at < 40; at += 1) {
+    many = withTouched(many, one(`/r/${at}.ts`))
+  }
+  expect(many.length).toBe(30)
+  expect(many[0]?.path).toBe('/r/39.ts')
+  expect(withTouched([one('/r/a.ts')], one('/r/b.ts'), 1)).toEqual([one('/r/b.ts')])
+})
+
+test('a touched path is short: notes-relative, then root-relative, then ~', async () => {
+  expect(shortPath('/v/Ideas/A.md', '/v', '/Users/t', '/Users/t/r')).toBe('Ideas/A.md')
+  expect(shortPath('/Users/t/r/src/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('src/a.ts')
+  expect(shortPath('/Users/t/other/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('~/other/a.ts')
+  expect(shortPath('/tmp/a.ts', '/v', '/Users/t', '')).toBe('/tmp/a.ts')
+})
+
+test('a vault note opens in the note editor, any other file in the file editor', async () => {
+  const paths = resolvePaths({ notesFolder: '/v', editor: 'obsidian' }, '/Users/t')
+  expect(paths.fileEditor).toBe('vscode')
+  expect(openArgv(paths, '/v/A.md')).toEqual(['open', 'obsidian://open?path=%2Fv%2FA.md'])
+  expect(openArgv(paths, '/v/pic.png')).toEqual(['code', '/v/pic.png'])
+  expect(openArgv(paths, '/r/notes.md')).toEqual(['code', '/r/notes.md'])
+  expect(openArgv({ ...paths, fileEditor: 'cursor' }, '/r/a.ts')).toEqual(['cursor', '/r/a.ts'])
+  expect(openArgv({ ...paths, fileEditor: 'system' }, '/r/a.ts')).toEqual(['open', '/r/a.ts'])
+})
+
+test('Agent Logs and dot-folders in the notes are not listed; the pin is a note by name or the file, unticked', async () => {
+  expect(isListedTouch('/r/src/a.ts', '/v', '/v/Notes')).toBe(true)
+  expect(isListedTouch('/r/.github/ci.yml', '/v', '/v/Notes')).toBe(true)
+  expect(isListedTouch('/v/Notes/Agent Log - X.md', '/v', '/v/Notes')).toBe(false)
+  expect(isListedTouch('/v/.obsidian/app.json', '/v', '/v/Notes')).toBe(false)
+  expect(touchedPin('/v/Ideas/A.md', '/v')).toEqual({ on: false, kind: 'note', target: 'A', label: 'A', path: '/v/Ideas/A.md' })
+  expect(touchedPin('/r/README.md', '/v')).toEqual({ on: false, kind: 'file', target: '/r/README.md', label: 'README.md' })
+  const file = (n: number) => ({ on: false, kind: 'file', target: `/r/${n}`, label: String(n) }) as const
+  const art = { on: true, kind: 'artifact', target: 'https://claude.ai/artifact/a', label: 'A' } as const
+  const note = { on: true, kind: 'note', target: 'N', label: 'N' } as const
+  expect(anchorFiles([file(1), art, note, file(2), file(3), file(4), file(5), SESSION_PIN]).map(pin => pin.label)).toEqual(['5', '4', '3', '2', 'N'])
+})
+
+test('files this chat touched: listed newest first, opened in the right editor, pinned as unticked links that show in the Anchor card', { options: OPTIONS }, async ($, on) => {
+  const written = new Map<string, string>()
+  const store = new Map<string, unknown>()
+  const onDisk = new Set(['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/r/README.md', '/r/src/b.ts'])
+  const ran: string[][] = []
+  const toasts: string[] = []
+  let answer: object = { result: {}, text: 'ok' }
+  on('env.get', () => ({ value: '/Users/t' }))
+  on('command.register', () => ({ value: { command: 'augi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.toast', (_, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('session.id', () => ({ value: 'own-session' }))
+  on('session.cwd', () => ({ value: '/r' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 8, 9, 30).getTime() }))
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.set', (_, e) => {
+    store.set(e.key, e.value)
+    return { value: undefined }
+  })
+  on('fs.exists', (_, e) => ({ value: onDisk.has(e.path) || e.path.endsWith('Kanban.md') || written.has(e.path) }))
+  on('fs.read', (_, e) => ({ value: written.get(e.path) ?? (e.path.endsWith('Kanban.md') ? BOARD_TEXT : '') }))
+  on('fs.write', (_, e) => {
+    written.set(e.path, e.text)
+    return { value: undefined }
+  })
+  on('fs.list', () => ({ value: [] }))
+  on('process.run', (_, e) => {
+    if (e.argv[0] !== 'find' && e.argv[0] !== 'mkdir') {
+      ran.push(e.argv)
+    }
+    return { value: { exitCode: 0, stdout: e.argv[0] === 'find' && e.argv.includes('PMOC - Garden.md') ? '/v/PMOC - Garden.md\n' : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  // The tool runs as told: the file is on disk after, unless the call is denied or fails.
+  on('tool.call', (_, e) => {
+    const input = e as { file_path?: string; notebook_path?: string }
+    if (!('deny' in answer) && !('isError' in answer)) {
+      onDisk.add(input.file_path ?? input.notebook_path ?? '')
+    }
+    return answer as never
+  })
+  const pinsNow = () => parseTrail(written.get(trailPath('PMOC - Garden')) ?? '').pins
+
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'card-files' })).toBeFalsy()
+
+  await $.tool.call({ tool: 'Write', file_path: '/r/src/new.ts', content: 'x' })
+  await $.tool.call({ tool: 'Edit', file_path: '/r/README.md', old_string: 'a', new_string: 'b' })
+  // The Agent Log folder is the pane's own; a denied or failed call changed nothing.
+  await $.tool.call({ tool: 'Write', file_path: '/v/Notes/Agent Log - X.md', content: 'x' })
+  answer = { deny: 'no' }
+  await $.tool.call({ tool: 'Edit', file_path: '/r/src/denied.ts', old_string: 'a', new_string: 'b' })
+  answer = { result: 'boom', text: 'boom', isError: true }
+  await $.tool.call({ tool: 'Write', file_path: '/r/src/failed.ts', content: 'x' })
+  answer = { result: {}, text: 'ok' }
+
+  const rowOf = async (path: string) => (await ui.find({ key: `touched-${path}` }))?.text ?? ''
+  expect(await ui.find({ text: '📄 Files this chat touched · 2' })).toBeTruthy()
+  expect((await ui.findAll({ type: 'Box', text: /^ {2}\S.* open/ })).map(one => one.key)).toEqual(['touched-/r/README.md', 'touched-/r/src/new.ts'])
+  expect(await rowOf('/r/README.md')).toBe('  README.md open')
+  expect(await rowOf('/r/src/new.ts')).toBe('  src/new.ts new open')
+  expect(await rowOf('/v/Notes/Agent Log - X.md')).toBe('')
+  expect(await rowOf('/r/src/denied.ts')).toBe('')
+  expect(await rowOf('/r/src/failed.ts')).toBe('')
+  expect(await ui.find({ key: 'touched-pin-/r/README.md' })).toBeFalsy()
+  expect(await ui.find({ text: /Pick an anchor to pin these/ })).toBeTruthy()
+
+  await ui.press({ key: 'touched-open-/r/README.md' })
+  expect(ran.pop()).toEqual(['code', '/r/README.md'])
+  await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/Fresh.md', content: 'x' })
+  expect(await rowOf('/v/Ideas/Fresh.md')).toBe('  Ideas/Fresh.md new open')
+  await ui.press({ key: 'touched-open-/v/Ideas/Fresh.md' })
+  expect(ran.pop()).toEqual(['open', 'obsidian://open?path=%2Fv%2FIdeas%2FFresh.md'])
+  onDisk.delete('/r/src/new.ts')
+  await ui.press({ key: 'touched-open-/r/src/new.ts' })
+  expect(toasts.pop()).toBe('Not found: /r/src/new.ts')
+  expect(ran.length).toBe(0)
+
+  // Anchored: pin writes an unticked pin, the row says pinned, the Anchor card links it.
+  await ui.press({ key: 'anchor-menu' })
+  await ui.press({ key: 'card-PMOC - Garden' })
+  await ui.press({ key: 'touched-pin-/r/README.md' })
+  expect(pinsNow()).toEqual([{ on: false, kind: 'file', target: '/r/README.md', label: 'README.md' }])
+  expect(await ui.find({ key: 'touched-pin-/r/README.md' })).toBeFalsy()
+  expect(await rowOf('/r/README.md')).toMatch(/open\s*pinned$/)
+  expect((await ui.find({ key: 'anchor-file-file-/r/README.md' }))?.text).toMatch(/📄 README.md/)
+  await ui.press({ key: 'anchor-file-file-/r/README.md' })
+  expect(ran.pop()).toEqual(['code', '/r/README.md'])
+  await ui.press({ key: 'touched-pin-/v/Ideas/Fresh.md' })
+  expect(pinsNow()[1]).toEqual({ on: false, kind: 'note', target: 'Fresh', label: 'Fresh' })
+  await ui.press({ key: 'anchor-file-note-Fresh' })
+  expect(ran.pop()).toEqual(['open', 'obsidian://open?path=%2Fv%2FIdeas%2FFresh.md'])
+
+  // A new vault note written now is still pinned unticked by itself, and listed as pinned.
+  await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/Later.md', content: 'x' })
+  expect(pinsNow()[2]).toEqual({ on: false, kind: 'note', target: 'Later', label: 'Later' })
+  expect(await rowOf('/v/Ideas/Later.md')).toMatch(/^ {2}Ideas\/Later\.md new open\s*pinned$/)
+
+  // Past five, the rest wait behind show all.
+  await $.tool.call({ tool: 'NotebookEdit', notebook_path: '/r/nb.ipynb', new_source: 'x' })
+  await $.tool.call({ tool: 'Edit', file_path: '/r/src/b.ts', old_string: 'a', new_string: 'b' })
+  expect(await ui.find({ text: '📄 Files this chat touched · 6' })).toBeTruthy()
+  expect(await rowOf('/r/src/new.ts')).toBe('')
+  expect(await rowOf('/r/nb.ipynb')).toMatch(/^ {2}nb\.ipynb new open/)
+  await ui.press({ key: 'files-all' })
+  expect(await rowOf('/r/src/new.ts')).toMatch(/^ {2}src\/new\.ts new open/)
   await ui.unmount()
 })

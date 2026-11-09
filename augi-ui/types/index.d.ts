@@ -49,6 +49,10 @@ export type Swatch = {
 export type MadeArtifact = { url: string; title: string }
 // What this chat has published, for the session `session` (a /clear starts a new list).
 export type Made = { session: string; artifacts: MadeArtifact[] }
+// A file this chat wrote or edited; `made` when it did not exist before the chat's first write.
+export type TouchedFile = { path: string; made: boolean }
+// What this chat has touched, newest first, for the session `session` (a /clear starts a new list).
+export type Touched = { session: string; files: TouchedFile[] }
 // A note to self on this chat's scratchpad; `when` as `stamp()` writes it.
 export type PadEntry = { when: string; text: string }
 export type Picks = { aboutMe: boolean; openAugi: boolean; project: boolean }
@@ -63,6 +67,8 @@ export type View = {
   doneOpen: boolean
   // The Anchor card's detail, outcome and open tasks, folded away by default.
   detailsOpen: boolean
+  // The Files card lists every touched file, not just the newest five.
+  filesOpen: boolean
 }
 // A side answer to a parked question, by the question's `when` and text: `pending`
 // while the fork runs, then the answer until it is kept in the Agent Log or dropped.
@@ -72,6 +78,6 @@ export type Asides = { btw: boolean; answers: AsideAnswer[] }
 
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; pad: Shaped<PadEntry[]>; asides: Shaped<Asides> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; touched: Shaped<Touched>; pad: Shaped<PadEntry[]>; asides: Shaped<Asides> }
   }
 }

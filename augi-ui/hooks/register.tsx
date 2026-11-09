@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
 
-import type { AsideAnswer, Asides, Card, Chat, Lens, Made, MadeArtifact, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Trail, View } from '../types'
+import type { AsideAnswer, Asides, Card, Chat, Lens, Made, MadeArtifact, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Touched, TouchedFile, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -9,6 +9,8 @@ export type Options = {
   notesFolder: string
   editor: string
   editorCommand: string
+  // What opens a file that is not a note: vscode, cursor or system.
+  fileEditor: string
   contextNote: string
   boardNote: string
   lensFolder: string
@@ -37,6 +39,7 @@ export type Paths = {
   codexDir: string
   editor: string
   editorCommand: string
+  fileEditor: string
   picks: string[]
   jiraProject: string
   jiraSite: string
@@ -67,6 +70,7 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
     codexDir: `${home}/.codex/sessions`,
     editor: options.editor || 'obsidian',
     editorCommand: options.editorCommand ?? '',
+    fileEditor: options.fileEditor || 'vscode',
     picks: (options.lensPicks ?? '').split(',').map(one => one.trim()).filter(Boolean),
     jiraProject: (options.jiraProject ?? '').trim(),
     jiraSite: (options.jiraSite ?? '').trim().replace(/\/+$/, ''),
@@ -103,6 +107,27 @@ export const editorArgv = (editor: string, command: string, path: string): strin
   }
 
   return ['open', `obsidian://open?path=${encodeURIComponent(path)}`]
+}
+
+export const FILE_EDITORS = ['vscode', 'cursor', 'system'] as const
+
+// A markdown note inside the notes folder; anything else is a file.
+export const isVaultNote = (path: string, notes: string): boolean => Boolean(notes) && path.startsWith(`${notes}/`) && path.endsWith('.md')
+
+// The command that opens a path: a note with the note editor, any other file with the file editor.
+export const openArgv = (paths: Paths, path: string): string[] =>
+  isVaultNote(path, paths.notes) ? editorArgv(paths.editor, paths.editorCommand, path) : editorArgv(paths.fileEditor, '', path)
+
+// A path made short to read: inside the notes folder or the session's root, relative; under home, ~/….
+export const shortPath = (path: string, notes: string, home: string, root = ''): string => {
+  if (notes && path.startsWith(`${notes}/`)) {
+    return path.slice(notes.length + 1)
+  }
+  if (root && path.startsWith(`${root}/`)) {
+    return path.slice(root.length + 1)
+  }
+
+  return home && path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path
 }
 
 // What setup still needs: the notes folder first, then the files the pane reads.
@@ -267,13 +292,19 @@ const picks = atom(
 )
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
-  { anchorsOpen: false, contextOpen: false, sessionsOpen: false, lensesOpen: false, showHidden: false, setupOpen: false, inOpen: true, doneOpen: false, detailsOpen: false } as View,
-  { shape: 'view-5' },
+  { anchorsOpen: false, contextOpen: false, sessionsOpen: false, lensesOpen: false, showHidden: false, setupOpen: false, inOpen: true, doneOpen: false, detailsOpen: false, filesOpen: false } as View,
+  { shape: 'view-6' },
 )
 const made = atom(
   { plugin: 'augi-ui', key: 'made' } as const,
   { session: '', artifacts: [] } as Made,
   { shape: 'made-1' },
+)
+// The files this chat wrote or edited, tagged with its session like `made`.
+const touched = atom(
+  { plugin: 'augi-ui', key: 'touched' } as const,
+  { session: '', files: [] } as Touched,
+  { shape: 'touched-1' },
 )
 
 // This chat's scratchpad, newest first: session state, so each chat has its own and it
@@ -1211,6 +1242,33 @@ export const withArtifact = (list: MadeArtifact[], one: MadeArtifact): MadeArtif
 // The anchor's pinned artifacts for its card, newest first.
 export const anchorArtifacts = (pins: Pin[], limit = 3): Pin[] => pins.filter(pin => pin.kind === 'artifact').reverse().slice(0, limit)
 
+// The anchor's pinned files and notes for its card, as links: newest first.
+export const anchorFiles = (pins: Pin[], limit = 5): Pin[] => pins.filter(pin => pin.kind === 'file' || pin.kind === 'note').reverse().slice(0, limit)
+
+export const TOUCHED_KEPT = 30
+
+// This chat's touched files with one more on top: a path already listed moves up and stays made if it was.
+export const withTouched = (list: TouchedFile[], one: TouchedFile, kept = TOUCHED_KEPT): TouchedFile[] => {
+  const was = list.find(old => old.path === one.path)
+
+  return [{ path: one.path, made: one.made || Boolean(was?.made) }, ...list.filter(old => old.path !== one.path)].slice(0, kept)
+}
+
+// Whether a touched path is listed: not the Agent Logs, nothing in a dot-folder of the notes folder.
+export const isListedTouch = (path: string, notes: string, trails: string): boolean =>
+  Boolean(path) && !(trails && path.startsWith(`${trails}/`)) && !(notes && path.startsWith(`${notes}/`) && path.slice(notes.length).includes('/.'))
+
+// A touched file as a pin, unticked (a link, not prompt context): a vault note by name, else the file.
+export const touchedPin = (path: string, notes: string): Pin => {
+  if (isVaultNote(path, notes)) {
+    const name = baseName(path).replace(/\.md$/, '')
+
+    return { on: false, kind: 'note', target: name, label: name, path }
+  }
+
+  return { on: false, kind: 'file', target: path, label: baseName(path) }
+}
+
 // Pins as the context card lists them: artifacts first, each group in its order.
 export const artifactsFirst = (pins: Pin[]): Pin[] => [...pins.filter(pin => pin.kind === 'artifact'), ...pins.filter(pin => pin.kind !== 'artifact')]
 
@@ -1937,10 +1995,57 @@ async function openPin($: EngineInterface, pin: Pin): Promise<void> {
   if (pin.kind === 'session') {
     return copyText($, pinLink(pin), 'A session reopens in a terminal. Copied')
   }
-  if (pin.kind === 'file' && pin.target.endsWith('.md')) {
-    return openNote($, pin.target)
+  if (pin.kind === 'file') {
+    return openPath($, pin.target)
   }
   await launch($, ['open', pin.target])
+}
+
+// Opens a file the way its kind wants (a vault note in the note editor, the rest in the
+// file editor); one that is gone says so and opens nothing.
+async function openPath($: EngineInterface, path: string): Promise<void> {
+  if (!(await $.fs.exists(path))) {
+    await $.ui.toast(`Not found: ${path}`)
+
+    return
+  }
+  await launch($, openArgv(P, path))
+}
+
+// Whether a file is there before a write or edit; unsure reads as there (nothing marked new).
+async function existsBefore($: EngineInterface, path: string): Promise<boolean> {
+  try {
+    return await $.fs.exists(path)
+  } catch {
+    return true
+  }
+}
+
+// After a write or edit that ran (not denied, no error), the file goes on this chat's list.
+async function afterTouch($: EngineInterface, path: string, existed: boolean, ran: ToolCallResult): Promise<void> {
+  try {
+    if (ran.deny === undefined && !ran.isError) {
+      await rememberTouch($, path, !existed)
+    }
+  } catch {
+    // the list is a convenience; the call's result stands
+  }
+}
+
+// The files this chat touched; a list from an earlier session reads as none.
+async function sessionTouched($: EngineInterface): Promise<TouchedFile[]> {
+  const { session, files } = await read($, touched)
+
+  return session && session === (await $.session.id()) ? files : []
+}
+
+// A file a write or edit of this chat's changed: listed unless it is the pane's own or hidden.
+async function rememberTouch($: EngineInterface, path: string, isMade: boolean): Promise<void> {
+  if (!isListedTouch(path, P.notes, P.trails)) {
+    return
+  }
+  const id = await $.session.id()
+  await update($, touched, old => ({ session: id, files: withTouched(old.session === id ? old.files : [], { path, made: isMade }) }))
 }
 
 // The anchor whose Agent Log holds this session's chat: anchoring records it, so any anchor.
@@ -2276,6 +2381,7 @@ export const register: Register = (on, options) => {
       // The scratchpad and unkept side answers were that chat's; they don't follow into the next.
       await update($, pad, () => [])
       await update($, asides, old => ({ ...old, answers: [] }))
+      await update($, touched, () => ({ session: '', files: [] }))
     }
 
     return ended
@@ -2335,13 +2441,32 @@ export const register: Register = (on, options) => {
     return ran
   })
 
+  // Every file the chat writes or edits is listed under Files this chat touched; made
+  // is whether it was there before. Neither step throws into the tool call.
+  on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
+    const existed = await existsBefore($, e.file_path)
+    const ran = await next(e)
+    await afterTouch($, e.file_path, existed, ran)
+
+    return ran
+  })
+
+  on('tool.call', { tool: 'NotebookEdit' }, async ($, e, next) => {
+    const existed = await existsBefore($, e.notebook_path)
+    const ran = await next(e)
+    await afterTouch($, e.notebook_path, existed, ran)
+
+    return ran
+  })
+
   on('tool.call', { tool: 'Write' }, async ($, e, next) => {
     await ready($)
     const path = e.file_path
-    const isNewNote = Boolean(P.notes) && path.startsWith(`${P.notes}/`) && path.endsWith('.md')
-      && !path.startsWith(`${P.trails}/`) && !path.includes('/.') && !(await $.fs.exists(path))
+    const existed = await existsBefore($, path)
     const ran = await next(e)
+    await afterTouch($, path, existed, ran)
     try {
+      const isNewNote = !existed && isVaultNote(path, P.notes) && !path.startsWith(`${P.trails}/`) && !path.includes('/.')
       const note = isNewNote ? await paneChatAnchor($) : null
       if (note && ran.deny === undefined && !ran.isError) {
         const name = baseName(path).replace(/\.md$/, '')
@@ -2365,6 +2490,16 @@ export const register: Register = (on, options) => {
     const choice = await read($, picks)
     const shown = await read($, view)
     const ownArtifacts = await sessionArtifacts($)
+    const ownFiles = await sessionTouched($)
+    let root = ''
+    if (ownFiles.length > 0) {
+      try {
+        root = await $.session.cwd()
+      } catch {
+        root = ''
+      }
+    }
+    const shownFiles = shown.filesOpen ? ownFiles : ownFiles.slice(0, 5)
     const jotted = await read($, pad)
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
     const arrow = (isOpen: boolean): string => (isOpen ? '▾' : '▸')
@@ -2387,7 +2522,7 @@ export const register: Register = (on, options) => {
     const step = setup[0]?.ok ? STEPS.find(one => !skipped.includes(one.field) && !setup.find(item => item.field === one.field)?.ok) : undefined
     const editorPicker = (
       <Box key="editor-picker" flexDirection="column">
-        <Text>Open notes with:</Text>
+        <Text>Open notes (markdown in the notes folder) with:</Text>
         <Box flexDirection="row">
           {EDITORS.map(name => (
             <Button key={`editor-${name}`} plain label={`${P.editor === name ? '●' : '○'} ${name} `} onPress={() => setOption($, 'editor', name)} />
@@ -2396,6 +2531,12 @@ export const register: Register = (on, options) => {
         {P.editor === 'custom' && (
           <Input key="set-editorCommand" label="Command" placeholder="zed {file}" value={settings.editorCommand ?? ''} onSubmit={value => setOption($, 'editorCommand', value)} />
         )}
+        <Text>Open other files (code, docs outside the notes) with:</Text>
+        <Box flexDirection="row">
+          {FILE_EDITORS.map(name => (
+            <Button key={`file-editor-${name}`} plain label={`${P.fileEditor === name ? '●' : '○'} ${name} `} onPress={() => setOption($, 'fileEditor', name)} />
+          ))}
+        </Box>
       </Box>
     )
 
@@ -2511,6 +2652,16 @@ export const register: Register = (on, options) => {
             ))}
           </Box>
         )}
+        {anchor && anchorFiles(pins).length > 0 && (
+          <Box key="anchor-files" flexDirection="row">
+            {anchorFiles(pins).map((pin, at) => (
+              <Box key={`anchor-file-box-${pinKey(pin)}`} flexDirection="row">
+                {at > 0 && <Text dimColor> | </Text>}
+                <Button key={`anchor-file-${pinKey(pin)}`} label={`📄 ${pin.label}`} onPress={() => openPin($, pin)} />
+              </Box>
+            ))}
+          </Box>
+        )}
         {anchor && (
           <Input
             key={`capture-${trail.questions.length}`}
@@ -2582,6 +2733,31 @@ export const register: Register = (on, options) => {
           <Button key="show-hidden" label={`${shown.showHidden ? 'hide' : 'show'} hidden chats (${hiddenCount})`} hotkey="x" onPress={flip('showHidden')} />
         )}
         </Box>
+
+        {ownFiles.length > 0 && (
+          <Box key="card-files" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="subtle">
+            <Text bold>{`📄 Files this chat touched · ${ownFiles.length}`}</Text>
+            {shownFiles.map(one => {
+              const pin = touchedPin(one.path, P.notes)
+              const isPinned = pins.some(other => other.kind === pin.kind && other.target === pin.target)
+
+              return (
+                <Box key={`touched-${one.path}`} flexDirection="row">
+                  <Text key={`touched-path-${one.path}`}>{`  ${shortPath(one.path, P.notes, P.home, root)} `}</Text>
+                  {one.made && <Text key={`touched-new-${one.path}`} dimColor>new </Text>}
+                  <Button key={`touched-open-${one.path}`} label="open" onPress={() => openPath($, one.path)} />
+                  {anchor && (isPinned
+                    ? <Text key={`touched-pinned-${one.path}`} dimColor> pinned</Text>
+                    : <Button key={`touched-pin-${one.path}`} label="pin" onPress={() => pinIt($, anchor.note, pin)} />)}
+                </Box>
+              )
+            })}
+            {ownFiles.length > 5 && (
+              <Button key="files-all" plain label={`  ${arrow(shown.filesOpen)} ${shown.filesOpen ? 'show fewer' : `show all (${ownFiles.length})`}`} onPress={flip('filesOpen')} />
+            )}
+            {!anchor && <Text dimColor>  Pick an anchor to pin these to it, as links.</Text>}
+          </Box>
+        )}
 
         <Box key="card-pad" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="subtle">
         <Text bold>📝 Scratchpad · this chat</Text>

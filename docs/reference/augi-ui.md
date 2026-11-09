@@ -33,6 +33,8 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 |---|---|---|
 | `notesFolder` | The notes folder; Obsidian's known vaults are offered as buttons | — |
 | `editor` / `editorCommand` | What opens a note: obsidian, vscode, cursor, system, or a custom command with `{file}` | `obsidian` |
+| `fileEditor` | What opens a file that is not a note (anything but markdown in the notes folder): vscode, cursor or system | `vscode` |
+| `fileEditor` | What opens a file that is not a note (code, docs outside the notes folder): vscode, cursor or system | `vscode` |
 | `boardNote` | The Kanban note whose linked cards are the anchors | `Kanban.md` |
 | `contextNote` | A note about the user and this season | `OpenAugi/AGENT/Slowly Changing Context.md` |
 | `lensFolder` | One markdown file per lens | `OpenAugi/AGENT/lenses` |
@@ -49,8 +51,8 @@ skipped. Starters are never written over an existing file.
 **The pane.**
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
-chat is attached to: the anchor card, its questions, chats and saved notes, and
-the scratchpad. **Anywhere** holds what is not tied to one chat: the context
+chat is attached to: the anchor card, its questions, chats and saved notes, the
+files this chat touched, and the scratchpad. **Anywhere** holds what is not tied to one chat: the context
 picker (pull notes, files, links and sessions from anywhere in the notes
 folder), the lenses, and setup.
 
@@ -58,14 +60,32 @@ folder), the lenses, and setup.
   anchor belongs to the chat session: a new session opens with none, and a
   reload or `claude --resume` of the session keeps it (`$.store`, keyed by
   session id). Choosing one records this chat in its Agent Log. The card shows
-  only the links (note, Agent Log, artifacts, Jira) until `▸ outcome and next (N)`
+  only the links (note, Agent Log, artifacts, Jira, and under them a row of
+  `📄` buttons for its newest five pinned files and notes, each opening it; see
+  **Files**) until `▸ outcome and next (N)`
   is opened: then the card's detail, the note's `🎯` outcome, and its open
   sub-items and the note's `# Next` checkboxes as tasks; one that links a
   note (`\t- [ ] [[Child task]]`) is a button that opens it, which is the whole
   parent/child story: the child's `Up:` line points back. A `jira:` key in the
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note
   you write, `k` the Agent Log, and `◇` buttons open its newest three pinned
-  artifacts.
+  artifacts. Under them, `📄` buttons open its newest five pinned files and
+  notes, however they were pinned: a note with `editor`, any other file with
+  `fileEditor`. Pinned this way they are links; ticking one in Context also
+  puts it in the next draft.
+- **Files** (`📄 Files this chat touched · N`): every file this chat wrote or
+  edited (`Write`, `Edit`, `NotebookEdit`, subagents' calls included), newest
+  first, one row per path, kept in session state (a `/clear` or resume starts a
+  new list; at most 30, the newest five shown until `▸ show all`). A call that
+  was denied or failed is not listed, nor anything in the Agent Log folder or a
+  dot-folder of the notes folder. Paths read relative to the notes folder or the
+  session's directory, else `~/…`; `new` marks a file the chat created. `open`
+  opens it (a note with `editor`, the rest with `fileEditor`; a file that is
+  gone says so). With an anchor, `pin` adds it to the anchor's `## Context`
+  unticked (a markdown file in the notes folder as `[[note]]`, the rest as
+  `file:`), so it shows as a `📄` link in the Anchor card; the row then says
+  `pinned`. A brand-new note in the notes folder is still pinned unticked by
+  itself, as before.
 - **New task** (`＋ task`, with or without an anchor): type a title, optionally
   with a Jira key or issue link at either end. The pane writes the note into
   `taskFolder`, one flat folder whatever the anchor (hierarchy is the `Up:`
@@ -119,6 +139,20 @@ folder), the lenses, and setup.
   there) and opens it in your editor to paste the prompt.
   Every lens in the lens folder is listed; the `lensPicks` setting narrows and orders
   the menu. Lenses follow the OpenAugi lens contract (`OpenAugi/AGENT/lens-template.md`).
+- **Files** (`📄 Files this chat touched · N`, in This chat, drawn once there is
+  one): every file the chat wrote or edited (`Write`, `Edit`, `NotebookEdit`
+  calls that ran; a denied or failed one is not listed), newest first, one row
+  per path, the newest five until `▸ show all (N)`, at most 30, kept in session
+  state (a `/clear` starts a new list). Agent Logs and dot-folders of the notes
+  folder are left out. A row shows the path made short (relative to the notes
+  folder or the session's working folder, else `~/…`), a dim `new` when the
+  chat created the file, and `open`: a markdown note in the notes folder opens
+  with `editor`, anything else with `fileEditor`; a file that is gone says so.
+  With an anchor, `pin` adds it to the Agent Log's `## Context` unticked (a
+  link, not prompt context, until ticked there) and the row then reads
+  `pinned`. Every pinned file or note, however it was pinned, is a `📄` button
+  in the Anchor card. A new note the chat writes in the notes folder is still
+  pinned unticked by itself.
 - **Scratchpad**: notes to self for this chat only, kept in session state (gone
   with the session). `→ notes` adds one to the anchor's own note as `- HH:MM text`
   under its `# Journal`, beneath that day's dated heading (made if missing); with

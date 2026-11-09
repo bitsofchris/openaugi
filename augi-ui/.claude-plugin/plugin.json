@@ -29,6 +29,17 @@
       "description": "Used when the editor is custom. {file} is replaced by the note's path, e.g. zed {file}.",
       "default": ""
     },
+    "fileEditor": {
+      "type": "string",
+      "title": "File editor",
+      "description": "What opens a file that is not a note (code, docs, anything outside the notes folder) when you press it in the pane. Notes open with the editor above.",
+      "default": "vscode",
+      "options": [
+        "vscode",
+        "cursor",
+        "system"
+      ]
+    },
     "contextNote": {
       "type": "string",
       "title": "Context note",
