@@ -33,7 +33,6 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 |---|---|---|
 | `notesFolder` | The notes folder; Obsidian's known vaults are offered as buttons | — |
 | `editor` / `editorCommand` | What opens a note: obsidian, vscode, cursor, system, or a custom command with `{file}` | `obsidian` |
-| `fileEditor` | What opens a file that is not a note (anything but markdown in the notes folder): vscode, cursor or system | `vscode` |
 | `fileEditor` | What opens a file that is not a note (code, docs outside the notes folder): vscode, cursor or system | `vscode` |
 | `boardNote` | The Kanban note whose linked cards are the anchors | `Kanban.md` |
 | `contextNote` | A note about the user and this season | `OpenAugi/AGENT/Slowly Changing Context.md` |
@@ -52,7 +51,8 @@ skipped. Starters are never written over an existing file.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
 chat is attached to: the anchor card, its questions, chats and saved notes, the
-files this chat touched, and the scratchpad. **Anywhere** holds what is not tied to one chat: the context
+files this chat touched, and the scratchpad. **Anywhere** holds what is not
+tied to one chat: the context
 picker (pull notes, files, links and sessions from anywhere in the notes
 folder), the lenses, and setup.
 
@@ -61,31 +61,15 @@ folder), the lenses, and setup.
   reload or `claude --resume` of the session keeps it (`$.store`, keyed by
   session id). Choosing one records this chat in its Agent Log. The card shows
   only the links (note, Agent Log, artifacts, Jira, and under them a row of
-  `📄` buttons for its newest five pinned files and notes, each opening it; see
-  **Files**) until `▸ outcome and next (N)`
+  `📄` buttons that open its newest five pinned files and notes, however they
+  were pinned; see **Files**) until `▸ outcome and next (N)`
   is opened: then the card's detail, the note's `🎯` outcome, and its open
   sub-items and the note's `# Next` checkboxes as tasks; one that links a
   note (`\t- [ ] [[Child task]]`) is a button that opens it, which is the whole
   parent/child story: the child's `Up:` line points back. A `jira:` key in the
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note
   you write, `k` the Agent Log, and `◇` buttons open its newest three pinned
-  artifacts. Under them, `📄` buttons open its newest five pinned files and
-  notes, however they were pinned: a note with `editor`, any other file with
-  `fileEditor`. Pinned this way they are links; ticking one in Context also
-  puts it in the next draft.
-- **Files** (`📄 Files this chat touched · N`): every file this chat wrote or
-  edited (`Write`, `Edit`, `NotebookEdit`, subagents' calls included), newest
-  first, one row per path, kept in session state (a `/clear` or resume starts a
-  new list; at most 30, the newest five shown until `▸ show all`). A call that
-  was denied or failed is not listed, nor anything in the Agent Log folder or a
-  dot-folder of the notes folder. Paths read relative to the notes folder or the
-  session's directory, else `~/…`; `new` marks a file the chat created. `open`
-  opens it (a note with `editor`, the rest with `fileEditor`; a file that is
-  gone says so). With an anchor, `pin` adds it to the anchor's `## Context`
-  unticked (a markdown file in the notes folder as `[[note]]`, the rest as
-  `file:`), so it shows as a `📄` link in the Anchor card; the row then says
-  `pinned`. A brand-new note in the notes folder is still pinned unticked by
-  itself, as before.
+  artifacts.
 - **New task** (`＋ task`, with or without an anchor): type a title, optionally
   with a Jira key or issue link at either end. The pane writes the note into
   `taskFolder`, one flat folder whatever the anchor (hierarchy is the `Up:`
@@ -149,6 +133,7 @@ folder), the lenses, and setup.
   chat created the file, and `open`: a markdown note in the notes folder opens
   with `editor`, anything else with `fileEditor`; a file that is gone says so.
   With an anchor, `pin` adds it to the Agent Log's `## Context` unticked (a
+  markdown file in the notes folder as `[[note]]`, the rest as `file:`; a
   link, not prompt context, until ticked there) and the row then reads
   `pinned`. Every pinned file or note, however it was pinned, is a `📄` button
   in the Anchor card. A new note the chat writes in the notes folder is still
