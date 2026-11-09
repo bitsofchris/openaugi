@@ -25,18 +25,27 @@ pip install openaugi              # keyword + link search, nothing leaves your m
 # optional semantic search:  pip install "openaugi[local]"  or  "openaugi[openai]"
 
 # Configure and run
-openaugi init    # 3 questions: vault, search mode, task mode
+openaugi init    # 3 questions: vault, search mode, Light or Full
 openaugi ingest  # index the vault (re-run any time)
-openaugi tasks   # review zzz: tasks and launch one
+openaugi kb get-context --query "what did I decide about pricing"
 ```
 
-Nothing runs in the background unless you choose it: `openaugi up` is the
-optional service that keeps the index fresh and (with `[tasks] auto_dispatch =
-true`) launches agents by itself. Point your MCP client at **`openaugi serve`** —
-[register with Claude](docs/reference/GETTING_STARTED.md#register-with-claude) —
-and start asking questions about your notes.
+### Light or Full — same tools, different footprint
 
-### Two commands, and why
+|  | 🪶 **Light** (default) | ⚡ **Full** |
+|---|---|---|
+| How agents reach your notes | `openaugi kb <tool>` — a shell call that answers in JSON and exits | `openaugi serve`, an MCP server ([register with Claude](docs/reference/GETTING_STARTED.md#register-with-claude)) |
+| Index freshness | you run `openaugi ingest` | `openaugi up` watches the vault |
+| `zzz:` tasks | wait until you launch one (`openaugi tasks run`) | `openaugi up` launches an agent for each |
+| Runs in the background | nothing | `openaugi up`, plus one `serve` per client |
+
+Every MCP tool is an `openaugi kb` command with the same arguments and the same
+JSON answer — the commands are generated from the server's own tool registry,
+so the two can't drift. In a Light install, add one line to your agent's
+instructions (`init` prints it): *run `openaugi kb --help`, start research with
+`openaugi kb get-context`*.
+
+### Full: two processes, and why
 
 |  | What it is | How many |
 |---|---|---|

@@ -6,6 +6,10 @@ description: Setup and registration guide for the OpenAugi MCP server — Claude
 # OpenAugi MCP Server
 
 The OpenAugi MCP server exposes your knowledge graph as structured tools for Claude.
+
+No server wanted? Every tool below is also `openaugi kb <tool-name>` (underscores
+or dashes), with the same arguments and JSON answer and no process left running —
+the Light install. See [Query Layer](query-layer.md) and `openaugi kb --help`.
 All reads hit SQLite (FTS5 + sqlite-vec vector search). Writes go directly to markdown files in your vault.
 
 ## Architecture
