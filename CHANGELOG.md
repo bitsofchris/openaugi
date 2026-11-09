@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 — 2026-11-09
+## 0.4.1 — 2026-11-09
 
 **Upgrading from 0.3.x:** nothing to change. An existing config keeps working
 as it is; a machine with `[tasks] auto_dispatch = true`, `openaugi up` and a
@@ -36,6 +36,12 @@ Dashboard footer drops the design-record link.
 it rejected `list`'s options (`--all`, `--no-sync`, `--db`, `--path`). It now
 takes them. Putting one before a subcommand (`tasks --all show 1`) is an
 error, not a silently ignored flag.
+
+**For contributors: hermetic tests and a release script.** The test suite
+runs with an empty HOME, no `OPENAUGI_*` or API-key variables and colour off,
+so a configured machine and CI see the same thing. `scripts/release.sh X.Y.Z`
+pushes `main`, waits for CI on that commit, then tags; see
+[releasing](docs/reference/releasing.md).
 
 ## 0.3.0 — 2026-11-08
 
