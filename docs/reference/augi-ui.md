@@ -48,6 +48,12 @@ skipped. Starters are never written over an existing file.
 
 **The pane.**
 
+The pane has two sections. **This chat** holds what belongs to the anchor this
+chat is attached to: the anchor card, its questions, chats and saved notes, and
+the scratchpad. **Anywhere** holds what is not tied to one chat: the context
+picker (pull notes, files, links and sessions from anywhere in the notes
+folder), the lenses, and setup.
+
 - **Anchor** (`a`): a linked card from the board — a project or a task. The
   anchor belongs to the chat session: a new session opens with none, and a
   reload or `claude --resume` of the session keeps it (`$.store`, keyed by

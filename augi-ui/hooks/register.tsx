@@ -2458,6 +2458,7 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         {gaps > 0 && <Text dimColor>{gaps} setup {gaps === 1 ? 'item needs' : 'items need'} you: open setup below.</Text>}
         {Svg && <Svg key="augi-face" source={AUGI_SVG} alt="Augi" width={40} height={40} />}
+        <Text key="section-chat" bold>━ This chat{anchor ? ` · ${anchor.note}` : ''}</Text>
         <Box key="card-anchor" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="claude">
         <Text bold color="claude">⚓ Anchor</Text>
         <Button key="anchor-menu" label={`${arrow(shown.anchorsOpen)} ${anchor ? anchor.note : 'pick a project or task'}`} hotkey="a" onPress={flip('anchorsOpen')} />
@@ -2526,56 +2527,6 @@ export const register: Register = (on, options) => {
           submitLabel="create"
           onSubmit={value => newTask($, value)}
         />
-        </Box>
-
-        <Box key="card-context" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="remember">
-        <Text bold color="remember">📎 Project context · {contextCount} going in</Text>
-        <Text dimColor>Ticked items go into the drafted prompt. Claude reads them after you press enter.</Text>
-        {!anchor && <Text dimColor>  Pick an anchor to keep context with it.</Text>}
-        {!anchor && ownArtifacts.map(one => (
-          <Text key={`made-${one.url}`} dimColor>{`  ◇ ${one.title}`}</Text>
-        ))}
-        {!anchor && ownArtifacts.length > 0 && <Text dimColor>  Artifacts this chat published: picking an anchor keeps them with it.</Text>}
-        {anchor && (
-          <Button key="pick-project" plain label={`  ${mark(choice.project)} 🧠 human and 🤖 agent notes for ${anchor.note}`} onPress={() => update($, picks, old => ({ ...old, project: !old.project }))} />
-        )}
-        {anchor && artifactsFirst(pins).map(pin => (
-          <Box key={`pin-${pinKey(pin)}`} flexDirection="row">
-            <Button key={`pin-tick-${pinKey(pin)}`} plain label={`  ${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label} `} onPress={() => onPins(text => setPinOn(text, pin, !pin.on))} />
-            <Button key={`pin-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />
-            <Button key={`pin-link-${pinKey(pin)}`} label="link" onPress={() => copyText($, pinLink(pin, pin.path))} />
-            <Button key={`pin-drop-${pinKey(pin)}`} label="unpin" onPress={() => onPins(text => removePin(text, pin))} />
-          </Box>
-        ))}
-        {anchor && (
-          <Input key="pin-search" label="  🔎 " placeholder="search notes to pin (OpenAugi): Enter searches" submitLabel="search" onSubmit={value => searchNotes($, value)} />
-        )}
-        {anchor && (hits ?? []).map(hit => (
-          <Button key={`hit-${hit.target}`} plain label={`      + ${hit.label}`} onPress={() => pinIt($, anchor.note, hit)} />
-        ))}
-        {anchor && (hits ?? []).length > 0 && <Button key="hits-clear" plain label="      clear results" onPress={() => update($, swatch, old => ({ ...old, hits: [] }))} />}
-        {anchor && (
-          <Input key={`pin-paste-${pins.length}`} label="  ⧉ " placeholder="paste an artifact link, [[note]] or file path: Enter pins it" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
-        )}
-        {anchor && (
-          <Button key="sessions-menu" plain label={`  ${arrow(shown.sessionsOpen)} ◦ pin a recent coding session`} onPress={flip('sessionsOpen')} />
-        )}
-        {anchor && shown.sessionsOpen && sessions.length === 0 && <Text dimColor>      No recent coding sessions found.</Text>}
-        {anchor && shown.sessionsOpen && sessions.map(one => (
-          <Button
-            key={`session-${one.path}`}
-            plain
-            label={`      + ${one.repo} · ${ago(loadedAt, one.mtimeMs)} · ${one.title}`}
-            onPress={() => pinIt($, anchor.note, sessionPin(one))}
-          />
-        ))}
-        <Button key="openaugi" plain label={`  ${mark(choice.openAugi)} also let the chat search my notes with OpenAugi`} onPress={() => update($, picks, old => ({ ...old, openAugi: !old.openAugi }))} />
-        {choice.aboutMe && <Text dimColor>  + your overall context (change it under Setup)</Text>}
-        <Box flexDirection="row">
-          <Button key="draft" variant="primary" label="💬 draft a prompt with this context" hotkey="n" onPress={() => draft($, null)} />
-          <Text dimColor> </Text>
-          <Button key="copy-draft" label="⧉ copy it for a new chat" onPress={() => copyDraft($)} />
-        </Box>
         </Box>
 
         <Box key="card-trail" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="success" display={anchor ? 'flex' : 'none'}>
@@ -2654,6 +2605,58 @@ export const register: Register = (on, options) => {
         )}
         {!(anchor && notePath) && <Text dimColor>{anchor ? `  No note found for ${anchor.note}: entries stay here.` : '  Pick an anchor to save these to its Human Notes.'}</Text>}
         </Box>
+
+        <Text key="section-anywhere" bold>━ Anywhere · your vault, lenses and setup</Text>
+        <Box key="card-context" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="remember">
+        <Text bold color="remember">📎 Context · {contextCount} going in</Text>
+        <Text dimColor>Pull from anywhere: notes, files, links, sessions. Ticked items go into the drafted prompt; pins are kept with the anchor.</Text>
+        {!anchor && <Text dimColor>  Pick an anchor to keep context with it.</Text>}
+        {!anchor && ownArtifacts.map(one => (
+          <Text key={`made-${one.url}`} dimColor>{`  ◇ ${one.title}`}</Text>
+        ))}
+        {!anchor && ownArtifacts.length > 0 && <Text dimColor>  Artifacts this chat published: picking an anchor keeps them with it.</Text>}
+        {anchor && (
+          <Button key="pick-project" plain label={`  ${mark(choice.project)} 🧠 human and 🤖 agent notes for ${anchor.note}`} onPress={() => update($, picks, old => ({ ...old, project: !old.project }))} />
+        )}
+        {anchor && artifactsFirst(pins).map(pin => (
+          <Box key={`pin-${pinKey(pin)}`} flexDirection="row">
+            <Button key={`pin-tick-${pinKey(pin)}`} plain label={`  ${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label} `} onPress={() => onPins(text => setPinOn(text, pin, !pin.on))} />
+            <Button key={`pin-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />
+            <Button key={`pin-link-${pinKey(pin)}`} label="link" onPress={() => copyText($, pinLink(pin, pin.path))} />
+            <Button key={`pin-drop-${pinKey(pin)}`} label="unpin" onPress={() => onPins(text => removePin(text, pin))} />
+          </Box>
+        ))}
+        {anchor && (
+          <Input key="pin-search" label="  🔎 " placeholder="search notes to pin (OpenAugi): Enter searches" submitLabel="search" onSubmit={value => searchNotes($, value)} />
+        )}
+        {anchor && (hits ?? []).map(hit => (
+          <Button key={`hit-${hit.target}`} plain label={`      + ${hit.label}`} onPress={() => pinIt($, anchor.note, hit)} />
+        ))}
+        {anchor && (hits ?? []).length > 0 && <Button key="hits-clear" plain label="      clear results" onPress={() => update($, swatch, old => ({ ...old, hits: [] }))} />}
+        {anchor && (
+          <Input key={`pin-paste-${pins.length}`} label="  ⧉ " placeholder="paste an artifact link, [[note]] or file path: Enter pins it" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
+        )}
+        {anchor && (
+          <Button key="sessions-menu" plain label={`  ${arrow(shown.sessionsOpen)} ◦ pin a recent coding session`} onPress={flip('sessionsOpen')} />
+        )}
+        {anchor && shown.sessionsOpen && sessions.length === 0 && <Text dimColor>      No recent coding sessions found.</Text>}
+        {anchor && shown.sessionsOpen && sessions.map(one => (
+          <Button
+            key={`session-${one.path}`}
+            plain
+            label={`      + ${one.repo} · ${ago(loadedAt, one.mtimeMs)} · ${one.title}`}
+            onPress={() => pinIt($, anchor.note, sessionPin(one))}
+          />
+        ))}
+        <Button key="openaugi" plain label={`  ${mark(choice.openAugi)} also let the chat search my notes with OpenAugi`} onPress={() => update($, picks, old => ({ ...old, openAugi: !old.openAugi }))} />
+        {choice.aboutMe && <Text dimColor>  + your overall context (change it under Setup)</Text>}
+        <Box flexDirection="row">
+          <Button key="draft" variant="primary" label="💬 draft a prompt with this context" hotkey="n" onPress={() => draft($, null)} />
+          <Text dimColor> </Text>
+          <Button key="copy-draft" label="⧉ copy it for a new chat" onPress={() => copyDraft($)} />
+        </Box>
+        </Box>
+
         <Box key="card-lenses" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="suggestion">
         <Button key="lens-menu" label={`${arrow(shown.lensesOpen)} 🔍 Lenses (saved prompts) · ${lenses.length}`} hotkey="l" onPress={flip('lensesOpen')} />
         {shown.lensesOpen && lenses.map((lens, index) => (

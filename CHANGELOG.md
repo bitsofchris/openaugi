@@ -53,6 +53,11 @@ task's draft asks the chat to fill Outcome and Verify, and a Jira key on a
 note without frontmatter is a `Jira: KEY` line under `Up:` rather than a
 frontmatter field. The PMOC template keeps its shape.
 
+**augi-ui: the pane is two sections.** "This chat" has the anchor, its
+questions and chats, and the scratchpad. "Anywhere" has the context picker
+(renamed from Project context: it pulls from the whole notes folder), the
+lenses and setup.
+
 **augi-ui: a leaner Agent Log, and a new lens opens in the editor.** The log
 drops its title line and seen box and opens with a link to the human note, so
 the note shows the backlink; the copy-embed button is gone. Older logs are
