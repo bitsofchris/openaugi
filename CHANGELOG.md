@@ -33,6 +33,16 @@ built-in update wording. The pane itself never calls Jira.
 day's heading in its Journal. This is the one place the pane writes the user's
 note, only on their press.
 
+**augi-ui: carry an anchor's context into a new chat, and ask a parked
+question aside.** `⧉ copy it for a new chat` copies the context draft; sent in
+a session with no anchor, it anchors that session and logs the chat, so a
+fresh chat (a manager over the anchor's other chats, say) starts attached.
+Each parked question has `aside`: it fills `/btw <question>` when the session
+has that command, else it asks a fork of the chat and shows the answer under
+the question, with `keep` (saved under the question in the Agent Log) and
+`drop`. The Anchor card shows its links; outcome and the task list sit behind
+one closed toggle.
+
 **augi-ui: a leaner Agent Log, and a new lens opens in the editor.** The log
 drops its title line and seen box and opens with a link to the human note, so
 the note shows the backlink; the copy-embed button is gone. Older logs are
