@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Card, Chat, Lens, Made, MadeArtifact, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Trail, View } from '../types'
+import type { AsideAnswer, Asides, Card, Chat, Lens, Made, MadeArtifact, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -267,8 +267,8 @@ const picks = atom(
 )
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
-  { anchorsOpen: false, contextOpen: false, sessionsOpen: false, lensesOpen: false, showHidden: false, setupOpen: false, inOpen: true, doneOpen: false } as View,
-  { shape: 'view-4' },
+  { anchorsOpen: false, contextOpen: false, sessionsOpen: false, lensesOpen: false, showHidden: false, setupOpen: false, inOpen: true, doneOpen: false, detailsOpen: false } as View,
+  { shape: 'view-5' },
 )
 const made = atom(
   { plugin: 'augi-ui', key: 'made' } as const,
@@ -279,6 +279,10 @@ const made = atom(
 // This chat's scratchpad, newest first: session state, so each chat has its own and it
 // outlives a redraw or a reload of this module, but not the session.
 const pad = atom({ plugin: 'augi-ui', key: 'pad' } as const, [] as PadEntry[], { shape: 'pad-1' })
+
+// Side answers to parked questions, and whether /btw exists: session state, so an
+// answer not kept goes with the session.
+const asides = atom({ plugin: 'augi-ui', key: 'asides' } as const, { btw: false, answers: [] } as Asides, { shape: 'asides-1' })
 
 // The first bold line under a heading that names the season or focus,
 // e.g. "Primary: the metrics data factory."
@@ -876,6 +880,30 @@ export const setDone = (text: string, one: Question, done: boolean): string =>
     })
     .join('\n')
 
+// Keeps a side answer under its question as indented lines, so the question line (and
+// parseTrail) reads as before: `  - aside: <first line>`, further lines indented four.
+// A second keep replaces the indented lines already under the question. A question not
+// in the log, or an empty answer, changes nothing.
+export const addAnswer = (text: string, one: Question, answer: string): string => {
+  const said = answer.split('\n').map(line => line.trimEnd()).filter(line => line.trim())
+  const lines = text.split('\n')
+  const at = lines.findIndex(line => {
+    const found = line.match(QUESTION_LINE)
+
+    return Boolean(found && found[2] === one.when && found[3] === one.text)
+  })
+  if (at < 0 || said.length === 0) {
+    return text
+  }
+  let end = at + 1
+  while (end < lines.length && /^\s+\S/.test(lines[end] ?? '')) {
+    end += 1
+  }
+  lines.splice(at + 1, end - at - 1, ...said.map((line, index) => (index === 0 ? `  - aside: ${line.trim()}` : `    ${line}`)))
+
+  return lines.join('\n')
+}
+
 // ## Context lines: `- [x] [[Note]]` for a note, `- [ ] kind: \`target\` · label` for the rest.
 const PIN_LINE = /^- \[([ x])\] (?:\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|(file|session|artifact|url): `([^`]+)`)(?: · (.*))?\s*$/
 
@@ -1256,8 +1284,9 @@ export const buildDraft = (
   const lines = [DRAFT_HEAD]
 
   if (anchor && choice.project) {
-    const where = anchor.notePath ? `"${anchor.notePath}"` : `[[${anchor.note}]] (find it in the vault)`
-    lines.push(`- Project: ${where}, my note (outcome, Next, Journal), and its Agent Log "${anchor.trail}": the context, questions, chats and notes saved on it so far. Read both.`)
+    // The note's name in [[ ]] lets a pasted draft anchor a new chat (anchorFromDraft).
+    const where = anchor.notePath ? `"${anchor.notePath}"` : '(find it in the vault)'
+    lines.push(`- Project [[${anchor.note}]]: ${where}, my note (outcome, Next, Journal), and its Agent Log "${anchor.trail}": the context, questions, chats and notes saved on it so far. Read both.`)
   }
   for (const pin of anchor ? pins.filter(one => one.on) : []) {
     lines.push(pinDraftLine(pin))
@@ -1279,6 +1308,17 @@ export const buildDraft = (
   lines.push(`Instruction: ${typed}`)
 
   return lines.join('\n')
+}
+
+// The anchor a draft names on its `- Project [[<note>]]:` line, exactly as written;
+// null for text that isn't ours or names no anchor.
+export const anchorFromDraft = (text: string): string | null => {
+  if (!text.startsWith(DRAFT_HEAD)) {
+    return null
+  }
+  const note = text.match(/^- Project \[\[(.+?)\]\]: /m)?.[1]
+
+  return note?.trim() ? note : null
 }
 
 export const typedFrom = (box: string): string => {
@@ -1555,6 +1595,8 @@ async function load($: EngineInterface): Promise<void> {
   }
 
   await update($, swatch, () => next)
+  const btw = await hasBtw($)
+  await update($, asides, old => ({ ...old, btw }))
 }
 
 // The Jira MCP server this session has, read from its tool list (a plain read: nothing
@@ -1654,17 +1696,34 @@ async function setSessionAnchor($: EngineInterface, note: string | null): Promis
   }
 }
 
+// Anchors this session on `note`: the pane (when it has loaded) shows it, and what the
+// chat already published is pinned to it, ticked. The caller records the chat.
+async function anchorSession($: EngineInterface, note: string): Promise<void> {
+  await setSessionAnchor($, note)
+  const { cards, loadedAt } = await read($, swatch)
+  if (loadedAt > 0) {
+    const found = await loadAnchor($, cards)
+    await update($, swatch, old => ({ ...old, ...found }))
+  }
+  for (const one of await sessionArtifacts($)) {
+    await writeTrail($, note, text => addPin(text, artifactPin(one)))
+  }
+}
+
 // Anchoring puts this chat in the anchor's ## Chats and pins what it already published, ticked.
 async function chooseAnchor($: EngineInterface, card: Card): Promise<void> {
-  await setSessionAnchor($, card.note)
-  const { cards } = await read($, swatch)
-  const found = await loadAnchor($, cards)
-  await update($, swatch, old => ({ ...old, ...found }))
+  await anchorSession($, card.note)
   await recordChat($, CHAT_PLACEHOLDER)
-  for (const one of await sessionArtifacts($)) {
-    await writeTrail($, card.note, text => addPin(text, artifactPin(one)))
-  }
   await update($, view, old => ({ ...old, anchorsOpen: false }))
+}
+
+// A draft pasted into a chat with no anchor (copied for a new chat) anchors it on the
+// draft's anchor. A chat that has one keeps it, whatever the draft says.
+async function anchorFromPaste($: EngineInterface, text: string): Promise<void> {
+  const note = anchorFromDraft(text)
+  if (note && !(await sessionAnchor($))) {
+    await anchorSession($, note)
+  }
 }
 
 async function clearAnchor($: EngineInterface): Promise<void> {
@@ -1680,12 +1739,72 @@ async function anchorNow($: EngineInterface): Promise<Anchor | null> {
 }
 
 // `about` replaces what's typed in the prompt box: a captured question, for one.
-async function draft($: EngineInterface, lens: Lens | null, about?: string): Promise<void> {
+async function draftText($: EngineInterface, lens: Lens | null, about?: string): Promise<string> {
   const { trail, pinPaths } = await read($, swatch)
   const choice = await read($, picks)
   const typed = about ?? typedFrom((await $.prompt.read()).text)
 
-  await $.prompt.fill({ text: buildDraft(withPaths(trail.pins ?? [], pinPaths), choice, lens, typed, await anchorNow($)), mode: 'replace' })
+  return buildDraft(withPaths(trail.pins ?? [], pinPaths), choice, lens, typed, await anchorNow($))
+}
+
+async function draft($: EngineInterface, lens: Lens | null, about?: string): Promise<void> {
+  await $.prompt.fill({ text: await draftText($, lens, about), mode: 'replace' })
+}
+
+// The same draft, copied to start a new chat with; the prompt box is left alone.
+async function copyDraft($: EngineInterface): Promise<void> {
+  const copied = await $.ui.copy({ text: await draftText($, null) })
+  await $.ui.toast(copied.isCopied ? 'Copied: paste it into a new chat. Sent there, it anchors that chat here too.' : `Couldn't copy the draft (${copied.reason}).`)
+}
+
+// A side answer to a parked question: /btw when this session has it (filled, not sent),
+// else a low-effort fork of this chat, its answer shown under the question to keep or drop.
+async function aside($: EngineInterface, one: Question): Promise<void> {
+  if ((await read($, asides)).btw) {
+    await $.prompt.fill({ text: `/btw ${one.text}`, mode: 'replace' })
+
+    return
+  }
+  const isThis = (other: AsideAnswer): boolean => other.when === one.when && other.text === one.text
+  const others = (old: Asides): AsideAnswer[] => old.answers.filter(other => !isThis(other))
+  await update($, asides, old => ({ ...old, answers: [...others(old), { when: one.when, text: one.text, answer: '', pending: true }] }))
+  let said = ''
+  try {
+    const reply = await $.model.fork({ prompt: `${one.text}\n\nAnswer in a few short lines from what this chat already contains; don't go looking for more.`, effort: 'low' })
+    if (reply.isAnswered) {
+      said = reply.text.trim()
+    } else {
+      const why = reply.reason === 'nothing-to-fork' ? 'nothing to ask yet: this chat has no reply to fork'
+        : reply.reason === 'api-error' ? `the API answered ${reply.status ?? 'nothing'} (${reply.error})`
+        : reply.reason === 'empty-reply' ? 'the reply had no text'
+        : 'it was interrupted'
+      await $.ui.toast(`No side answer: ${why}.`)
+    }
+  } catch (error) {
+    await $.ui.toast(`No side answer: ${String(error)}`)
+  }
+  await update($, asides, old => ({ ...old, answers: said ? [...others(old), { when: one.when, text: one.text, answer: said, pending: false }] : others(old) }))
+}
+
+async function dropAside($: EngineInterface, one: AsideAnswer): Promise<void> {
+  await update($, asides, old => ({ ...old, answers: old.answers.filter(other => !(other.when === one.when && other.text === one.text)) }))
+}
+
+// Keeps a side answer under its question in the Agent Log; the question stays open.
+async function keepAside($: EngineInterface, note: string, one: AsideAnswer): Promise<void> {
+  await writeTrail($, note, text => addAnswer(text, { when: one.when, text: one.text, done: false }, one.answer))
+  await dropAside($, one)
+}
+
+// Whether this session has a /btw command; a list that fails reads as none.
+async function hasBtw($: EngineInterface): Promise<boolean> {
+  try {
+    const commands = await $.command.list()
+
+    return Array.isArray(commands) && commands.some(one => one.name === 'btw')
+  } catch {
+    return false
+  }
 }
 
 const withPaths = (pins: Pin[], pinPaths: Record<string, string>): Pin[] =>
@@ -2112,12 +2231,14 @@ export const register: Register = (on, options) => {
     return { text: 'Augi is open. Pick an anchor, tick its context, then draft a prompt or run a lens. It only drafts; you press enter.' }
   })
 
-  // A draft from the pane, once sent, goes on the anchor's trail.
+  // A draft from the pane, once sent, goes on the anchor's trail. One pasted into a
+  // chat with no anchor anchors it first, so a new chat lands in the same Agent Log.
   on('prompt.submit', async ($, e, next) => {
     const title = chatTitleFrom(e.text)
     if (title) {
       try {
         await ready($)
+        await anchorFromPaste($, e.text)
         await recordChat($, title)
       } catch (error) {
         await $.ui.toast(`Augi couldn't record this chat: ${String(error)}`)
@@ -2193,6 +2314,10 @@ export const register: Register = (on, options) => {
     const PIN_ICON: Record<Pin['kind'], string> = { note: '▤', file: '📄', session: '◦', artifact: '◇', url: '🔗' }
     const pinKey = (pin: Pin): string => `${pin.kind}-${pin.target}`
     const onPins = (change: (text: string) => string) => (anchor ? writeTrail($, anchor.note, change) : undefined)
+    // The note's Next items, then the card's sub-items not already among them.
+    const openTasks = anchor ? [...(next ?? []), ...anchor.tasks.filter(task => !(next ?? []).some(one => one.text === task.text))] : []
+    const { answers } = await read($, asides)
+    const answerOf = (one: Question): AsideAnswer | undefined => answers.find(other => other.when === one.when && other.text === one.text)
     const openQuestions = trail.questions.filter(one => !one.done)
     const doneQuestions = trail.questions.filter(one => one.done)
     const gaps = setup.filter(item => !item.ok).length
@@ -2284,8 +2409,11 @@ export const register: Register = (on, options) => {
         ))}
         {shown.anchorsOpen && anchor && <Button key="anchor-clear" plain label="    ○ no anchor" onPress={() => clearAnchor($)} />}
         {!anchor && <Text dimColor>🧭 Season: {season}</Text>}
-        {anchor && anchor.detail && <Text dimColor>{anchor.detail}</Text>}
-        {anchor && outcome && <Text>🎯 {outcome}</Text>}
+        {anchor && (
+          <Button key="anchor-details" plain label={`${arrow(shown.detailsOpen)} outcome and next (${openTasks.length})`} onPress={flip('detailsOpen')} />
+        )}
+        {anchor && shown.detailsOpen && anchor.detail && <Text dimColor>{anchor.detail}</Text>}
+        {anchor && shown.detailsOpen && outcome && <Text>🎯 {outcome}</Text>}
         {anchor && jira && (
           <Box key="jira-linked" flexDirection="row">
             {P.jiraSite
@@ -2302,7 +2430,7 @@ export const register: Register = (on, options) => {
             <Button key="jira-find" label="find in Jira" onPress={() => findInJira($)} />
           </Box>
         )}
-        {anchor && [...(next ?? []), ...anchor.tasks.filter(task => !(next ?? []).some(one => one.text === task.text))].map(task => (
+        {anchor && shown.detailsOpen && openTasks.map(task => (
           task.note
             ? <Button key={`task-${task.text}`} plain label={`☐ ${task.text} ↗`} onPress={() => openByName($, task.note ?? '')} />
             : <Text key={`task-${task.text}`}>☐ {task.text}</Text>
@@ -2381,17 +2509,39 @@ export const register: Register = (on, options) => {
         ))}
         <Button key="openaugi" plain label={`  ${mark(choice.openAugi)} also let the chat search my notes with OpenAugi`} onPress={() => update($, picks, old => ({ ...old, openAugi: !old.openAugi }))} />
         {choice.aboutMe && <Text dimColor>  + your overall context (change it under Setup)</Text>}
-        <Button key="draft" variant="primary" label="💬 draft a prompt with this context" hotkey="n" onPress={() => draft($, null)} />
+        <Box flexDirection="row">
+          <Button key="draft" variant="primary" label="💬 draft a prompt with this context" hotkey="n" onPress={() => draft($, null)} />
+          <Text dimColor> </Text>
+          <Button key="copy-draft" label="⧉ copy it for a new chat" onPress={() => copyDraft($)} />
+        </Box>
         </Box>
 
         <Box key="card-trail" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="success" display={anchor ? 'flex' : 'none'}>
         {anchor && <Text bold color="success">🌱 On {anchor.note}</Text>}
-        {anchor && openQuestions.map(one => (
-          <Box key={`question-${one.when}-${one.text}`} flexDirection="row">
-            <Button key={`ask-${one.when}`} plain label={`  ? ${one.text}`} onPress={() => draft($, null, one.text)} />
-            <Button key={`done-${one.when}`} label="done" onPress={() => writeTrail($, anchor.note, text => setDone(text, one, true))} />
-          </Box>
-        ))}
+        {anchor && openQuestions.map(one => {
+          const got = answerOf(one)
+
+          return (
+            <Box key={`question-${one.when}-${one.text}`} flexDirection="column">
+              <Box flexDirection="row">
+                <Button key={`ask-${one.when}`} plain label={`  ? ${one.text}`} onPress={() => draft($, null, one.text)} />
+                {got?.pending
+                  ? <Text key={`aside-wait-${one.when}`} dimColor> … </Text>
+                  : <Button key={`aside-${one.when}`} label="aside" onPress={() => aside($, one)} />}
+                <Button key={`done-${one.when}`} label="done" onPress={() => writeTrail($, anchor.note, text => setDone(text, one, true))} />
+              </Box>
+              {got && !got.pending && (
+                <Box key={`aside-answer-${one.when}`} flexDirection="column" paddingLeft={4}>
+                  <Text key={`aside-text-${one.when}`} dimColor wrap="wrap">{got.answer}</Text>
+                  <Box flexDirection="row">
+                    <Button key={`aside-keep-${one.when}`} label="keep" onPress={() => keepAside($, anchor.note, got)} />
+                    <Button key={`aside-drop-${one.when}`} label="drop" onPress={() => dropAside($, got)} />
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          )
+        })}
         {anchor && doneQuestions.length > 0 && (
           <Button key="show-done" plain label={`  ${arrow(shown.doneOpen)} done questions (${doneQuestions.length})`} onPress={flip('doneOpen')} />
         )}

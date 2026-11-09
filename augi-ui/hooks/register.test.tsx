@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { findInJiraDraft, insertCard, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, withJira } from './register'
-import { addChat, addJournalEntry, anchorArtifacts, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
+import { addAnswer, addChat, addJournalEntry, anchorFromDraft,anchorArtifacts, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
   plugin: 'augi-ui',
@@ -464,7 +464,16 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
   await ui.press({ key: 'card-PMOC - Garden' })
   expect(store.get('anchors')).toEqual([['own-session', 'PMOC - Garden']])
   expect(await ui.find({ key: 'copy-embed' })).toBeFalsy()
+  // Outcome and tasks sit behind one toggle, closed by default.
+  expect(await ui.find({ text: 'Plant the beds' })).toBeFalsy()
+  expect(await ui.find({ text: '🎯 It loads fast.' })).toBeFalsy()
+  expect((await ui.find({ key: 'anchor-details' }))?.text).toMatch(/▸ outcome and next \(2\)/)
+  await ui.press({ key: 'anchor-details' })
   expect(await ui.find({ text: 'Plant the beds' })).toBeTruthy()
+  expect(await ui.find({ text: '🎯 It loads fast.' })).toBeTruthy()
+  await ui.press({ key: 'anchor-details' })
+  expect(await ui.find({ text: 'Plant the beds' })).toBeFalsy()
+  await ui.press({ key: 'anchor-details' })
   expect([...written.keys()].some(path => path.includes('Trail - '))).toBe(false)
   // The anchor card opens the human and agent notes; overall context lives under Setup.
   expect(await ui.find({ key: 'open-note' })).toBeTruthy()
@@ -1119,6 +1128,7 @@ test('a new task from the pane: note from the template, card after the anchor, c
   expect(await ui.find({ text: '🔗 PROJ-1' })).toBeTruthy()
 
   // A sub-item that links a note opens it; one without a link is plain text.
+  await ui.press({ key: 'anchor-details' })
   expect(await ui.find({ text: 'Plant the beds' })).toBeTruthy()
   await ui.press({ key: 'task-Child task wire it' })
   expect(ran.some(argv => argv[0] === 'open' && argv[1] === `obsidian://open?path=${encodeURIComponent('/v/Child task.md')}`)).toBe(true)
@@ -1367,5 +1377,184 @@ test('with no task folder, a new task goes to the notes root, never beside the a
   expect(got.written.has('/v/Fix the gate.md')).toBe(true)
   expect(got.written.has('/v/Projects/Fix the gate.md')).toBe(false)
   expect(got.filled).toEqual([newTaskDraft('/v/Fix the gate.md', trailPath('Fix the gate'), 'Fix the gate')])
+  await ui.unmount()
+})
+
+test('a draft names its anchor so a pasted copy can attach a new chat; anything else names none', async () => {
+  expect(anchorFromDraft(buildDraft([], ALL_ON, null, 'go', ANCHOR))).toBe('PMOC - Garden')
+  const odd = { note: 'Plan: a/b', notePath: '/v/Plan- a-b.md', trail: trailPath('Plan: a/b') }
+  expect(trailPath('Plan: a/b').endsWith('Agent Log - Plan- a-b.md')).toBe(true)
+  expect(anchorFromDraft(buildDraft([], ALL_ON, null, 'go', odd))).toBe('Plan: a/b')
+  const lost = { ...ANCHOR, notePath: '' }
+  const text = buildDraft([], ALL_ON, null, 'go', lost)
+  expect(text.includes('- Project [[PMOC - Garden]]: (find it in the vault), my note')).toBe(true)
+  expect(anchorFromDraft(text)).toBe('PMOC - Garden')
+  expect(buildDraft([], ALL_ON, null, 'go', ANCHOR).includes('- Project [[PMOC - Garden]]: "/v/PMOC - Garden.md", my note')).toBe(true)
+  expect(anchorFromDraft('hello\n- Project [[PMOC - Garden]]: x')).toBe(null)
+  expect(anchorFromDraft(buildDraft([], ALL_ON, null, 'go'))).toBe(null)
+  expect(anchorFromDraft(buildDraft([], { ...ALL_ON, project: false }, null, 'go', ANCHOR))).toBe(null)
+  expect(anchorFromDraft(findInJiraDraft('/v/PMOC - Garden.md', 'PMOC - Garden', { project: '', server: '' }))).toBe(null)
+})
+
+test('a kept side answer goes under its question, indented; the questions parse as before and a second keep replaces it', async () => {
+  const older = { when: '2022-01-05 09:30', text: 'does the cache survive restarts?', done: false }
+  const newer = { when: '2022-01-05 09:45', text: 'who owns the hose?', done: false }
+  const log = addQuestion(addQuestion(trailTemplate('X', '2022-01-05'), older), newer)
+  const kept = addAnswer(log, older, 'Yes, it is on disk.\n\n  Restarts read it back.  \n')
+  expect(kept).toBe(log.replace(
+    '- [ ] 2022-01-05 09:30 · does the cache survive restarts?',
+    '- [ ] 2022-01-05 09:30 · does the cache survive restarts?\n  - aside: Yes, it is on disk.\n      Restarts read it back.',
+  ))
+  expect(parseTrail(kept)).toEqual(parseTrail(log))
+  expect(addAnswer(kept, older, 'No.')).toBe(addAnswer(log, older, 'No.'))
+  // The top question's answer goes between it and the next question.
+  const top = addAnswer(kept, newer, 'The neighbour.')
+  expect(top.includes('who owns the hose?\n  - aside: The neighbour.\n- [ ] 2022-01-05 09:30')).toBe(true)
+  expect(parseTrail(top).questions).toEqual(parseTrail(log).questions)
+  // Ticking done keeps the answer under it.
+  const done = setDone(kept, older, true)
+  expect(done.includes('- [x] 2022-01-05 09:30 · does the cache survive restarts?\n  - aside: Yes, it is on disk.')).toBe(true)
+  expect(parseTrail(done).questions.find(one => one.when === older.when)?.done).toBe(true)
+  // A question not in the log, or an empty answer, changes nothing.
+  expect(addAnswer(log, { ...older, when: '2022-01-04 08:00' }, 'x')).toBe(log)
+  expect(addAnswer(log, older, ' \n ')).toBe(log)
+})
+
+// A vault with PMOC - Garden (a Next item and a parked question) and PMOC - Birdhouse on the board.
+const asideHooks = (on: On, session: { id: string }, anchors: [string, string][], extra: { btw?: boolean; fork?: (prompt: string) => unknown } = {}) => {
+  const question = '- [ ] 2026-11-08 09:00 · does the cache survive restarts?'
+  const written = new Map<string, string>([[trailPath('PMOC - Garden'), addQuestion(trailTemplate('PMOC - Garden', '2026-11-08'), { when: '2026-11-08 09:00', text: 'does the cache survive restarts?', done: false })]])
+  const store = new Map<string, unknown>([['anchors', anchors]])
+  const got = { written, store, question, filled: [] as string[], copied: [] as string[], toasts: [] as string[], forks: [] as { prompt: string; effort?: string }[] }
+  on('env.get', () => ({ value: '/Users/t' }))
+  on('command.register', () => ({ value: { command: 'augi' } }))
+  on('command.list', () => ({ value: extra.btw ? [{ name: 'clear', description: '', source: 'builtin' }, { name: 'btw', description: 'ask aside', source: 'builtin' }] : [{ name: 'clear', description: '', source: 'builtin' }] }))
+  on('model.fork', (_, e) => {
+    got.forks.push({ prompt: e.prompt, effort: e.effort })
+    return { value: (extra.fork ?? (() => ({ isAnswered: false, reason: 'nothing-to-fork' })))(e.prompt) as never }
+  })
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.toast', (_, e) => {
+    got.toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.copy', (_, e) => {
+    got.copied.push(e.text)
+    return { value: { isCopied: true } }
+  })
+  on('session.id', () => ({ value: session.id }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 8, 9, 30).getTime() }))
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.set', (_, e) => {
+    store.set(e.key, e.value)
+    return { value: undefined }
+  })
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/v/Kanban.md'].includes(e.path) || written.has(e.path) }))
+  on('fs.read', (_, e) => ({ value: written.get(e.path) ?? (e.path === '/v/Kanban.md' ? BOARD_TEXT : e.path === '/v/PMOC - Garden.md' ? GARDEN_NOTE : '') }))
+  on('fs.write', (_, e) => {
+    written.set(e.path, e.text)
+    return { value: undefined }
+  })
+  on('fs.list', () => ({ value: [] }))
+  on('process.run', (_, e) => {
+    const name = e.argv[0] === 'find' ? e.argv[e.argv.indexOf('-name') + 1] ?? '' : ''
+    const found = name === 'PMOC - Garden.md' ? '/v/PMOC - Garden.md' : ''
+
+    return { value: { exitCode: 0, stdout: found ? `${found}\n` : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('prompt.read', () => ({ value: { text: 'explain the cache', cursor: 0 } }))
+  on('prompt.fill', (_, e) => {
+    got.filled.push(e.text)
+    return { isFilled: true }
+  })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+
+  return got
+}
+
+const anchorOf = (store: Map<string, unknown>, id: string): string | undefined => anchorPairs(store.get('anchors')).find(([one]) => one === id)?.[1]
+
+test('copy it for a new chat copies the draft and leaves the box; sent in a chat with no anchor, it anchors that chat; one with an anchor keeps it', { options: OPTIONS }, async ($, on) => {
+  const session = { id: 'first' }
+  const got = asideHooks(on, session, [['first', 'PMOC - Garden'], ['other', 'PMOC - Birdhouse']])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'draft' })
+  await ui.press({ key: 'copy-draft' })
+  expect(got.filled.length).toBe(1)
+  expect(got.copied).toEqual([got.filled[0]])
+  expect(anchorFromDraft(got.copied[0] ?? '')).toBe('PMOC - Garden')
+  expect(got.toasts.some(text => text.startsWith('Copied: paste it into a new chat'))).toBe(true)
+
+  // A new chat with no anchor: the pasted draft anchors it, and the pane shows it.
+  session.id = 'second'
+  await ui.press({ key: 'refresh' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  await $.prompt.submit({ text: got.copied[0] ?? '' })
+  expect(anchorOf(got.store, 'second')).toBe('PMOC - Garden')
+  expect(parseTrail(got.written.get(trailPath('PMOC - Garden')) ?? '').chats.map(chat => [chat.id, chat.title])).toEqual([['second', 'explain the cache']])
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  expect(await ui.find({ key: 'chat-second' })).toBeTruthy()
+
+  // A chat anchored elsewhere keeps its anchor; the chat goes in its own anchor's log.
+  session.id = 'other'
+  await $.prompt.submit({ text: got.copied[0] ?? '' })
+  expect(anchorOf(got.store, 'other')).toBe('PMOC - Birdhouse')
+  expect(parseTrail(got.written.get(trailPath('PMOC - Birdhouse')) ?? '').chats.map(chat => chat.id)).toEqual(['other'])
+  expect(parseTrail(got.written.get(trailPath('PMOC - Garden')) ?? '').chats.map(chat => chat.id)).toEqual(['second'])
+  await ui.unmount()
+})
+
+test('with /btw in this session, aside fills /btw and the question unsent; pressing the question still drafts it', { options: OPTIONS }, async ($, on) => {
+  const got = asideHooks(on, { id: 'own' }, [['own', 'PMOC - Garden']], { btw: true })
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'aside-2026-11-08 09:00' })
+  expect(got.filled).toEqual(['/btw does the cache survive restarts?'])
+  expect(got.forks).toEqual([])
+  await ui.press({ key: 'ask-2026-11-08 09:00' })
+  expect(got.filled[1]?.endsWith('Instruction: does the cache survive restarts?')).toBe(true)
+  await ui.unmount()
+})
+
+test('without /btw, aside forks the chat: the answer shows under the question, keep writes it under the question, drop clears it', { options: OPTIONS }, async ($, on) => {
+  let replies = 0
+  const got = asideHooks(on, { id: 'own' }, [['own', 'PMOC - Garden']], {
+    fork: () => {
+      replies += 1
+      return replies === 1
+        ? { isAnswered: false, reason: 'nothing-to-fork' }
+        : { isAnswered: true, text: `Yes, it is on disk (${replies}).`, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } }
+    },
+  })
+  const log = () => got.written.get(trailPath('PMOC - Garden')) ?? ''
+  const before = log()
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+
+  // Nothing to fork yet: a toast, the question as it was.
+  await ui.press({ key: 'aside-2026-11-08 09:00' })
+  expect(got.forks[0]?.effort).toBe('low')
+  expect(got.forks[0]?.prompt.startsWith('does the cache survive restarts?\n')).toBe(true)
+  expect(got.toasts.some(text => text.startsWith('No side answer: nothing to ask yet'))).toBe(true)
+  expect(await ui.find({ key: 'aside-keep-2026-11-08 09:00' })).toBeFalsy()
+  expect(await ui.find({ key: 'aside-2026-11-08 09:00' })).toBeTruthy()
+
+  // Answered: shown under the question; drop clears it and writes nothing.
+  await ui.press({ key: 'aside-2026-11-08 09:00' })
+  expect(await ui.find({ text: 'Yes, it is on disk (2).' })).toBeTruthy()
+  await ui.press({ key: 'aside-drop-2026-11-08 09:00' })
+  expect(await ui.find({ text: 'Yes, it is on disk (2).' })).toBeFalsy()
+  expect(log()).toBe(before)
+  expect(got.filled).toEqual([])
+
+  // Answered again and kept: under the question in the Agent Log, the question still open.
+  await ui.press({ key: 'aside-2026-11-08 09:00' })
+  await ui.press({ key: 'aside-keep-2026-11-08 09:00' })
+  expect(log()).toBe(before.replace(got.question, `${got.question}\n  - aside: Yes, it is on disk (3).`))
+  expect(parseTrail(log()).questions).toEqual(parseTrail(before).questions)
+  expect(await ui.find({ text: 'Yes, it is on disk (3).' })).toBeFalsy()
+  expect(await ui.find({ key: 'aside-keep-2026-11-08 09:00' })).toBeFalsy()
+  expect(await ui.find({ key: 'done-2026-11-08 09:00' })).toBeTruthy()
   await ui.unmount()
 })

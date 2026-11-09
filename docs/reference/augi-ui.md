@@ -51,8 +51,10 @@ skipped. Starters are never written over an existing file.
 - **Anchor** (`a`): a linked card from the board — a project or a task. The
   anchor belongs to the chat session: a new session opens with none, and a
   reload or `claude --resume` of the session keeps it (`$.store`, keyed by
-  session id). Choosing one records this chat in its Agent Log. Its open
-  sub-items and the note's `# Next` checkboxes show as tasks; one that links a
+  session id). Choosing one records this chat in its Agent Log. The card shows
+  only the links (note, Agent Log, artifacts, Jira) until `▸ outcome and next (N)`
+  is opened: then the card's detail, the note's `🎯` outcome, and its open
+  sub-items and the note's `# Next` checkboxes as tasks; one that links a
   note (`\t- [ ] [[Child task]]`) is a button that opens it, which is the whole
   parent/child story: the child's `Up:` line points back. A `jira:` key in the
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note
@@ -90,7 +92,21 @@ skipped. Starters are never written over an existing file.
   board (`m`), and OpenAugi search. An artifact the chat publishes is pinned
   ticked; one published before an anchor was chosen is pinned when it is.
 - **Draft** (`n`): fills the prompt with that context. Nothing is sent until
-  the user presses enter.
+  the user presses enter. `⧉ copy it for a new chat` copies the same text instead
+  (the prompt box is left alone) to start a fresh chat on the anchor, say a
+  manager chat that reads the Agent Log's list of every chat on it. The draft's
+  `- Project [[<note>]]:` line names the anchor, so when it is sent in a chat
+  with no anchor, that chat is anchored on it first and lands in the same Agent
+  Log; a chat that already has an anchor keeps its own. A draft with the
+  project context unticked names no anchor and attaches nothing.
+- **Questions**: parked with `?` in the Anchor card, listed under `On <anchor>`.
+  Pressing one drafts it as the instruction. `aside` asks it on the side: with
+  Claude Code's `/btw` command in the session (checked when the pane loads) it
+  fills `/btw <question>`, unsent; without it, a low-effort fork of this chat
+  answers from what the chat already holds, shown under the question with `keep`
+  (written under the question in the Agent Log as `  - aside: …`, the question
+  left open; a second keep replaces it) and `drop`. Unkept answers live in
+  session state only.
 - **Lenses (saved prompts)** (`l`): run a lens with the same context; `+ new lens`
   takes a name, writes a skeleton file in the lens folder (never over one that's
   there) and opens it in your editor to paste the prompt.
@@ -102,7 +118,8 @@ skipped. Starters are never written over an existing file.
   no anchor the entries just stay on the pad. This is the one place the pane
   writes the user's own note: only on their press, only their own words.
 - **Agent Log**: per anchor, a companion note that holds the pinned context,
-  open questions and every chat anchored on it (titled `chat` until a draft
+  open questions (with any kept side answers indented under them) and every
+  chat anchored on it (titled `chat` until a draft
   sent from the pane names it). Its first line links the user's own note (so
   the note shows it as a backlink); agents never write that note (the pane does only for a
   saved scratchpad entry). An older log is tidied (title and seen box dropped) when the pane next writes it.

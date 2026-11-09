@@ -61,10 +61,17 @@ export type View = {
   setupOpen: boolean
   inOpen: boolean
   doneOpen: boolean
+  // The Anchor card's detail, outcome and open tasks, folded away by default.
+  detailsOpen: boolean
 }
+// A side answer to a parked question, by the question's `when` and text: `pending`
+// while the fork runs, then the answer until it is kept in the Agent Log or dropped.
+export type AsideAnswer = { when: string; text: string; answer: string; pending: boolean }
+// `btw`: whether this session has a /btw command, checked when the pane loads.
+export type Asides = { btw: boolean; answers: AsideAnswer[] }
 
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; pad: Shaped<PadEntry[]> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; pad: Shaped<PadEntry[]>; asides: Shaped<Asides> }
   }
 }
