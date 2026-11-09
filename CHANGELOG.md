@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-09
+
+**Upgrading from 0.3.x:** nothing to change. An existing config keeps working
+as it is; a machine with `[tasks] auto_dispatch = true`, `openaugi up` and a
+registered `openaugi serve` is a ⚡ Full install and runs exactly as before.
+New CLI-only install: `openaugi init --search none --mode light`.
 
 **`openaugi kb`: every MCP tool is a CLI command — the Light install.** An
 agent can now use the whole knowledge base with no server and nothing in the

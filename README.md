@@ -45,6 +45,20 @@ so the two can't drift. In a Light install, add one line to your agent's
 instructions (`init` prints it): *run `openaugi kb --help`, start research with
 `openaugi kb get-context`*.
 
+**CLI-only install** — for a machine where you want no server and no
+background process (a work laptop, say):
+
+```bash
+uv tool install openaugi                          # or: pipx install openaugi
+openaugi init --search none --mode light          # keyword search, nothing leaves the machine
+openaugi ingest                                   # re-run when you want the index fresh
+openaugi kb get-context --query "roadmap"         # what your agent will run
+```
+
+Nothing is registered with Claude and nothing stays running: each `openaugi kb`
+call is a short process that answers in JSON and exits. Your agent's writes
+land only under `<vault>/OpenAugi/`.
+
 ### Full: two processes, and why
 
 |  | What it is | How many |
