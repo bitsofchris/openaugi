@@ -91,8 +91,9 @@ src/openaugi/
 │   └── doc_writer.py      # VaultWriter — writes .md to OpenAugi/ in vault
 ├── http_api.py            # HTTP adapter — /api/* JSON routes on the daemon (full blocks, read-only)
 ├── cli/
-│   ├── main.py            # typer CLI (init, up, ingest, serve, watch, search, query, tasks, hubs, status, service)
-│   └── setup.py           # `openaugi init` guided setup: vault, search mode, task mode
+│   ├── main.py            # typer CLI (init, up, ingest, serve, watch, search, query, tasks, kb, hubs, status, service)
+│   ├── kb.py              # `openaugi kb`: every MCP tool as a CLI command, generated from the registry (Light install's agent API)
+│   └── setup.py           # `openaugi init` guided setup: vault, search mode, Light or Full
 └── config.py              # TOML config loader + .env loader + vault path resolution
 ```
 
@@ -137,6 +138,9 @@ adapters present it (docs/reference/query-layer.md):
     500-char summaries,   full blocks,       openaugi query,
     docstrings,           no handshake,      terminal output)
     pagination hints)     k ≤ 500)
+          ↑
+   cli/kb.py — `openaugi kb <tool>`: the MCP tools themselves, generated
+   from the registry and run through FastMCP.call_tool, no server process
 
   engine functions:
   → run(QuerySpec): title/keyword/semantic/browse dispatch + filters

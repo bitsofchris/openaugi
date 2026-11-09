@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+**`openaugi kb`: every MCP tool is a CLI command — the Light install.** An
+agent can now use the whole knowledge base with no server and nothing in the
+background: `openaugi kb get-context --query …`, `kb traverse --start-id …`,
+`kb get-related`, `kb write-document --content - < note.md`, and every other
+tool, with the same arguments and the same JSON as MCP. The commands are
+generated from the MCP server's registry and run through `FastMCP.call_tool`,
+so a new tool shows up with no CLI change and the two cannot drift (a test
+fails if they do). `openaugi kb --help` is the agent's guide. Exit 0 is an
+answer, 1 an error envelope, 2 bad arguments.
+
+**`init`'s third question is now 🪶 Light or ⚡ Full.** Light (the default)
+is the CLI only: no MCP server, no watcher, and `init` prints the line to
+paste into your agent's CLAUDE.md. Full is `openaugi up` plus `openaugi serve`,
+and launches agents on `zzz:`. Same config underneath (`[tasks]
+auto_dispatch`). `--mode light|full` replaces `--tasks manual|auto`, which
+still works.
+
 **`docs/plans/` is gone; plans live in the user's notes.** The design
 records, roadmap and master plan (with its STATUS / LEFT OFF header) are
 removed and kept in git history. AGENTS.md and ARCHITECTURE.md no longer

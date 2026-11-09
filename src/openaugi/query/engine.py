@@ -539,18 +539,19 @@ def context(
         candidate_scores[b.id] = 0.0
 
     # Prong 2: semantic search
+    # No model is the normal case in a keyword-only install, not a failure:
+    # skip the prong quietly. A model that is configured but fails still warns.
     query_vec: list[float] | None = None
-    try:
-        if embedding_model is None:
-            raise ValueError("no embedding model provided")
-        vec: list[float] = embedding_model.embed_query(query)
-        query_vec = vec
-        hits = store.semantic_search(vec, k=fetch_limit)
-        for block_id, distance in hits:
-            score = _similarity(distance)
-            candidate_scores[block_id] = max(candidate_scores.get(block_id, 0.0), score)
-    except Exception:
-        logger.warning("Semantic search unavailable in context", exc_info=True)
+    if embedding_model is not None:
+        try:
+            vec: list[float] = embedding_model.embed_query(query)
+            query_vec = vec
+            hits = store.semantic_search(vec, k=fetch_limit)
+            for block_id, distance in hits:
+                score = _similarity(distance)
+                candidate_scores[block_id] = max(candidate_scores.get(block_id, 0.0), score)
+        except Exception:
+            logger.warning("Semantic search unavailable in context", exc_info=True)
 
     # Apply the filters to the pool. Unstamped blocks count as human, so a
     # store that predates provenance behaves exactly as before.

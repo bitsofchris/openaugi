@@ -81,7 +81,14 @@ class _SearchChoice(StrEnum):
     openai = "openai"
 
 
+class _ModeChoice(StrEnum):
+    light = "light"
+    full = "full"
+
+
 class _TasksChoice(StrEnum):
+    """0.3.0's name for the same choice: manual = light, auto = full."""
+
     manual = "manual"
     auto = "auto"
 
@@ -93,26 +100,27 @@ def init(
         _SearchChoice | None,
         typer.Option("--search", help="Search mode: none (keyword), local, or openai"),
     ] = None,
+    mode: Annotated[
+        _ModeChoice | None,
+        typer.Option(
+            "--mode",
+            help="light: CLI only, nothing in the background · "
+            "full: `openaugi up` + MCP server, agents launch on zzz:",
+        ),
+    ] = None,
     tasks: Annotated[
         _TasksChoice | None,
-        typer.Option(
-            "--tasks",
-            help="zzz: tasks: manual (openaugi tasks) or auto (openaugi up launches them)",
-        ),
+        typer.Option("--tasks", hidden=True, help="Old name for --mode (manual|auto)"),
     ] = None,
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Accept defaults; replace an existing config (backed up)"
     ),
 ):
-    """Guided setup: your vault, how to search it, and how zzz: tasks run."""
-    from openaugi.cli.setup import run_setup
+    """Guided setup: your vault, how to search it, and whether anything runs in the background."""
+    from openaugi.cli.setup import LEGACY_TASK_MODES, run_setup
 
-    run_setup(
-        vault=vault,
-        search=search.value if search else None,
-        tasks=tasks.value if tasks else None,
-        yes=yes,
-    )
+    chosen = mode.value if mode else (LEGACY_TASK_MODES[tasks.value] if tasks else None)
+    run_setup(vault=vault, search=search.value if search else None, mode=chosen, yes=yes)
 
 
 def _ingest_vault(vault_path: str, store, config: dict) -> tuple[dict, bool]:
@@ -2061,6 +2069,13 @@ def _print_block(block, score: float | None = None):
     if block.content:
         preview = block.content[:200].replace("\n", " ")
         console.print(f"  {preview}")
+
+
+# Every MCP tool as a CLI command (openaugi/cli/kb.py) — the CLI-only install's
+# whole agent surface. Registered last so it lists after the commands above.
+from openaugi.cli.kb import kb_app  # noqa: E402
+
+app.add_typer(kb_app, name="kb")
 
 
 if __name__ == "__main__":

@@ -1,11 +1,13 @@
 ---
 name: query-layer
-description: The query engine and its three adapters — QuerySpec fields, saved-query files, relative-date tokens, the HTTP /api route table, and the engine/adapter boundary rule.
+description: The query engine and its adapters — QuerySpec fields, saved-query files, relative-date tokens, the HTTP /api route table, `openaugi kb` (the MCP tools as CLI commands), and the engine/adapter boundary rule.
 ---
 
 # Query Layer
 
 One engine, thin adapters. Every deterministic read — SQLite filters, FTS5, sqlite-vec KNN, link walks, the get_context pipeline — executes in `src/openaugi/query/engine.py`. MCP, HTTP, and the CLI are presentation over it: same question, same answer, whichever door you knock on.
+
+**`openaugi kb` is the MCP surface, not a fourth adapter.** `cli/kb.py` builds one command per MCP tool (and per resource template) from the server's own registry and runs each call through `FastMCP.call_tool`, so arguments, validation, defaults and the JSON answer are byte-for-byte what an MCP client gets — with no server process. It is the whole agent API of a Light install. A tool added to `mcp/server.py` becomes a `kb` command with no CLI change; `tests/test_kb_cli.py` fails if a tool or argument goes missing, or if the `kb --help` guide names a command or option that doesn't exist. The human commands (`openaugi search`, `openaugi query`) stay as they are: terminal output for a person.
 
 ## When to use
 

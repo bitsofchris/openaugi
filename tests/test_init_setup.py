@@ -102,11 +102,13 @@ def test_next_steps_name_the_missing_extra(monkeypatch):
 
 def test_unattended_setup(home: Path, vault: Path):
     result = runner.invoke(
-        app, ["init", "--vault", str(vault), "--search", "none", "--tasks", "manual", "--yes"]
+        app, ["init", "--vault", str(vault), "--search", "none", "--mode", "light", "--yes"]
     )
     assert result.exit_code == 0, result.output
     assert "You're set up" in result.output
-    assert "openaugi tasks" in result.output
+    # Light: the agent gets the CLI, not an MCP server.
+    assert "openaugi kb get-context" in result.output
+    assert "claude mcp add" not in result.output
     cfg = _config(home)
     assert cfg["vault"]["default_path"] == str(vault.resolve())
     assert cfg["models"]["embedding"]["provider"] == "none"
@@ -162,8 +164,23 @@ def test_existing_config_is_kept_unless_you_say_replace(home: Path, vault: Path)
     assert _config(home)["vault"]["default_path"] == str(vault.resolve())
 
 
+def test_full_mode_prints_the_mcp_hookup(home: Path, vault: Path):
+    result = runner.invoke(app, ["init", "--vault", str(vault), "--mode", "full", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert "claude mcp add" in result.output
+    assert "openaugi up" in result.output
+    assert _config(home)["tasks"]["auto_dispatch"] is True
+
+
+@pytest.mark.parametrize("old,auto", [("manual", False), ("auto", True)])
+def test_old_tasks_flag_still_works(home: Path, vault: Path, old: str, auto: bool):
+    result = runner.invoke(app, ["init", "--vault", str(vault), "--tasks", old, "--yes"])
+    assert result.exit_code == 0, result.output
+    assert _config(home)["tasks"]["auto_dispatch"] is auto
+
+
 def test_rerun_offers_current_choices_as_defaults(home: Path, vault: Path):
-    runner.invoke(app, ["init", "--vault", str(vault), "--tasks", "auto", "--yes"])
+    runner.invoke(app, ["init", "--vault", str(vault), "--mode", "full", "--yes"])
     assert _config(home)["tasks"]["auto_dispatch"] is True
     # Enter through everything (vault default, search, tasks), then replace.
     result = runner.invoke(app, ["init"], input="\n\n\ny\n")

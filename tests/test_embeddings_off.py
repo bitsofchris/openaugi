@@ -134,9 +134,12 @@ def test_mcp_keyword_search_has_no_note(keyword_only_server):
     assert "note" not in result
 
 
-def test_mcp_get_context_works_without_embeddings(keyword_only_server):
+def test_mcp_get_context_works_without_embeddings(keyword_only_server, caplog):
     result = json.loads(keyword_only_server.get_context(query="career"))
     assert "error" not in result
+    # No model is expected in a keyword-only install, so nothing to warn about
+    # (each `openaugi kb get-context` call would print a traceback otherwise).
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────────

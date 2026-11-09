@@ -45,8 +45,11 @@ Three questions, each with a safe default (press Enter):
 2. 🔎 **Search** — 🔤 keyword + links (built in, default), 💻 local semantic
    (`openaugi[local]`), or ☁️ OpenAI semantic (`openaugi[openai]` + API key; note
    text goes to OpenAI). It shows which are installed and how to install the rest.
-3. 🤖 **zzz: tasks** — ✋ manual (default: `openaugi tasks`, nothing in the
-   background) or ⚡ automatic (`openaugi up` launches agents itself).
+3. 🪶 **How it runs** — 🪶 Light (default): the CLI only. Agents call
+   `openaugi kb …`; no server, no watcher, nothing in the background, and
+   `zzz:` tasks wait for `openaugi tasks run`. ⚡ Full: `openaugi up` keeps the
+   index fresh and launches an agent for each `zzz:`, and Claude Code connects
+   to `openaugi serve` over MCP. Both have every tool.
 
 It writes `~/.openaugi/config.toml`, copies the agent files into
 `<vault>/OpenAugi/AGENT/` (never overwriting yours), and prints the next
@@ -56,7 +59,8 @@ backup (`config.toml.bak-…`) kept next to it. Replacing drops settings `init`
 doesn't ask about (exclude patterns, source rules) — copy them back from the
 backup.
 
-Unattended: `openaugi init --vault ~/notes --search none --tasks manual --yes`.
+Unattended: `openaugi init --vault ~/notes --search none --mode light --yes`.
+(0.3.0's `--tasks manual|auto` still works and means `--mode light|full`.)
 
 The vault path may use `~` (`~/Documents/vault`) — it is expanded to an absolute path everywhere it is used, whether it comes from `init`, a `--path` flag, or `[vault] default_path` edited by hand.
 
@@ -64,19 +68,37 @@ The vault path may use `~` (`~/Documents/vault`) — it is expanded to an absolu
 
 Pick one of two ways. `openaugi init` asks which you want.
 
-### On demand (default) — nothing runs in the background
+### 🪶 Light (default) — the CLI only
 
 ```bash
-openaugi ingest            # index the vault; re-run whenever you want it fresh
-openaugi search "budget"   # search from the terminal
-openaugi tasks             # review zzz: tasks; `openaugi tasks run 1` launches one
+openaugi ingest                                  # index; re-run whenever you want it fresh
+openaugi kb get-context --query "budget"         # what an agent runs: JSON out, then exit
+openaugi kb --help                               # the agent's guide and every tool
 ```
 
-No watcher and no daemon. An agent starts only when you run
-`openaugi tasks run`, after you have seen its instruction. See
+No server, no watcher, no daemon: nothing is running between calls. Every MCP
+tool is an `openaugi kb` command with the same arguments and the same JSON —
+`search`, `get-context`, `get-block(s)`, `get-related`, `traverse`, `recent`,
+`run-query`, the view and review tools, and the writes (`write-document`,
+`write-record`, …). Arguments map one to one: `--block-id X`; a list repeats
+its option (`--tags a --tags b`); a JSON argument is a string (`--data
+'{"k": "v"}'`); `-` reads a value from stdin (`--content - < note.md`). Exit 0 is
+an answer, 1 an error envelope from the tool, 2 bad arguments.
+
+Tell your agent once — `init` prints this for `~/.claude/CLAUDE.md`:
+
+```markdown
+## My notes (OpenAugi)
+My notes vault is indexed by OpenAugi. Before grep/find, use its CLI:
+run `openaugi kb --help` once for the tools, start research with
+`openaugi kb get-context --query "..."`. Output is JSON.
+```
+
+`zzz:` lines still become task files on `ingest`; an agent starts only if you
+run `openaugi tasks run`. See
 [Task dispatch § On demand](task-dispatch.md#on-demand-openaugi-tasks).
 
-### Background service — `openaugi up`
+### ⚡ Full — background service `openaugi up` + MCP
 
 ```bash
 openaugi up        # the service — leave it running
@@ -161,7 +183,8 @@ The MCP server supports HTTP transport with OAuth authentication for remote acce
 
 | Command | What |
 |---------|------|
-| `openaugi init` | Guided setup: vault path, search mode, task mode |
+| `openaugi init` | Guided setup: vault path, search mode, Light or Full |
+| `openaugi kb <tool>` | Every MCP tool as a command, JSON out, no server (`kb --help` lists them) |
 | `openaugi tasks` | Sync the vault and list `zzz:` tasks; `tasks show <#>`, `tasks run <#>` |
 | `openaugi up` | **The service, one per vault:** ingest + watcher + zzz → task files; launches agents only with `[tasks] auto_dispatch = true`. Does not serve MCP |
 | `openaugi up --serve` | Also serve MCP in the foreground (single terminal, one client) |

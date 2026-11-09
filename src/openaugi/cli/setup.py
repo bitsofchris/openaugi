@@ -5,8 +5,10 @@ Three questions, each with a safe default:
 1. 📁 Vault — where the notes are.
 2. 🔎 Search — keyword-only (built in, nothing leaves the machine), local
    embeddings, or OpenAI embeddings. Only the first needs nothing installed.
-3. 🤖 Tasks — `zzz:` tasks launched by hand (`openaugi tasks`, no background
-   process) or automatically by `openaugi up`.
+3. 🪶 How it runs — Light (the default): the CLI only. Agents call
+   `openaugi kb …` when they need the notes; no server, no watcher, nothing
+   in the background. Full: `openaugi up` keeps the index fresh and launches
+   an agent for each `zzz:` line, and Claude Code connects over MCP.
 
 Then it writes `~/.openaugi/config.toml` (backing up any existing one first),
 saves an API key to `~/.openaugi/.env` if one was given, copies the agent files
@@ -76,16 +78,27 @@ SEARCH_MODES = (
     ),
 )
 
-TASK_MODES = {
-    "manual": (
-        "✋ Manual",
-        "You review and launch each task with `openaugi tasks`. Nothing runs in the background.",
+RUN_MODES = {
+    "light": (
+        "🪶 Light",
+        "CLI only. Agents run `openaugi kb …` when they need your notes. "
+        "No server, no watcher, nothing in the background.",
     ),
-    "auto": (
-        "⚡ Automatic",
-        "`openaugi up` runs in the background and launches an agent for each new zzz: line.",
+    "full": (
+        "⚡ Full",
+        "`openaugi up` keeps the index fresh and launches an agent for each zzz: line. "
+        "Claude Code connects over MCP.",
     ),
 }
+# `--tasks manual|auto` shipped in 0.3.0; it still works and means the same thing.
+LEGACY_TASK_MODES = {"manual": "light", "auto": "full"}
+
+# What an agent needs to know in a Light install, pasted into its CLAUDE.md.
+AGENT_SNIPPET = """\
+## My notes (OpenAugi)
+My notes vault is indexed by OpenAugi. Before grep/find, use its CLI:
+run `openaugi kb --help` once for the tools, start research with
+`openaugi kb get-context --query "..."`. Output is JSON."""
 
 
 # ── Pure helpers ───────────────────────────────────────────────────────────
@@ -117,8 +130,8 @@ def build_config_toml(
     lines += [
         "",
         "[tasks]",
-        "# false = zzz: tasks wait for `openaugi tasks run`.",
-        "# true  = `openaugi up` launches a Claude Code agent for each one by itself.",
+        "# false = Light: nothing launches agents; zzz: tasks wait for `openaugi tasks run`.",
+        "# true  = Full: `openaugi up` launches a Claude Code agent for each one by itself.",
         f"auto_dispatch = {'true' if auto_dispatch else 'false'}",
         "",
     ]
@@ -271,17 +284,19 @@ def _missing_agent_tools() -> list[str]:
     return missing
 
 
-def ask_tasks(current: bool | None, given: str | None) -> bool:
-    _step(3, "🤖", "zzz: tasks")
+def ask_mode(current: bool | None, given: str | None) -> bool:
+    """Light or Full. Returns True for Full (which is `[tasks] auto_dispatch`)."""
+    _step(3, "🪶", "How it runs")
     console.print(
-        "  Write [cyan]zzz: <instruction>[/cyan] in any note to hand it to a Claude Code agent."
+        "  Every install has every tool. The choice is whether anything runs in the background."
     )
+    given = LEGACY_TASK_MODES.get(given or "", given)
     if given:
-        label, _ = TASK_MODES[given]
+        label, _ = RUN_MODES[given]
         console.print(f"  {label}")
-        auto = given == "auto"
+        auto = given == "full"
     else:
-        modes = enumerate(TASK_MODES.values(), 1)
+        modes = enumerate(RUN_MODES.values(), 1)
         rows = [(str(i), label, blurb, "") for i, (label, blurb) in modes]
         console.print(Padding(_options_table(rows), (0, 0, 0, 2)))
         auto = _choose(2, 2 if current else 1) == 2
@@ -362,8 +377,7 @@ def next_steps(search: SearchMode, auto: bool) -> list[tuple[str, str]]:
     else:
         steps += [
             ("openaugi ingest", "index your vault — run it again whenever you want it fresh"),
-            ("openaugi search --keyword budget", "try a search"),
-            ("openaugi tasks", "see zzz: tasks and launch one"),
+            ('openaugi kb get-context --query "budget"', "what an agent sees: JSON, then exit"),
         ]
     return steps
 
@@ -398,7 +412,7 @@ def print_summary(
     summary.add_column()
     summary.add_row("Vault", tilde(vault))
     summary.add_row("Search", search.label)
-    summary.add_row("Tasks", TASK_MODES["auto" if auto else "manual"][0])
+    summary.add_row("Runs", RUN_MODES["full" if auto else "light"][0])
     console.print()
     console.print(Panel(summary, title="🎉 You're set up", title_align="left", expand=False))
 
@@ -408,13 +422,24 @@ def print_summary(
     for i, (cmd, why) in enumerate(steps, 1):
         console.print(f"  {i}. [cyan]{escape(cmd.ljust(width))}[/cyan]  [dim]{why}[/dim]")
 
-    console.print("\n[bold]🔌 Connect Claude Code[/bold] [dim](optional)[/dim]")
+    if auto:
+        console.print("\n[bold]🔌 Connect Claude Code[/bold]")
+        console.print(
+            f"  [cyan]claude mcp add --scope user openaugi -- {openaugi_executable()} serve[/cyan]"
+        )
+        console.print(
+            "  [dim]Runs only while Claude Code is open. Agent writes stay inside "
+            "<vault>/OpenAugi/.[/dim]\n"
+        )
+        return
     console.print(
-        f"  [cyan]claude mcp add --scope user openaugi -- {openaugi_executable()} serve[/cyan]"
+        "\n[bold]🤝 Tell your agent[/bold] [dim]— paste into ~/.claude/CLAUDE.md "
+        "(or your agent's instructions file)[/dim]\n"
     )
+    console.print(Padding(AGENT_SNIPPET, (0, 0, 0, 2)), markup=False, highlight=False)
     console.print(
-        "  [dim]Runs only while Claude Code is open. Agent writes stay inside "
-        "<vault>/OpenAugi/.[/dim]\n"
+        "\n  [dim]Agent writes stay inside <vault>/OpenAugi/. "
+        "Want a server or background service later? Re-run init and pick ⚡ Full.[/dim]\n"
     )
 
 
@@ -424,7 +449,7 @@ def print_summary(
 def run_setup(
     vault: str | None = None,
     search: str | None = None,
-    tasks: str | None = None,
+    mode: str | None = None,
     yes: bool = False,
 ) -> None:
     """The whole `openaugi init` flow. Flags answer their question; `yes`
@@ -450,7 +475,7 @@ def run_setup(
         search = search or next(
             (m.key for m in SEARCH_MODES if m.provider == current_provider), "none"
         )
-        tasks = tasks or ("auto" if current_auto else "manual")
+        mode = mode or ("full" if current_auto else "light")
         if not vault:
             console.print("[red]--yes needs --vault the first time.[/red]")
             raise typer.Exit(1)
@@ -469,7 +494,7 @@ def run_setup(
     vault_path = ask_vault(current_vault or str(Path.home() / "Documents" / "vault"), vault)
     search_mode = ask_search(current_provider, search)
     key = ask_openai_key(interactive=not yes) if search_mode.provider == "openai" else None
-    auto = ask_tasks(current_auto, tasks)
+    auto = ask_mode(current_auto, mode)
 
     text = build_config_toml(str(vault_path), search_mode, auto)
     written, backup = write_config(config_path, text, assume_yes=yes)
