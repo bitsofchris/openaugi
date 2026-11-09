@@ -522,11 +522,13 @@ export const kanbanCards = (text: string): Card[] => {
   return cards
 }
 
-// The `jira:` key in a note's frontmatter, or empty.
+// The note's Jira key: `jira:` in its frontmatter, else a `Jira: KEY` line in the body. Or empty.
 export const jiraFrom = (text: string): string => {
-  const front = text.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? ''
+  const front = text.match(/^---\n([\s\S]*?)\n---/)
+  const fromFront = ((front?.[1] ?? '').match(/^jira:[ \t]*(.*)$/m)?.[1] ?? '').trim().replace(/^["']|["']$/g, '')
+  const body = front ? text.slice(front[0].length) : text
 
-  return (front.match(/^jira:[ \t]*(.*)$/m)?.[1] ?? '').trim().replace(/^["']|["']$/g, '')
+  return fromFront || (body.match(/^Jira:[ \t]*(\S+)[ \t]*$/m)?.[1] ?? '')
 }
 
 const JIRA_KEY = /^[A-Z][A-Z0-9]+-\d+$/
@@ -564,33 +566,23 @@ export const taskNoteName = (title: string): string =>
 
 // The shipped task template (templates/Task.md), for a notes folder without its own.
 export const TASK_TEMPLATE = [
-  '---',
-  'outcome: ',
-  'status: active',
-  '---',
-  '#note-type/task #area/ #status/active',
-  '',
   'Up: [[PMOC - ]]',
   '',
-  '# Next',
+  '### Outcome',
   '',
-  '- [ ] ',
+  '',
+  '### Verify',
+  '',
   '',
   '# Journal',
   '',
   '### {{date:YYYY-MM-DD}}',
   '',
   '',
-  '',
-  '# Agent Log',
-  '',
-  '> [!abstract]- Agent Log',
-  '> ![[Agent Log - {{title}}]]',
-  '',
 ].join('\n')
 
 // A new task note from a template: date and title filled, `Up:` pointing at the anchor
-// (the line gone without one), and `jira:` in the frontmatter when there is a key.
+// (the line gone without one), and the Jira key when there is one (see withJira).
 export const taskNoteText = (template: string, name: string, today: string, up: string | null, jira: string): string => {
   const lines = template.replace(/\{\{date(?::YYYY-MM-DD)?\}\}/g, today).replace(/\{\{title\}\}/g, name).split('\n')
   const at = lines.findIndex(line => /^Up:/.test(line))
@@ -605,19 +597,35 @@ export const taskNoteText = (template: string, name: string, today: string, up: 
   return jira ? withJira(text, jira) : text
 }
 
-// The note with its `jira:` frontmatter line set to `key` (replaced, or added last),
-// or removed when `key` is empty. A note without frontmatter gets one holding only
-// that line. Every other byte stays as it was.
+// The note with its Jira key set to `key`, or removed when `key` is empty. A note with
+// frontmatter keeps it there as `jira:` (replaced, or added last). A note without
+// frontmatter gets no frontmatter made for it: the key is a `Jira: KEY` line in the body,
+// under the `Up:` line when there is one, else first. Every other byte stays as it was.
 export const withJira = (text: string, key: string): string => {
   const front = text.match(/^---\n([\s\S]*?\n)?---(?=\n|$)/)
-  if (!front) {
-    return key ? `---\njira: ${key}\n---\n${text}` : text
-  }
-  const body = front[1] ?? ''
-  const has = /^jira:.*$/m.test(body)
-  const fields = !key ? body.replace(/^jira:.*\n/m, '') : has ? body.replace(/^jira:.*$/m, `jira: ${key}`) : `${body}jira: ${key}\n`
+  if (front) {
+    const fields = front[1] ?? ''
+    const has = /^jira:.*$/m.test(fields)
+    const next = !key ? fields.replace(/^jira:.*\n/m, '') : has ? fields.replace(/^jira:.*$/m, `jira: ${key}`) : `${fields}jira: ${key}\n`
 
-  return `---\n${fields}---${text.slice(front[0].length)}`
+    return `---\n${next}---${text.slice(front[0].length)}`
+  }
+  if (!text) {
+    return key ? `Jira: ${key}\n` : text
+  }
+  const lines = text.split('\n')
+  const at = lines.findIndex(line => /^Jira:/.test(line))
+  if (at >= 0 && key) {
+    lines[at] = `Jira: ${key}`
+  } else if (at >= 0) {
+    // With a blank line on both sides (or first, then a blank), one blank goes too.
+    lines.splice(at, lines[at + 1] === '' && (at === 0 || lines[at - 1] === '') ? 2 : 1)
+  } else if (key) {
+    const up = lines.findIndex(line => /^Up:/.test(line))
+    lines.splice(up + 1, 0, ...(up >= 0 ? [`Jira: ${key}`] : [`Jira: ${key}`, '']))
+  }
+
+  return lines.join('\n')
 }
 
 // Where an issue opens in the browser.
@@ -656,7 +664,7 @@ const jiraTools = (project: string, server: string): string =>
 // The find-or-offer-to-create steps, shared by "find in Jira" and a new task's draft.
 const jiraFindSteps = (what: string, project: string, server: string): string[] => [
   `- Search Jira${jiraTools(project, server)} for issues that match ${what}. List up to five likely matches, one line each: KEY · summary · status. Do not create or change anything in Jira.`,
-  `- When I pick one, set \`jira: <KEY>\` in the note's frontmatter (this once you may write that line: I'm asking). If nothing matches, offer to create an issue and wait for my yes.`,
+  `- When I pick one, link it in the note: add the line \`Jira: <KEY>\` under its \`Up:\` line, or set \`jira:\` in its frontmatter if the note has frontmatter (this once you may write that line: I'm asking). If nothing matches, offer to create an issue and wait for my yes.`,
 ]
 
 // What Jira the drafts name: the project key and the MCP server, either may be empty.
@@ -677,7 +685,7 @@ export const findInJiraDraft = (notePath: string, note: string, ask: JiraAsk): s
 export const jiraUpdateDraft = (notePath: string, note: string, logPath: string, key: string, ask: JiraAsk): string =>
   [
     DRAFT_HEAD,
-    `- Anchor note: ${notePath ? `"${notePath}"` : `[[${note}]] (find it in "${P.notes}")`} (${note}): read its \`outcome:\`, \`# Next\` and \`# Journal\`, and its Agent Log "${logPath}".`,
+    `- Anchor note: ${notePath ? `"${notePath}"` : `[[${note}]] (find it in "${P.notes}")`} (${note}): read its Outcome, Verify and Journal sections, and its Agent Log "${logPath}".`,
     `- Read Jira issue ${key} and its recent comments${jiraTools('', ask.server)}, so the update covers only what is new since the last one.`,
     '- Write a status update of at most six lines: what moved, what is next, what is blocked. Show it to me first.',
     `- Post it as a comment on ${key} only after I say yes. Change the issue's status only if I ask. Don't change any files.`,
@@ -732,13 +740,13 @@ export const insertCard = (board: string, note: string, anchor: string | null): 
 }
 
 // The prompt a new task leaves in the box, unsent: the chat fills in the note's
-// outcome and Next from what it has done, and keeps the context in the Agent Log.
+// Outcome and Verify from what it has done, and keeps the context in the Agent Log.
 // With `jira` (Jira is on and no key was typed) it also looks for the task's issue.
 export const newTaskDraft = (notePath: string, logPath: string, name: string, jira: JiraAsk | null = null): string =>
   [
     DRAFT_HEAD,
     `- A task note was just made from this chat: "${notePath}".`,
-    "- From what this chat has done, fill in the sections the note already has for its outcome and how to verify it (headings in the note, not frontmatter, unless the note only has an `outcome:` line) and its Next checkboxes. Add no headings the note doesn't have. This once you may write that note: I'm asking.",
+    "- From what this chat has done, fill in what goes under the note's Outcome and Verify headings (the outcome as a state of the world, and how we will know it is reached). Add no headings and no frontmatter. This once you may write that note: I'm asking.",
     `- Put the context worth keeping (decisions, files, links) under ## Context in its Agent Log "${logPath}", one line each on why it matters.`,
     ...(jira ? jiraFindSteps('this task', jira.project, jira.server) : []),
     'Reply in a few lines with what you wrote.',

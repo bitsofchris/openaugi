@@ -232,8 +232,8 @@ never copies; and the **note templates** under `templates/templates/` (twin of
 the vault's `AGENT/templates/`: `PMOC.md`, `Task.md`), the starting shape of the
 user's own notes. Their frontmatter belongs to the notes made from them, so the
 folder marks them engine; they ship and are copied verbatim. They are the
-contract an interface (augi-ui, the pane) reads: `outcome:`, `# Next`, `# Journal`,
-and the embed of the note's Agent Log (`pmoc.md`).
+contract an interface (augi-ui, the pane) reads: a PMOC's `outcome:`, `# Next` and
+`# Journal`; a task's `### Outcome`, `### Verify` and `# Journal` (`pmoc.md`).
 
 **Reference docs follow the same line.** `docs/reference/` describes the engine
 in its current state; dated rulings and vault-specific incidents stay in the

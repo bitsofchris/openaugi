@@ -43,6 +43,16 @@ the question, with `keep` (saved under the question in the Agent Log) and
 `drop`. The Anchor card shows its links; outcome and the task list sit behind
 one closed toggle.
 
+**The task note template is plain sections: no frontmatter, no tags.**
+`templates/Task.md` is now an `Up:` link, `### Outcome`, `### Verify` (how we
+will know the outcome is reached) and `# Journal` with dated entries. The
+`# Next` list and the Agent Log embed are gone: the Agent Log links the note,
+so the note shows it as a backlink. augi-ui reads a task's outcome from its
+Outcome heading (the frontmatter line still works for older notes), a new
+task's draft asks the chat to fill Outcome and Verify, and a Jira key on a
+note without frontmatter is a `Jira: KEY` line under `Up:` rather than a
+frontmatter field. The PMOC template keeps its shape.
+
 **augi-ui: a leaner Agent Log, and a new lens opens in the editor.** The log
 drops its title line and seen box and opens with a link to the human note, so
 the note shows the backlink; the copy-embed button is gone. Older logs are

@@ -2,7 +2,7 @@
 description: 
 outcome: 
 ---
-#note-type/pmoc #area/ #status/active
+#note-type/pmoc #area/ 
 
 [[AMOC - ]]
 

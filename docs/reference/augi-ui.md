@@ -65,7 +65,7 @@ skipped. Starters are never written over an existing file.
   `taskFolder`, one flat folder whatever the anchor (hierarchy is the `Up:`
   link), from `OpenAugi/AGENT/templates/Task.md` in the notes folder (else a
   built-in copy of the shipped one: date and title filled, `Up: [[<anchor>]]`
-  or no `Up:` line, `jira:` in the frontmatter), adds `- [ ] [[<title>]]` to the board after
+  or no `Up:` line, a `Jira: KEY` line under it), adds `- [ ] [[<title>]]` to the board after
   the anchor's card and its sub-items (else at the end of the first column),
   pins this chat's transcript to the new task's Agent Log, anchors on it, and
   leaves an unsent draft asking the chat to fill in the note's own outcome, verify and Next sections and the
@@ -79,8 +79,9 @@ skipped. Starters are never written over an existing file.
   likely name such as `atlassian` or `jira`), `jiraProject` or `jiraSite` is
   set, or the anchor already has a `jira:` key; otherwise the pane shows nothing
   about it. With an anchor: unlinked, paste a key or issue link into `🔗` to
-  write `jira: KEY` into the note's frontmatter (one line, read fresh, on the
-  user's press), or `find in Jira` to draft a search that lists likely issues
+  write the key into the note (one line, read fresh, on the user's press: a
+  `Jira: KEY` line under `Up:`, or `jira:` in the frontmatter when the note has
+  frontmatter), or `find in Jira` to draft a search that lists likely issues
   and links the one the user picks. Linked, `🔗 KEY` opens the issue when
   `jiraSite` is set, `unlink` removes the line, and `↑ update Jira` drafts a
   status update from the note and Agent Log, shown first and posted as a comment

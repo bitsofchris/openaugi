@@ -224,12 +224,12 @@ test('a typed task gives its title and any Jira key or issue link at either end'
   expect(taskNoteName('Gate: fix/oil [it] #now?')).toBe('Gate- fix-oil it now')
 })
 
-test('a task note fills the template: date, title, Up to the anchor or no Up line, and jira in the frontmatter', async () => {
+test('a task note fills the template: date, title, Up to the anchor or no Up line, and the Jira key under it', async () => {
   const linked = taskNoteText(TASK_TEMPLATE, 'Fix the gate', '2022-01-04', 'PMOC - Garden', 'PROJ-123')
-  expect(linked.startsWith('---\noutcome: \nstatus: active\njira: PROJ-123\n---\n#note-type/task')).toBe(true)
-  expect(linked.includes('\nUp: [[PMOC - Garden]]\n')).toBe(true)
+  expect(linked.startsWith('Up: [[PMOC - Garden]]\nJira: PROJ-123\n\n### Outcome\n\n\n### Verify\n\n\n# Journal\n\n### 2022-01-04\n')).toBe(true)
+  expect(linked.includes('Up: [[PMOC - Garden]]\n')).toBe(true)
   expect(linked.includes('### 2022-01-04')).toBe(true)
-  expect(linked.includes('> ![[Agent Log - Fix the gate]]')).toBe(true)
+  expect(linked.includes('Agent Log')).toBe(false)
   expect(nextFrom(linked)).toEqual([])
   expect(outcomeFrom(linked)).toBe('')
   expect(jiraFrom(linked)).toBe('PROJ-123')
@@ -237,9 +237,9 @@ test('a task note fills the template: date, title, Up to the anchor or no Up lin
   const bare = taskNoteText(TASK_TEMPLATE, 'Fix the gate', '2022-01-04', null, '')
   expect(bare.includes('Up:')).toBe(false)
   expect(bare.includes('jira:')).toBe(false)
-  expect(bare.includes('#status/active\n\n# Next\n')).toBe(true)
+  expect(bare.startsWith('### Outcome\n')).toBe(true)
 
-  expect(taskNoteText('# {{title}}\n', 'X', '2022-01-04', null, 'PROJ-1')).toBe('---\njira: PROJ-1\n---\n# X\n')
+  expect(taskNoteText('# {{title}}\n', 'X', '2022-01-04', null, 'PROJ-1')).toBe('Jira: PROJ-1\n\n# X\n')
   expect(taskNoteText('---\njira: \n---\n', 'X', '2022-01-04', null, 'PROJ-1')).toBe('---\njira: PROJ-1\n---\n')
   expect(jiraFrom('---\njira: "PROJ-9"\n---\n')).toBe('PROJ-9')
   expect(jiraFrom('jira: PROJ-9\n')).toBe('')
@@ -249,8 +249,8 @@ test('a new-task draft asks the chat to fill in the note and its Agent Log, and 
   const text = newTaskDraft('/v/Fix the gate.md', '/v/Notes/Agent Log - Fix the gate.md', 'Fix the gate')
   expect(text.startsWith('Context for this chat:\n')).toBe(true)
   expect(text.includes('"/v/Fix the gate.md"')).toBe(true)
-  expect(text.includes('headings in the note, not frontmatter')).toBe(true)
-  expect(text.includes('Next checkboxes')).toBe(true)
+  expect(text.includes("under the note's Outcome and Verify headings")).toBe(true)
+  expect(text.includes('no frontmatter')).toBe(true)
   expect(text.includes('## Context in its Agent Log "/v/Notes/Agent Log - Fix the gate.md"')).toBe(true)
   expect(chatTitleFrom(text)).toBe('fill in the new task Fix the gate')
 })
@@ -1139,10 +1139,10 @@ test('a new task from the pane: note from the template, card after the anchor, c
 
   await ui.input({ key: 'new-task-2', text: 'Fix the gate PROJ-123' })
   const note = written.get('/v/Fix the gate.md') ?? ''
-  expect(note.includes('jira: PROJ-123')).toBe(true)
+  expect(note.includes('Jira: PROJ-123')).toBe(true)
   expect(note.includes('Up: [[PMOC - Garden]]')).toBe(true)
   expect(note.includes('### 2026-11-08')).toBe(true)
-  expect(note.includes('![[Agent Log - Fix the gate]]')).toBe(true)
+  expect(note.includes('### Outcome')).toBe(true)
   const board = written.get('/v/Kanban.md') ?? ''
   expect(board.split('\n').indexOf('- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT.split('\n').indexOf('\t- [ ] [[PMOC - Birdhouse]]') + 1)
   expect(without(board, '- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT)
@@ -1181,12 +1181,18 @@ test('jira: in the frontmatter is added, replaced or removed, every other byte a
   const middle = '---\njira: PROJ-1\noutcome: x\n---\nbody'
   expect(withJira(middle, 'PROJ-9')).toBe('---\njira: PROJ-9\noutcome: x\n---\nbody')
   expect(withJira(middle, '')).toBe('---\noutcome: x\n---\nbody')
-  // No frontmatter: one is made holding only the key; removing from none changes nothing.
-  expect(withJira('# Next\n', 'PROJ-1')).toBe('---\njira: PROJ-1\n---\n# Next\n')
+  // No frontmatter: none is made. The key is a body line, under Up: when there is one, else first.
+  expect(withJira('# Next\n', 'PROJ-1')).toBe('Jira: PROJ-1\n\n# Next\n')
   expect(withJira('# Next\n', '')).toBe('# Next\n')
-  expect(withJira('', 'PROJ-1')).toBe('---\njira: PROJ-1\n---\n')
+  expect(withJira('', 'PROJ-1')).toBe('Jira: PROJ-1\n')
   // A body rule (---) is not frontmatter.
-  expect(withJira('# A\n---\nb\n', 'PROJ-1')).toBe('---\njira: PROJ-1\n---\n# A\n---\nb\n')
+  expect(withJira('# A\n---\nb\n', 'PROJ-1')).toBe('Jira: PROJ-1\n\n# A\n---\nb\n')
+  const flat = 'Up: [[PMOC - Garden]]\n\n### Outcome\n'
+  expect(withJira(flat, 'PROJ-1')).toBe('Up: [[PMOC - Garden]]\nJira: PROJ-1\n\n### Outcome\n')
+  expect(withJira(withJira(flat, 'PROJ-1'), 'PROJ-2')).toBe('Up: [[PMOC - Garden]]\nJira: PROJ-2\n\n### Outcome\n')
+  expect(withJira(withJira(flat, 'PROJ-1'), '')).toBe(flat)
+  expect(withJira(withJira('# Next\n', 'PROJ-1'), '')).toBe('# Next\n')
+  expect(jiraFrom(withJira(flat, 'PROJ-1'))).toBe('PROJ-1')
   expect(jiraFrom(withJira(note, 'PROJ-1'))).toBe('PROJ-1')
 })
 
@@ -1209,7 +1215,7 @@ test('find in Jira drafts a search that changes nothing in Jira, with and withou
   expect(both.includes('Search Jira in project PROJ using the atlassian MCP server for issues')).toBe(true)
   expect(both.includes('up to five likely matches, one line each: KEY · summary · status')).toBe(true)
   expect(both.includes('Do not create or change anything in Jira.')).toBe(true)
-  expect(both.includes("set `jira: <KEY>` in the note's frontmatter")).toBe(true)
+  expect(both.includes("add the line `Jira: <KEY>` under its `Up:` line")).toBe(true)
   expect(both.includes('offer to create an issue and wait for my yes')).toBe(true)
   expect(both.endsWith('\nInstruction: find the Jira issue for PMOC - Garden')).toBe(true)
   expect(chatTitleFrom(both)).toBe('find the Jira issue for PMOC - Garden')
@@ -1222,7 +1228,7 @@ test('find in Jira drafts a search that changes nothing in Jira, with and withou
 test('update Jira drafts a short update shown first and posted only on a yes', async () => {
   const text = jiraUpdateDraft('/v/PMOC - Garden.md', 'PMOC - Garden', '/v/Notes/Agent Log - PMOC - Garden.md', 'PROJ-1', { project: 'PROJ', server: 'atlassian' })
   expect(text.startsWith('Context for this chat:\n')).toBe(true)
-  for (const part of ['`outcome:`', '`# Next`', '`# Journal`', 'Agent Log "/v/Notes/Agent Log - PMOC - Garden.md"', 'Read Jira issue PROJ-1 and its recent comments using the atlassian MCP server', 'only what is new since the last one', 'at most six lines: what moved, what is next, what is blocked', 'Show it to me first', 'comment on PROJ-1 only after I say yes', 'status only if I ask']) {
+  for (const part of ['Outcome, Verify and Journal sections', 'Agent Log "/v/Notes/Agent Log - PMOC - Garden.md"', 'Read Jira issue PROJ-1 and its recent comments using the atlassian MCP server', 'only what is new since the last one', 'at most six lines: what moved, what is next, what is blocked', 'Show it to me first', 'comment on PROJ-1 only after I say yes', 'status only if I ask']) {
     expect(text.includes(part)).toBe(true)
   }
   expect(text.endsWith('\nInstruction: update Jira PROJ-1')).toBe(true)
