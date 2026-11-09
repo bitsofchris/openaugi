@@ -58,6 +58,13 @@ questions and chats, and the scratchpad. "Anywhere" has the context picker
 (renamed from Project context: it pulls from the whole notes folder), the
 lenses and setup.
 
+**augi-ui: files this chat touched.** Every file the chat writes or edits
+(Write, Edit, NotebookEdit) is listed in the This chat section, newest first.
+`open` opens a note in the note editor and any other file in the new
+`fileEditor` setting (`vscode`, `cursor` or `system`). `pin` adds it to the
+anchor unticked, as a link; pinned files and notes show as `📄` buttons in
+the Anchor card.
+
 **augi-ui: a leaner Agent Log, and a new lens opens in the editor.** The log
 drops its title line and seen box and opens with a link to the human note, so
 the note shows the backlink; the copy-embed button is gone. Older logs are
