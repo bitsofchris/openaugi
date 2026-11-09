@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+**augi-ui: the anchor belongs to the chat, and what the chat makes sticks to
+it.** A new session opens with no anchor; picking one records the chat in that
+anchor's Agent Log straight away (the "put this chat in the Agent Log" button
+is gone). Artifacts the chat publishes are pinned to the anchor ticked,
+including ones published before the anchor was picked, and the newest three
+show as buttons beside Human Notes and Agent Log. The Project context card
+lists artifacts first and loses its hotkeys except `n`.
+
+**augi-ui: a new task from a chat.** `＋ task` in the Anchor card takes a title,
+optionally with a Jira key (`PROJ-123`) or issue link. The pane writes the note
+from the Task template, adds its card to the board after the current anchor,
+sets `Up:` to the parent, pins the chat, anchors on the task and leaves an
+unsent draft asking the chat to fill in outcome, Next and context. A `jira:`
+key shows on the anchor; nothing calls Jira. New setting `taskFolder`. A board
+sub-item or Next checkbox that links a note is a button that opens it.
+
+**augi-ui: a scratchpad per chat.** Notes to self that live with the session;
+`→ notes` appends one to the anchor's own note as `- HH:MM text` under that
+day's heading in its Journal. This is the one place the pane writes the user's
+note, only on their press.
+
+**augi-ui: a leaner Agent Log, and a new lens opens in the editor.** The log
+drops its title line and seen box and opens with a link to the human note, so
+the note shows the backlink; the copy-embed button is gone. Older logs are
+tidied the next time the pane writes them. `+ new lens` takes a name, writes a
+skeleton file in the lens folder and opens it to paste the prompt.
+
 ## 0.4.2 — 2026-11-09
 
 **A Light install keeps its own index fresh.** Before answering, an

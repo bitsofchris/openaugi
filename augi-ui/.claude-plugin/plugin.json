@@ -53,6 +53,12 @@
       "description": "Where Augi keeps one Agent Log per anchor: the companion note agents write (context, questions, chats, saved notes). Your own note is never written.",
       "default": "OpenAugi/Agent-Logs"
     },
+    "taskFolder": {
+      "type": "string",
+      "title": "Task folder",
+      "description": "Where a new task note from the pane goes, inside the notes folder. Empty puts it beside the current anchor's note, or at the notes folder's root.",
+      "default": ""
+    },
     "lensPicks": {
       "type": "string",
       "title": "Lens picks",
