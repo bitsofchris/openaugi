@@ -161,6 +161,25 @@ def test_tasks_list_syncs_and_shows_new_zzz(configured, vault: Path, tmp_path: P
     assert "draft the agenda" in second.output
 
 
+def test_bare_tasks_takes_list_options(configured, vault: Path):
+    """`openaugi tasks --all` is `openaugi tasks list --all`."""
+    _task(vault / "OpenAugi" / "Tasks", "finished", status="done", instruction="old job")
+    hidden = runner.invoke(app, ["tasks", "--no-sync"])
+    assert hidden.exit_code == 0, hidden.output
+    assert "old job" not in hidden.output
+
+    shown = runner.invoke(app, ["tasks", "--all", "--no-sync"])
+    assert shown.exit_code == 0, shown.output
+    assert "old job" in shown.output
+
+
+def test_group_options_before_a_subcommand_are_refused(configured, vault: Path):
+    _task(vault / "OpenAugi" / "Tasks", "waiting")
+    result = runner.invoke(app, ["tasks", "--all", "show", "1"])
+    assert result.exit_code == 2
+    assert "after the subcommand" in result.output
+
+
 def test_tasks_run_confirms_then_launches(configured, vault: Path, monkeypatch):
     path = _task(vault / "OpenAugi" / "Tasks", "memo", instruction="write the memo")
     launched = []

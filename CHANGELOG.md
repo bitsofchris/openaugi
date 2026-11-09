@@ -10,6 +10,11 @@ point a new session at a master plan; the docs layout is two tiers,
 docs that cited a plan now say it is in git history. The review-pass
 Dashboard footer drops the design-record link.
 
+**`openaugi tasks --all` works.** Bare `openaugi tasks` is `tasks list`, but
+it rejected `list`'s options (`--all`, `--no-sync`, `--db`, `--path`). It now
+takes them. Putting one before a subcommand (`tasks --all show 1`) is an
+error, not a silently ignored flag.
+
 ## 0.3.0 — 2026-11-08
 
 **Upgrading from 0.2.x — two things change by default:**
