@@ -53,6 +53,12 @@ Two mechanisms fix it, and both are needed because they cover different gaps:
    it. This is what makes the guarantee hold across restarts rather than only
    within a cycle.
 
+5. **Atomic claim.** `up`, `ingest`, `tasks` and `kb` can all drain the queue,
+   so two processes may read the same QUEUED row. `drain_zzz_queue` claims a
+   row (queued → dispatched) in one compare-and-set UPDATE before writing its
+   task file; only the winner writes. A failed write after the claim is logged
+   and left dispatched — a lost task can be seen, a retried one could run twice.
+
 The ledger lives in the `records` table under the `zzz_queue` collection
 (docs/reference/records.md) — workflow state, droppable, pruned once settled.
 It also makes dispatch idempotent across restarts and re-ingests: a block id
@@ -802,14 +808,31 @@ def drain_zzz_queue(
         if (now - _parse_stamp(row["created_at"])).total_seconds() < settle_seconds:
             continue
 
-        tasks_dir.mkdir(parents=True, exist_ok=True)
-        filepath = _write_task_file(tasks_dir, row.get("title") or "zzz task", row["task_content"])
-        store.update_record(
-            ZZZ_QUEUE_COLLECTION,
-            block_id,
-            {"status": DISPATCHED, "task_file": filepath.name},
-            stamp,
-        )
+        # Claim before writing. `up`, `ingest`, `tasks` and `kb` can all drain
+        # this queue, and two of them reading the same QUEUED row would each
+        # write a task file — one instruction, two agents. The claim is one
+        # atomic UPDATE (queued → dispatched), so exactly one caller gets it.
+        if not store.claim_record(
+            ZZZ_QUEUE_COLLECTION, block_id, "status", QUEUED, {"status": DISPATCHED}, stamp
+        ):
+            logger.info("zzz %s claimed by another process — not writing it", block_id[:12])
+            continue
+        try:
+            tasks_dir.mkdir(parents=True, exist_ok=True)
+            filepath = _write_task_file(
+                tasks_dir, row.get("title") or "zzz task", row["task_content"]
+            )
+        except OSError:
+            # The row stays DISPATCHED: a lost task is visible in this log and
+            # the ledger; a retried one could run twice.
+            store.update_record(
+                ZZZ_QUEUE_COLLECTION, block_id, {"reason": "task file write failed"}, stamp
+            )
+            logger.error(
+                "zzz %s: task file write failed — not retried", block_id[:12], exc_info=True
+            )
+            continue
+        store.update_record(ZZZ_QUEUE_COLLECTION, block_id, {"task_file": filepath.name}, stamp)
         logger.info("Dispatched zzz task: %s → %s", block_id[:12], filepath.name)
         written.append(filepath)
 

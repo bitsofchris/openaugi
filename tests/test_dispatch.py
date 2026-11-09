@@ -332,6 +332,69 @@ def test_zzz_does_not_dispatch_before_it_settles(tmp_path: Path, store: SQLiteSt
     assert len(_tasks(tmp_path)) == 1
 
 
+def test_two_drainers_racing_write_one_task(tmp_path: Path, store: SQLiteStore, monkeypatch):
+    """`up` and a `kb`/`ingest` call both see the same QUEUED row; one task file.
+
+    The race is forced: the first drainer reads the row, then — just before it
+    claims — a second process (its own connection) drains the whole queue.
+    """
+    block = _make_block("aaa1", "note", zzz=["write the memo"])
+    store.insert_blocks([block])
+    record_zzz_changes([block], [], store, tmp_path)
+
+    other = SQLiteStore(str(tmp_path / "test.db"))
+    real_claim = store.claim_record
+    raced = []
+
+    def claim_after_the_other_process(*args, **kwargs):
+        if not raced:
+            raced.append(drain_zzz_queue(other, tmp_path, settle_seconds=0))
+        return real_claim(*args, **kwargs)
+
+    monkeypatch.setattr(store, "claim_record", claim_after_the_other_process)
+    mine = drain_zzz_queue(store, tmp_path, settle_seconds=0)
+    other.close()
+
+    assert len(raced[0]) == 1  # the other process won
+    assert mine == []  # this one lost the claim and wrote nothing
+    assert len(_tasks(tmp_path)) == 1
+    assert _ledger(store, "aaa1")["task_file"] == raced[0][0].name
+
+
+def test_task_file_write_failure_is_not_retried(tmp_path: Path, store: SQLiteStore, monkeypatch):
+    """A lost task is visible in the ledger; a retried one could run twice."""
+    import openaugi.pipeline.dispatch as dispatch
+
+    block = _make_block("aaa1", "note", zzz=["write the memo"])
+    store.insert_blocks([block])
+    record_zzz_changes([block], [], store, tmp_path)
+
+    def disk_full(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(dispatch, "_write_task_file", disk_full)
+    assert drain_zzz_queue(store, tmp_path, settle_seconds=0) == []
+    row = _ledger(store, "aaa1")
+    assert row["status"] == DISPATCHED
+    assert row["reason"] == "task file write failed"
+
+    monkeypatch.undo()
+    assert drain_zzz_queue(store, tmp_path, settle_seconds=0) == []
+    assert _tasks(tmp_path) == []
+
+
+def test_claim_record_is_compare_and_set(store: SQLiteStore):
+    store.write_record("c", "r1", {"status": "queued", "title": "t"}, "2022-01-01T00:00:00")
+    assert store.claim_record("c", "r1", "status", "queued", {"status": "done"}, "2022-01-01")
+    assert not store.claim_record("c", "r1", "status", "queued", {"status": "x"}, "2022-01-01")
+    assert not store.claim_record("c", "missing", "status", "queued", {}, "2022-01-01")
+    (row,) = store.list_records("c")
+    assert row["status"] == "done"
+    assert row["title"] == "t"  # the patch merges; other fields stay
+    with pytest.raises(ValueError):
+        store.claim_record("c", "r1", "status') OR 1=1 --", "x", {}, "2022-01-01")
+
+
 def test_instruction_edited_while_settling_dispatches_once(tmp_path: Path, store: SQLiteStore):
     """The 2026-09-01 bug, caught inside the settle window."""
     draft = _make_block("aaa1", "note", zzz=["read this voice"])

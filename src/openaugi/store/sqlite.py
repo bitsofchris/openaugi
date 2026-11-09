@@ -721,6 +721,33 @@ class SQLiteStore:
         self.conn.commit()
         return True
 
+    def claim_record(
+        self,
+        collection: str,
+        record_id: str,
+        field: str,
+        expected: str,
+        patch: dict,
+        now: str,
+    ) -> bool:
+        """Merge `patch` only if `data[field] == expected` — one atomic statement.
+
+        Compare-and-set for workflow state that more than one process may act
+        on at once (the zzz queue: `up`, `ingest`, `tasks` and `kb` all drain
+        it). The check and the write are a single UPDATE, so SQLite's write
+        lock lets exactly one caller win; every other caller gets False and
+        must not act. Read-then-update (`update_record`) cannot give that.
+        """
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", field):
+            raise ValueError(f"invalid field name: {field!r}")
+        cur = self.conn.execute(
+            "UPDATE records SET data = json_patch(data, ?), updated_at = ? "
+            f"WHERE collection = ? AND id = ? AND json_extract(data, '$.{field}') = ?",
+            (json.dumps(patch), now, collection, record_id, expected),
+        )
+        self.conn.commit()
+        return cur.rowcount == 1
+
     def delete_record(self, collection: str, record_id: str) -> bool:
         """Drop one record. Returns False if it was already gone.
 

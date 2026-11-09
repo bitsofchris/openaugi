@@ -13,6 +13,13 @@ lines are queued as `ingest` queues them). The first `kb` call on a vault
 that was never ingested indexes it. Tune with `[kb] auto_sync` and
 `sync_after_seconds`; `openaugi kb --no-sync` skips it for one call.
 
+**A `zzz:` instruction can't become two tasks when two processes drain the
+queue at once.** `up`, `ingest`, `tasks` and `kb` all turn settled `zzz:`
+lines into task files; two of them reading the same queued entry at the same
+moment could each write one. The drain now claims the entry in a single
+compare-and-set update before writing, so exactly one process writes the task.
+If writing the file fails after the claim, it is logged and not retried.
+
 ## 0.4.1 — 2026-11-09
 
 **Upgrading from 0.3.x:** nothing to change. An existing config keeps working
