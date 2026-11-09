@@ -123,7 +123,7 @@ export const obsidianConfigs = (home: string, appData: string): string[] => [
 export const STEPS: { field: string; title: string; why: string; starter: string }[] = [
   { field: 'boardNote', title: 'Your board', why: 'The Kanban note your projects live on. Its cards become the anchors you pick from.', starter: 'Kanban.md' },
   { field: 'contextNote', title: 'Your context note', why: 'A note about you and this season: what you are focused on and how you like to work.', starter: 'OpenAugi/AGENT/Slowly Changing Context.md' },
-  { field: 'lensFolder', title: 'Your lens folder', why: 'A folder of saved prompts, one note each. They show under Run a lens.', starter: 'OpenAugi/AGENT/lenses' },
+  { field: 'lensFolder', title: 'Your lens folder', why: 'A folder of saved prompts, one note each. They show under Lenses.', starter: 'OpenAugi/AGENT/lenses' },
 ]
 
 // Search output (one path per line, newest first) as paths inside the notes folder, the first few.
@@ -228,7 +228,6 @@ const swatch = atom(
     notePath: '',
     outcome: '',
     next: [],
-    hasEmbed: false,
     trail: EMPTY_TRAIL,
     pinPaths: {},
     hits: [],
@@ -236,7 +235,7 @@ const swatch = atom(
     sessions: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-9' },
+  { shape: 'swatch-10' },
 )
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
@@ -301,24 +300,35 @@ export const nextFrom = (text: string): string[] => {
   return tasks
 }
 
-// What the note's Agent Log heading holds: a collapsed callout embedding the companion.
-export const embedFor = (note: string): string =>
-  ['# Agent Log', '', '> [!abstract]- Agent Log', `> ![[${logName(note)}]]`, ''].join('\n')
-
-export const hasEmbedOf = (text: string, note: string): boolean => text.includes(`![[${logName(note)}`)
-
 // The lens menu: the picks in their order (the lens picks setting is the only filter).
 // With no picks, every lens in the folder.
 export const lensNames = (files: string[]): string[] =>
   P.picks.length > 0 ? P.picks.filter(name => files.includes(name)) : [...files].sort()
 
-export const newLensDraft = (typed: string): string =>
+// A typed lens name as a file name: no path or link characters, no `.md`, dashes for spaces.
+export const lensFileName = (typed: string): string =>
+  typed
+    .trim()
+    .replace(/\.md$/i, '')
+    .replace(/[\s\\/:*?"<>|#^[\]]+/g, '-')
+    .replace(/^[-.]+|-+$/g, '')
+
+// A new lens file, in the contract starterLens follows, waiting for its prompt.
+export const newLensSkeleton = (name: string): string =>
   [
-    DRAFT_HEAD,
-    `- New lens: write it as a markdown file in "${P.lenses}/" that follows the OpenAugi lens contract (lens-template.md beside the lens folder, if it's there): frontmatter with name, description, scope, \`trigger: on-demand\`, target and \`kind: personal\`, then what it reads and how it answers.`,
-    '- Ask me what you need first: the question it answers, and what it reads. Keep it short enough to answer in about six lines.',
-    'When it is written, tell me its name and that Augi shows it after refresh.',
-    `What it should do: ${typed}`,
+    '---',
+    `name: ${name}`,
+    'description: What this lens answers, in one line.',
+    "scope: The anchor's note and Agent Log, my context note, and any coding session handed over.",
+    'trigger: on-demand',
+    'target: chat — answers in the conversation and writes nothing.',
+    'kind: personal',
+    '---',
+    '',
+    `# ${name}`,
+    '',
+    'Paste the prompt here.',
+    '',
   ].join('\n')
 
 const linkName = (text: string): string | null => {
@@ -381,11 +391,7 @@ export const trailTemplate = (note: string, today: string): string =>
     `created: ${today}`,
     '---',
     '',
-    `# ${logName(note)}`,
-    '',
-    '- [ ] seen',
-    '',
-    `Project: [[${note}]], embedded there under # Agent Log. Context lines are \`- [x] [[note]] · why it matters\` (ticked goes into the next draft). Hidden chats stay listed, marked \`(hidden)\`.`,
+    logIntro(note),
     '',
     '## Context',
     '',
@@ -396,6 +402,45 @@ export const trailTemplate = (note: string, today: string): string =>
     '## Saved',
     '',
   ].join('\n')
+
+// The log's first body line links the human note, so the note shows it as a backlink.
+const logIntro = (note: string): string =>
+  `Human note: [[${note}]]. Context lines are \`- [x] [[note]] · why it matters\` (ticked goes into the next draft). Hidden chats stay listed, marked \`(hidden)\`.`
+const oldLogIntro = (note: string): string =>
+  `Project: [[${note}]], embedded there under # Agent Log. Context lines are \`- [x] [[note]] · why it matters\` (ticked goes into the next draft). Hidden chats stay listed, marked \`(hidden)\`.`
+
+// An older log in the current shape: no title H1 (Agent Log or Trail), no seen box,
+// the human-note link first. Removes only those exact lines and the blank each leaves.
+export const tidyTrail = (text: string, note: string): string => {
+  const dropped = new Set([`# ${logName(note)}`, `# Trail - ${safe(note)}`, '- [ ] seen', '- [x] seen'])
+  const lines: string[] = []
+  let gap = false
+  for (const line of text.split('\n')) {
+    if (dropped.has(line)) {
+      gap = gap || lines.length === 0 || lines[lines.length - 1] === ''
+      continue
+    }
+    if (gap && line === '') {
+      gap = false
+      continue
+    }
+    gap = false
+    lines.push(line === oldLogIntro(note) ? logIntro(note) : line)
+  }
+  if (!lines.some(line => line.startsWith(`Human note: [[${note}]]`))) {
+    // Under the frontmatter (one blank between), else at the top.
+    const close = lines[0] === '---' ? lines.indexOf('---', 1) : -1
+    if (close < 0) {
+      lines.splice(0, 0, logIntro(note), '')
+    } else if (lines[close + 1] === '') {
+      lines.splice(close + 2, 0, logIntro(note), '')
+    } else {
+      lines.splice(close + 1, 0, '', logIntro(note), '')
+    }
+  }
+
+  return lines.join('\n')
+}
 
 const CHAT_LINE = /^- (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) · (.*) · `([^`]+)`( \(hidden\))?$/
 
@@ -979,23 +1024,23 @@ async function readOr($: EngineInterface, path: string): Promise<string> {
   return (await $.fs.exists(path)) ? $.fs.read(path) : ''
 }
 
-// Renames a v0.6 trail note to its Agent Log name, once, with its title line.
+// Renames a v0.6 trail note to its Agent Log name, once, tidied (its title line goes).
 async function moveOldTrail($: EngineInterface, note: string): Promise<void> {
   const from = oldTrailPath(note)
   const to = trailPath(note)
   if ((await $.fs.exists(from)) && !(await $.fs.exists(to))) {
-    const text = (await $.fs.read(from)).replace(`# Trail - ${safe(note)}`, `# ${logName(note)}`)
+    const text = tidyTrail(await $.fs.read(from), note)
     await $.fs.write(to, text)
     await $.process.run(['rm', from])
   }
 }
 
 // Reads the anchored card's note and Agent Log; the rest of the pane stays as it was.
-async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'hasEmbed' | 'trail' | 'pinPaths' | 'hits'>> {
+async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'trail' | 'pinPaths' | 'hits'>> {
   const chosen = await $.store.get(ANCHOR_KEY)
   const anchor = cards.find(card => card.note === chosen) ?? null
   if (!anchor) {
-    return { anchor: null, notePath: '', outcome: '', next: [], hasEmbed: false, trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }
+    return { anchor: null, notePath: '', outcome: '', next: [], trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }
   }
   const notePath = await notePathOf($, anchor.note)
   const noteText = notePath ? await $.fs.read(notePath) : ''
@@ -1011,7 +1056,6 @@ async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatc
     notePath,
     outcome: outcomeFrom(noteText),
     next: nextFrom(noteText),
-    hasEmbed: hasEmbedOf(noteText, anchor.note),
     trail,
     pinPaths,
     hits: [],
@@ -1140,7 +1184,7 @@ async function chooseAnchor($: EngineInterface, card: Card): Promise<void> {
 
 async function clearAnchor($: EngineInterface): Promise<void> {
   await $.store.delete(ANCHOR_KEY)
-  await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], hasEmbed: false, trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
+  await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
   await update($, view, old => ({ ...old, anchorsOpen: false }))
 }
 
@@ -1249,16 +1293,24 @@ async function paneChatAnchor($: EngineInterface): Promise<string | null> {
 
 export const ARTIFACT_URL = /https:\/\/claude\.ai\/(?:code\/)?artifact\/[\w-]+/
 
-async function draftNewLens($: EngineInterface): Promise<void> {
-  const { text } = await $.prompt.read()
+// Writes the lens file (never over one that's there), opens it to paste the prompt, lists it.
+async function newLens($: EngineInterface, typed: string): Promise<void> {
+  const name = lensFileName(typed)
+  if (!name) {
+    return
+  }
+  const path = `${P.lenses}/${name}.md`
 
-  await $.prompt.fill({ text: newLensDraft(typedFrom(text)), mode: 'replace' })
+  await writeNew($, path, newLensSkeleton(name))
+  await openNote($, path)
+  await load($)
 }
 
+// Tidies an older log as it's written: only logs the pane touches change.
 async function writeTrail($: EngineInterface, note: string, change: (text: string) => string): Promise<void> {
   const path = trailPath(note)
   const old = await readOr($, path)
-  const base = old || trailTemplate(note, stamp(await $.clock.now()).slice(0, 10))
+  const base = old ? tidyTrail(old, note) : trailTemplate(note, stamp(await $.clock.now()).slice(0, 10))
   const text = change(base)
 
   if (text !== old) {
@@ -1398,12 +1450,6 @@ async function setOption($: EngineInterface, field: string, value: string): Prom
   await $.config.set({ key: row.key, value })
 }
 
-// You paste it into your own note; Augi never writes there.
-async function copyEmbed($: EngineInterface, note: string): Promise<void> {
-  await $.ui.copy({ text: embedFor(note) })
-  await $.ui.toast('Copied the Agent Log embed: paste it at the end of your note.')
-}
-
 async function copyResume($: EngineInterface, chat: Chat): Promise<void> {
   await $.ui.copy({ text: `claude --resume ${chat.id}` })
   await $.ui.toast(`Copied: claude --resume ${chat.id}`)
@@ -1509,7 +1555,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Input, Text } = $.ui.resolve(e)
     // Svg is drawn by the desktop, editor and phone, not the terminal.
     const Svg = e.surface === 'terminal' ? null : (($.ui.resolve(e) as unknown as { Svg?: typeof Text }).Svg ?? null)
-    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, hasEmbed, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
+    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
     const choice = await read($, picks)
     const shown = await read($, view)
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
@@ -1616,9 +1662,6 @@ export const register: Register = (on, options) => {
         {anchor && anchor.detail && <Text dimColor>{anchor.detail}</Text>}
         {anchor && outcome && <Text>🎯 {outcome}</Text>}
         {anchor && [...(next ?? []), ...anchor.tasks.filter(task => !(next ?? []).includes(task))].map(task => <Text key={`task-${task}`}>☐ {task}</Text>)}
-        {anchor && notePath && !hasEmbed && (
-          <Button key="copy-embed" plain label="  ⧉ copy the Agent Log embed for your note" onPress={() => copyEmbed($, anchor.note)} />
-        )}
         {anchor && (
           <Box flexDirection="row">
             <Button key="open-note" label="🧠 Human Notes" hotkey="p" onPress={() => (notePath ? openNote($, notePath) : openByName($, anchor.note))} />
@@ -1716,14 +1759,16 @@ export const register: Register = (on, options) => {
         )}
         </Box>
         <Box key="card-lenses" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="suggestion">
-        <Button key="lens-menu" label={`${arrow(shown.lensesOpen)} 🔍 Run a lens · ${lenses.length}`} hotkey="l" onPress={flip('lensesOpen')} />
+        <Button key="lens-menu" label={`${arrow(shown.lensesOpen)} 🔍 Lenses (saved prompts) · ${lenses.length}`} hotkey="l" onPress={flip('lensesOpen')} />
         {shown.lensesOpen && lenses.map((lens, index) => (
           <Box key={lens.name} flexDirection="row">
             <Button key={lens.name} label={`  ${lens.name}`} hotkey={index < 9 ? String(index + 1) : undefined} onPress={() => draft($, lens)} />
             <Button key={`edit-${lens.name}`} label="edit" hotkey={EDIT_KEYS[index]} onPress={() => openNote($, lens.path)} />
           </Box>
         ))}
-        {shown.lensesOpen && <Button key="new-lens" label="  + add a new lens" hotkey="g" onPress={() => draftNewLens($)} />}
+        {shown.lensesOpen && (
+          <Input key={`new-lens-${lenses.length}`} label="  + new lens " placeholder="name it: Enter opens it in your editor" submitLabel="create" onSubmit={value => newLens($, value)} />
+        )}
         {shown.lensesOpen && <Button key="all-lenses" label="  open the lens folder" hotkey="f" onPress={() => openFolder($, P.lenses)} />}
         </Box>
 

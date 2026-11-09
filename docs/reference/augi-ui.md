@@ -51,12 +51,15 @@ skipped. Starters are never written over an existing file.
   session), the context note and board (`m`), and OpenAugi search (`o`).
 - **Draft** (`n`): fills the prompt with that context. Nothing is sent until
   the user presses enter.
-- **Lenses** (`l`): run a lens with the same context; `g` drafts a new one.
+- **Lenses (saved prompts)** (`l`): run a lens with the same context; `+ new lens`
+  takes a name, writes a skeleton file in the lens folder (never over one that's
+  there) and opens it in your editor to paste the prompt.
   Every lens in the lens folder is listed; the `lensPicks` setting narrows and orders
   the menu. Lenses follow the OpenAugi lens contract (`OpenAugi/AGENT/lens-template.md`).
 - **Agent Log**: per anchor, a companion note that holds the pinned context,
-  open questions and the chats started from the pane. The user's own note is
-  never written; `⧉` copies an embed line to paste into it.
+  open questions and the chats started from the pane. Its first line links the
+  user's own note (so the note shows it as a backlink); that note is never
+  written. An older log is tidied (title and seen box dropped) when the pane next writes it.
 
 ## Developing
 
