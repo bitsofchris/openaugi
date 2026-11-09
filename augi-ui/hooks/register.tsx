@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Card, Chat, Lens, Picks, Pin, PinKind, Question, Session, SetupItem, Swatch, Trail, View } from '../types'
+import type { Card, Chat, Lens, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, Swatch, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -249,6 +249,10 @@ const view = atom(
   { shape: 'view-4' },
 )
 
+// This chat's scratchpad, newest first: session state, so each chat has its own and it
+// outlives a redraw or a reload of this module, but not the session.
+const pad = atom({ plugin: 'augi-ui', key: 'pad' } as const, [] as PadEntry[], { shape: 'pad-1' })
+
 // The first bold line under a heading that names the season or focus,
 // e.g. "Primary: the metrics data factory."
 export const anchorFrom = (text: string): string => {
@@ -273,6 +277,91 @@ export const outcomeFrom = (text: string): string => {
   const fromBody = body.match(/^[ \t]*(?:\*\*)?outcome(?:\*\*)?[ \t]*:[ \t]*(?:\*\*)?[ \t]*(.+)$/im)?.[1] ?? ''
 
   return (fromFront.trim() || fromBody.trim()).replace(/^"|"$/g, '')
+}
+
+// A scratchpad entry as a Journal line: `- HH:MM text`, further lines indented under it.
+const journalLines = (one: PadEntry): string[] => {
+  const lines = one.text.trim().split('\n').map(line => line.trimEnd()).filter(line => line.trim())
+
+  return lines.map((line, at) => (at === 0 ? `- ${one.when.slice(11, 16)} ${line}` : `  ${line}`))
+}
+
+// Adds a scratchpad entry to the user's note: under its Journal heading (any level), under
+// the dated heading for the entry's day, as that day's last line. A missing day heading is
+// made at the level the note's dated headings use, first when they run newest first, else
+// last. A note with no Journal gets one above its Agent Log heading, else at the end.
+// Every other line, the frontmatter included, is left as it was.
+export const addJournalEntry = (text: string, one: PadEntry): string => {
+  const entry = journalLines(one)
+  if (entry.length === 0) {
+    return text
+  }
+  const day = one.when.slice(0, 10)
+  const lines = text.split('\n')
+  const front = lines[0] === '---' ? lines.indexOf('---', 1) + 1 : 0
+  const headingAt = (at: number): { level: number; title: string } | null => {
+    const found = at >= front ? lines[at]?.match(/^(#{1,6})\s+(.*?)\s*$/) : null
+
+    return found ? { level: (found[1] ?? '').length, title: found[2] ?? '' } : null
+  }
+  const lastFilled = (from: number, to: number): number => {
+    let at = to - 1
+    while (at > from && !lines[at]?.trim()) {
+      at -= 1
+    }
+
+    return at
+  }
+  const journal = lines.findIndex((_, at) => /^journal$/i.test(headingAt(at)?.title ?? ''))
+  if (journal < 0) {
+    const block = ['# Journal', '', `### ${day}`, ...entry]
+    const log = lines.findIndex((_, at) => /^agent log$/i.test(headingAt(at)?.title ?? ''))
+    if (log >= 0) {
+      lines.splice(log, 0, ...(log > 0 && lines[log - 1]?.trim() ? [''] : []), ...block, '')
+
+      return lines.join('\n')
+    }
+    if (!text.trim()) {
+      return `${block.join('\n')}\n`
+    }
+
+    return `${text}${text.endsWith('\n\n') ? '' : text.endsWith('\n') ? '\n' : '\n\n'}${block.join('\n')}\n`
+  }
+  const level = headingAt(journal)?.level ?? 1
+  let end = journal + 1
+  while (end < lines.length && (headingAt(end)?.level ?? 7) > level) {
+    end += 1
+  }
+  const dated: { at: number; level: number; date: string }[] = []
+  for (let at = journal + 1; at < end; at += 1) {
+    const heading = headingAt(at)
+    const date = heading?.title.match(/^(\d{4}-\d{2}-\d{2})\b/)?.[1]
+    if (heading && date && heading.level > level) {
+      dated.push({ at, level: heading.level, date })
+    }
+  }
+  const dayLevel = dated[0]?.level ?? Math.min(6, Math.max(3, level + 1))
+  const days = dated.filter(one => one.level === dayLevel)
+  const same = days.find(one => one.date === day)
+  if (same) {
+    let close = same.at + 1
+    while (close < end && (headingAt(close)?.level ?? 7) > dayLevel) {
+      close += 1
+    }
+    lines.splice(lastFilled(same.at, close) + 1, 0, ...entry)
+
+    return lines.join('\n')
+  }
+  const heading = `${'#'.repeat(dayLevel)} ${day}`
+  const first = days[0]
+  const last = days[days.length - 1]
+  if (first && last && first.date > last.date) {
+    lines.splice(first.at, 0, heading, ...entry, '')
+  } else {
+    lines.splice(lastFilled(journal, end) + 1, 0, '', heading, ...entry)
+  }
+
+  return lines.join('\n')
 }
 
 // The open checkboxes under the note's Next heading (# or ##), up to the next heading
@@ -1296,6 +1385,55 @@ async function capture($: EngineInterface, text: string): Promise<void> {
   await writeTrail($, anchor.note, old => addQuestion(old, { when, text: text.trim(), done: false }))
 }
 
+// Keeps a note to self on this chat's scratchpad, newest first. Nothing is written.
+async function jot($: EngineInterface, text: string): Promise<void> {
+  if (!text.trim()) {
+    return
+  }
+  const when = stamp(await $.clock.now())
+
+  await update($, pad, old => [{ when, text: text.trim() }, ...old])
+}
+
+const samePad = (a: PadEntry, b: PadEntry): boolean => a.when === b.when && a.text === b.text
+
+// Takes the given entries off the pad, each once.
+async function unjot($: EngineInterface, gone: PadEntry[]): Promise<void> {
+  await update($, pad, old => {
+    const left = [...gone]
+
+    return old.filter(one => {
+      const at = left.findIndex(other => samePad(one, other))
+      if (at >= 0) {
+        left.splice(at, 1)
+      }
+
+      return at < 0
+    })
+  })
+}
+
+// The one place the pane writes the user's own note, and only on their press, only with
+// their own words: scratchpad entries go into its Journal, oldest first, read fresh from
+// disk (it may be open in their editor). On a failed write the entries stay on the pad.
+async function saveToNotes($: EngineInterface, entries: PadEntry[]): Promise<void> {
+  const { anchor, notePath } = await read($, swatch)
+  if (!anchor || !notePath || entries.length === 0) {
+    return
+  }
+  try {
+    const old = await $.fs.read(notePath)
+    const text = [...entries].reverse().reduce(addJournalEntry, old)
+    await $.fs.write(notePath, text)
+  } catch (error) {
+    await $.ui.toast(`Couldn't save to ${anchor.note}: ${String(error)}`)
+
+    return
+  }
+  await unjot($, entries)
+  await $.ui.toast(`Saved to ${anchor.note}'s Journal`)
+}
+
 // `open` is macOS; elsewhere the same argument goes to xdg-open.
 async function launch($: EngineInterface, argv: string[]): Promise<void> {
   let ran: { exitCode: number | null } | null = null
@@ -1512,6 +1650,7 @@ export const register: Register = (on, options) => {
     const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, hasEmbed, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
     const choice = await read($, picks)
     const shown = await read($, view)
+    const jotted = await read($, pad)
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
     const arrow = (isOpen: boolean): string => (isOpen ? '▾' : '▸')
     const flip = (key: keyof View) => () => update($, view, old => ({ ...old, [key]: !old[key] }))
@@ -1714,6 +1853,29 @@ export const register: Register = (on, options) => {
         {anchor && hiddenCount > 0 && (
           <Button key="show-hidden" label={`${shown.showHidden ? 'hide' : 'show'} hidden chats (${hiddenCount})`} hotkey="x" onPress={flip('showHidden')} />
         )}
+        </Box>
+
+        <Box key="card-pad" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="subtle">
+        <Text bold>📝 Scratchpad · this chat</Text>
+        <Input
+          key={`pad-input-${jotted.length}`}
+          label="  "
+          placeholder="a note to self: Enter keeps it here for this chat"
+          submitLabel="keep"
+          rows={2}
+          onSubmit={value => jot($, value)}
+        />
+        {jotted.map((one, at) => (
+          <Box key={`pad-row-${at}`} flexDirection="row">
+            <Text key={`pad-text-${at}`} dimColor>{`  ${one.when.slice(11, 16)} ${one.text} `}</Text>
+            {anchor && notePath && <Button key={`pad-save-${at}`} label="→ notes" onPress={() => saveToNotes($, [one])} />}
+            <Button key={`pad-drop-${at}`} label="drop" onPress={() => unjot($, [one])} />
+          </Box>
+        ))}
+        {anchor && notePath && jotted.length >= 2 && (
+          <Button key="pad-save-all" plain label="  → save all to Human Notes" onPress={() => saveToNotes($, jotted)} />
+        )}
+        {!(anchor && notePath) && <Text dimColor>{anchor ? `  No note found for ${anchor.note}: entries stay here.` : '  Pick an anchor to save these to its Human Notes.'}</Text>}
         </Box>
         <Box key="card-lenses" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="suggestion">
         <Button key="lens-menu" label={`${arrow(shown.lensesOpen)} 🔍 Run a lens · ${lenses.length}`} hotkey="l" onPress={flip('lensesOpen')} />

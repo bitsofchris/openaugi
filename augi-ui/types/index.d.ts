@@ -40,6 +40,8 @@ export type Swatch = {
   sessions: Session[]
   loadedAt: number
 }
+// A note to self on this chat's scratchpad; `when` as `stamp()` writes it.
+export type PadEntry = { when: string; text: string }
 export type Picks = { aboutMe: boolean; openAugi: boolean; project: boolean }
 export type View = {
   anchorsOpen: boolean
@@ -54,6 +56,6 @@ export type View = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; pad: Shaped<PadEntry[]> }
   }
 }
