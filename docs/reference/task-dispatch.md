@@ -174,13 +174,14 @@ note on every dispatch. Restart after changing the code, as always.
 
 A block's id is the hash of its raw text, so editing the paragraph around a
 `zzz` line deletes one block and inserts another — with the instruction
-unchanged. Three mechanisms keep that from becoming three agents:
+unchanged. Four mechanisms keep that from becoming several agents:
 
 | Mechanism | Covers |
 |---|---|
 | **Settle window** (`DEFAULT_ZZZ_SETTLE`, 120s) | A half-typed instruction. The draft never becomes a task. |
 | **Supersession** | An instruction edited *after* it dispatched. The old task is retired and its tmux session killed. |
 | **Instruction keys** | The same instruction re-hashed. Every ledger row carries a hash of `source_path` + instruction text, so the predecessor is found by lookup — across cycles, across restarts, across a whole-file re-read. |
+| **Atomic claim** | Two processes draining at once — `up` alongside a manual `ingest`, `tasks` or a `kb` call. A row is claimed (queued → dispatched) in one compare-and-set UPDATE before its task file is written; only the winner writes. A write that fails after the claim is logged and not retried. |
 
 Keys are scoped to the note, so the same standing command in two different
 notes is two different asks. A *changed* instruction is a real edit and
