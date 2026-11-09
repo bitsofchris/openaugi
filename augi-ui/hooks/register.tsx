@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Card, Chat, Lens, Picks, Pin, PinKind, Question, Session, SetupItem, Swatch, Trail, View } from '../types'
+import type { Card, Chat, Lens, Made, MadeArtifact, Picks, Pin, PinKind, Question, Session, SetupItem, Swatch, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -209,7 +209,12 @@ const PANE = 'augi'
 const AUGI_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="14" cy="16" r="7" fill="#8a5a3b"/><circle cx="50" cy="16" r="7" fill="#8a5a3b"/><circle cx="14" cy="16" r="3.5" fill="#5e3b25"/><circle cx="50" cy="16" r="3.5" fill="#5e3b25"/><circle cx="32" cy="34" r="24" fill="#a06a45"/><ellipse cx="32" cy="43" rx="15" ry="11" fill="#e8cfb0"/><circle cx="23" cy="30" r="3.2" fill="#2b1a10"/><circle cx="41" cy="30" r="3.2" fill="#2b1a10"/><circle cx="24" cy="29" r="1" fill="#fff"/><circle cx="42" cy="29" r="1" fill="#fff"/><ellipse cx="32" cy="38" rx="4.5" ry="3" fill="#2b1a10"/><path d="M32 41v3M28 46q4 3 8 0" stroke="#2b1a10" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M20 41l-9-2M20 44l-9 1M44 41l9-2M44 44l9 1" stroke="#5e3b25" stroke-width="1" stroke-linecap="round"/></svg>'
 const DRAFT_HEAD = 'Context for this chat:'
 const HEAD_BYTES = '65536'
-const ANCHOR_KEY = 'anchor'
+// Each chat session's anchor, as [session id, note] pairs, oldest first. The anchor
+// belongs to the session: a new one opens with none; a reload or a resume keeps it.
+const ANCHORS_KEY = 'anchors'
+const ANCHORS_KEPT = 200
+// The title a chat gets in ## Chats when anchoring records it, until a draft names it.
+export const CHAT_PLACEHOLDER = 'chat'
 // The setup steps someone chose to skip; /augi setup clears it.
 const SKIPPED_KEY = 'skipped'
 export const EMPTY_TRAIL: Trail = { questions: [], chats: [], saved: [], pins: [] }
@@ -247,6 +252,11 @@ const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
   { anchorsOpen: false, contextOpen: false, sessionsOpen: false, lensesOpen: false, showHidden: false, setupOpen: false, inOpen: true, doneOpen: false } as View,
   { shape: 'view-4' },
+)
+const made = atom(
+  { plugin: 'augi-ui', key: 'made' } as const,
+  { session: '', artifacts: [] } as Made,
+  { shape: 'made-1' },
 )
 
 // The first bold line under a heading that names the season or focus,
@@ -722,6 +732,43 @@ export const setHidden = (text: string, id: string, hidden: boolean): string =>
     })
     .join('\n')
 
+// Names a chat recorded with the placeholder title; a real title stays as it is.
+export const retitleChat = (text: string, id: string, title: string): string =>
+  text
+    .split('\n')
+    .map(line => {
+      const found = line.match(CHAT_LINE)
+
+      return found && found[3] === id && found[2].trim() === CHAT_PLACEHOLDER
+        ? chatLine({ when: found[1], title, id, hidden: Boolean(found[4]) })
+        : line
+    })
+    .join('\n')
+
+// The session → anchor pairs with this session's set (or dropped, for null), most
+// recent last, the oldest let go past `kept`.
+export const withAnchor = (pairs: [string, string][], id: string, note: string | null, kept = ANCHORS_KEPT): [string, string][] => {
+  const others = pairs.filter(([one]) => one !== id)
+
+  return (note ? [...others, [id, note] as [string, string]] : others).slice(-kept)
+}
+
+// What the store holds under the anchors key, read defensively.
+export const anchorPairs = (value: unknown): [string, string][] =>
+  Array.isArray(value)
+    ? value.filter((one): one is [string, string] => Array.isArray(one) && typeof one[0] === 'string' && typeof one[1] === 'string')
+    : []
+
+// This session's published artifacts with one more: a URL already listed takes the new title.
+export const withArtifact = (list: MadeArtifact[], one: MadeArtifact): MadeArtifact[] =>
+  list.some(old => old.url === one.url) ? list.map(old => (old.url === one.url ? one : old)) : [...list, one]
+
+// The anchor's pinned artifacts for its card, newest first.
+export const anchorArtifacts = (pins: Pin[], limit = 3): Pin[] => pins.filter(pin => pin.kind === 'artifact').reverse().slice(0, limit)
+
+// Pins as the context card lists them: artifacts first, each group in its order.
+export const artifactsFirst = (pins: Pin[]): Pin[] => [...pins.filter(pin => pin.kind === 'artifact'), ...pins.filter(pin => pin.kind !== 'artifact')]
+
 // What a submitted draft was about: the lens and the instruction. Null if it isn't ours.
 export const chatTitleFrom = (text: string): string | null => {
   if (!text.startsWith(DRAFT_HEAD)) {
@@ -992,7 +1039,7 @@ async function moveOldTrail($: EngineInterface, note: string): Promise<void> {
 
 // Reads the anchored card's note and Agent Log; the rest of the pane stays as it was.
 async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'hasEmbed' | 'trail' | 'pinPaths' | 'hits'>> {
-  const chosen = await $.store.get(ANCHOR_KEY)
+  const chosen = await sessionAnchor($)
   const anchor = cards.find(card => card.note === chosen) ?? null
   if (!anchor) {
     return { anchor: null, notePath: '', outcome: '', next: [], hasEmbed: false, trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }
@@ -1130,16 +1177,35 @@ async function load($: EngineInterface): Promise<void> {
   await update($, swatch, () => next)
 }
 
+// The note this chat session is anchored on, if any.
+async function sessionAnchor($: EngineInterface): Promise<string | null> {
+  const id = await $.session.id()
+
+  return anchorPairs(await $.store.get(ANCHORS_KEY)).find(([one]) => one === id)?.[1] ?? null
+}
+
+async function setSessionAnchor($: EngineInterface, note: string | null): Promise<void> {
+  const id = await $.session.id()
+  if (id) {
+    await $.store.set(ANCHORS_KEY, withAnchor(anchorPairs(await $.store.get(ANCHORS_KEY)), id, note))
+  }
+}
+
+// Anchoring puts this chat in the anchor's ## Chats and pins what it already published, ticked.
 async function chooseAnchor($: EngineInterface, card: Card): Promise<void> {
-  await $.store.set(ANCHOR_KEY, card.note)
+  await setSessionAnchor($, card.note)
   const { cards } = await read($, swatch)
   const found = await loadAnchor($, cards)
   await update($, swatch, old => ({ ...old, ...found }))
+  await recordChat($, CHAT_PLACEHOLDER)
+  for (const one of await sessionArtifacts($)) {
+    await writeTrail($, card.note, text => addPin(text, artifactPin(one)))
+  }
   await update($, view, old => ({ ...old, anchorsOpen: false }))
 }
 
 async function clearAnchor($: EngineInterface): Promise<void> {
-  await $.store.delete(ANCHOR_KEY)
+  await setSessionAnchor($, null)
   await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], hasEmbed: false, trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
   await update($, view, old => ({ ...old, anchorsOpen: false }))
 }
@@ -1239,13 +1305,25 @@ async function openPin($: EngineInterface, pin: Pin): Promise<void> {
   await launch($, ['open', pin.target])
 }
 
-// The anchor this session's chat was started on from the pane, if it was.
+// The anchor whose Agent Log holds this session's chat: anchoring records it, so any anchor.
 async function paneChatAnchor($: EngineInterface): Promise<string | null> {
-  const { anchor, trail } = await read($, swatch)
-  const id = await $.session.id()
-
-  return anchor && id && (trail.chats ?? []).some(one => one.id === id) ? anchor.note : null
+  return sessionAnchor($)
 }
+
+// The artifacts this chat session published; a list from an earlier session reads as none.
+async function sessionArtifacts($: EngineInterface): Promise<MadeArtifact[]> {
+  const { session, artifacts } = await read($, made)
+
+  return session && session === (await $.session.id()) ? artifacts : []
+}
+
+async function rememberArtifact($: EngineInterface, one: MadeArtifact): Promise<void> {
+  const id = await $.session.id()
+  await update($, made, old => ({ session: id, artifacts: withArtifact(old.session === id ? old.artifacts : [], one) }))
+}
+
+// An artifact the chat published, pinned ticked: it sticks to the anchor as context.
+const artifactPin = (one: MadeArtifact): Pin => ({ on: true, kind: 'artifact', target: one.url, label: one.title })
 
 export const ARTIFACT_URL = /https:\/\/claude\.ai\/(?:code\/)?artifact\/[\w-]+/
 
@@ -1268,16 +1346,17 @@ async function writeTrail($: EngineInterface, note: string, change: (text: strin
   await update($, swatch, current => (current.anchor?.note === note ? { ...current, trail: parseTrail(text) } : current))
 }
 
-// Puts this chat on the anchored project's trail. Nothing happens with no anchor.
+// Puts this chat in its anchor's Agent Log, or names it there if it went in as the
+// placeholder. Nothing happens with no anchor.
 async function recordChat($: EngineInterface, title: string): Promise<void> {
-  const { anchor } = await read($, swatch)
+  const note = await sessionAnchor($)
   const id = await $.session.id()
-  if (!anchor || !id) {
+  if (!note || !id) {
     return
   }
   const when = stamp(await $.clock.now())
 
-  await writeTrail($, anchor.note, text => addChat(text, { id, when, title, hidden: false }))
+  await writeTrail($, note, text => retitleChat(addChat(text, { id, when, title, hidden: false }), id, title))
 }
 
 // Parks a question or side quest on the anchor's trail without leaving the step you're in.
@@ -1437,6 +1516,17 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // A /clear goes on in this process under a new session id with no session.start:
+  // the pane drops the old session's anchor, as a new session opens with none.
+  on('session.end', async ($, e, next) => {
+    const ended = await next(e)
+    if (e.reason === 'clear' || e.reason === 'resume') {
+      await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], hasEmbed: false, trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
+    }
+
+    return ended
+  })
+
   on('command.run', { command: 'augi' }, async ($, e) => {
     await ready($)
     if (e.args.trim() === 'setup') {
@@ -1464,19 +1554,23 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // What a chat started from the pane makes goes on its anchor's context, unticked:
-  // an artifact it publishes, and a new note it writes in the notes folder.
+  // What an anchored chat makes goes on its anchor's context: an artifact it publishes,
+  // ticked, and a new note it writes in the notes folder, unticked. The session keeps
+  // its artifacts either way, so anchoring later pins them.
   on('tool.call', { tool: 'Artifact' }, async ($, e, next) => {
     const ran = await next(e)
     try {
       await ready($)
       // Only a page published; reads, lists and asset uploads name artifacts too.
       const isPublish = (e.action === undefined || e.action === 'publish') && !e.asset
-      const note = isPublish ? await paneChatAnchor($) : null
-      const url = note ? JSON.stringify(ran).match(ARTIFACT_URL)?.[0] : undefined
-      if (note && url && ran.deny === undefined && !ran.isError) {
-        const title = typeof e.title === 'string' && e.title ? e.title : 'artifact'
-        await writeTrail($, note, text => addPin(text, { on: false, kind: 'artifact', target: url, label: title }))
+      const url = isPublish ? JSON.stringify(ran).match(ARTIFACT_URL)?.[0] : undefined
+      if (url && ran.deny === undefined && !ran.isError) {
+        const one = { url, title: typeof e.title === 'string' && e.title ? e.title : 'artifact' }
+        await rememberArtifact($, one)
+        const note = await paneChatAnchor($)
+        if (note) {
+          await writeTrail($, note, text => addPin(text, artifactPin(one)))
+        }
       }
     } catch (error) {
       await $.ui.toast(`Augi couldn't pin this artifact: ${String(error)}`)
@@ -1512,6 +1606,7 @@ export const register: Register = (on, options) => {
     const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, hasEmbed, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
     const choice = await read($, picks)
     const shown = await read($, view)
+    const ownArtifacts = await sessionArtifacts($)
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
     const arrow = (isOpen: boolean): string => (isOpen ? '▾' : '▸')
     const flip = (key: keyof View) => () => update($, view, old => ({ ...old, [key]: !old[key] }))
@@ -1624,6 +1719,12 @@ export const register: Register = (on, options) => {
             <Button key="open-note" label="🧠 Human Notes" hotkey="p" onPress={() => (notePath ? openNote($, notePath) : openByName($, anchor.note))} />
             <Text dimColor> | </Text>
             <Button key="open-trail" label="🤖 Agent Log" hotkey="k" onPress={() => writeTrail($, anchor.note, text => text).then(() => openNote($, trailPath(anchor.note)))} />
+            {anchorArtifacts(pins).map(pin => (
+              <Box key={`anchor-artifact-box-${pin.target}`} flexDirection="row">
+                <Text dimColor> | </Text>
+                <Button key={`anchor-artifact-${pin.target}`} label={`◇ ${pin.label}`} onPress={() => openPin($, pin)} />
+              </Box>
+            ))}
           </Box>
         )}
         {anchor && (
@@ -1641,10 +1742,14 @@ export const register: Register = (on, options) => {
         <Text bold color="remember">📎 Project context · {contextCount} going in</Text>
         <Text dimColor>Ticked items go into the drafted prompt. Claude reads them after you press enter.</Text>
         {!anchor && <Text dimColor>  Pick an anchor to keep context with it.</Text>}
+        {!anchor && ownArtifacts.map(one => (
+          <Text key={`made-${one.url}`} dimColor>{`  ◇ ${one.title}`}</Text>
+        ))}
+        {!anchor && ownArtifacts.length > 0 && <Text dimColor>  Artifacts this chat published: picking an anchor keeps them with it.</Text>}
         {anchor && (
-          <Button key="pick-project" plain label={`  ${mark(choice.project)} 🧠 human and 🤖 agent notes for this ${anchor.note.startsWith('TASK') ? 'task' : 'project'}`} hotkey="j" onPress={() => update($, picks, old => ({ ...old, project: !old.project }))} />
+          <Button key="pick-project" plain label={`  ${mark(choice.project)} 🧠 human and 🤖 agent notes for this ${anchor.note.startsWith('TASK') ? 'task' : 'project'}`} onPress={() => update($, picks, old => ({ ...old, project: !old.project }))} />
         )}
-        {anchor && pins.map(pin => (
+        {anchor && artifactsFirst(pins).map(pin => (
           <Box key={`pin-${pinKey(pin)}`} flexDirection="row">
             <Button key={`pin-tick-${pinKey(pin)}`} plain label={`  ${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label} `} onPress={() => onPins(text => setPinOn(text, pin, !pin.on))} />
             <Button key={`pin-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />
@@ -1660,7 +1765,10 @@ export const register: Register = (on, options) => {
         ))}
         {anchor && (hits ?? []).length > 0 && <Button key="hits-clear" plain label="      clear results" onPress={() => update($, swatch, old => ({ ...old, hits: [] }))} />}
         {anchor && (
-          <Button key="sessions-menu" plain label={`  ${arrow(shown.sessionsOpen)} ◦ pin a recent coding session`} hotkey="h" onPress={flip('sessionsOpen')} />
+          <Input key={`pin-paste-${pins.length}`} label="  ⧉ " placeholder="paste an artifact link, [[note]] or file path: Enter pins it" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
+        )}
+        {anchor && (
+          <Button key="sessions-menu" plain label={`  ${arrow(shown.sessionsOpen)} ◦ pin a recent coding session`} onPress={flip('sessionsOpen')} />
         )}
         {anchor && shown.sessionsOpen && sessions.length === 0 && <Text dimColor>      No recent coding sessions found.</Text>}
         {anchor && shown.sessionsOpen && sessions.map(one => (
@@ -1671,10 +1779,7 @@ export const register: Register = (on, options) => {
             onPress={() => pinIt($, anchor.note, sessionPin(one))}
           />
         ))}
-        {anchor && (
-          <Input key={`pin-paste-${pins.length}`} label="  ⧉ " placeholder="paste a link, [[note]] or file path: Enter pins it" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
-        )}
-        <Button key="openaugi" plain label={`  ${mark(choice.openAugi)} also let the chat search my notes with OpenAugi`} hotkey="o" onPress={() => update($, picks, old => ({ ...old, openAugi: !old.openAugi }))} />
+        <Button key="openaugi" plain label={`  ${mark(choice.openAugi)} also let the chat search my notes with OpenAugi`} onPress={() => update($, picks, old => ({ ...old, openAugi: !old.openAugi }))} />
         {choice.aboutMe && <Text dimColor>  + your overall context (change it under Setup)</Text>}
         <Button key="draft" variant="primary" label="💬 draft a prompt with this context" hotkey="n" onPress={() => draft($, null)} />
         </Box>
@@ -1710,7 +1815,6 @@ export const register: Register = (on, options) => {
           </Box>
         ))}
         {anchor && trail.saved.length === 0 && chats.length === 0 && trail.questions.length === 0 && <Text dimColor>  Nothing yet. Questions you park, chats you start and notes they save show up here.</Text>}
-        {anchor && <Button key="add-this-chat" label="+ put this chat in the Agent Log" hotkey="b" onPress={() => recordChat($, 'this chat, added by hand')} />}
         {anchor && hiddenCount > 0 && (
           <Button key="show-hidden" label={`${shown.showHidden ? 'hide' : 'show'} hidden chats (${hiddenCount})`} hotkey="x" onPress={flip('showHidden')} />
         )}
