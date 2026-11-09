@@ -14,9 +14,19 @@ lists artifacts first and loses its hotkeys except `n`.
 optionally with a Jira key (`PROJ-123`) or issue link. The pane writes the note
 from the Task template, adds its card to the board after the current anchor,
 sets `Up:` to the parent, pins the chat, anchors on the task and leaves an
-unsent draft asking the chat to fill in outcome, Next and context. A `jira:`
-key shows on the anchor; nothing calls Jira. New setting `taskFolder`. A board
-sub-item or Next checkbox that links a note is a button that opens it.
+unsent draft asking the chat to fill in outcome, Next and context. The note
+lands in the one flat `taskFolder` (empty = the notes folder root); hierarchy
+is only the `Up:` link. A board sub-item or Next checkbox that links a note is
+a button that opens it.
+
+**augi-ui: link an anchor to Jira, optionally.** Off until a Jira MCP server is
+found among the session's tools or one of the new settings `jiraProject`,
+`jiraSite`, `jiraServer` is set. Paste a key or issue link to write `jira:` on
+the anchor's note (`unlink` removes it); `🔗 KEY` opens the issue. `find in
+Jira` and `↑ update Jira` only draft prompts: the chat searches, links, or
+posts a status comment with whatever Jira tools it has, and only after the
+user sends the prompt and confirms. A `jira-update.md` lens replaces the
+built-in update wording. The pane itself never calls Jira.
 
 **augi-ui: a scratchpad per chat.** Notes to self that live with the session;
 `→ notes` appends one to the anchor's own note as `- HH:MM text` under that
