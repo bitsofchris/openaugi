@@ -36,16 +36,31 @@ def db(tmp_path: Path, vault_path: Path) -> Path:
 
 @pytest.fixture(autouse=True)
 def _point_at_test_db(db: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from openaugi.config import DEFAULT_CONFIG, _merge
+
     out_vault = tmp_path / "vault"
     out_vault.mkdir()
     monkeypatch.setenv("OPENAUGI_DB", str(db))
     monkeypatch.setenv("OPENAUGI_VAULT_PATH", str(out_vault))
+    # Keyword-only, whatever ~/.openaugi/config.toml on this machine says: the
+    # default provider (sentence-transformers) is not installed in CI.
+    keyword_only = _merge(DEFAULT_CONFIG, {"models": {"embedding": {"provider": "none"}}})
+    monkeypatch.setattr(srv, "load_config", lambda *a, **k: keyword_only)
+    srv._store = None
+    srv._embedding_model = None
+    yield
     srv._store = None
     srv._embedding_model = None
 
 
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
 def kb(*args: str, input: str | None = None):
-    return runner.invoke(app, ["kb", *args], input=input)
+    """Run `openaugi kb …`; output has colour codes removed (CI forces colour)."""
+    result = runner.invoke(app, ["kb", *args], input=input)
+    result.output_plain = ANSI.sub("", result.output)  # type: ignore[attr-defined]
+    return result
 
 
 def ok(*args: str, input: str | None = None) -> dict:
@@ -188,19 +203,19 @@ def test_write_error_status_exits_1(tmp_path: Path):
 def test_bad_json_is_a_usage_error():
     result = kb("write-record", "--collection", "c", "--record-id", "r", "--data", "{nope")
     assert result.exit_code == 2
-    assert "not valid JSON" in result.output
+    assert "not valid JSON" in result.output_plain
 
 
 def test_missing_required_option_is_a_usage_error():
     result = kb("get-block")
     assert result.exit_code == 2
-    assert "--block-id" in result.output
+    assert "--block-id" in result.output_plain
 
 
 def test_two_stdin_arguments_are_refused():
     result = kb("write-recap", "--container-title", "-", "--recap-md", "-", input="x")
     assert result.exit_code == 2
-    assert "only one argument" in result.output
+    assert "only one argument" in result.output_plain
 
 
 def test_top_level_help_does_not_import_the_server():
