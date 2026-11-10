@@ -7,16 +7,13 @@ The augi-ui entries below ship together as **augi-ui 0.13.0**
 shows `✗ task template`, press `use the current template`; and set a
 `new task folder` there if Setup warns that none is set.
 
-**Two new lenses: `overview` and `standup`.** `overview` answers "what is
-open across everything I am working on, and what is next?": it reads the
-board and every anchor's Agent Log and returns each anchor's open chats, open
-tasks and next step, with the three next steps on top. `standup` turns the
-daily note's log and the day's chats into done / next / blocked as plain text
-to paste. Both are engine lenses (`openaugi init` copies them; existing
-vaults get them from `src/openaugi/templates/lenses/`). In the augi-ui pane
-they have buttons of their own when the lens folder has them:
-`🔭 what's open, what's next` in the You card and `draft my standup` on the
-Today card.
+**A new lens: `overview`.** It answers "what is open across everything I am
+working on, and what is next?": it reads the board and every anchor's Agent
+Log and returns each anchor's open chats, open tasks and next step, with the
+three next steps on top. It is an engine lens (`openaugi init` copies it;
+an existing vault gets it from `src/openaugi/templates/lenses/`). In the
+augi-ui pane it has a button of its own when the lens folder has it:
+`🔭 what's open, what's next` in the You card.
 
 **augi-ui: chats are free, tasks are earned.** Splitting a task into parallel
 chats used to mean a note, a board line and an anchor switch for each. Now:

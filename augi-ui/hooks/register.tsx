@@ -151,7 +151,7 @@ export const USAGE_FEATURES = [
   'ask', 'done', 'show-done', 'reopen', 'saved', 'chat', 'chat-task', 'chat-done', 'chat-reopen', 'chats-done',
   'pin-tick', 'pin-open', 'pin-drop', 'pin-paste',
   'touched-open', 'touched-pin', 'files-all', 'pad-input', 'pad-save', 'pad-ask', 'pad-today', 'pad-drop', 'pad-save-all',
-  'today-log', 'today-open', 'pick-today', 'run-overview', 'run-standup',
+  'today-log', 'today-open', 'pick-today', 'run-overview',
   'all-tick', 'all-open', 'all-drop', 'all-paste', 'pin-search', 'offer-anchor', 'offer-all', 'hits-clear', 'sessions-menu', 'draft', 'copy-draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
@@ -522,11 +522,11 @@ const swatch = atom(
     hits: [],
     everywhere: [],
     lenses: [],
-    quick: { overview: '', standup: '' },
+    quick: { overview: '' },
     sessions: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-16' },
+  { shape: 'swatch-17' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
 const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, trailOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true, todayOpen: true, contextOpen: true }
@@ -2159,7 +2159,7 @@ async function load($: EngineInterface): Promise<void> {
     today: await todayNow($, dailyPattern(P.daily, P.daily ? '' : await readOr($, P.obsidianDaily))),
     everywhere: storedPins(await $.store.get(PINS_KEY)),
     lenses: [],
-    quick: { overview: '', standup: '' },
+    quick: { overview: '' },
     sessions: await recentSessions($),
     loadedAt: await $.clock.now(),
   }
@@ -2173,12 +2173,9 @@ async function load($: EngineInterface): Promise<void> {
   for (const name of lensNames([...texts.keys()])) {
     next.lenses.push({ name, path: `${P.lenses}/${name}.md`, description: descriptionFrom(texts.get(name) ?? '') })
   }
-  // Two lenses get a button of their own where they are used, when the lens folder has
-  // them, whatever the lens picks list: the wording stays a note the user can edit.
-  next.quick = {
-    overview: texts.has('overview') ? `${P.lenses}/overview.md` : '',
-    standup: texts.has('standup') ? `${P.lenses}/standup.md` : '',
-  }
+  // The overview lens gets a button of its own in the You card when the lens folder has
+  // it, whatever the lens picks list: the wording stays a note the user can edit.
+  next.quick = { overview: texts.has('overview') ? `${P.lenses}/overview.md` : '' }
 
   await update($, swatch, () => next)
 }
@@ -3816,7 +3813,6 @@ export const register: Register = (on, options) => {
                     {today.exists && (
                       <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                         <Button key="today-open" label="open" onPress={() => openNote($, today.path)} />
-                        {quick?.standup && <Button key="run-standup" label="draft my standup" onPress={() => draft($, { name: 'standup', path: quick.standup, description: '' })} />}
                         <Button key="pick-today" plain label={`${mark(choice.today)} goes into every draft`} onPress={() => update($, picks, old => ({ ...old, today: !old.today }))} />
                       </Box>
                     )}

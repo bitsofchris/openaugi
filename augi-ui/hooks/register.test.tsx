@@ -2391,14 +2391,14 @@ test('→ task on this chat itself anchors it on the new task; a name already ta
   await ui.unmount()
 })
 
-test('the overview and standup lenses get a button where they are used when the lens folder has them, even outside the lens picks; without them, no button', { options: OPTIONS }, async ($, on) => {
+test('the overview lens gets a button in the You card when the lens folder has it, even outside the lens picks; without it, no button', { options: OPTIONS }, async ($, on) => {
   const written = new Map<string, string>([['/v/.obsidian/daily-notes.json', '{}'], ['/v/2022-01-05.md', '- [ ] x\n']])
   const got = todayHooks(except(on, ['fs.list']), written, [])
-  let files = ['echoes.md', 'overview.md', 'standup.md']
+  let files = ['echoes.md', 'overview.md']
   on('fs.list', (_, e) => ({ value: e.path === '/v/lenses' ? files.map(name => ({ name, kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false })) : [] }))
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  // The picks list (execution-focus, echoes) does not name them: they are not in the lens menu.
+  // The picks list (execution-focus, echoes) does not name it: it is not in the lens menu.
   await ui.press({ key: 'lens-menu' })
   expect(await ui.find({ key: 'echoes' })).toBeTruthy()
   expect(await ui.find({ key: 'overview' })).toBeFalsy()
@@ -2406,15 +2406,12 @@ test('the overview and standup lenses get a button where they are used when the 
   expect(got.filled[0]?.includes('- Lens: read "/v/lenses/overview.md" and apply it')).toBe(true)
   expect(got.filled[0]?.includes('- Today: read "/v/2022-01-05.md"')).toBe(true)
   expect(got.filled[0]?.endsWith('Instruction: what next')).toBe(true)
-  await ui.press({ key: 'run-standup' })
-  expect(got.filled[1]?.includes('- Lens: read "/v/lenses/standup.md" and apply it')).toBe(true)
   // Sent, the chat is titled by the lens, like any lens run.
-  expect(chatTitleFrom(got.filled[1] ?? '')).toBe('standup: what next')
+  expect(chatTitleFrom(got.filled[0] ?? '')).toBe('overview: what next')
 
   files = ['echoes.md']
   await ui.press({ key: 'refresh' })
   expect(await ui.find({ key: 'run-overview' })).toBeFalsy()
-  expect(await ui.find({ key: 'run-standup' })).toBeFalsy()
   expect(await ui.find({ key: 'today-open' })).toBeTruthy()
   await ui.unmount()
 })

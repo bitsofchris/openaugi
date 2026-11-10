@@ -112,7 +112,6 @@ Current lenses (canonical list: `OpenAugi/AGENT/lenses/` or
 | **currency-board** | "Where did I leave off, and what's the next concrete thing?" — per lane, plus ≤3 judgment items and what drifted. Scheduled daily; answered with checkboxes |
 | **morning-briefing** | *(superseded by currency-board — mirror-only, no answer channel)* "What matters today?" — yesterday distilled, open loops due, pending nominations, one resurfaced thought |
 | **overview** | "What is open across everything I am working on, and what is next?" — every active anchor on the board with its open chats, open tasks and next step. In the augi-ui pane: `🔭 what's open, what's next` |
-| **standup** | "What did I do since the last standup, what is next, what is in the way?" — plain text from the daily note and the Agent Logs. In the pane: `draft my standup` on the Today card |
 | **open-loops** | "What did I say I'd do and never close?" — commitments and aging questions, checkbox to close |
 | **echoes** | "Have I thought this before?" — current thinking matched against older notes; recognition, not summary |
 | **idea-lineage** | "How did my thinking on X evolve?" — one topic's full biography: earliest mention → revisions → strongest form → dead branches |
