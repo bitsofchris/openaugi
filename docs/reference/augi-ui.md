@@ -81,7 +81,7 @@ Layout rules, so the pane reads the same on the terminal and the desktop
 text, never a button; a list row puts what it is on the left and its actions
 together at the right edge (the `line` helper); indentation is a Box's
 `paddingLeft`, never spaces in a label; rows space their children with `gap`,
-not divider characters; secondary actions (`unpin`, `hide`, `drop`, `cancel`)
+not divider characters; secondary actions (`unpin`, `done`, `drop`, `cancel`)
 are `dimColor`, and the one primary button is the draft.
 
 - **Anchor** (`a`): a linked card from the board — a project or a task. The
@@ -112,6 +112,32 @@ are `dimColor`, and the one primary button is the draft.
   parent/child story: the child's `Up:` line points back. A `jira:` key in the
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note
   you write, `k` the Agent Log.
+- **Chats, child chats and tasks: chats are free, tasks are earned.** A piece
+  of an anchor's work gets a chat, not a note; a chat becomes a task only when
+  it has outgrown a chat. Three steps, each one press:
+  - `＋ child chat` (Anchor card, with an anchor) asks for the chat's goal in
+    one line and copies a draft for a new chat: the anchor's context with the
+    goal as the instruction. The pane starts no session and writes nothing;
+    paste the draft into a new chat and send it. That chat is then anchored on
+    the same anchor and listed under it with the goal as its title.
+  - **`🌱 Chats on <anchor>`** (its own card) is the list of every open chat on
+    the anchor: its goal (its first prompt, or the goal it was started with),
+    `(this chat)` on the row of the chat you are in, and when it was last
+    active (its transcript's time when that is on this computer, the newest
+    twelve followed on the ten-second sync; else when it was filed). Pressing
+    a row copies `claude --resume <id>`. `done` folds a chat under
+    `▸ done chats (N)`, where `reopen` brings it back. In the Agent Log a
+    chat is one line under `## Chats`, a finished one marked `(done)` (a log
+    written while that was called `(hidden)` reads the same).
+  - `→ task` on a chat's row makes that chat a task of the anchor: the title
+    field opens with the chat's goal, and Enter writes the note (`Up:` the
+    anchor), a linked sub-item under the anchor's card, and the task's own
+    Agent Log with the anchor and the chat's transcript pinned. The chat's
+    line moves from the anchor's log to the task's, and the chat is anchored
+    on the task from then on: its own pane follows on its next sync, and when
+    it is this chat the pane moves at once.
+  `＋ sub-task` and `＋ new task` (below) stay for work known to be a task from
+  the start.
 - **New task** (two buttons in the Anchor card): `＋ new task` (always) and
   `＋ sub-task of <anchor>` (with an anchor). No field that makes a file is open
   until one is pressed: it opens a title field and `cancel`; an empty title or

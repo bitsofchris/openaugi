@@ -7,7 +7,7 @@ import { addDailyLine, dailyNotePath, dailyPattern, formatDate, openBoxes } from
 import { folderKey, promptTitle } from './register'
 import { extraPins, isListedTouch, storedPins, openArgv, shortPath, touchedPin, withTouched } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
-import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
+import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, removeChat, setChatDone, lastActive, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
   plugin: 'augi-ui',
@@ -336,9 +336,9 @@ test('a trail note starts empty, takes chats newest first, once each', async () 
   expect(empty.split('---\n')[2]?.split('\n')[1]?.startsWith('Human note: [[PMOC - Garden]]. ')).toBe(true)
   expect(parseTrail(empty)).toEqual({ questions: [], chats: [], saved: [], pins: [] })
 
-  const one = addChat(empty, { id: 's1', when: '2026-11-08 10:00', title: 'echoes: why slow', hidden: false })
-  const two = addChat(one, { id: 's2', when: '2026-11-08 11:00', title: 'second', hidden: false })
-  expect(addChat(two, { id: 's1', when: '2026-11-08 12:00', title: 'again', hidden: false })).toBe(two)
+  const one = addChat(empty, { id: 's1', when: '2026-11-08 10:00', title: 'echoes: why slow', done: false })
+  const two = addChat(one, { id: 's2', when: '2026-11-08 11:00', title: 'second', done: false })
+  expect(addChat(two, { id: 's1', when: '2026-11-08 12:00', title: 'again', done: false })).toBe(two)
   expect(parseTrail(two).chats.map(chat => chat.id)).toEqual(['s2', 's1'])
 
   const saved = two.replace('## Saved\n', '## Saved\n- [[A note]] from a chat\n')
@@ -431,12 +431,27 @@ test('a claude session copies its resume command; codex its path', async () => {
   expect(resumeCommand({ path: '/c/rollout.jsonl', tool: 'codex', repo: 'r', title: 't', mtimeMs: 0 })).toBe('/c/rollout.jsonl')
 })
 
-test('hiding a chat marks its line and keeps it listed', async () => {
-  const text = addChat(trailTemplate('X', '2026-11-08'), { id: 's1', when: '2026-11-08 10:00', title: 't', hidden: false })
-  const hidden = setHidden(text, 's1', true)
-  expect(hidden.includes('`s1` (hidden)')).toBe(true)
-  expect(parseTrail(hidden).chats[0]?.hidden).toBe(true)
-  expect(parseTrail(setHidden(hidden, 's1', false)).chats[0]?.hidden).toBe(false)
+test('a finished chat is marked done on its line and stays listed; an older (hidden) mark reads as done; a moved chat\'s line is removed', async () => {
+  const text = addChat(addChat(trailTemplate('X', '2026-11-08'), { id: 's1', when: '2026-11-08 10:00', title: 'fix the gate', done: false }), { id: 's2', when: '2026-11-08 11:00', title: 'paint it', done: false })
+  const done = setChatDone(text, 's1', true)
+  expect(done.includes('- 2026-11-08 10:00 · fix the gate · `s1` (done)')).toBe(true)
+  expect(parseTrail(done).chats.map(chat => [chat.id, chat.done])).toEqual([['s2', false], ['s1', true]])
+  expect(setChatDone(done, 's1', false)).toBe(text)
+  // A log written before done was the word: the chat reads as done, and is written back as done.
+  const older = text.replace('`s1`', '`s1` (hidden)')
+  expect(parseTrail(older).chats.find(chat => chat.id === 's1')?.done).toBe(true)
+  expect(setChatDone(older, 's1', true)).toBe(done)
+  // Moved to another anchor's log: only that line goes.
+  expect(removeChat(text, 's1')).toBe(text.replace('- 2026-11-08 10:00 · fix the gate · `s1`\n', ''))
+  expect(removeChat(text, 'nobody')).toBe(text)
+  expect(parseTrail(removeChat(done, 's1')).chats.map(chat => chat.id)).toEqual(['s2'])
+})
+
+test('a chat\'s last activity reads as the time today, the month and day before, nothing when unknown', async () => {
+  const now = new Date(2022, 0, 5, 15, 0).getTime()
+  expect(lastActive(new Date(2022, 0, 5, 9, 7).getTime(), now)).toBe('09:07')
+  expect(lastActive(new Date(2022, 0, 3, 23, 59).getTime(), now)).toBe('01-03')
+  expect(lastActive(0, now)).toBe('')
 })
 
 test('a sent draft is titled by its lens and instruction; anything else is not ours', async () => {
@@ -562,7 +577,7 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
   await $.prompt.submit({ text: filled[0] ?? '' })
   const trail = written.get(trailPath('PMOC - Garden')) ?? ''
   expect(parseTrail(trail).chats).toEqual([
-    { id: 'own-session', when: '2026-11-08 09:30', title: 'echoes: is the sprinkler the bottleneck', hidden: false },
+    { id: 'own-session', when: '2026-11-08 09:30', title: 'echoes: is the sprinkler the bottleneck', done: false },
   ])
   expect(await ui.find({ key: 'chat-own-session' })).toBeTruthy()
 
@@ -580,9 +595,19 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
   expect(parseTrail(written.get(trailPath('PMOC - Garden')) ?? '').questions[0]?.done).toBe(true)
   expect(await ui.find({ key: 'ask-2026-11-08 09:30' })).toBeFalsy()
 
-  await ui.press({ key: 'hide-own-session' })
-  expect(parseTrail(written.get(trailPath('PMOC - Garden')) ?? '').chats[0]?.hidden).toBe(true)
+  // The chat is a row under Chats: done folds it away, reopen brings it back.
+  expect((await ui.find({ key: 'chat-own-session' }))?.text).toMatch(/◦ echoes: is the sprinkler the bottleneck \(this chat\) · 11-08 09:30/)
+  expect(await ui.find({ text: /🌱 Chats on PMOC - Garden · 1 open/ })).toBeTruthy()
+  await ui.press({ key: 'chat-done-own-session' })
+  expect(parseTrail(written.get(trailPath('PMOC - Garden')) ?? '').chats[0]?.done).toBe(true)
+  expect(written.get(trailPath('PMOC - Garden'))?.includes('`own-session` (done)')).toBe(true)
   expect(await ui.find({ key: 'chat-own-session' })).toBeFalsy()
+  expect(await ui.find({ text: /🌱 Chats on PMOC - Garden · 0 open/ })).toBeTruthy()
+  await ui.press({ key: 'chats-done' })
+  expect((await ui.find({ key: 'chat-own-session' }))?.text).toMatch(/✓ echoes: is the sprinkler the bottleneck/)
+  await ui.press({ key: 'chat-reopen-own-session' })
+  expect(parseTrail(written.get(trailPath('PMOC - Garden')) ?? '').chats[0]?.done).toBe(false)
+  expect(await ui.find({ key: 'chat-done-own-session' })).toBeTruthy()
   await ui.unmount()
 })
 
@@ -905,6 +930,8 @@ test('the Agent Log is named for its note and links it first, with no title or s
 })
 
 const OLD_INTRO = 'Project: [[PMOC - Garden]], embedded there under # Agent Log. Context lines are `- [x] [[note]] · why it matters` (ticked goes into the next draft). Hidden chats stay listed, marked `(hidden)`.'
+// The intro the log had while a finished chat was called hidden.
+const HIDDEN_INTRO = 'Human note: [[PMOC - Garden]]. Context lines are `- [x] [[note]] · why it matters` (ticked goes into the next draft). Hidden chats stay listed, marked `(hidden)`.'
 
 test('an older Agent Log loses its title and seen box, gains the note link, and keeps its sections', async () => {
   const sections = ['## Context', '', '- [x] [[A note]] · why', '', '## Questions', '', '- [x] 2022-01-04 10:00 · q', '', '## Chats', '', '## Saved', '']
@@ -914,6 +941,12 @@ test('an older Agent Log loses its title and seen box, gains the note link, and 
   expect(tidyTrail(tidy, 'PMOC - Garden')).toBe(tidy)
   expect(parseTrail(tidy)).toEqual(parseTrail(old))
   expect(tidyTrail(trailTemplate('PMOC - Garden', '2022-01-04'), 'PMOC - Garden')).toBe(trailTemplate('PMOC - Garden', '2022-01-04'))
+  // A log from the version before this one takes the current intro, which says done, and nothing else changes.
+  const current = trailTemplate('PMOC - Garden', '2022-01-04')
+  const previous = current.replace(/^Human note: .*$/m, HIDDEN_INTRO)
+  expect(previous).not.toBe(current)
+  expect(tidyTrail(previous, 'PMOC - Garden')).toBe(current)
+  expect(current.includes('marked `(done)`')).toBe(true)
 
   // A moved trail and a log with no link line get the link line; a seen line inside a section stays.
   const trail = tidyTrail('# Trail - PMOC - Garden\n\n## Chats\n- [ ] seen it\n', 'PMOC - Garden')
@@ -971,13 +1004,13 @@ test('a new lens is written once from its name, opened in the editor, and listed
 })
 
 test('a placeholder chat title takes the draft title once; a real title stays', async () => {
-  const text = addChat(trailTemplate('X', '2026-11-08'), { id: 's1', when: '2026-11-08 10:00', title: 'chat', hidden: false })
+  const text = addChat(trailTemplate('X', '2026-11-08'), { id: 's1', when: '2026-11-08 10:00', title: 'chat', done: false })
   const named = retitleChat(text, 's1', 'echoes: why slow')
   expect(parseTrail(named).chats[0]?.title).toBe('echoes: why slow')
   expect(retitleChat(named, 's1', 'later')).toBe(named)
   expect(retitleChat(text, 's2', 'other')).toBe(text)
-  const hidden = retitleChat(setHidden(text, 's1', true), 's1', 'named')
-  expect(parseTrail(hidden).chats[0]).toEqual({ id: 's1', when: '2026-11-08 10:00', title: 'named', hidden: true })
+  const hidden = retitleChat(setChatDone(text, 's1', true), 's1', 'named')
+  expect(parseTrail(hidden).chats[0]).toEqual({ id: 's1', when: '2026-11-08 10:00', title: 'named', done: true })
 })
 
 test('session anchors keep the latest per session, the most recent last, capped', async () => {
@@ -1053,7 +1086,7 @@ test('a new session opens with no anchor; anchoring logs the chat, pins its arti
   await ui.press({ key: 'anchor-menu' })
   await ui.press({ key: 'card-PMOC - Garden' })
   expect(store.get('anchors')).toEqual([['other-session', 'PMOC - Garden'], ['new-session', 'PMOC - Garden']])
-  expect(logNow().chats).toEqual([{ id: 'new-session', when: '2026-11-08 09:30', title: 'chat', hidden: false }])
+  expect(logNow().chats).toEqual([{ id: 'new-session', when: '2026-11-08 09:30', title: 'chat', done: false }])
   expect(logNow().pins).toEqual([{ on: true, kind: 'artifact', target: 'https://claude.ai/artifact/early-1', label: 'Early plan' }])
   // The Anchor card does not repeat the pins: they are opened from the Pins card below it.
   expect(await ui.find({ key: 'anchor-artifact-https://claude.ai/artifact/early-1' })).toBeFalsy()
@@ -1976,9 +2009,11 @@ const inheritHooks = (on: On, folders: [string, string][] = [['/r/garden', 'PMOC
   got.store.set('folders', folders)
   on('session.cwd', () => ({ value: state.cwd }))
   on('session.usage', () => ({ value: { startedAt: now - state.age, context: { window: 200000 }, rateLimits: [] } as never }))
-  on('fs.stat', () => ({ value: { kind: 'file', size: 1, mtimeMs: 1, isLink: false } }))
+  // When each file was last written, by path; a test moves a transcript's time forward.
+  const seen: Record<string, number> = {}
+  on('fs.stat', (_, e) => ({ value: { kind: 'file', size: 1, mtimeMs: seen[e.path] ?? 1, isLink: false } }))
 
-  return { ...got, state }
+  return { ...got, state, seen }
 }
 
 test('a new chat starts on the anchor last chosen in its folder, is filed there with its first prompt, and keep, change or no anchor is one press', { options: OPTIONS }, async ($, on) => {
@@ -1997,7 +2032,7 @@ test('a new chat starts on the anchor last chosen in its folder, is filed there 
   expect(got.written.size).toBe(0)
   // Its first prompt files it under that prompt's first line, and the note about where it came from goes.
   await $.prompt.submit({ text: 'fix the sprinkler valve\nit leaks at the joint' })
-  expect(parseTrail(got.written.get(trailPath('PMOC - Garden')) ?? '').chats).toEqual([{ id: 'fresh', when: '2026-11-08 09:30', title: 'fix the sprinkler valve', hidden: false }])
+  expect(parseTrail(got.written.get(trailPath('PMOC - Garden')) ?? '').chats).toEqual([{ id: 'fresh', when: '2026-11-08 09:30', title: 'fix the sprinkler valve', done: false }])
   expect(await ui.find({ text: /From your last chat in this folder/ })).toBeFalsy()
   expect(await ui.find({ key: 'chat-fresh' })).toBeTruthy()
   // Later prompts do not rename it, and do not read the log again to find that out.
@@ -2133,6 +2168,162 @@ test('a chat on an anchor it chose is titled by its first prompt too, replacing 
   expect(chats()).toEqual(['plan the beds for spring'])
   await $.prompt.submit({ text: 'something else entirely' })
   expect(chats()).toEqual(['plan the beds for spring'])
+  await ui.unmount()
+})
+
+test('＋ child chat copies a draft with its goal and writes nothing; sent in a new chat, that chat is listed on the parent with the goal, its last activity, and done', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on, [], [['parent', 'PMOC - Garden']])
+  got.state.id = 'parent'
+  const { seen } = got
+  const child = '/Users/t/.claude/projects/-r-garden/child-1.jsonl'
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ text: /No open chats/ })).toBeTruthy()
+
+  // The goal field opens on a press; cancel and an empty goal copy nothing.
+  expect(await ui.find({ key: 'task-title-child' })).toBeFalsy()
+  await ui.press({ key: 'task-child' })
+  await ui.press({ key: 'task-cancel' })
+  await ui.press({ key: 'task-child' })
+  await ui.input({ key: 'task-title-child', text: '   ' })
+  expect(got.copied).toEqual([])
+  await ui.press({ key: 'task-child' })
+  await ui.input({ key: 'task-title-child', text: '  wire the  sprinkler timer ' })
+  expect(got.copied.length).toBe(1)
+  const draft = got.copied[0] ?? ''
+  expect(anchorFromDraft(draft)).toBe('PMOC - Garden')
+  expect(draft.endsWith('Instruction: wire the sprinkler timer')).toBe(true)
+  expect(draft.includes('"/v/PMOC - Garden.md"')).toBe(true)
+  // No note, no card, no log line, and this chat's prompt box untouched.
+  expect(got.written.size).toBe(0)
+  expect(got.filled).toEqual([])
+  expect(await ui.find({ key: 'task-title-child' })).toBeFalsy()
+  expect(got.toasts.some(text => text.includes('shows under Chats on PMOC - Garden as "wire the sprinkler timer"'))).toBe(true)
+
+  // The draft is pasted into a new chat in the same folder and sent.
+  got.state.id = 'child-1'
+  got.written.set(child, '')
+  await $.prompt.submit({ text: draft })
+  expect(anchorOf(got.store, 'child-1')).toBe('PMOC - Garden')
+  expect(parseTrail(got.written.get(trailPath('PMOC - Garden')) ?? '').chats).toEqual([{ id: 'child-1', when: '2026-11-08 09:30', title: 'wire the sprinkler timer', done: false }])
+  expect([...got.written.keys()].filter(path => path.endsWith('.md') && !path.includes('Agent Log'))).toEqual([])
+
+  // Back in the parent chat, the pane reads the log again and lists the child with its goal.
+  got.state.id = 'parent'
+  seen[child] = new Date(2026, 10, 8, 9, 42).getTime()
+  await ui.press({ key: 'refresh' })
+  expect(await ui.find({ text: /🌱 Chats on PMOC - Garden · 1 open/ })).toBeTruthy()
+  expect((await ui.find({ key: 'chat-child-1' }))?.text).toBe('◦ wire the sprinkler timer · 09:42')
+  // The child keeps working: its row follows its transcript without a full reload.
+  seen[child] = new Date(2026, 10, 8, 10, 5).getTime()
+  await $.prompt.submit({ text: 'still here' })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect((await ui.find({ key: 'chat-child-1' }))?.text).toMatch(/· 10:05$/)
+  // The parent chat itself is listed too, marked as this chat, by its own first prompt.
+  expect((await ui.find({ key: 'chat-parent' }))?.text).toMatch(/◦ still here \(this chat\)/)
+
+  // Pressing a chat copies how to resume it; done folds it away.
+  await ui.press({ key: 'chat-child-1' })
+  expect(got.copied[1]).toBe('claude --resume child-1')
+  await ui.press({ key: 'chat-done-child-1' })
+  expect(await ui.find({ key: 'chat-done-child-1' })).toBeFalsy()
+  expect(await ui.find({ text: /🌱 Chats on PMOC - Garden · 1 open/ })).toBeTruthy()
+  expect(await ui.find({ key: 'chats-done' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('→ task turns a chat on the anchor into a task in one press: note, sub-item, its own log with the chat moved there, and that chat anchored on it', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on, [], [['parent', 'PMOC - Garden'], ['child-1', 'PMOC - Garden']])
+  got.state.id = 'parent'
+  const child = '/Users/t/.claude/projects/-r-garden/child-1.jsonl'
+  got.written.set(child, '')
+  const log = addChat(addChat(trailTemplate('PMOC - Garden', '2026-11-08'), { id: 'parent', when: '2026-11-08 09:00', title: 'plan the beds', done: false }), { id: 'child-1', when: '2026-11-08 09:10', title: 'wire the sprinkler timer', done: false })
+  got.written.set(trailPath('PMOC - Garden'), log)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ text: /🌱 Chats on PMOC - Garden · 2 open/ })).toBeTruthy()
+  // One search finds the open chats' transcripts, by id, two folders deep and no further.
+  expect(got.ran.find(argv => argv[0] === 'find' && argv.includes('-maxdepth'))).toEqual(
+    ['find', '/Users/t/.claude/projects', '-maxdepth', '2', '(', '-name', 'child-1.jsonl', '-o', '-name', 'parent.jsonl', ')'],
+  )
+
+  // The title field opens with the chat's goal; cancel makes nothing.
+  await ui.press({ key: 'chat-task-child-1' })
+  expect((await ui.find({ key: 'task-title-promote' }))?.props?.value).toBe('wire the sprinkler timer')
+  await ui.press({ key: 'task-cancel' })
+  expect(await ui.find({ key: 'task-title-promote' })).toBeFalsy()
+  expect(got.written.has('/v/wire the sprinkler timer.md')).toBe(false)
+
+  await ui.press({ key: 'chat-task-child-1' })
+  await ui.input({ key: 'task-title-promote', text: 'Wire the sprinkler timer PROJ-7' })
+  // The note, from the template, Up the anchor, with the Jira key typed.
+  const note = got.written.get('/v/Wire the sprinkler timer.md') ?? ''
+  expect(note.startsWith('Up: [[PMOC - Garden]]\nJira: PROJ-7\n')).toBe(true)
+  expect(note.includes('### Outcome')).toBe(true)
+  // A linked sub-item under the anchor's card, nothing else on the board moved.
+  const item = '\t- [ ] [[Wire the sprinkler timer]]'
+  const board = got.written.get('/v/Kanban.md') ?? ''
+  expect(board.split('\n').indexOf(item)).toBe(BOARD_TEXT.split('\n').indexOf('\t- [ ] [[PMOC - Birdhouse]]') + 1)
+  expect(without(board, item)).toBe(BOARD_TEXT)
+  // Its own log: the anchor and the chat's transcript pinned, and the chat itself, as it was.
+  const made = parseTrail(got.written.get(trailPath('Wire the sprinkler timer')) ?? '')
+  expect(made.pins).toEqual([
+    { on: true, kind: 'note', target: 'PMOC - Garden', label: 'PMOC - Garden' },
+    { on: true, kind: 'session', target: child, label: 'the chat this task came from' },
+  ])
+  expect(made.chats).toEqual([{ id: 'child-1', when: '2026-11-08 09:10', title: 'wire the sprinkler timer', done: false }])
+  // The parent's log lost only that chat's line.
+  expect(got.written.get(trailPath('PMOC - Garden'))).toBe(removeChat(log, 'child-1'))
+  expect(await ui.find({ key: 'chat-child-1' })).toBeFalsy()
+  expect(await ui.find({ text: /🌱 Chats on PMOC - Garden · 1 open/ })).toBeTruthy()
+  // That chat is on the task now; this one stays where it was, and so does the folder's anchor.
+  expect(anchorOf(got.store, 'child-1')).toBe('Wire the sprinkler timer')
+  expect(anchorOf(got.store, 'parent')).toBe('PMOC - Garden')
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  expect(got.store.get('folders')).toEqual([])
+  expect(await ui.find({ text: '✓ just made: Wire the sprinkler timer' })).toBeTruthy()
+  expect(got.toasts.some(text => text.includes("under PMOC - Garden's card") && text.includes('That chat is anchored on it now.'))).toBe(true)
+  // The new task is among the anchor's open tasks.
+  await ui.press({ key: 'anchor-details' })
+  expect(await ui.find({ key: 'task-Wire the sprinkler timer' })).toBeTruthy()
+
+  // The child chat's own pane follows on its next sync: it is on the task.
+  got.state.id = 'child-1'
+  await ui.press({ key: 'refresh' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/Wire the sprinkler timer/)
+  expect((await ui.find({ key: 'chat-child-1' }))?.text).toMatch(/wire the sprinkler timer \(this chat\)/)
+  await ui.unmount()
+})
+
+test('→ task on this chat itself anchors it on the new task; a name already taken makes nothing and moves nothing', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on, [], [['parent', 'PMOC - Garden']])
+  got.state.id = 'parent'
+  const log = addChat(trailTemplate('PMOC - Garden', '2026-11-08'), { id: 'parent', when: '2026-11-08 09:00', title: 'chat', done: false })
+  got.written.set(trailPath('PMOC - Garden'), log)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'chat-task-parent' })
+  // A chat still titled by the placeholder offers no title: the user names the task.
+  expect((await ui.find({ key: 'task-title-promote' }))?.props?.value ?? '').toBe('')
+  // A note of that name exists: nothing is written, the chat stays where it is.
+  await ui.input({ key: 'task-title-promote', text: 'PMOC - Birdhouse' })
+  expect(got.toasts.some(text => text.includes('already there'))).toBe(true)
+  expect(got.written.get(trailPath('PMOC - Garden'))).toBe(log)
+  expect(anchorOf(got.store, 'parent')).toBe('PMOC - Garden')
+
+  await ui.press({ key: 'chat-task-parent' })
+  await ui.input({ key: 'task-title-promote', text: 'Mend the fence' })
+  expect(got.written.get('/v/Mend the fence.md')?.startsWith('Up: [[PMOC - Garden]]\n')).toBe(true)
+  expect(anchorOf(got.store, 'parent')).toBe('Mend the fence')
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/Mend the fence/)
+  // The placeholder title becomes the task's name in its log; this chat's transcript is pinned.
+  const made = parseTrail(got.written.get(trailPath('Mend the fence')) ?? '')
+  expect(made.chats).toEqual([{ id: 'parent', when: '2026-11-08 09:00', title: 'Mend the fence', done: false }])
+  expect(made.pins.map(pin => pin.kind)).toEqual(['note'])
+  expect(parseTrail(got.written.get(trailPath('PMOC - Garden')) ?? '').chats).toEqual([])
+  expect(got.toasts.some(text => text.includes('This chat is anchored on it now.'))).toBe(true)
+  // The task this chat is now on is what the next new chat in the folder starts on.
+  expect(got.store.get('folders')).toEqual([['/r/garden', 'Mend the fence']])
   await ui.unmount()
 })
 

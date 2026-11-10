@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+**augi-ui: chats are free, tasks are earned.** Splitting a task into parallel
+chats used to mean a note, a board line and an anchor switch for each. Now:
+`＋ child chat` on the anchor takes a one-line goal and copies a draft for a
+new chat; nothing is written, and once sent that chat is listed on the anchor
+under its goal. The card that listed chats is now **Chats on `<anchor>`**: one
+row per open chat with its goal and when it was last active, `done` to fold
+it away, and `→ task` to turn a chat that outgrew its session into a task in
+one press (the note, the line under the anchor's card, its own Agent Log, and
+the chat moved there and anchored on it). In the Agent Log a finished chat is
+now marked `(done)`; logs that say `(hidden)` read the same. `＋ sub-task` and
+`＋ new task` are unchanged.
+
 **augi-ui: a new chat starts on your last anchor.** Opening a chat no longer
 begins with picking an anchor: it starts on the one last chosen in that
 working folder, and the Anchor card says so with `keep`, `change` and

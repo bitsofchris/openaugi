@@ -5,7 +5,9 @@ export type Session = { path: string; tool: 'claude' | 'codex'; repo: string; ti
 export type SubItem = { text: string; note: string | null }
 // A Kanban card that links a note: the project or task an anchor points at.
 export type Card = { column: string; note: string; detail: string; tasks: SubItem[] }
-export type Chat = { id: string; when: string; title: string; hidden: boolean }
+// A chat anchored here: when it was filed, its goal (its first prompt, or what a child
+// chat was started for), its session id, and whether it is finished.
+export type Chat = { id: string; when: string; title: string; done: boolean }
 // A question an agent (or an older pane) left on the trail under ## Questions.
 export type Question = { when: string; text: string; done: boolean }
 // Something kept as context for an anchor, under ## Context on its trail. `on` is whether
@@ -44,6 +46,11 @@ export type Swatch = {
   taskTemplate: 'built-in' | 'yours' | 'old'
   today: Today
   trail: Trail
+  // The anchor's open chats whose transcripts are on this computer, by chat id: the file,
+  // and when it was last written. `seenAt` is when those were read.
+  chatFiles: Record<string, string>
+  chatSeen: Record<string, number>
+  seenAt: number
   // Where each pinned note was found, by name.
   pinPaths: Record<string, string>
   // Notes a pane search found, to pin with a press.
@@ -83,7 +90,8 @@ export type View = {
   anchorsOpen: boolean
   sessionsOpen: boolean
   lensesOpen: boolean
-  showHidden: boolean
+  // The finished chats of the anchor, folded away by default.
+  chatsDoneOpen: boolean
   setupOpen: boolean
   inOpen: boolean
   doneOpen: boolean
@@ -91,8 +99,10 @@ export type View = {
   detailsOpen: boolean
   // The Files card lists every touched file, not just the newest five.
   filesOpen: boolean
-  // Which new-task field is open in the Anchor card: none, a standalone task, or a sub-task of the anchor.
-  taskMode: '' | 'new' | 'sub'
+  // Which field is open in the Anchor card: none, a standalone task, or a sub-task of the anchor.
+  // `child` asks for a child chat's goal; `promote` turns the chat `promote` into a task.
+  taskMode: '' | 'new' | 'sub' | 'child' | 'promote'
+  promote: string
   // How many lines the Today card has logged this session: it empties the log field after each.
   logged: number
 }
