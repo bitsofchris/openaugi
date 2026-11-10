@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.3 — 2026-11-09
+
+**Upgrading:** `pip install -U openaugi` (or `uv tool upgrade openaugi`). If
+interactive `openaugi init` crashed for you at the search question, this is
+the fix. The pane ships as augi-ui 0.12.0: `/plugin update augi-ui`, then see
+`docs/reference/augi-ui.md` for the new task buttons, scratchpad, files card
+and Setup options.
 
 **Fix: `openaugi init` crashed at the search question on typer 0.29.** That
 release vendored click, and its prompt no longer accepts a `click.Choice`, so
