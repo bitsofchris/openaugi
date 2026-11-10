@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+The augi-ui entries below ship together as **augi-ui 0.13.0**
+(`/plugin update augi-ui`). Two things to do once after updating: if ⚙️ Setup
+shows `✗ task template`, press `use the current template`; and set a
+`new task folder` there if Setup warns that none is set.
+
 **Two new lenses: `overview` and `standup`.** `overview` answers "what is
 open across everything I am working on, and what is next?": it reads the
 board and every anchor's Agent Log and returns each anchor's open chats, open

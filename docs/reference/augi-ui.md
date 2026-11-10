@@ -1,6 +1,6 @@
 ---
 name: augi-ui
-description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, pick the context a chat gets, run lenses, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
+description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, split its work into child chats and track them, pick the context a chat gets, keep today's note in view, run lenses, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
 ---
 
 # augi-ui — the pane beside your agent chat
@@ -156,7 +156,7 @@ are `dimColor`, and the one primary button is the draft.
   `Up: [[<anchor>]]`, a linked sub-item `\t- [ ] [[<title>]]` as the last of
   the anchor card's indented lines (`insertSubItem`; an anchor that is itself a
   sub-item gets it beside it under the same card; an anchor not on the board
-  gets a top-level card at the end of the first column, and the toast says
+  gets a top-level card at the end of the `taskColumn` setting's column, else the first, and the toast says
   which), and the anchor pinned, ticked, in the child's Agent Log so the two
   share context. Either way this chat's transcript is pinned there too, the
   board is read back into the pane, and **the chat's anchor and prompt box are
@@ -238,7 +238,7 @@ are `dimColor`, and the one primary button is the draft.
   project context unticked names no anchor and attaches nothing.
 - **Questions**: the pane has one place to type a thought, the scratchpad
   (below). Questions an agent left under `## Questions` in the Agent Log are
-  still listed under `On <anchor>`: pressing one drafts it as the instruction,
+  still listed in the `Chats on <anchor>` card, under its chats: pressing one drafts it as the instruction,
   `done` ticks it. The pane itself no longer writes that section.
 - **Lenses (saved prompts)** (`l`): run a lens with the same context; `+ new lens`
   takes a name, writes a skeleton file in the lens folder (never over one that's
