@@ -19,6 +19,8 @@ export type Options = {
   trailFolder: string
   // The one flat folder every new task note goes to; empty means the notes folder's root.
   taskFolder: string
+  // The board column a new standalone task goes to when the chat has no anchor; empty means the first.
+  taskColumn: string
   lensPicks: string
   // `no` keeps the pane closed until /augi; anything else opens it with each new chat.
   openOnStart: string
@@ -39,6 +41,10 @@ export type Paths = {
   trails: string
   // Where every new task note goes: the task folder, else the notes folder's root.
   tasks: string
+  // The board column for a new standalone task from a chat with no anchor, or empty.
+  taskColumn: string
+  // The notes folder's own task template, which the pane prefers over its built-in one.
+  taskTemplate: string
   claudeDir: string
   codexDir: string
   // The usage log: one JSON line per pane press, on this computer only.
@@ -72,6 +78,8 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
     lenses: within(notes, options.lensFolder || 'OpenAugi/AGENT/lenses', home),
     trails: within(notes, options.logFolder || options.trailFolder || 'OpenAugi/Agent-Logs', home),
     tasks: options.taskFolder?.trim() ? within(notes, options.taskFolder, home) : notes,
+    taskColumn: (options.taskColumn ?? '').trim(),
+    taskTemplate: `${notes}/OpenAugi/AGENT/templates/Task.md`,
     claudeDir: `${home}/.claude/projects`,
     codexDir: `${home}/.codex/sessions`,
     usage: `${home}/.openaugi/usage/augi-ui.jsonl`,
@@ -126,7 +134,7 @@ export const usageName = (element: string): string => {
 export const USAGE_FEATURES = [
   'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'open-note', 'open-trail', 'anchor-details', 'task',
   'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
-  'made-open', 'made-define', 'made-copy', 'made-anchor', 'made-dismiss',
+  'made-open', 'made-board', 'made-define', 'made-copy', 'made-anchor', 'made-dismiss', 'template-update',
   'ask', 'done', 'show-done', 'reopen', 'saved', 'chat', 'hide', 'show-hidden',
   'pin-tick', 'pin-open', 'pin-drop', 'pin-paste',
   'touched-open', 'touched-pin', 'files-all', 'pad-input', 'pad-save', 'pad-ask', 'pad-drop', 'pad-save-all',
@@ -379,6 +387,7 @@ const swatch = atom(
     next: [],
     jira: '',
     jiraServer: '',
+    taskTemplate: 'built-in',
     trail: EMPTY_TRAIL,
     pinPaths: {},
     hits: [],
@@ -387,7 +396,7 @@ const swatch = atom(
     sessions: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-12' },
+  { shape: 'swatch-13' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
 const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, trailOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true, contextOpen: true }
@@ -429,8 +438,8 @@ let typedPad = ''
 const opened = atom({ plugin: 'augi-ui', key: 'opened' } as const, { session: '-' } as Opened, { shape: 'opened-1' })
 
 // The task this chat just made: session state, cleared by its dismiss and on clear or resume.
-const NO_TASK: JustMade = { note: '', path: '', jira: '' }
-const justMade = atom({ plugin: 'augi-ui', key: 'justMade' } as const, NO_TASK, { shape: 'just-made-1' })
+const NO_TASK: JustMade = { note: '', path: '', jira: '', where: '' }
+const justMade = atom({ plugin: 'augi-ui', key: 'justMade' } as const, NO_TASK, { shape: 'just-made-2' })
 
 // The first bold line under a heading that names the season or focus,
 // e.g. "Primary: the metrics data factory."
@@ -731,6 +740,17 @@ export const TASK_TEMPLATE = [
   '',
 ].join('\n')
 
+// Which task template a new task is made from: the built-in one (the notes folder has
+// none), the notes folder's own, or its own from before the Agent Log left the note: one
+// that still has an Agent Log heading or embeds the log.
+export const taskTemplateState = (text: string): 'built-in' | 'yours' | 'old' => {
+  if (!text.trim()) {
+    return 'built-in'
+  }
+
+  return /^#{1,6}\s+Agent Log\s*$/im.test(text) || /!\[\[Agent Log - /.test(text) ? 'old' : 'yours'
+}
+
 // A new task note from a template: date and title filled, `Up:` pointing at the anchor
 // (the line gone without one), and the Jira key when there is one (see withJira).
 export const taskNoteText = (template: string, name: string, today: string, up: string | null, jira: string): string => {
@@ -845,9 +865,10 @@ export const jiraUpdateDraft = (notePath: string, note: string, logPath: string,
   ].join('\n')
 
 // Puts `- [ ] [[note]]` on the board as a top-level card: after the anchor's card and
-// its sub-items, else at the end of the first column's cards. Never in the archive;
-// every other line stays as it was.
-export const insertCard = (board: string, note: string, anchor: string | null): string => {
+// its sub-items; else at the end of the column named `into` (by its heading, any case);
+// else at the end of the first column's cards. Never in the archive; every other line
+// stays as it was.
+export const insertCard = (board: string, note: string, anchor: string | null, into = ''): string => {
   const lines = board.split('\n')
   // Cards end at the archive, or at the Kanban plugin's settings block on a board with no archive.
   const archive = lines.findIndex(line => line === '***' || /^%% kanban:settings/.test(line))
@@ -863,7 +884,10 @@ export const insertCard = (board: string, note: string, anchor: string | null): 
 
     return lines.join('\n')
   }
-  const column = lines.findIndex((line, index) => index < end && line.startsWith('## '))
+  const isColumn = (line: string, index: number): boolean => index < end && line.startsWith('## ')
+  const wanted = into.trim().toLowerCase()
+  const named = wanted ? lines.findIndex((line, index) => isColumn(line, index) && line.slice(3).trim().toLowerCase() === wanted) : -1
+  const column = named >= 0 ? named : lines.findIndex(isColumn)
   if (column < 0) {
     lines.splice(end, 0, ...(end > 0 && lines[end - 1] !== '' ? [''] : []), card, '')
 
@@ -1804,6 +1828,7 @@ async function load($: EngineInterface): Promise<void> {
     cards,
     ...(await loadAnchor($, cards)),
     jiraServer: await jiraServerNow($),
+    taskTemplate: taskTemplateState(await readOr($, P.taskTemplate)),
     everywhere: storedPins(await $.store.get(PINS_KEY)),
     lenses: [],
     sessions: await recentSessions($),
@@ -2354,9 +2379,10 @@ async function ownTranscript($: EngineInterface): Promise<string> {
 }
 
 // A new task from this chat, on the user's press: the note from the template, and on the
-// board either a top-level card at the end of the first column ('new', standalone, no
-// `Up:`) or a linked sub-item under the anchor's card ('sub', `Up:` the anchor, the anchor
-// pinned in its Agent Log so the two share context). This chat's transcript is pinned to
+// board either a top-level card ('new', standalone, no `Up:`: at the end of the anchor's
+// column, else of the task column setting, else of the first column) or a linked sub-item
+// under the anchor's card ('sub', `Up:` the anchor, the anchor pinned in its Agent Log so
+// the two share context). This chat's transcript is pinned to
 // it too. The chat's anchor and its prompt box are left alone: the just-made row offers
 // the next step. Never writes over a note that is there.
 async function newTask($: EngineInterface, typed: string, mode: 'new' | 'sub'): Promise<void> {
@@ -2373,7 +2399,8 @@ async function newTask($: EngineInterface, typed: string, mode: 'new' | 'sub'): 
 
     return
   }
-  const parent = mode === 'sub' ? ((await read($, swatch)).anchor?.note ?? null) : null
+  const anchored = (await read($, swatch)).anchor
+  const parent = mode === 'sub' ? (anchored?.note ?? null) : null
   if (mode === 'sub' && !parent) {
     await $.ui.toast('Pick an anchor first: a sub-task hangs off it. Nothing made.')
 
@@ -2386,18 +2413,21 @@ async function newTask($: EngineInterface, typed: string, mode: 'new' | 'sub'): 
 
     return
   }
-  const template = (await readOr($, `${P.notes}/OpenAugi/AGENT/templates/Task.md`)) || TASK_TEMPLATE
+  const template = (await readOr($, P.taskTemplate)) || TASK_TEMPLATE
   await writeNew($, path, taskNoteText(template, name, stamp(await $.clock.now()).slice(0, 10), parent, jira))
   const old = await $.fs.read(P.board)
   let board = parent ? insertSubItem(old, name, parent) : old
   let where = ''
+  // A standalone task belongs where the chat is working: its anchor's column.
+  const into = anchored?.column || P.taskColumn
+  const columnOf = (text: string): string => kanbanCards(text).find(one => one.note === name)?.column || 'the first column'
   if (!parent) {
-    board = insertCard(old, name, null)
-    where = 'a card at the end of the first column'
+    board = insertCard(old, name, null, into)
+    where = `a card at the end of ${columnOf(board)}`
   } else if (board === old) {
     // A bare anchor (not on the board): its own card, so the task is not lost.
-    board = insertCard(old, name, null)
-    where = `${parent} is not on the board, so a card at the end of the first column`
+    board = insertCard(old, name, null, P.taskColumn)
+    where = `${parent} is not on the board, so a card at the end of ${columnOf(board)}`
   } else {
     const holder = kanbanCards(old).find(one => one.note === parent || one.tasks.some(task => task.note === parent))
     where = !holder || holder.note === parent ? `under ${parent}'s card` : `under ${holder.note}'s card, beside ${parent}`
@@ -2411,9 +2441,21 @@ async function newTask($: EngineInterface, typed: string, mode: 'new' | 'sub'): 
 
     return transcript ? addPin(withParent, { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' }) : withParent
   })
-  await update($, justMade, () => ({ note: name, path, jira }))
+  await update($, justMade, () => ({ note: name, path, jira, where }))
   const folder = settings.taskFolder?.trim() ? '' : " New tasks go to the notes folder's root: Setup → new task folder changes it."
   await $.ui.toast(`Made ${name} at ${path}; on the board: ${where}.${folder}`)
+}
+
+// Replaces the notes folder's task template with the shipped one, on the user's press. The
+// one it replaces is kept beside it, named for the day, so nothing of theirs is lost.
+async function useCurrentTemplate($: EngineInterface): Promise<void> {
+  const old = await readOr($, P.taskTemplate)
+  if (old) {
+    await $.fs.write(`${P.taskTemplate}.${stamp(await $.clock.now()).slice(0, 10)}.bak`, old)
+  }
+  await $.fs.write(P.taskTemplate, TASK_TEMPLATE)
+  await update($, swatch, current => ({ ...current, taskTemplate: 'yours' as const }))
+  await $.ui.toast(`New tasks now use the current template (Outcome, Verify, Journal). Your old one is kept beside it as a .bak file.`)
 }
 
 // The just-made task's draft for this chat's prompt box (unsent): fill in the note.
@@ -2781,7 +2823,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Input, Text } = $.ui.resolve(e)
     // Svg is drawn by the desktop, editor and phone, not the terminal.
     const Svg = e.surface === 'terminal' ? null : (($.ui.resolve(e) as unknown as { Svg?: typeof Text }).Svg ?? null)
-    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
+    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
     const everywhere = (await read($, swatch)).everywhere ?? []
     // Jira shows only when it is on: a server found or named, a project or site set, or a key on the anchor.
     const isJiraOn = Boolean(jiraServer || P.jiraServer || P.jiraProject || P.jiraSite || jira)
@@ -2850,7 +2892,7 @@ export const register: Register = (on, options) => {
     const CARD = { flexDirection: 'column', borderStyle: 'round', paddingX: 1, marginBottom: 1 } as const
     const openQuestions = trail.questions.filter(one => !one.done)
     const doneQuestions = trail.questions.filter(one => one.done)
-    const gaps = setup.filter(item => !item.ok).length
+    const gaps = setup.filter(item => !item.ok).length + (taskTemplate === 'old' ? 1 : 0)
     const short = (path: string): string => (path.startsWith(`${P.notes}/`) ? path.slice(P.notes.length + 1) : path.startsWith(P.home) ? `~${path.slice(P.home.length)}` : path)
     const step = setup[0]?.ok ? STEPS.find(one => !skipped.includes(one.field) && !setup.find(item => item.field === one.field)?.ok) : undefined
     const editorPicker = (
@@ -3019,8 +3061,10 @@ export const register: Register = (on, options) => {
                   {madeTask.note && (
                     <Box key="just-made" flexDirection="column" marginTop={1}>
                       <Text dimColor>{`✓ just made: ${madeTask.note}`}</Text>
+                      {madeTask.where && <Text key="made-where" dimColor wrap="wrap">{`on the board: ${madeTask.where}`}</Text>}
                       <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                         <Button key="made-open" label="open" onPress={() => openNote($, madeTask.path)} />
+                        <Button key="made-board" label="open the board" onPress={() => openNote($, P.board)} />
                         <Button key="made-define" label="define here" onPress={() => defineHere($)} />
                         <Button key="made-copy" label="copy for a new chat" onPress={() => copyForNewChat($)} />
                         {anchor?.note !== madeTask.note && <Button key="made-anchor" label="anchor on it" onPress={() => anchorOnMade($)} />}
@@ -3239,6 +3283,10 @@ export const register: Register = (on, options) => {
                     ))}
                     <Input key="set-logFolder" label="agent log folder" value={settings.logFolder || settings.trailFolder || ''} placeholder="OpenAugi/Agent-Logs" onSubmit={value => setOption($, 'logFolder', value)} />
                     <Input key="set-taskFolder" label="new task folder" value={settings.taskFolder ?? ''} placeholder="the notes folder's root" onSubmit={value => setOption($, 'taskFolder', value)} />
+                    {!settings.taskFolder?.trim() && <Text key="task-folder-unset" dimColor wrap="wrap">⚠ No task folder set: new task notes go to the notes folder's root.</Text>}
+                    <Input key="set-taskColumn" label="new task column" value={settings.taskColumn ?? ''} placeholder="the anchor's column, else the board's first" onSubmit={value => setOption($, 'taskColumn', value)} />
+                    <Text key="task-template" wrap="wrap">{taskTemplate === 'old' ? '✗ task template: yours still has an Agent Log section. The Agent Log links the note now, so new tasks get a section nothing fills.' : `✓ task template: ${taskTemplate === 'yours' ? short(P.taskTemplate) : 'built-in (Outcome, Verify, Journal)'}`}</Text>
+                    {taskTemplate === 'old' && <Button key="template-update" label="use the current template" onPress={() => useCurrentTemplate($)} />}
                   </Box>
                   <Box key="setup-jira" flexDirection="column" marginTop={1}>
                     <Text bold>Jira (optional)</Text>

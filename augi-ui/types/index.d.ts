@@ -36,6 +36,9 @@ export type Swatch = {
   jira: string
   // The Jira MCP server found among this session's tools, or empty.
   jiraServer: string
+  // Which task template new tasks are made from; `old` is the notes folder's own from
+  // before the Agent Log left the note.
+  taskTemplate: 'built-in' | 'yours' | 'old'
   trail: Trail
   // Where each pinned note was found, by name.
   pinPaths: Record<string, string>
@@ -85,8 +88,8 @@ export type View = {
   taskMode: '' | 'new' | 'sub'
 }
 // The task this chat just made, for the Anchor card's "just made" row; an empty `note` is none.
-// `jira` is the key typed with its title, if any.
-export type JustMade = { note: string; path: string; jira: string }
+// `jira` is the key typed with its title, if any; `where` says where on the board it went.
+export type JustMade = { note: string; path: string; jira: string; where: string }
 // The session id the pane last opened by itself for; `-` before any.
 export type Opened = { session: string }
 declare module 'claude-code' {

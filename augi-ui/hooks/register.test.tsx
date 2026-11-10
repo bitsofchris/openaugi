@@ -4,7 +4,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { parseUsage, usageName, usageReport } from './register'
 import { extraPins, isListedTouch, storedPins, openArgv, shortPath, touchedPin, withTouched } from './register'
-import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, withJira } from './register'
+import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
 import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
 const PANE = {
@@ -213,6 +213,20 @@ test('a new card goes after its anchor card and sub-items, else at the end of th
     expect(without(first, card)).toBe(MANY_COLUMNS)
     expect(first.slice(first.indexOf('***'))).toBe(MANY_COLUMNS.slice(MANY_COLUMNS.indexOf('***')))
   }
+
+  // With no anchor card to follow, a named column takes it at its end, whatever the case;
+  // a column the board does not have falls back to the first.
+  for (const into of ['Next', 'next ', 'NEXT']) {
+    const named = insertCard(MANY_COLUMNS, 'Fix the gate', null, into)
+    expect(named.split('\n').indexOf(card)).toBe(MANY_COLUMNS.split('\n').indexOf('\t- [ ] [[Dig the hole]]') + 1)
+    expect(without(named, card)).toBe(MANY_COLUMNS)
+    expect(kanbanCards(named).find(one => one.note === 'Fix the gate')?.column).toBe('Next')
+  }
+  expect(insertCard(MANY_COLUMNS, 'Fix the gate', null, 'Someday')).toBe(insertCard(MANY_COLUMNS, 'Fix the gate', null))
+  // The archive is never a column to add to, even by name.
+  expect(insertCard(MANY_COLUMNS, 'Fix the gate', null, 'Archive')).toBe(insertCard(MANY_COLUMNS, 'Fix the gate', null))
+  // An anchor card on the board still wins over the named column.
+  expect(insertCard(MANY_COLUMNS, 'Fix the gate', 'PMOC - Garden', 'Next')).toBe(after)
 
   // An empty first column takes the card under the blank line after its heading.
   const empty = '---\n\nkanban-plugin: board\n\n---\n\n## Todo\n\n\n\n## Doing\n\n- [ ] [[A]]\n'
@@ -1285,8 +1299,10 @@ test('no task field is open until a button opens it; ＋ new task makes a standa
   expect(note.includes('### 2026-11-08')).toBe(true)
   const board = got.written.get('/v/Kanban.md') ?? ''
   expect(without(board, '- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT)
-  expect(board.split('\n').indexOf('- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT.split('\n').indexOf('\t- [ ] not a task of any card') + 1)
-  expect(kanbanCards(board).find(card => card.note === 'Fix the gate')?.column).toBe('Ideas')
+  // A standalone task lands where the chat is working: at the end of its anchor's column, not the board's first.
+  expect(board.split('\n').indexOf('- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT.split('\n').indexOf('\t- [ ] [[PMOC - Birdhouse]]') + 1)
+  expect(kanbanCards(board).find(card => card.note === 'Fix the gate')?.column).toBe('Work')
+  expect(kanbanCards(board).find(card => card.note === 'PMOC - Garden')?.tasks.length).toBe(2)
   expect(parseTrail(got.written.get(trailPath('Fix the gate')) ?? '').pins).toEqual([
     { on: true, kind: 'session', target: got.transcript, label: 'the chat this task came from' },
   ])
@@ -1296,8 +1312,12 @@ test('no task field is open until a button opens it; ＋ new task makes a standa
   expect(await ui.find({ key: 'task-title-new' })).toBeFalsy()
   expect(got.toasts.some(text => text.includes('/v/Fix the gate.md') && text.includes('Setup → new task folder'))).toBe(true)
 
-  // The just-made row.
+  // The just-made row says where on the board it went and opens the board.
   expect(await ui.find({ text: '✓ just made: Fix the gate' })).toBeTruthy()
+  expect(await ui.find({ text: 'on the board: a card at the end of Work' })).toBeTruthy()
+  expect(got.toasts.some(text => text.includes('a card at the end of Work'))).toBe(true)
+  await ui.press({ key: 'made-board' })
+  expect(got.ran.some(argv => argv[0] === 'open' && argv[1] === `obsidian://open?path=${encodeURIComponent('/v/Kanban.md')}`)).toBe(true)
   await ui.press({ key: 'made-open' })
   expect(got.ran.some(argv => argv[0] === 'open' && argv[1] === `obsidian://open?path=${encodeURIComponent('/v/Fix the gate.md')}`)).toBe(true)
   await ui.press({ key: 'made-define' })
@@ -1633,6 +1653,99 @@ test('with no task folder, a new task goes to the notes root, never beside the a
   expect(got.written.has('/v/Projects/Fix the gate.md')).toBe(false)
   await ui.press({ key: 'made-define' })
   expect(got.filled).toEqual([newTaskDraft('/v/Fix the gate.md', trailPath('Fix the gate'), 'Fix the gate')])
+  await ui.unmount()
+})
+
+test('a chat with no anchor puts a standalone task in the task column setting, else in the first column', { options: { ...OPTIONS, taskColumn: 'work' } }, async ($, on) => {
+  const got = taskHooks(on, [], {})
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'task-new' })
+  await ui.input({ key: 'task-title-new', text: 'Fix the gate' })
+  const board = got.written.get('/v/Kanban.md') ?? ''
+  expect(kanbanCards(board).find(card => card.note === 'Fix the gate')?.column).toBe('Work')
+  expect(without(board, '- [ ] [[Fix the gate]]')).toBe(BOARD_TEXT)
+  expect(await ui.find({ text: 'on the board: a card at the end of Work' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('a chat with no anchor and no task column puts a standalone task in the first column, and says which', { options: OPTIONS }, async ($, on) => {
+  const got = taskHooks(on, [], {})
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'task-new' })
+  await ui.input({ key: 'task-title-new', text: 'Fix the gate' })
+  expect(kanbanCards(got.written.get('/v/Kanban.md') ?? '').find(card => card.note === 'Fix the gate')?.column).toBe('Ideas')
+  expect(await ui.find({ text: 'on the board: a card at the end of Ideas' })).toBeTruthy()
+  await ui.unmount()
+})
+
+// The task template as it shipped before the Agent Log left the note.
+const OLD_TASK_TEMPLATE = '---\noutcome: \nstatus: active\n---\n\nUp: [[PMOC - ]]\n\n# Next\n\n- [ ] \n\n# Journal\n\n### {{date:YYYY-MM-DD}}\n\n# Agent Log\n\n> [!abstract]- Agent Log\n> ![[Agent Log - {{title}}]]\n'
+
+test('a task template is the built-in one, the notes folder\'s own, or its own from before the Agent Log left the note', async () => {
+  expect(taskTemplateState('')).toBe('built-in')
+  expect(taskTemplateState('  \n')).toBe('built-in')
+  expect(taskTemplateState(TASK_TEMPLATE)).toBe('yours')
+  expect(taskTemplateState('Up: [[PMOC - ]]\n\n### Outcome\n\nMention of the Agent Log in a sentence.\n')).toBe('yours')
+  expect(taskTemplateState(OLD_TASK_TEMPLATE)).toBe('old')
+  expect(taskTemplateState('### Outcome\n\n## agent log\n')).toBe('old')
+  expect(taskTemplateState('### Outcome\n\n![[Agent Log - {{title}}]]\n')).toBe('old')
+})
+
+test('an old task template in the notes folder is what new tasks get, Setup says so, and one press replaces it keeping the old one', { options: OPTIONS }, async ($, on) => {
+  const template = '/v/OpenAugi/AGENT/templates/Task.md'
+  const got = taskHooks(on, [['own-session', 'PMOC - Garden']], { '/v/PMOC - Garden.md': GARDEN_PLAIN, [template]: OLD_TASK_TEMPLATE })
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // It counts as a setup item that needs the user, shown before Setup is opened.
+  expect(await ui.find({ text: '1 setup item needs you: open setup below.' })).toBeTruthy()
+  // Until they act, the notes folder's template is theirs to keep: a new task is made from it.
+  await ui.press({ key: 'task-sub' })
+  await ui.input({ key: 'task-title-sub', text: 'Old shape' })
+  expect(got.written.get('/v/Old shape.md')?.includes('# Agent Log')).toBe(true)
+  expect(got.written.get('/v/Old shape.md')?.includes('![[Agent Log - Old shape]]')).toBe(true)
+
+  await ui.press({ key: 'setup-menu' })
+  expect(await ui.find({ text: /✗ task template: yours still has an Agent Log section/ })).toBeTruthy()
+  await ui.press({ key: 'template-update' })
+  expect(got.written.get(template)).toBe(TASK_TEMPLATE)
+  expect(got.written.get(`${template}.2026-11-08.bak`)).toBe(OLD_TASK_TEMPLATE)
+  expect(await ui.find({ key: 'template-update' })).toBeFalsy()
+  expect(await ui.find({ text: '✓ task template: OpenAugi/AGENT/templates/Task.md' })).toBeTruthy()
+  expect(await ui.find({ text: '1 setup item needs you: open setup below.' })).toBeFalsy()
+  await ui.press({ key: 'setup-menu' })
+
+  await ui.press({ key: 'task-sub' })
+  await ui.input({ key: 'task-title-sub', text: 'New shape' })
+  const made = got.written.get('/v/New shape.md') ?? ''
+  expect(made.includes('Agent Log')).toBe(false)
+  expect(made.startsWith('Up: [[PMOC - Garden]]\n\n### Outcome\n')).toBe(true)
+  // A refresh reads the template again: still fine.
+  await ui.press({ key: 'refresh' })
+  expect(await ui.find({ text: '1 setup item needs you: open setup below.' })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('Setup names the built-in task template when the notes folder has none, and warns while no task folder is set', { options: OPTIONS }, async ($, on) => {
+  taskHooks(on, [], {})
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /setup items? needs? you/ })).toBeFalsy()
+  await ui.press({ key: 'setup-menu' })
+  expect(await ui.find({ text: '✓ task template: built-in (Outcome, Verify, Journal)' })).toBeTruthy()
+  expect(await ui.find({ key: 'template-update' })).toBeFalsy()
+  expect(await ui.find({ text: /No task folder set: new task notes go to the notes folder's root/ })).toBeTruthy()
+  expect(await ui.find({ key: 'set-taskColumn' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('with a task folder set, Setup does not warn about it', { options: { ...OPTIONS, taskFolder: 'Tasks' } }, async ($, on) => {
+  taskHooks(on, [], {})
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'setup-menu' })
+  expect(await ui.find({ text: /No task folder set/ })).toBeFalsy()
   await ui.unmount()
 })
 

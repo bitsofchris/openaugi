@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**augi-ui: a new task lands where you are working, and an old task template
+is flagged.** A standalone task made from the pane used to become a card at
+the end of the board's *first* column, whatever that column was. It now goes
+to the end of the anchor's column, else of the new `taskColumn` setting, else
+of the first; the just-made row names the column and has `open the board`.
+Setup warns while no task folder is set (notes then go to the notes folder's
+root). And because the notes folder's own `OpenAugi/AGENT/templates/Task.md`
+wins over the built-in one, a folder set up before 0.4.3 kept making tasks
+with an Agent Log section: Setup now flags that template and `use the current
+template` replaces it, keeping the old file as a `.bak`.
+
 **augi-ui: fewer buttons, one place to type, and you above Setup.** A pin
 row is now the pin, `open` and `✕ unpin`: `link` and `→ everywhere` are gone
 (pin for every chat from the Context card), and the card says what the tick

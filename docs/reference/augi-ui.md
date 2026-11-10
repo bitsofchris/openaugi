@@ -38,7 +38,8 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `contextNote` | A note about the user and this season | `OpenAugi/AGENT/Slowly Changing Context.md` |
 | `lensFolder` | One markdown file per lens | `OpenAugi/AGENT/lenses` |
 | `logFolder` | One Agent Log per anchor | `OpenAugi/Agent-Logs` |
-| `taskFolder` | The one flat folder every new task note goes to; empty is the notes folder's root. Tasks are organized by their `Up:` link, never by folder | — |
+| `taskFolder` | The one flat folder every new task note goes to; empty is the notes folder's root (Setup warns while it is). Tasks are organized by their `Up:` link, never by folder | — |
+| `taskColumn` | The board column a new standalone task goes to when the chat has no anchor, by its heading; with an anchor it goes to the anchor's column. Empty is the board's first column | — |
 | `jiraProject` | Optional. The Jira project key or board (`PROJ`), quoted into the Jira drafts | — |
 | `jiraSite` | Optional. The Jira site's base URL (`https://example.atlassian.net`), only to open a linked issue in the browser | — |
 | `jiraServer` | Optional. The Jira MCP server's name as `/mcp` lists it; empty looks for a likely one | — |
@@ -109,7 +110,8 @@ are `dimColor`, and the one primary button is the draft.
   `OpenAugi/AGENT/templates/Task.md` in the notes folder (else a built-in copy
   of the shipped one: date and title filled, a `Jira: KEY` line under `Up:`).
   A **new task** is standalone: no `Up:` line, a top-level `- [ ] [[<title>]]`
-  card at the end of the first column. A **sub-task** hangs off the anchor:
+  card at the end of the anchor's column (the chat is working there), else of
+  the `taskColumn` setting, else of the board's first column. A **sub-task** hangs off the anchor:
   `Up: [[<anchor>]]`, a linked sub-item `\t- [ ] [[<title>]]` as the last of
   the anchor card's indented lines (`insertSubItem`; an anchor that is itself a
   sub-item gets it beside it under the same card; an anchor not on the board
@@ -117,14 +119,21 @@ are `dimColor`, and the one primary button is the draft.
   which), and the anchor pinned, ticked, in the child's Agent Log so the two
   share context. Either way this chat's transcript is pinned there too, the
   board is read back into the pane, and **the chat's anchor and prompt box are
-  left alone**. A `✓ just made` row then offers: `open` (the note in the
-  editor), `define here` (an unsent draft in this chat's box asking it to fill
+  left alone**. A `✓ just made` row says where on the board it went and
+  offers: `open` (the note in the editor), `open the board`, `define here` (an unsent draft in this chat's box asking it to fill
   in the note's Outcome and Verify and the Agent Log's `## Context`, and with
   Jira on and no key typed to find the task's issue; a half-typed prompt goes to
   the clipboard first), `copy for a new chat` (a context draft whose project
   line names the new task, so pasting it into a fresh chat anchors that chat on
   it), `anchor on it`, and `dismiss`. The row is this chat's: `/clear` and a
   resume drop it. It never writes over a note that already exists.
+  **The template.** The notes folder's own `OpenAugi/AGENT/templates/Task.md`
+  wins over the built-in one, so a folder set up before the template changed
+  keeps making tasks in the old shape. Setup names which is in use (*yours* or
+  *built-in*). One that still has an Agent Log heading or embeds the log is
+  flagged, counts as a setup item that needs you, and `use the current
+  template` replaces it with the shipped one; the old file is kept beside it as
+  `Task.md.<date>.bak`.
 - **Jira** (optional): the pane never calls Jira itself, because Jira MCP servers
   differ in name and tools. It does the deterministic part and drafts the rest
   for the chat, which uses whatever Jira tools it has; nothing is created or

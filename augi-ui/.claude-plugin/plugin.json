@@ -70,6 +70,12 @@
       "description": "The one folder every new task note from the pane goes to, inside the notes folder. Empty puts them at the notes folder's root. Tasks are organized by their Up: link, not by folder.",
       "default": ""
     },
+    "taskColumn": {
+      "type": "string",
+      "title": "New task column",
+      "description": "The board column a new standalone task goes to when the chat has no anchor (with one, it goes to the anchor's column). The column's heading as written on the board. Empty uses the board's first column.",
+      "default": ""
+    },
     "jiraProject": {
       "type": "string",
       "title": "Jira project",
