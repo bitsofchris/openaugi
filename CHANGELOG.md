@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**Fix: `openaugi init` crashed at the search question on typer 0.29.** That
+release vendored click, and its prompt no longer accepts a `click.Choice`, so
+the interactive setup died with an assertion error as soon as it asked you to
+choose a search mode. The menu now checks the answer itself and asks again on
+anything off the list, which works on every typer version and drops the
+undeclared `click` import. Flags-only setup (`--yes`) was not affected.
+
 **Security: lockfile bumps for seven flagged packages.** `uv.lock` moves PyJWT
 to 2.15.1, mcp to 1.30.0, certifi to 2026.10.23, urllib3 to 2.8.0, filelock to
 4.2.10, virtualenv to 21.15.6 and setuptools to 84.2.1 (plus `packaging` and

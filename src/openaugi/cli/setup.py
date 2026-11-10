@@ -30,7 +30,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import click
 import typer
 from rich.console import Console
 from rich.markup import escape
@@ -202,11 +201,17 @@ def _options_table(rows: list[tuple[str, str, str, str]]) -> Table:
 
 
 def _choose(n_options: int, default: int) -> int:
+    """Ask for a number from 1 to n_options, again until one is given.
+
+    Checked here, not by a prompt type: typer 0.29 vendored click and its
+    prompt no longer takes a click.Choice.
+    """
     choices = [str(i) for i in range(1, n_options + 1)]
-    answer = typer.prompt(
-        "  Choose", default=str(default), type=click.Choice(choices), show_choices=False
-    )
-    return int(answer)
+    while True:
+        answer = str(typer.prompt("  Choose", default=str(default))).strip()
+        if answer in choices:
+            return int(answer)
+        console.print(f"  [yellow]⚠️  Pick a number from 1 to {n_options}.[/yellow]")
 
 
 def ask_vault(default: str, given: str | None) -> Path:

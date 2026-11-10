@@ -125,6 +125,14 @@ def test_interactive_defaults_are_the_safe_ones(home: Path, vault: Path):
     assert cfg["tasks"]["auto_dispatch"] is False
 
 
+def test_a_choice_off_the_menu_asks_again(home: Path, vault: Path):
+    # 9 is not on the search menu; Enter then takes the default.
+    result = runner.invoke(app, ["init"], input=f"{vault}\n9\n\n\n")
+    assert result.exit_code == 0, result.output
+    assert "Pick a number from 1 to" in result.output
+    assert _config(home)["models"]["embedding"]["provider"] == "none"
+
+
 def test_missing_vault_asks_again(home: Path, vault: Path):
     result = runner.invoke(app, ["init"], input=f"{vault}/nope\n{vault}\n\n\n")
     assert result.exit_code == 0, result.output
