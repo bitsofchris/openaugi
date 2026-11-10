@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**augi-ui: a new chat starts on your last anchor.** Opening a chat no longer
+begins with picking an anchor: it starts on the one last chosen in that
+working folder, and the Anchor card says so with `keep`, `change` and
+`no anchor`. The chat is written to the anchor's Agent Log with its first
+prompt, not before, so a chat you open and close leaves nothing behind.
+Every anchored chat is now titled in the log by its first prompt (a pane
+draft's instruction, else the prompt's first line) instead of staying `chat`
+until a draft named it.
+
 **augi-ui: a Today card for the daily note.** Under Always, the pane now
 shows today's note: its first five open checkboxes, a `+ log` field that adds
 `- HH:MM text` to it, and `open`. A scratchpad entry gets `→ today`, and the

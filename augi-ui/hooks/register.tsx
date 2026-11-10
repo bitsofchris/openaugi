@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren, ToolCallResult } from 'claude-code'
 
-import type { Card, Chat, JustMade, Lens, Made, MadeArtifact, Opened, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Today, Touched, TouchedFile, Trail, View } from '../types'
+import type { Card, Chat, Inherited, JustMade, Lens, Made, MadeArtifact, Opened, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Today, Touched, TouchedFile, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -145,7 +145,7 @@ export const usageName = (element: string): string => {
 // Every control the pane draws, by its log name: what a report checks for never used.
 // tests/test_augi_ui_usage.py reads this file's Button and Input keys and fails when one is missing here.
 export const USAGE_FEATURES = [
-  'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'open-note', 'open-trail', 'anchor-details', 'task',
+  'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'open-trail', 'anchor-details', 'task',
   'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
   'made-open', 'made-board', 'made-define', 'made-copy', 'made-anchor', 'made-dismiss', 'template-update',
   'ask', 'done', 'show-done', 'reopen', 'saved', 'chat', 'hide', 'show-hidden',
@@ -478,7 +478,14 @@ const HEAD_BYTES = '65536'
 // belongs to the session: a new one opens with none; a reload or a resume keeps it.
 const ANCHORS_KEY = 'anchors'
 const ANCHORS_KEPT = 200
-// The title a chat gets in ## Chats when anchoring records it, until a draft names it.
+// The anchor last chosen in each working folder, as [folder, note] pairs, oldest first:
+// what a new chat there starts on.
+const FOLDERS_KEY = 'folders'
+const FOLDERS_KEPT = 100
+// How long after it began a session still counts as new, for carrying an anchor over. An
+// older chat that never had one (a resume, a chat open across an update) is left as it is.
+const NEW_SESSION_MS = 10 * 60_000
+// The title a chat gets in ## Chats when anchoring records it, until its first prompt names it.
 export const CHAT_PLACEHOLDER = 'chat'
 // The setup steps someone chose to skip; /augi setup clears it.
 const SKIPPED_KEY = 'skipped'
@@ -555,6 +562,12 @@ let typedPad = ''
 // The session the pane was opened for by itself: it opens once a session, so a window
 // that attaches again does not reopen a pane the user closed.
 const opened = atom({ plugin: 'augi-ui', key: 'opened' } as const, { session: '-' } as Opened, { shape: 'opened-1' })
+
+// The anchor this chat started on by itself (carried over from the last chat in its
+// folder), until the user keeps or changes it or the chat says something. `named` is the
+// session and anchor whose log already has this chat under a real title.
+const NOT_INHERITED: Inherited = { session: '', note: '', named: '' }
+const inherited = atom({ plugin: 'augi-ui', key: 'inherited' } as const, NOT_INHERITED, { shape: 'inherited-1' })
 
 // The task this chat just made: session state, cleared by its dismiss and on clear or resume.
 const NO_TASK: JustMade = { note: '', path: '', jira: '', where: '' }
@@ -1477,11 +1490,24 @@ export const retitleChat = (text: string, id: string, title: string): string =>
     .join('\n')
 
 // The session → anchor pairs with this session's set (or dropped, for null), most
-// recent last, the oldest let go past `kept`.
+// recent last, the oldest let go past `kept`. An empty note is kept: it says the session
+// chose to have no anchor, so none is carried over to it.
 export const withAnchor = (pairs: [string, string][], id: string, note: string | null, kept = ANCHORS_KEPT): [string, string][] => {
   const others = pairs.filter(([one]) => one !== id)
 
-  return (note ? [...others, [id, note] as [string, string]] : others).slice(-kept)
+  return (note === null ? others : [...others, [id, note] as [string, string]]).slice(-kept)
+}
+
+// The folder a chat's anchor is remembered under: its working folder, a Claude Code
+// worktree counted as the repository it belongs to.
+export const folderKey = (cwd: string): string => cwd.replace(/\/+$/, '').replace(/\/\.claude\/worktrees\/[^/]+$/, '')
+
+// What a chat is called in its anchor's log when no pane draft names it: its prompt's
+// first line. Empty for a slash command or a line that is only markup.
+export const promptTitle = (text: string): string => {
+  const first = text.split('\n').map(line => line.trim()).find(Boolean) ?? ''
+
+  return first.startsWith('/') ? '' : first.replace(/<[^>]+>/g, ' ').replace(/[·`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 70)
 }
 
 const PIN_KINDS: PinKind[] = ['note', 'file', 'session', 'artifact', 'url']
@@ -2032,6 +2058,7 @@ async function load($: EngineInterface): Promise<void> {
 
     return
   }
+  await inheritAnchor($)
   const cards = kanbanCards(await readOr($, P.board))
   const next: Swatch = {
     setup,
@@ -2150,7 +2177,7 @@ async function updateJira($: EngineInterface): Promise<void> {
 async function sessionAnchor($: EngineInterface): Promise<string | null> {
   const id = await $.session.id()
 
-  return anchorPairs(await $.store.get(ANCHORS_KEY)).find(([one]) => one === id)?.[1] ?? null
+  return anchorPairs(await $.store.get(ANCHORS_KEY)).find(([one]) => one === id)?.[1] || null
 }
 
 async function setSessionAnchor($: EngineInterface, note: string | null): Promise<void> {
@@ -2158,6 +2185,61 @@ async function setSessionAnchor($: EngineInterface, note: string | null): Promis
   if (id) {
     await $.store.set(ANCHORS_KEY, withAnchor(anchorPairs(await $.store.get(ANCHORS_KEY)), id, note))
   }
+}
+
+// The session's working folder as the key its anchor is remembered under, or empty.
+async function folderNow($: EngineInterface): Promise<string> {
+  try {
+    return folderKey(await $.session.cwd())
+  } catch {
+    return ''
+  }
+}
+
+// A chosen anchor becomes what the next new chat in this folder starts on.
+async function rememberFolder($: EngineInterface, note: string): Promise<void> {
+  const folder = await folderNow($)
+  if (folder) {
+    await $.store.set(FOLDERS_KEY, withAnchor(anchorPairs(await $.store.get(FOLDERS_KEY)), folder, note, FOLDERS_KEPT))
+  }
+}
+
+// A new chat that has not chosen starts on the anchor last chosen in its working folder,
+// so starting a chat does not begin with picking one. Only a session that just began: an
+// older one that never had an anchor keeps none. Nothing is written to the anchor's log
+// until the chat says something (nameChat), so an abandoned chat leaves no trace there.
+// True when it anchored the session.
+async function inheritAnchor($: EngineInterface): Promise<boolean> {
+  try {
+    const id = await $.session.id()
+    const pairs = anchorPairs(await $.store.get(ANCHORS_KEY))
+    if (!id || pairs.some(([one]) => one === id)) {
+      return false
+    }
+    const folder = await folderNow($)
+    const note = folder ? anchorPairs(await $.store.get(FOLDERS_KEY)).find(([one]) => one === folder)?.[1] : ''
+    if (!note || (await $.clock.now()) - (await $.session.usage()).startedAt > NEW_SESSION_MS) {
+      return false
+    }
+    await $.store.set(ANCHORS_KEY, withAnchor(pairs, id, note))
+    await update($, inherited, () => ({ session: id, note, named: '' }))
+
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Whether this chat is still on the anchor it started on by itself, unconfirmed.
+async function isInherited($: EngineInterface, note: string): Promise<boolean> {
+  const one = await read($, inherited)
+
+  return one.note === note && one.session === (await $.session.id())
+}
+
+// The user is fine with the anchor the chat started on: the note about it goes.
+async function keepInherited($: EngineInterface): Promise<void> {
+  await update($, inherited, old => ({ ...old, session: '', note: '' }))
 }
 
 // Anchors this session on `note`: the pane (when it has loaded) shows it, and what the
@@ -2192,6 +2274,13 @@ export async function resync($: EngineInterface): Promise<void> {
   }
   await resyncToday($)
   if (!anchor) {
+    // A chat cleared or resumed in this process is a new session: it starts on the folder's anchor too.
+    if (await inheritAnchor($)) {
+      const { cards } = await read($, swatch)
+      const found = await loadAnchor($, cards)
+      await update($, swatch, old => ({ ...old, ...found }))
+    }
+
     return
   }
   const stamp = await anchorStamp($, anchor.note, notePath)
@@ -2238,6 +2327,8 @@ async function openOnce($: EngineInterface): Promise<void> {
 
 async function anchorSession($: EngineInterface, note: string): Promise<void> {
   await setSessionAnchor($, note)
+  await rememberFolder($, note)
+  await keepInherited($)
   const { cards, loadedAt } = await read($, swatch)
   if (loadedAt > 0) {
     const found = await loadAnchor($, cards)
@@ -2256,16 +2347,20 @@ async function chooseAnchor($: EngineInterface, card: Card): Promise<void> {
 }
 
 // A draft pasted into a chat with no anchor (copied for a new chat) anchors it on the
-// draft's anchor. A chat that has one keeps it, whatever the draft says.
+// draft's anchor. A chat that chose one keeps it, whatever the draft says; one the chat
+// only started on by itself gives way to the draft.
 async function anchorFromPaste($: EngineInterface, text: string): Promise<void> {
   const note = anchorFromDraft(text)
-  if (note && !(await sessionAnchor($))) {
+  const mine = await sessionAnchor($)
+  if (note && note !== mine && (!mine || (await isInherited($, mine)))) {
     await anchorSession($, note)
   }
 }
 
+// No anchor, by choice: remembered for the session, so none is carried over to it again.
 async function clearAnchor($: EngineInterface): Promise<void> {
-  await setSessionAnchor($, null)
+  await setSessionAnchor($, '')
+  await keepInherited($)
   await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
   await update($, view, old => ({ ...old, anchorsOpen: false }))
 }
@@ -2523,6 +2618,25 @@ async function recordChat($: EngineInterface, title: string): Promise<void> {
   const when = stamp(await $.clock.now())
 
   await writeTrail($, note, text => retitleChat(addChat(text, { id, when, title, hidden: false }), id, title))
+}
+
+// Once an anchored chat says something it is in its anchor's log under a real title: a
+// pane draft's, else the prompt's first line. The log is read for this once per session
+// and anchor, not on every prompt. A slash command names nothing.
+async function nameChat($: EngineInterface, drafted: string | null, text: string): Promise<void> {
+  const note = await sessionAnchor($)
+  const id = await $.session.id()
+  const title = drafted ?? promptTitle(text)
+  if (!note || !id || !title) {
+    return
+  }
+  const key = `${id}|${note}`
+  if (!drafted && (await read($, inherited)).named === key) {
+    return
+  }
+  await recordChat($, title)
+  // It is filed now: the anchor it started on by itself is its anchor.
+  await update($, inherited, () => ({ session: '', note: '', named: key }))
 }
 
 // Remembers what is typed in the scratchpad's field, unsent.
@@ -2899,8 +3013,9 @@ export const register: Register = (on, options) => {
     return joined
   })
 
-  // A /clear goes on in this process under a new session id with no session.start:
-  // the pane drops the old session's anchor, as a new session opens with none.
+  // A /clear goes on in this process under a new session id with no session.start: the
+  // pane drops the old session's anchor, and the next sync starts the new session on the
+  // folder's anchor as any new chat would.
   on('session.end', async ($, e, next) => {
     const ended = await next(e)
     if (e.reason === 'clear' || e.reason === 'resume') {
@@ -2932,19 +3047,22 @@ export const register: Register = (on, options) => {
     return { text: 'Augi is open. Pick an anchor, tick its context, then draft a prompt or run a lens. It only drafts; you press enter.' }
   })
 
-  // A draft from the pane, once sent, goes on the anchor's trail. One pasted into a
-  // chat with no anchor anchors it first, so a new chat lands in the same Agent Log.
+  // An anchored chat goes on its anchor's log with its first prompt: titled by a pane
+  // draft, else by the prompt's first line. A draft pasted into a chat with no anchor of
+  // its own choosing anchors it first, so a new chat lands in the same Agent Log.
   on('prompt.submit', async ($, e, next) => {
     const title = chatTitleFrom(e.text)
-    if (title) {
-      try {
-        await ready($)
+    try {
+      await ready($)
+      if (title) {
         await anchorFromPaste($, e.text)
-        await recordChat($, title)
-        await track($, 'sent', 'draft-sent', '')
-      } catch (error) {
-        await $.ui.toast(`Augi couldn't record this chat: ${String(error)}`)
       }
+      await nameChat($, title, e.text)
+      if (title) {
+        await track($, 'sent', 'draft-sent', '')
+      }
+    } catch (error) {
+      await $.ui.toast(`Augi couldn't record this chat: ${String(error)}`)
     }
 
     // Sending a prompt is a good moment to catch up with what other chats wrote.
@@ -3061,6 +3179,8 @@ export const register: Register = (on, options) => {
     const shownFiles = shown.filesOpen ? ownFiles : ownFiles.slice(0, 5)
     const jotted = await read($, pad)
     const madeTask = await read($, justMade)
+    const carried = await read($, inherited)
+    const isCarried = Boolean(anchor) && carried.note === anchor?.note && carried.session === (await $.session.id())
     // A sub-task field needs an anchor; with none it reads as closed.
     const taskMode = shown.taskMode === 'sub' && !anchor ? '' : (shown.taskMode ?? '')
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
@@ -3219,6 +3339,16 @@ export const register: Register = (on, options) => {
                         </Box>
                       ))}
                       {anchor && <Button key="anchor-clear" plain dimColor label="○ no anchor" onPress={() => clearAnchor($)} />}
+                    </Box>
+                  )}
+                  {isCarried && (
+                    <Box key="anchor-carried" flexDirection="column">
+                      <Text dimColor wrap="wrap">↩ From your last chat in this folder. It is filed here with its first prompt.</Text>
+                      <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                        <Button key="inherit-keep" label="keep" onPress={() => keepInherited($)} />
+                        <Button key="inherit-change" label="change" onPress={() => update($, view, old => ({ ...old, anchorsOpen: true }))} />
+                        <Button key="inherit-none" dimColor label="no anchor" onPress={() => clearAnchor($)} />
+                      </Box>
                     </Box>
                   )}
                   {anchor && (

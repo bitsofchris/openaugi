@@ -4,6 +4,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, formatDate, openBoxes } from './register'
+import { folderKey, promptTitle } from './register'
 import { extraPins, isListedTouch, storedPins, openArgv, shortPath, touchedPin, withTouched } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
 import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
@@ -1944,6 +1945,194 @@ test('with dailyNote none, Obsidian\'s daily notes are ignored', { options: { ..
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ key: 'head-todayOpen' })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('an anchor is remembered per working folder, a worktree counted as its repository; a chosen none is kept', async () => {
+  expect(folderKey('/r/garden')).toBe('/r/garden')
+  expect(folderKey('/r/garden/')).toBe('/r/garden')
+  expect(folderKey('/r/garden/.claude/worktrees/fix-gate')).toBe('/r/garden')
+  expect(folderKey('/r/garden/.claude/worktrees/fix-gate/src')).toBe('/r/garden/.claude/worktrees/fix-gate/src')
+  // null drops a session's pair; an empty note stays, as "no anchor, by choice".
+  expect(withAnchor([['a', 'X'], ['b', 'Y']], 'a', null)).toEqual([['b', 'Y']])
+  expect(withAnchor([['a', 'X'], ['b', 'Y']], 'a', '')).toEqual([['b', 'Y'], ['a', '']])
+})
+
+test('a chat is titled by its prompt\'s first line; a slash command titles nothing', async () => {
+  expect(promptTitle('fix the sprinkler valve\nit leaks at the joint')).toBe('fix the sprinkler valve')
+  expect(promptTitle('\n\n  why is `this` slow · today  ')).toBe('why is this slow today')
+  expect(promptTitle('see <pasted_content id="1">the log</pasted_content> please')).toBe('see the log please')
+  expect(promptTitle('/augi usage')).toBe('')
+  expect(promptTitle('   \n ')).toBe('')
+  expect(promptTitle('x'.repeat(200)).length).toBe(70)
+})
+
+// A vault whose folder /r/garden last worked on PMOC - Garden. `state` can be changed
+// mid-test: the session id, its folder, and how long ago it began.
+const inheritHooks = (on: On, folders: [string, string][] = [['/r/garden', 'PMOC - Garden']], anchors: [string, string][] = []) => {
+  const state = { id: 'fresh', cwd: '/r/garden', age: 60_000 }
+  const now = new Date(2026, 10, 8, 9, 30).getTime()
+  const got = taskHooks(on, anchors, { '/v/PMOC - Garden.md': GARDEN_PLAIN, '/v/PMOC - Birdhouse.md': '### Outcome\n\nBirds move in.\n' }, state)
+  got.store.set('folders', folders)
+  on('session.cwd', () => ({ value: state.cwd }))
+  on('session.usage', () => ({ value: { startedAt: now - state.age, context: { window: 200000 }, rateLimits: [] } as never }))
+  on('fs.stat', () => ({ value: { kind: 'file', size: 1, mtimeMs: 1, isLink: false } }))
+
+  return { ...got, state }
+}
+
+test('a new chat starts on the anchor last chosen in its folder, is filed there with its first prompt, and keep, change or no anchor is one press', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  // No picking: the pane is on the folder's anchor, and says where it came from.
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeTruthy()
+  expect(anchorOf(got.store, 'fresh')).toBe('PMOC - Garden')
+  // Nothing is written to the anchor's log for a chat that has not said anything.
+  expect(got.written.size).toBe(0)
+
+  // A slash command is not the chat saying something.
+  await $.prompt.submit({ text: '/augi usage' })
+  expect(got.written.size).toBe(0)
+  // Its first prompt files it under that prompt's first line, and the note about where it came from goes.
+  await $.prompt.submit({ text: 'fix the sprinkler valve\nit leaks at the joint' })
+  expect(parseTrail(got.written.get(trailPath('PMOC - Garden')) ?? '').chats).toEqual([{ id: 'fresh', when: '2026-11-08 09:30', title: 'fix the sprinkler valve', hidden: false }])
+  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeFalsy()
+  expect(await ui.find({ key: 'chat-fresh' })).toBeTruthy()
+  // Later prompts do not rename it, and do not read the log again to find that out.
+  const log = got.written.get(trailPath('PMOC - Garden'))
+  got.written.set(trailPath('PMOC - Garden'), `${log}\n<!-- an edit made elsewhere -->\n`)
+  await $.prompt.submit({ text: 'and the timer too' })
+  expect(got.written.get(trailPath('PMOC - Garden'))).toBe(`${log}\n<!-- an edit made elsewhere -->\n`)
+  await ui.unmount()
+})
+
+test('keep confirms a carried-over anchor; change opens the menu; no anchor sticks for the session', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'inherit-keep' })
+  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeFalsy()
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  await ui.unmount()
+
+  // Another new chat in the folder: change opens the anchor list, and picking one is a choice.
+  got.state.id = 'second'
+  await $.command.run({ command: 'augi', args: '' })
+  const two = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await two.find({ text: /From your last chat in this folder/ })).toBeTruthy()
+  expect(await two.find({ key: 'card-sub-PMOC - Garden-PMOC - Birdhouse' })).toBeFalsy()
+  await two.press({ key: 'inherit-change' })
+  await two.press({ key: 'card-sub-PMOC - Garden-PMOC - Birdhouse' })
+  expect(anchorOf(got.store, 'second')).toBe('PMOC - Birdhouse')
+  expect(await two.find({ text: /From your last chat in this folder/ })).toBeFalsy()
+  // The choice is what the next new chat here starts on.
+  expect(got.store.get('folders')).toEqual([['/r/garden', 'PMOC - Birdhouse']])
+  await two.unmount()
+
+  // A third: no anchor, by choice. A refresh does not bring one back, and the folder keeps its last.
+  got.state.id = 'third'
+  await $.command.run({ command: 'augi', args: '' })
+  const three = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await three.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
+  await three.press({ key: 'inherit-none' })
+  expect((await three.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  await three.press({ key: 'refresh' })
+  expect((await three.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  await $.prompt.submit({ text: 'an unanchored question' })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect((await three.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  expect(got.store.get('folders')).toEqual([['/r/garden', 'PMOC - Birdhouse']])
+  // Nothing was filed anywhere for the chats that only looked.
+  expect([...got.written.keys()].filter(path => path.includes('Agent Log - PMOC - Garden'))).toEqual([])
+  await three.unmount()
+})
+
+test('no anchor is carried over to an older chat, a chat in another folder, or one that already chose; a worktree counts as its repository', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on, [['/r/garden', 'PMOC - Garden']], [['chose', 'PMOC - Birdhouse']])
+  // A chat that began two hours ago and never had an anchor (a resume, a chat open across an update).
+  got.state.id = 'old'
+  got.state.age = 2 * 3_600_000
+  await $.command.run({ command: 'augi', args: '' })
+  let ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  expect(anchorOf(got.store, 'old')).toBe(undefined)
+  await ui.unmount()
+
+  // A new chat in a folder nothing was anchored in.
+  got.state.id = 'elsewhere'
+  got.state.age = 5_000
+  got.state.cwd = '/r/pond'
+  await $.command.run({ command: 'augi', args: '' })
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  await ui.unmount()
+
+  // A chat with its own anchor keeps it.
+  got.state.id = 'chose'
+  got.state.cwd = '/r/garden'
+  await $.command.run({ command: 'augi', args: '' })
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
+  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeFalsy()
+  await ui.unmount()
+
+  // A new chat in a worktree of the repository starts on the repository's anchor.
+  got.state.id = 'tree'
+  got.state.cwd = '/r/garden/.claude/worktrees/fix-gate'
+  await $.command.run({ command: 'augi', args: '' })
+  ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  await ui.unmount()
+})
+
+test('a draft copied for a new chat wins over an anchor the chat only started on by itself', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(anchorOf(got.store, 'fresh')).toBe('PMOC - Garden')
+  const pasted = buildDraft([], ALL_ON, null, 'hang the birdhouse', { note: 'PMOC - Birdhouse', notePath: '/v/PMOC - Birdhouse.md', trail: trailPath('PMOC - Birdhouse') })
+  await $.prompt.submit({ text: pasted })
+  expect(anchorOf(got.store, 'fresh')).toBe('PMOC - Birdhouse')
+  expect(parseTrail(got.written.get(trailPath('PMOC - Birdhouse')) ?? '').chats.map(chat => chat.title)).toEqual(['hang the birdhouse'])
+  // The anchor it started on was never written to.
+  expect(got.written.has(trailPath('PMOC - Garden'))).toBe(false)
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
+  await ui.unmount()
+})
+
+test('after /clear the pane is the new session\'s: no anchor at first, then the folder\'s on the next sync', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on, [['/r/garden', 'PMOC - Garden']], [['fresh', 'PMOC - Garden']])
+  on('session.end', (_, e) => ({ sessionId: e.sessionId }) as never)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  await $.session.end({ reason: 'clear', sessionId: 'fresh' } as never)
+  got.state.id = 'cleared'
+  got.state.age = 0
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  await $.prompt.submit({ text: '/augi' })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeTruthy()
+  expect(anchorOf(got.store, 'cleared')).toBe('PMOC - Garden')
+  await ui.unmount()
+})
+
+test('a chat on an anchor it chose is titled by its first prompt too, replacing the placeholder once', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on, [])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'anchor-menu' })
+  await ui.press({ key: 'card-PMOC - Garden' })
+  const chats = () => parseTrail(got.written.get(trailPath('PMOC - Garden')) ?? '').chats.map(chat => chat.title)
+  expect(chats()).toEqual(['chat'])
+  expect(got.store.get('folders')).toEqual([['/r/garden', 'PMOC - Garden']])
+  await $.prompt.submit({ text: 'plan the beds for spring' })
+  expect(chats()).toEqual(['plan the beds for spring'])
+  await $.prompt.submit({ text: 'something else entirely' })
+  expect(chats()).toEqual(['plan the beds for spring'])
   await ui.unmount()
 })
 

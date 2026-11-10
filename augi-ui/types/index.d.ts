@@ -99,10 +99,14 @@ export type View = {
 // The task this chat just made, for the Anchor card's "just made" row; an empty `note` is none.
 // `jira` is the key typed with its title, if any; `where` says where on the board it went.
 export type JustMade = { note: string; path: string; jira: string; where: string }
+// The anchor `note` this chat (`session`) started on by itself, carried over from the last
+// chat in its folder: empty once the user keeps or changes it or the chat is filed.
+// `named` is `<session>|<anchor>` once this chat is in that anchor's log under a real title.
+export type Inherited = { session: string; note: string; named: string }
 // The session id the pane last opened by itself for; `-` before any.
 export type Opened = { session: string }
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; touched: Shaped<Touched>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; touched: Shaped<Touched>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string>; inherited: Shaped<Inherited> }
   }
 }
