@@ -38,6 +38,8 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `contextNote` | A note about the user and this season | `OpenAugi/AGENT/Slowly Changing Context.md` |
 | `lensFolder` | One markdown file per lens | `OpenAugi/AGENT/lenses` |
 | `logFolder` | One Agent Log per anchor | `OpenAugi/Agent-Logs` |
+| `dailyNote` | Today's note, for the Today card: a path inside the notes folder with the date in it (`Daily/{{date:YYYY-MM-DD}}.md`). Empty reads Obsidian's own daily-note folder and format (`.obsidian/daily-notes.json`); `none` turns the card off | — |
+| `dailyHeading` | The heading in today's note that lines logged from the pane go under (made when missing); empty adds them at the end of the note | — |
 | `taskFolder` | The one flat folder every new task note goes to; empty is the notes folder's root (Setup warns while it is). Tasks are organized by their `Up:` link, never by folder | — |
 | `taskColumn` | The board column a new standalone task goes to when the chat has no anchor, by its heading; with an anchor it goes to the anchor's column. Empty is the board's first column | — |
 | `jiraProject` | Optional. The Jira project key or board (`PROJ`), quoted into the Jira drafts | — |
@@ -65,7 +67,7 @@ The pane has two sections. **This chat** holds what belongs to the anchor this
 chat is attached to: the anchor card, its chats, questions and saved notes, its
 pins, the files this chat touched, and the scratchpad. **Always** holds what
 is not tied to one chat: the You card (the season line from the context note,
-`✏️ my context` and `📋 the board`), the context picker (search, and the pins
+`✏️ my context` and `📋 the board`), the Today card (below), the context picker (search, and the pins
 that go into every chat), the lenses, and setup. Setup holds paths and
 switches only.
 
@@ -150,10 +152,26 @@ are `dimColor`, and the one primary button is the draft.
   status update from the note and Agent Log, shown first and posted as a comment
   only on a yes. A `jira-update.md` lens in the lens folder replaces that
   built-in wording.
+- **Today** (`☀️ Today · <date>`, under Always, drawn when there is a daily
+  note): the note for today, found from `dailyNote` or, with that empty, from
+  Obsidian's daily-note settings. The date in the path is written with
+  Obsidian's tokens (`YYYY YY MMMM MMM MM M DD D dddd ddd`, `[text]` kept).
+  The card lists the note's first five open checkboxes, so the day's
+  priorities stay in view, and follows the file: ticking one in the editor, or
+  midnight passing, shows within seconds. `+ log` adds `- HH:MM text` to the
+  note, under `dailyHeading` when one is set, else at its end; a scratchpad
+  entry has `→ today` for the same. `open` opens it, and a tick decides
+  whether it goes into every draft (on by default: one line naming the note).
+  **The pane never creates the note**: a daily note usually comes from a
+  template, so until it is made in the editor the card says so and offers no
+  log field. Like the scratchpad's `→ notes`, a logged line is the user's own
+  words written on their press. A standup or a plan for the day is a lens
+  that reads this note, not code.
 - **Context**: what the next chat is told to read. Three things go in without
   being listed, each a checkbox under Setup → *What goes into every draft*, all
   on by default: the anchor's human and agent notes, the context note and board
-  (`m`), and a search of the notes with OpenAugi. The Context card names the
+  (`m`), and a search of the notes with OpenAugi. Today's note is a fourth,
+  ticked in the Today card. The Context card names the
   ones that are on in one dim line.
 - **Pins** come in two scopes. *Pinned to `<anchor>`* (a card in This chat) is
   the anchor's own list, kept under `## Context` in its Agent Log: artifacts
@@ -228,8 +246,10 @@ are `dimColor`, and the one primary button is the draft.
   instruction (unsent), so a question or side quest typed here is asked with
   one press. `→ notes` adds one to the anchor's own note as `- HH:MM text`
   under its `# Journal`, beneath that day's dated heading (made if missing); with
-  no anchor the entries just stay on the pad. This is the one place the pane
-  writes the user's own note: only on their press, only their own words.
+  no anchor the entries just stay on the pad. `→ today` adds one to today's
+  note instead (see **Today**). These two, the Today card's `+ log` and a Jira
+  link are the only writes the pane makes to the user's own notes: only on
+  their press, only their own words.
 - **Agent Log**: per anchor, a companion note that holds the pinned context,
   open questions and every
   chat anchored on it (titled `chat` until a draft

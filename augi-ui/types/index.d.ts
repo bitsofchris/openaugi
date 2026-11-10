@@ -17,6 +17,9 @@ export type Pin = { on: boolean; kind: PinKind; target: string; label: string; p
 export type Trail = { questions: Question[]; chats: Chat[]; saved: string[]; pins: Pin[] }
 // One thing setup checks: a setting, the path it resolves to, and whether it's there.
 export type SetupItem = { field: string; label: string; path: string; ok: boolean; starter: boolean }
+// Today's note: the pattern its path comes from (empty for none), the path for `day`
+// (YYYY-MM-DD), whether the file is there, its first open checkboxes, and when it last changed.
+export type Today = { pattern: string; path: string; day: string; exists: boolean; todo: string[]; mtime: number }
 export type Swatch = {
   setup: SetupItem[]
   // Obsidian vaults found on this computer, offered on the setup screen.
@@ -39,6 +42,7 @@ export type Swatch = {
   // Which task template new tasks are made from; `old` is the notes folder's own from
   // before the Agent Log left the note.
   taskTemplate: 'built-in' | 'yours' | 'old'
+  today: Today
   trail: Trail
   // Where each pinned note was found, by name.
   pinPaths: Record<string, string>
@@ -60,7 +64,8 @@ export type TouchedFile = { path: string; made: boolean }
 export type Touched = { session: string; files: TouchedFile[] }
 // A note to self on this chat's scratchpad; `when` as `stamp()` writes it.
 export type PadEntry = { when: string; text: string }
-export type Picks = { aboutMe: boolean; openAugi: boolean; project: boolean }
+// What goes into every draft: `today` is today's note, when there is one.
+export type Picks = { aboutMe: boolean; openAugi: boolean; project: boolean; today: boolean }
 export type View = {
   // The two sections and each card under them, folded or open.
   chatOpen: boolean
@@ -72,6 +77,8 @@ export type View = {
   padOpen: boolean
   // The You card under Always: the season line, the context note and the board.
   youOpen: boolean
+  // The Today card under Always, drawn when there is a daily note.
+  todayOpen: boolean
   contextOpen: boolean
   anchorsOpen: boolean
   sessionsOpen: boolean
@@ -86,6 +93,8 @@ export type View = {
   filesOpen: boolean
   // Which new-task field is open in the Anchor card: none, a standalone task, or a sub-task of the anchor.
   taskMode: '' | 'new' | 'sub'
+  // How many lines the Today card has logged this session: it empties the log field after each.
+  logged: number
 }
 // The task this chat just made, for the Anchor card's "just made" row; an empty `note` is none.
 // `jira` is the key typed with its title, if any; `where` says where on the board it went.

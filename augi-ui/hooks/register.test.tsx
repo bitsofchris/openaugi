@@ -3,6 +3,7 @@ import type { Pin } from '../types'
 import { expect, test } from 'claude-code/testing'
 
 import { parseUsage, usageName, usageReport } from './register'
+import { addDailyLine, dailyNotePath, dailyPattern, formatDate, openBoxes } from './register'
 import { extraPins, isListedTouch, storedPins, openArgv, shortPath, touchedPin, withTouched } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
 import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
@@ -40,7 +41,7 @@ const OPTIONS = {
 }
 configure(resolvePaths(OPTIONS, '/Users/t'))
 
-const ALL_ON = { aboutMe: true, openAugi: true, project: true }
+const ALL_ON = { aboutMe: true, openAugi: true, project: true, today: true }
 const ANCHOR = { note: 'PMOC - Garden', notePath: '/v/PMOC - Garden.md', trail: '/v/Notes/Agent Log - PMOC - Garden.md' }
 const SESSION_PIN = { on: true, kind: 'session', target: '/p/a.jsonl', label: 'garden · fix the sprinkler' } as const
 
@@ -113,7 +114,7 @@ test('the draft carries what is ticked and leaves out what is not', async () => 
   expect(full.includes('No walls of text')).toBe(true)
   expect(full.endsWith('Instruction: ')).toBe(true)
 
-  const bare = buildDraft([{ ...SESSION_PIN, on: false }], { aboutMe: false, openAugi: false, project: false }, null, 'hi', ANCHOR)
+  const bare = buildDraft([{ ...SESSION_PIN, on: false }], { aboutMe: false, openAugi: false, project: false, today: false }, null, 'hi', ANCHOR)
   expect(bare.includes('/p/a.jsonl')).toBe(false)
   expect(bare.includes('Slowly Changing Context')).toBe(false)
   expect(bare.includes('Search my notes')).toBe(false)
@@ -365,7 +366,7 @@ test('what goes in lists exactly the paths the draft names, and toggles take the
     expect(text.includes(item.path)).toBe(true)
   }
   expect(text.includes('/r/docs/ARCH.md')).toBe(false)
-  expect(contextItems(pins, { project: false, aboutMe: false, openAugi: false }, anchor).map(item => item.kind)).toEqual(['pin', 'pin'])
+  expect(contextItems(pins, { project: false, aboutMe: false, openAugi: false, today: false }, anchor).map(item => item.kind)).toEqual(['pin', 'pin'])
   expect(contextItems(pins, ALL_ON, null).some(item => item.kind === 'pin' || item.key === 'in-note')).toBe(false)
 })
 
@@ -873,7 +874,7 @@ test('pins for every chat: the store is read defensively, and a draft adds the t
   expect(extraPins([], [arch, off], false)).toEqual([arch])
   expect(extraPins([arch], [arch], true)).toEqual([])
   expect(extraPins([{ ...arch, on: false }], [arch], true)).toEqual([arch])
-  const none = { aboutMe: false, openAugi: false, project: false }
+  const none = { aboutMe: false, openAugi: false, project: false, today: false }
   expect(buildDraft([], none, null, '', null, [arch, off]).split('ARCH.md').length).toBe(2)
   expect(buildDraft([], none, null, '', null, [arch, off]).includes('example.com')).toBe(false)
   expect(contextItems([], none, null, [arch, off]).map(item => item.key)).toEqual(['in-all-file-/r/docs/ARCH.md'])
@@ -1746,6 +1747,203 @@ test('with a task folder set, Setup does not warn about it', { options: { ...OPT
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'setup-menu' })
   expect(await ui.find({ text: /No task folder set/ })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('a date is written the way Obsidian names a daily note, with [text] kept', async () => {
+  const day = new Date(2022, 0, 5, 9, 30).getTime()
+  expect(formatDate('YYYY-MM-DD', day)).toBe('2022-01-05')
+  expect(formatDate('YYYY/MM/YYYY-MM-DD dddd', day)).toBe('2022/01/2022-01-05 Wednesday')
+  expect(formatDate('D MMM YY (ddd)', day)).toBe('5 Jan 22 (Wed)')
+  expect(formatDate('MMMM D, YYYY', day)).toBe('January 5, 2022')
+  expect(formatDate('[Daily] YYYY-MM-DD', day)).toBe('Daily 2022-01-05')
+  expect(formatDate('[DD is day] DD', day)).toBe('DD is day 05')
+  expect(formatDate('M-D', new Date(2022, 10, 23).getTime())).toBe('11-23')
+})
+
+test('the daily note pattern is what was typed, else Obsidian\'s own setting, else none; none typed turns it off', async () => {
+  expect(dailyPattern('Daily/{{date:YYYY-MM-DD}}.md', '{"folder":"Elsewhere"}')).toBe('Daily/{{date:YYYY-MM-DD}}.md')
+  expect(dailyPattern('', '{"folder":"Journal/Daily","format":"YYYY/MM/YYYY-MM-DD"}')).toBe('Journal/Daily/{{date:YYYY/MM/YYYY-MM-DD}}.md')
+  // Obsidian writes only what differs from its defaults: the vault root and YYYY-MM-DD.
+  expect(dailyPattern('', '{"template":"Templates/Daily"}')).toBe('{{date:YYYY-MM-DD}}.md')
+  expect(dailyPattern('', '{"folder":"/Daily/","format":"  "}')).toBe('Daily/{{date:YYYY-MM-DD}}.md')
+  expect(dailyPattern('', '')).toBe('')
+  expect(dailyPattern('', 'not json')).toBe('')
+  expect(dailyPattern('none', '{"folder":"Daily"}')).toBe('')
+  expect(dailyPattern('None', '')).toBe('')
+})
+
+test('today\'s note path fills the date, adds .md, and sits in the notes folder unless absolute', async () => {
+  const day = new Date(2022, 0, 5, 9, 30).getTime()
+  expect(dailyNotePath('Daily/{{date:YYYY-MM-DD}}.md', day, '/v', '/Users/t')).toBe('/v/Daily/2022-01-05.md')
+  expect(dailyNotePath('Daily/{{date}}', day, '/v', '/Users/t')).toBe('/v/Daily/2022-01-05.md')
+  expect(dailyNotePath('{{date:YYYY}}/{{date:MM}}/{{date:YYYY-MM-DD dddd}}', day, '/v', '/Users/t')).toBe('/v/2022/01/2022-01-05 Wednesday.md')
+  expect(dailyNotePath('~/notes/{{date:YYYY-MM-DD}}.md', day, '/v', '/Users/t')).toBe('/Users/t/notes/2022-01-05.md')
+  // A folder named like a token is left alone: only what is inside {{date:…}} is a date.
+  expect(dailyNotePath('DD Diary/{{date:YYYY-MM-DD}}', day, '/v', '/Users/t')).toBe('/v/DD Diary/2022-01-05.md')
+  expect(dailyNotePath('', day, '/v', '/Users/t')).toBe('')
+  expect(dailyNotePath('  ', day, '/v', '/Users/t')).toBe('')
+})
+
+test('what is still open in a note is its first open checkboxes, links read as text', async () => {
+  const text = '# Priorities\n- [ ] ship [[PMOC - Garden|the garden]]\n- [x] done\n  - [ ] nested one\n* [ ] star box\n- plain\n- [ ] \n- [ ] a\n- [ ] b\n- [ ] c\n- [ ] d\n'
+  expect(openBoxes(text)).toEqual(['ship the garden', 'nested one', 'star box', 'a', 'b'])
+  expect(openBoxes(text, 2)).toEqual(['ship the garden', 'nested one'])
+  expect(openBoxes('nothing here')).toEqual([])
+})
+
+test('a logged line goes last under the named heading, made when missing, or at the end of the note; every other line as it was', async () => {
+  const one = { when: '2022-01-05 09:30', text: 'fixed the gate\nand oiled it' }
+  // No heading named: the note's last line, with a newline between when the note had none.
+  expect(addDailyLine('# Today\n- [ ] a\n', '', one)).toBe('# Today\n- [ ] a\n- 09:30 fixed the gate\n  and oiled it\n')
+  expect(addDailyLine('# Today\n- [ ] a', '', one)).toBe('# Today\n- [ ] a\n- 09:30 fixed the gate\n  and oiled it\n')
+  expect(addDailyLine('', '', one)).toBe('- 09:30 fixed the gate\n  and oiled it\n')
+  // Under the heading, after its last line and before the next heading of its level; any case, any level.
+  const note = '---\ntags: daily\n---\n# Priorities\n- [ ] a\n\n## Log\n- 08:00 coffee\n\n### sub\n- 08:10 deeper\n\n## Later\n- x\n'
+  expect(addDailyLine(note, 'log', one)).toBe(note.replace('- 08:10 deeper\n', '- 08:10 deeper\n- 09:30 fixed the gate\n  and oiled it\n'))
+  // An empty section takes it right under the heading.
+  expect(addDailyLine('## Log\n\n## Later\n', 'Log', one)).toBe('## Log\n- 09:30 fixed the gate\n  and oiled it\n\n## Later\n')
+  // The heading is the note's last section: the note still ends with a newline.
+  expect(addDailyLine('# Priorities\n\n## Log\n- 08:00 coffee\n', 'Log', one)).toBe('# Priorities\n\n## Log\n- 08:00 coffee\n- 09:30 fixed the gate\n  and oiled it\n')
+  expect(addDailyLine('# Priorities\n\n## Log', 'Log', one)).toBe('# Priorities\n\n## Log\n- 09:30 fixed the gate\n  and oiled it\n')
+  // No such heading: made at the end.
+  expect(addDailyLine('# Priorities\n- [ ] a\n', 'Log', one)).toBe('# Priorities\n- [ ] a\n\n## Log\n- 09:30 fixed the gate\n  and oiled it\n')
+  expect(addDailyLine('', 'Log', one)).toBe('## Log\n- 09:30 fixed the gate\n  and oiled it\n')
+  expect(addDailyLine(note, 'Log', { when: '2022-01-05 09:30', text: '  ' })).toBe(note)
+})
+
+test('the draft names today\'s note when there is one and it is ticked', async () => {
+  const withToday = buildDraft([], ALL_ON, null, 'go', ANCHOR, [], '/v/2022-01-05.md')
+  expect(withToday.includes('- Today: read "/v/2022-01-05.md"')).toBe(true)
+  expect(buildDraft([], { ...ALL_ON, today: false }, null, 'go', ANCHOR, [], '/v/2022-01-05.md').includes('Today:')).toBe(false)
+  expect(buildDraft([], ALL_ON, null, 'go', ANCHOR, [], '').includes('Today:')).toBe(false)
+  expect(contextItems([], ALL_ON, null, [], '/v/2022-01-05.md').map(item => item.key)).toContain('in-today')
+  expect(contextItems([], { ...ALL_ON, today: false }, null, [], '/v/2022-01-05.md').map(item => item.key)).not.toContain('in-today')
+})
+
+// padHooks, with today's note found from Obsidian's daily-note settings; `clock` can be moved.
+const todayHooks = (on: On, written: Map<string, string>, toasts: string[], clock = { now: new Date(2022, 0, 5, 9, 30).getTime() }) => {
+  const filled: string[] = []
+  padHooks(except(on, ['clock.now']), new Map<string, unknown>([['anchors', [['own-session', 'PMOC - Garden']]]]), written, toasts)
+  on('clock.now', () => ({ value: clock.now }))
+  on('fs.stat', (_, e) => ({ value: { kind: 'file', size: 1, mtimeMs: (written.get(e.path) ?? '').length + 1, isLink: false } }))
+  on('prompt.read', () => ({ value: { text: 'what next', cursor: 0 } }))
+  on('prompt.fill', (_, e) => {
+    filled.push(e.text)
+    return { isFilled: true }
+  })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+
+  return { filled, clock }
+}
+
+test('with no daily note setting and no Obsidian daily notes, there is no Today card', { options: OPTIONS }, async ($, on) => {
+  todayHooks(on, new Map(), [])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'head-todayOpen' })).toBeFalsy()
+  await ui.input({ key: 'pad-input-0', text: 'a thought' })
+  expect(await ui.find({ key: 'pad-today-0' })).toBeFalsy()
+  await ui.press({ key: 'setup-menu' })
+  expect(await ui.find({ text: 'No daily note: the Today card is off.' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('Today: found from Obsidian\'s setting, it lists what is open, logs a line under the heading, takes scratchpad entries, and goes into drafts until unticked', { options: { ...OPTIONS, dailyHeading: '## Log' } }, async ($, on) => {
+  const note = '# Priorities\n- [ ] ship the gate\n- [x] water\n- [ ] call the plumber\n\n## Log\n- 08:00 coffee\n'
+  const written = new Map<string, string>([['/v/.obsidian/daily-notes.json', '{"folder":"Daily"}'], ['/v/Daily/2022-01-05.md', note], ['/v/PMOC - Garden.md', '# Journal\n']])
+  const toasts: string[] = []
+  const got = todayHooks(on, written, toasts)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ text: '☀️ Today · 2022-01-05' })).toBeTruthy()
+  expect(await ui.find({ text: '☐ ship the gate' })).toBeTruthy()
+  expect(await ui.find({ text: '☐ call the plumber' })).toBeTruthy()
+  expect(await ui.find({ text: '☐ water' })).toBeFalsy()
+
+  // + log writes the user's line under the heading, read fresh, and empties the field.
+  written.set('/v/Daily/2022-01-05.md', note.replace('- [ ] call the plumber', '- [x] call the plumber'))
+  await ui.input({ key: 'today-log-0', text: 'gate is fixed' })
+  expect(written.get('/v/Daily/2022-01-05.md')).toBe(note.replace('- [ ] call the plumber', '- [x] call the plumber').replace('- 08:00 coffee\n', '- 08:00 coffee\n- 09:30 gate is fixed\n'))
+  expect(toasts).toEqual(["Logged to today's note"])
+  expect(await ui.find({ key: 'today-log-1' })).toBeTruthy()
+  expect(await ui.find({ key: 'today-log-0' })).toBeFalsy()
+  // The card read the note again: what was ticked in the editor is gone from it.
+  expect(await ui.find({ text: '☐ call the plumber' })).toBeFalsy()
+  await ui.input({ key: 'today-log-1', text: '   ' })
+  expect(toasts.length).toBe(1)
+
+  // A scratchpad entry goes there too, and comes off the pad.
+  await ui.input({ key: 'pad-input-0', text: 'ordered the hinges' })
+  await ui.press({ key: 'pad-today-0' })
+  expect(written.get('/v/Daily/2022-01-05.md')?.endsWith('- 09:30 gate is fixed\n- 09:30 ordered the hinges\n')).toBe(true)
+  expect(await ui.find({ key: 'pad-row-0' })).toBeFalsy()
+  expect(toasts[1]).toBe("Saved to today's note")
+
+  // It goes into every draft, named in the Context card's line, until unticked.
+  expect(await ui.find({ text: /your overall context, today's note, a search of your notes/ })).toBeTruthy()
+  await ui.press({ key: 'draft' })
+  expect(got.filled[0]?.includes('- Today: read "/v/Daily/2022-01-05.md"')).toBe(true)
+  expect((await ui.find({ key: 'pick-today' }))?.text).toMatch(/☑/)
+  await ui.press({ key: 'pick-today' })
+  expect((await ui.find({ key: 'pick-today' }))?.text).toMatch(/☐/)
+  await ui.press({ key: 'draft' })
+  expect(got.filled[1]?.includes('Today:')).toBe(false)
+
+  // open opens it in the note editor; the card folds.
+  await ui.press({ key: 'head-todayOpen' })
+  expect(await ui.find({ key: 'today-open' })).toBeFalsy()
+  await ui.press({ key: 'head-todayOpen' })
+  expect(await ui.find({ key: 'today-open' })).toBeTruthy()
+  await ui.press({ key: 'setup-menu' })
+  expect(await ui.find({ text: "Today's note: Daily/2022-01-05.md" })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('Today: a note not made yet is never created by the pane; it shows once made, and the card follows the day', { options: { ...OPTIONS, dailyNote: 'Daily/{{date:YYYY-MM-DD}}' } }, async ($, on) => {
+  const written = new Map<string, string>()
+  const toasts: string[] = []
+  const got = todayHooks(on, written, toasts)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: '☀️ Today · 2022-01-05' })).toBeTruthy()
+  expect(await ui.find({ text: /No note for today yet \(Daily\/2022-01-05\.md\)/ })).toBeTruthy()
+  expect((await ui.findAll({ type: 'Input' })).some(one => /^today-log/.test(String(one.key ?? '')))).toBe(false)
+  expect(await ui.find({ key: 'today-open' })).toBeFalsy()
+  await ui.input({ key: 'pad-input-0', text: 'a thought' })
+  expect(await ui.find({ key: 'pad-today-0' })).toBeFalsy()
+  await ui.press({ key: 'draft' })
+  expect(got.filled[0]?.includes('Today:')).toBe(false)
+  expect([...written.keys()].some(path => path.startsWith('/v/Daily/'))).toBe(false)
+
+  // The user makes it in their editor: the next sync shows it.
+  written.set('/v/Daily/2022-01-05.md', '- [ ] one thing\n')
+  await $.prompt.submit({ text: 'hello' })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(await ui.find({ text: '☐ one thing' })).toBeTruthy()
+  expect(await ui.find({ key: 'today-log-0' })).toBeTruthy()
+  // They tick it there: the card follows.
+  written.set('/v/Daily/2022-01-05.md', '- [x] one thing\n- [ ] and another\n')
+  await $.prompt.submit({ text: 'hello' })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(await ui.find({ text: '☐ one thing' })).toBeFalsy()
+  expect(await ui.find({ text: '☐ and another' })).toBeTruthy()
+
+  // Past midnight the card is the new day's, whose note is not made yet.
+  got.clock.now = new Date(2022, 0, 6, 0, 5).getTime()
+  await $.prompt.submit({ text: 'hello' })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(await ui.find({ text: '☀️ Today · 2022-01-06' })).toBeTruthy()
+  expect(await ui.find({ text: /No note for today yet \(Daily\/2022-01-06\.md\)/ })).toBeTruthy()
+  expect(written.get('/v/Daily/2022-01-05.md')).toBe('- [x] one thing\n- [ ] and another\n')
+  await ui.unmount()
+})
+
+test('with dailyNote none, Obsidian\'s daily notes are ignored', { options: { ...OPTIONS, dailyNote: 'none' } }, async ($, on) => {
+  todayHooks(on, new Map([['/v/.obsidian/daily-notes.json', '{}'], ['/v/2022-01-05.md', '- [ ] x\n']]), [])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'head-todayOpen' })).toBeFalsy()
   await ui.unmount()
 })
 

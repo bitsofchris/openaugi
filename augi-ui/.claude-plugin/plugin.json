@@ -64,6 +64,18 @@
       "description": "Where Augi keeps one Agent Log per anchor: the companion note agents write (context, questions, chats, saved notes). Your own note is never written.",
       "default": "OpenAugi/Agent-Logs"
     },
+    "dailyNote": {
+      "type": "string",
+      "title": "Daily note",
+      "description": "Today's note, for the pane's Today card: a path inside the notes folder with the date in it, e.g. Daily/{{date:YYYY-MM-DD}}.md. Empty reads Obsidian's own daily-note folder and format; none turns the card off.",
+      "default": ""
+    },
+    "dailyHeading": {
+      "type": "string",
+      "title": "Daily log heading",
+      "description": "The heading in today's note that lines logged from the pane go under (made when missing). Empty adds them at the end of the note.",
+      "default": ""
+    },
     "taskFolder": {
       "type": "string",
       "title": "Task folder",

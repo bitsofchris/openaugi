@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**augi-ui: a Today card for the daily note.** Under Always, the pane now
+shows today's note: its first five open checkboxes, a `+ log` field that adds
+`- HH:MM text` to it, and `open`. A scratchpad entry gets `→ today`, and the
+note goes into every draft unless you untick it in the card. With Obsidian's
+daily notes it works with no setup (it reads the folder and name format from
+`.obsidian/daily-notes.json`); otherwise set `dailyNote` to a path with the
+date in it, `Daily/{{date:YYYY-MM-DD}}.md`, and `dailyHeading` to the heading
+logged lines go under. `dailyNote: none` turns it off. The pane never creates
+the note, so your daily template still applies.
+
 **augi-ui: a new task lands where you are working, and an old task template
 is flagged.** A standalone task made from the pane used to become a card at
 the end of the board's *first* column, whatever that column was. It now goes
