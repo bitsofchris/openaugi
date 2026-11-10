@@ -58,8 +58,6 @@ export type Swatch = {
   // Pins that go into every chat's draft, whatever its anchor; kept in the store.
   everywhere: Pin[]
   lenses: Lens[]
-  // The lens that gets a button of its own, by path; empty when the lens folder has none.
-  quick: { overview: string }
   sessions: Session[]
   loadedAt: number
 }
@@ -84,10 +82,8 @@ export type View = {
   pinsOpen: boolean
   touchedOpen: boolean
   padOpen: boolean
-  // The You card under Always: the season line, the context note and the board.
+  // The You card under Always: the season line, the context note, the board and today's note.
   youOpen: boolean
-  // The Today card under Always, drawn when there is a daily note.
-  todayOpen: boolean
   contextOpen: boolean
   anchorsOpen: boolean
   sessionsOpen: boolean
@@ -105,7 +101,7 @@ export type View = {
   // `child` asks for a child chat's goal; `promote` turns the chat `promote` into a task.
   taskMode: '' | 'new' | 'sub' | 'child' | 'promote'
   promote: string
-  // How many lines the Today card has logged this session: it empties the log field after each.
+  // How many lines the You card has logged to today's note this session: it empties the log field after each.
   logged: number
 }
 // The task this chat just made, for the Anchor card's "just made" row; an empty `note` is none.

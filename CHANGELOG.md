@@ -11,9 +11,8 @@ shows `✗ task template`, press `use the current template`; and set a
 working on, and what is next?": it reads the board and every anchor's Agent
 Log and returns each anchor's open chats, open tasks and next step, with the
 three next steps on top. It is an engine lens (`openaugi init` copies it;
-an existing vault gets it from `src/openaugi/templates/lenses/`). In the
-augi-ui pane it has a button of its own when the lens folder has it:
-`🔭 what's open, what's next` in the You card.
+an existing vault gets it from `src/openaugi/templates/lenses/`), run from
+the lens list like any other.
 
 **augi-ui: chats are free, tasks are earned.** Splitting a task into parallel
 chats used to mean a note, a board line and an anchor switch for each. Now:
@@ -36,15 +35,18 @@ Every anchored chat is now titled in the log by its first prompt (a pane
 draft's instruction, else the prompt's first line) instead of staying `chat`
 until a draft named it.
 
-**augi-ui: a Today card for the daily note.** Under Always, the pane now
-shows today's note: its first five open checkboxes, a `+ log` field that adds
-`- HH:MM text` to it, and `open`. A scratchpad entry gets `→ today`, and the
-note goes into every draft unless you untick it in the card. With Obsidian's
-daily notes it works with no setup (it reads the folder and name format from
-`.obsidian/daily-notes.json`); otherwise set `dailyNote` to a path with the
-date in it, `Daily/{{date:YYYY-MM-DD}}.md`, and `dailyHeading` to the heading
-logged lines go under. `dailyNote: none` turns it off. The pane never creates
-the note, so your daily template still applies.
+**augi-ui: today's note in the You card.** The You card now holds your
+context, the board and today's note: `☀️ today's note` opens it, its first
+five open checkboxes are listed, and a `+ log` field adds `- HH:MM text` to
+it. A scratchpad entry gets `→ today`, and the note goes into every draft
+unless you untick it. With Obsidian's daily notes it works with no setup: it
+reads the folder and name format from `.obsidian/daily-notes.json`, and with
+no folder named there it uses Obsidian's default new-note folder, as Obsidian
+does. Otherwise set `dailyNote` to a path with the date in it,
+`Daily/{{date:YYYY-MM-DD}}.md`, and `dailyHeading` to the heading logged
+lines go under. `dailyNote: none` turns it off. When there is no note for
+today, `＋ make today's note` makes it on your press, from Obsidian's daily
+template when it names one, else empty; nothing is made by itself.
 
 **augi-ui: a new task lands where you are working, and an old task template
 is flagged.** A standalone task made from the pane used to become a card at

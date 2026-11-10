@@ -55,6 +55,8 @@ export type Paths = {
   dailyHeading: string
   // Where Obsidian keeps its daily-note folder and name format for this notes folder.
   obsidianDaily: string
+  // Obsidian's own settings for this notes folder: where it puts a new note by default.
+  obsidianApp: string
   claudeDir: string
   codexDir: string
   // The usage log: one JSON line per pane press, on this computer only.
@@ -93,6 +95,7 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
     daily: (options.dailyNote ?? '').trim(),
     dailyHeading: (options.dailyHeading ?? '').trim().replace(/^#+\s*/, ''),
     obsidianDaily: `${notes}/.obsidian/daily-notes.json`,
+    obsidianApp: `${notes}/.obsidian/app.json`,
     claudeDir: `${home}/.claude/projects`,
     codexDir: `${home}/.codex/sessions`,
     usage: `${home}/.openaugi/usage/augi-ui.jsonl`,
@@ -151,11 +154,11 @@ export const USAGE_FEATURES = [
   'ask', 'done', 'show-done', 'reopen', 'saved', 'chat', 'chat-task', 'chat-done', 'chat-reopen', 'chats-done',
   'pin-tick', 'pin-open', 'pin-drop', 'pin-paste',
   'touched-open', 'touched-pin', 'files-all', 'pad-input', 'pad-save', 'pad-ask', 'pad-today', 'pad-drop', 'pad-save-all',
-  'today-log', 'today-open', 'pick-today', 'run-overview',
+  'today-log', 'today-open', 'today-make', 'pick-today',
   'all-tick', 'all-open', 'all-drop', 'all-paste', 'pin-search', 'offer-anchor', 'offer-all', 'hits-clear', 'sessions-menu', 'draft', 'copy-draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
-  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-trailOpen', 'head-pinsOpen', 'head-touchedOpen', 'head-padOpen', 'head-youOpen', 'head-todayOpen', 'head-contextOpen',
+  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-trailOpen', 'head-pinsOpen', 'head-touchedOpen', 'head-padOpen', 'head-youOpen', 'head-contextOpen',
 ]
 
 // The log's lines as events; a line that is not one is skipped.
@@ -275,9 +278,11 @@ export const formatDate = (format: string, ms: number): string => {
 }
 
 // The daily note setting as a pattern: what was typed; else, from Obsidian's own
-// daily-note settings (`obsidian` is that file's text: folder and name format, each with
-// Obsidian's default); else none. `none` typed turns it off.
-export const dailyPattern = (typed: string, obsidian: string): string => {
+// daily-note settings (`obsidian` is that file's text: folder and name format); else none.
+// `none` typed turns it off. Obsidian's defaults apply as it applies them: the name is
+// YYYY-MM-DD, and with no folder named the note goes where Obsidian puts any new note
+// (`app` is its app settings' text: a set folder, else the vault's root).
+export const dailyPattern = (typed: string, obsidian: string, app = ''): string => {
   if (typed.toLowerCase() === 'none') {
     return ''
   }
@@ -287,14 +292,50 @@ export const dailyPattern = (typed: string, obsidian: string): string => {
   if (!obsidian.trim()) {
     return ''
   }
+  const tidy = (value: unknown): string => (typeof value === 'string' ? value.trim().replace(/^\/+|\/+$/g, '') : '')
   try {
     const { folder, format } = JSON.parse(obsidian) as { folder?: unknown; format?: unknown }
-    const inFolder = typeof folder === 'string' ? folder.trim().replace(/^\/+|\/+$/g, '') : ''
+    let inFolder = tidy(folder)
+    if (!inFolder && app.trim()) {
+      try {
+        const { newFileLocation, newFileFolderPath } = JSON.parse(app) as { newFileLocation?: unknown; newFileFolderPath?: unknown }
+        inFolder = newFileLocation === 'folder' ? tidy(newFileFolderPath) : ''
+      } catch {
+        inFolder = ''
+      }
+    }
 
     return `${inFolder ? `${inFolder}/` : ''}{{date:${typeof format === 'string' && format.trim() ? format.trim() : 'YYYY-MM-DD'}}}.md`
   } catch {
     return ''
   }
+}
+
+// The template Obsidian makes a daily note from, as a path in the notes folder, or empty
+// when its settings name none.
+export const dailyTemplatePath = (obsidian: string, notes: string): string => {
+  try {
+    const { template } = JSON.parse(obsidian) as { template?: unknown }
+    const named = typeof template === 'string' ? template.trim().replace(/^\/+/, '') : ''
+
+    return named ? `${notes}/${named.endsWith('.md') ? named : `${named}.md`}` : ''
+  } catch {
+    return ''
+  }
+}
+
+// A template's text for a note made now: Obsidian's own placeholders filled, `{{date}}`
+// and `{{time}}` (each with an optional `:FORMAT`) and `{{title}}`. Anything else in it,
+// a scripting plugin's code included, is left exactly as written.
+export const fillTemplate = (text: string, ms: number, title: string): string => {
+  const date = new Date(ms)
+  const clock = (format: string): string =>
+    format.replace(/HH|mm/g, token => String(token === 'HH' ? date.getHours() : date.getMinutes()).padStart(2, '0'))
+
+  return text
+    .replace(/\{\{date(?::([^}]*))?\}\}/g, (_, format: string | undefined) => formatDate(format?.trim() || 'YYYY-MM-DD', ms))
+    .replace(/\{\{time(?::([^}]*))?\}\}/g, (_, format: string | undefined) => clock(format?.trim() || 'HH:mm'))
+    .replace(/\{\{title\}\}/g, title)
 }
 
 // Today's note for a pattern: each `{{date:FORMAT}}` (or `{{date}}`) filled for the day,
@@ -522,14 +563,13 @@ const swatch = atom(
     hits: [],
     everywhere: [],
     lenses: [],
-    quick: { overview: '' },
     sessions: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-17' },
+  { shape: 'swatch-18' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
-const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, trailOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true, todayOpen: true, contextOpen: true }
+const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, trailOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true, contextOpen: true }
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
   { aboutMe: true, openAugi: true, project: true, today: true } as Picks,
@@ -538,7 +578,7 @@ const picks = atom(
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
   { ...CARDS_OPEN, anchorsOpen: false, sessionsOpen: false, lensesOpen: false, chatsDoneOpen: false, setupOpen: false, inOpen: true, doneOpen: false, detailsOpen: false, filesOpen: false, taskMode: '', promote: '', logged: 0 } as View,
-  { shape: 'view-11' },
+  { shape: 'view-12' },
 )
 const made = atom(
   { plugin: 'augi-ui', key: 'made' } as const,
@@ -2023,7 +2063,7 @@ async function writeToday($: EngineInterface, entries: PadEntry[]): Promise<bool
   }
   try {
     if (!(await $.fs.exists(today.path))) {
-      await $.ui.toast("No note for today yet: make it in your editor first, and it shows here.")
+      await $.ui.toast("No note for today yet: make it first.")
 
       return false
     }
@@ -2040,7 +2080,33 @@ async function writeToday($: EngineInterface, entries: PadEntry[]): Promise<bool
   return true
 }
 
-// What was typed in the Today card's log field goes into today's note, stamped now.
+// Makes today's note, on the user's press and never by itself: from the template
+// Obsidian's daily notes use when its settings name one that is there, else empty. Never
+// over a note that exists. Then it opens.
+async function makeToday($: EngineInterface): Promise<void> {
+  const { today } = await read($, swatch)
+  if (!today.pattern) {
+    return
+  }
+  const now = await $.clock.now()
+  const path = dailyNotePath(today.pattern, now, P.notes, P.home)
+  try {
+    if (!(await $.fs.exists(path))) {
+      const template = dailyTemplatePath(await readOr($, P.obsidianDaily), P.notes)
+      const text = template ? fillTemplate(await readOr($, template), now, baseName(path).replace(/\.md$/, '')) : ''
+      await writeNew($, path, text)
+    }
+  } catch (error) {
+    await $.ui.toast(`Couldn't make today's note: ${String(error)}`)
+
+    return
+  }
+  const next = await todayNow($, today.pattern)
+  await update($, swatch, old => ({ ...old, today: next }))
+  await openNote($, path)
+}
+
+// What was typed in the You card's log field goes into today's note, stamped now.
 async function logToday($: EngineInterface, text: string): Promise<void> {
   if (!text.trim()) {
     return
@@ -2156,10 +2222,9 @@ async function load($: EngineInterface): Promise<void> {
     ...(await loadAnchor($, cards)),
     jiraServer: await jiraServerNow($),
     taskTemplate: taskTemplateState(await readOr($, P.taskTemplate)),
-    today: await todayNow($, dailyPattern(P.daily, P.daily ? '' : await readOr($, P.obsidianDaily))),
+    today: await todayNow($, dailyPattern(P.daily, P.daily ? '' : await readOr($, P.obsidianDaily), P.daily ? '' : await readOr($, P.obsidianApp))),
     everywhere: storedPins(await $.store.get(PINS_KEY)),
     lenses: [],
-    quick: { overview: '' },
     sessions: await recentSessions($),
     loadedAt: await $.clock.now(),
   }
@@ -2173,9 +2238,6 @@ async function load($: EngineInterface): Promise<void> {
   for (const name of lensNames([...texts.keys()])) {
     next.lenses.push({ name, path: `${P.lenses}/${name}.md`, description: descriptionFrom(texts.get(name) ?? '') })
   }
-  // The overview lens gets a button of its own in the You card when the lens folder has
-  // it, whatever the lens picks list: the wording stays a note the user can edit.
-  next.quick = { overview: texts.has('overview') ? `${P.lenses}/overview.md` : '' }
 
   await update($, swatch, () => next)
 }
@@ -3352,7 +3414,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Input, Text } = $.ui.resolve(e)
     // Svg is drawn by the desktop, editor and phone, not the terminal.
     const Svg = e.surface === 'terminal' ? null : (($.ui.resolve(e) as unknown as { Svg?: typeof Text }).Svg ?? null)
-    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, quick, trail, chatSeen, seenAt, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
+    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, trail, chatSeen, seenAt, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
     const everywhere = (await read($, swatch)).everywhere ?? []
     // Jira shows only when it is on: a server found or named, a project or site set, or a key on the anchor.
     const isJiraOn = Boolean(jiraServer || P.jiraServer || P.jiraProject || P.jiraSite || jira)
@@ -3791,35 +3853,25 @@ export const register: Register = (on, options) => {
                   <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                     <Button key="edit-context" label="✏️ my context" hotkey="s" onPress={() => openNote($, P.context)} />
                     <Button key="open-board" label="📋 the board" hotkey="d" onPress={() => openNote($, P.board)} />
-                    {quick?.overview && <Button key="run-overview" label="🔭 what's open, what's next" onPress={() => draft($, { name: 'overview', path: quick.overview, description: '' })} />}
+                    {today.exists && <Button key="today-open" label="☀️ today's note" onPress={() => openNote($, today.path)} />}
+                    {today.path && !today.exists && <Button key="today-make" label="＋ make today's note" onPress={() => makeToday($)} />}
                   </Box>
+                  {today.path && !today.exists && <Text key="today-missing" dimColor wrap="wrap">{`No note for ${today.day} yet: it would be ${short(today.path)}.`}</Text>}
+                  {!today.path && P.daily.toLowerCase() !== 'none' && <Text key="today-unset" dimColor wrap="wrap">No daily note set: name one under Setup (daily note) to keep today's note here.</Text>}
+                  {today.exists && (
+                    <Box key="today-body" flexDirection="column" marginTop={1}>
+                      <Text key="today-title" dimColor>{`Today · ${today.day}`}</Text>
+                      {today.todo.map((one, at) => (
+                        <Text key={`today-todo-${at}`} wrap="truncate-end">{`☐ ${one}`}</Text>
+                      ))}
+                      {today.todo.length === 0 && <Text key="today-clear" dimColor>Nothing open in today's note.</Text>}
+                      <Input key={`today-log-${shown.logged ?? 0}`} label="+ log" placeholder="what you just did or decided: Enter adds it to today's note" submitLabel="log" onSubmit={value => logToday($, value)} />
+                      <Button key="pick-today" plain label={`${mark(choice.today)} today's note goes into every draft`} onPress={() => update($, picks, old => ({ ...old, today: !old.today }))} />
+                    </Box>
+                  )}
                 </Box>
               )}
             </Box>
-
-            {today.path && (
-              <Box key="card-today" {...CARD} borderColor="success">
-                {head('todayOpen', `☀️ Today · ${today.day}`, 'success')}
-                {shown.todayOpen && (
-                  <Box key="today-body" flexDirection="column">
-                    {!today.exists && <Text key="today-missing" dimColor wrap="wrap">{`No note for today yet (${short(today.path)}). Make it in your editor and it shows here.`}</Text>}
-                    {today.todo.map((one, at) => (
-                      <Text key={`today-todo-${at}`} wrap="truncate-end">{`☐ ${one}`}</Text>
-                    ))}
-                    {today.exists && today.todo.length === 0 && <Text key="today-clear" dimColor>Nothing open in today's note.</Text>}
-                    {today.exists && (
-                      <Input key={`today-log-${shown.logged ?? 0}`} label="+ log" placeholder="what you just did or decided: Enter adds it to today's note" submitLabel="log" onSubmit={value => logToday($, value)} />
-                    )}
-                    {today.exists && (
-                      <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
-                        <Button key="today-open" label="open" onPress={() => openNote($, today.path)} />
-                        <Button key="pick-today" plain label={`${mark(choice.today)} goes into every draft`} onPress={() => update($, picks, old => ({ ...old, today: !old.today }))} />
-                      </Box>
-                    )}
-                  </Box>
-                )}
-              </Box>
-            )}
 
             <Box key="card-context" {...CARD} borderColor="remember">
               {head('contextOpen', `📎 Context · ${contextCount} going in`, 'remember')}
@@ -3891,7 +3943,7 @@ export const register: Register = (on, options) => {
                     ))}
                     <Input key="set-logFolder" label="agent log folder" value={settings.logFolder || settings.trailFolder || ''} placeholder="OpenAugi/Agent-Logs" onSubmit={value => setOption($, 'logFolder', value)} />
                     <Input key="set-dailyNote" label="daily note" value={settings.dailyNote ?? ''} placeholder="Daily/{{date:YYYY-MM-DD}}.md; empty reads Obsidian's setting, none turns it off" onSubmit={value => setOption($, 'dailyNote', value)} />
-                    <Text key="daily-now" dimColor wrap="wrap">{today.path ? `Today's note: ${short(today.path)}${today.exists ? '' : ' (not made yet)'}` : 'No daily note: the Today card is off.'}</Text>
+                    <Text key="daily-now" dimColor wrap="wrap">{today.path ? `Today's note: ${short(today.path)}${today.exists ? '' : ' (not made yet)'}` : 'No daily note: nothing about today is shown.'}</Text>
                     <Input key="set-dailyHeading" label="log heading in it" value={settings.dailyHeading ?? ''} placeholder="the end of the note" onSubmit={value => setOption($, 'dailyHeading', value)} />
                     <Input key="set-taskFolder" label="new task folder" value={settings.taskFolder ?? ''} placeholder="the notes folder's root" onSubmit={value => setOption($, 'taskFolder', value)} />
                     {!settings.taskFolder?.trim() && <Text key="task-folder-unset" dimColor wrap="wrap">⚠ No task folder set: new task notes go to the notes folder's root.</Text>}
