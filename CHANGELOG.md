@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**Security: lockfile bumps for seven flagged packages.** `uv.lock` moves PyJWT
+to 2.15.1, mcp to 1.30.0, certifi to 2026.10.23, urllib3 to 2.8.0, filelock to
+4.2.10, virtualenv to 21.15.6 and setuptools to 84.2.1 (plus `packaging` and
+`python-discovery`, which the resolver moved with them). No range in
+`pyproject.toml` changed. The PyJWT and mcp fixes matter when the MCP server
+is served over HTTP; stdio was not exposed.
+
 **augi-ui: the anchor belongs to the chat, and what the chat makes sticks to
 it.** A new session opens with no anchor; picking one records the chat in that
 anchor's Agent Log straight away (the "put this chat in the Agent Log" button
