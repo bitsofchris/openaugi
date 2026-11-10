@@ -2322,7 +2322,7 @@ async function ownTranscript($: EngineInterface): Promise<string> {
 // it too. The chat's anchor and its prompt box are left alone: the just-made row offers
 // the next step. Never writes over a note that is there.
 async function newTask($: EngineInterface, typed: string, mode: 'new' | 'sub'): Promise<void> {
-  await update($, view, old => ({ ...old, taskMode: '' }))
+  await update($, view, old => ({ ...old, taskMode: '' as const }))
   const { title, jira } = parseNewTask(typed)
   const name = taskNoteName(title)
   if (!name) {
@@ -2570,7 +2570,7 @@ export const register: Register = (on, options) => {
       await update($, asides, old => ({ ...old, answers: [] }))
       await update($, touched, () => ({ session: '', files: [] }))
       await update($, justMade, () => NO_TASK)
-      await update($, view, old => ({ ...old, taskMode: '' }))
+      await update($, view, old => ({ ...old, taskMode: '' as const }))
     }
 
     return ended
@@ -2874,10 +2874,10 @@ export const register: Register = (on, options) => {
         )}
         {taskMode === '' && (
           <Box key="task-buttons" flexDirection="row">
-            <Button key="task-new" label="＋ new task" onPress={() => update($, view, old => ({ ...old, taskMode: 'new' }))} />
+            <Button key="task-new" label="＋ new task" onPress={() => update($, view, old => ({ ...old, taskMode: 'new' as const }))} />
             {anchor && <Text dimColor> </Text>}
             {anchor && (
-              <Button key="task-sub" label={`＋ sub-task of ${anchor.note.length <= 32 ? anchor.note : `${anchor.note.slice(0, 31)}…`}`} onPress={() => update($, view, old => ({ ...old, taskMode: 'sub' }))} />
+              <Button key="task-sub" label={`＋ sub-task of ${anchor.note.length <= 32 ? anchor.note : `${anchor.note.slice(0, 31)}…`}`} onPress={() => update($, view, old => ({ ...old, taskMode: 'sub' as const }))} />
             )}
           </Box>
         )}
@@ -2891,7 +2891,7 @@ export const register: Register = (on, options) => {
               autoFocus
               onSubmit={value => newTask($, value, taskMode)}
             />
-            <Button key="task-cancel" plain label="  cancel" onPress={() => update($, view, old => ({ ...old, taskMode: '' }))} />
+            <Button key="task-cancel" plain label="  cancel" onPress={() => update($, view, old => ({ ...old, taskMode: '' as const }))} />
           </Box>
         )}
         {madeTask.note && (
