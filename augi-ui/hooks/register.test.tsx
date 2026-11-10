@@ -934,7 +934,7 @@ test('a new lens is written once from its name, opened in the editor, and listed
 
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ key: 'lens-menu' }))?.text).toMatch(/Lenses \(saved prompts\) · 1/)
+  expect(await ui.find({ text: /Lenses \(saved prompts\) · 1/ })).toBeTruthy()
   await ui.press({ key: 'lens-menu' })
   await ui.input({ key: 'new-lens-1', text: 'check my tests' })
   expect(written.get('/v/lenses/check-my-tests.md')).toBe(newLensSkeleton('check-my-tests'))
@@ -1905,11 +1905,12 @@ test('files this chat touched: listed newest first, opened in the right editor, 
   await $.tool.call({ tool: 'Write', file_path: '/r/src/failed.ts', content: 'x' })
   answer = { result: {}, text: 'ok' }
 
-  const rowOf = async (path: string) => (await ui.find({ key: `touched-${path}` }))?.text ?? ''
+  // A row's text with its spacing dropped: the path, `new`, then its buttons.
+  const rowOf = async (path: string) => ((await ui.find({ key: `touched-${path}` }))?.text ?? '').replace(/\s+/g, '')
   expect(await ui.find({ text: '📄 Files this chat touched · 2' })).toBeTruthy()
-  expect((await ui.findAll({ type: 'Box', text: /^ {2}\S.* open/ })).map(one => one.key)).toEqual(['touched-/r/README.md', 'touched-/r/src/new.ts'])
-  expect(await rowOf('/r/README.md')).toBe('  README.md open')
-  expect(await rowOf('/r/src/new.ts')).toBe('  src/new.ts new open')
+  expect((await ui.findAll({ type: 'Box', text: /open/ })).map(one => one.key).filter(key => key?.startsWith('touched-'))).toEqual(['touched-/r/README.md', 'touched-/r/src/new.ts'])
+  expect(await rowOf('/r/README.md')).toBe('README.mdopen')
+  expect(await rowOf('/r/src/new.ts')).toBe('src/new.tsnewopen')
   expect(await rowOf('/v/Notes/Agent Log - X.md')).toBe('')
   expect(await rowOf('/r/src/denied.ts')).toBe('')
   expect(await rowOf('/r/src/failed.ts')).toBe('')
@@ -1919,7 +1920,7 @@ test('files this chat touched: listed newest first, opened in the right editor, 
   await ui.press({ key: 'touched-open-/r/README.md' })
   expect(ran.pop()).toEqual(['code', '/r/README.md'])
   await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/Fresh.md', content: 'x' })
-  expect(await rowOf('/v/Ideas/Fresh.md')).toBe('  Ideas/Fresh.md new open')
+  expect(await rowOf('/v/Ideas/Fresh.md')).toBe('Ideas/Fresh.mdnewopen')
   await ui.press({ key: 'touched-open-/v/Ideas/Fresh.md' })
   expect(ran.pop()).toEqual(['open', 'obsidian://open?path=%2Fv%2FIdeas%2FFresh.md'])
   onDisk.delete('/r/src/new.ts')
@@ -1933,7 +1934,7 @@ test('files this chat touched: listed newest first, opened in the right editor, 
   await ui.press({ key: 'touched-pin-/r/README.md' })
   expect(pinsNow()).toEqual([{ on: false, kind: 'file', target: '/r/README.md', label: 'README.md' }])
   expect(await ui.find({ key: 'touched-pin-/r/README.md' })).toBeFalsy()
-  expect(await rowOf('/r/README.md')).toMatch(/open\s*pinned$/)
+  expect(await rowOf('/r/README.md')).toMatch(/openpinned$/)
   expect((await ui.find({ key: 'anchor-file-file-/r/README.md' }))?.text).toMatch(/📄 README.md/)
   await ui.press({ key: 'anchor-file-file-/r/README.md' })
   expect(ran.pop()).toEqual(['code', '/r/README.md'])
@@ -1945,16 +1946,16 @@ test('files this chat touched: listed newest first, opened in the right editor, 
   // A new vault note written now is still pinned unticked by itself, and listed as pinned.
   await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/Later.md', content: 'x' })
   expect(pinsNow()[2]).toEqual({ on: false, kind: 'note', target: 'Later', label: 'Later' })
-  expect(await rowOf('/v/Ideas/Later.md')).toMatch(/^ {2}Ideas\/Later\.md new open\s*pinned$/)
+  expect(await rowOf('/v/Ideas/Later.md')).toBe('Ideas/Later.mdnewopenpinned')
 
   // Past five, the rest wait behind show all.
   await $.tool.call({ tool: 'NotebookEdit', notebook_path: '/r/nb.ipynb', new_source: 'x' })
   await $.tool.call({ tool: 'Edit', file_path: '/r/src/b.ts', old_string: 'a', new_string: 'b' })
   expect(await ui.find({ text: '📄 Files this chat touched · 6' })).toBeTruthy()
   expect(await rowOf('/r/src/new.ts')).toBe('')
-  expect(await rowOf('/r/nb.ipynb')).toMatch(/^ {2}nb\.ipynb new open/)
+  expect(await rowOf('/r/nb.ipynb')).toMatch(/^nb\.ipynbnewopen/)
   await ui.press({ key: 'files-all' })
-  expect(await rowOf('/r/src/new.ts')).toMatch(/^ {2}src\/new\.ts new open/)
+  expect(await rowOf('/r/src/new.ts')).toMatch(/^src\/new\.tsnewopen/)
   await ui.unmount()
 })
 

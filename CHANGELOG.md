@@ -12,6 +12,11 @@ in This chat; the Context card under Anywhere keeps a second list that goes
 into every chat's draft whatever its anchor (`→ everywhere` moves a pin there,
 search hits and recent sessions offer both). See `docs/reference/augi-ui.md`.
 
+**augi-ui: a tidier pane.** Card and section titles are text with a small
+`hide` / `show` button at the right, list rows keep their actions lined up at
+the right edge, indentation and spacing come from the layout instead of spaces
+and `|` characters in labels, and secondary actions are dimmed.
+
 ## 0.4.3 — 2026-11-09
 
 **Upgrading:** `pip install -U openaugi` (or `uv tool upgrade openaugi`). If

@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, ToolCallResult } from 'claude-code'
+import type { EngineInterface, Register, RenderChildren, ToolCallResult } from 'claude-code'
 
 import type { AsideAnswer, Asides, Card, Chat, JustMade, Lens, Made, MadeArtifact, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Touched, TouchedFile, Trail, View } from '../types'
 
@@ -2762,23 +2762,45 @@ export const register: Register = (on, options) => {
     const hiddenCount = trail.chats.filter(one => one.hidden).length
     const pins = withPaths(trail.pins ?? [], pinPaths ?? {})
     const contextCount = contextItems(pins, choice, anchor ? { note: anchor.note, notePath, trail: trailPath(anchor.note) } : null, everywhere).length
-    // A section's or a card's title: press it to fold or unfold what is under it.
-    const head = (key: keyof View, label: string) => <Button key={`head-${key}`} label={`${arrow(Boolean(shown[key]))} ${label}`} onPress={flip(key)} />
-    // What every draft carries without being listed: switched under Setup.
-    const standing = [anchor && choice.project ? `notes for ${anchor.note}` : '', choice.aboutMe ? 'your overall context' : '', choice.openAugi ? 'a search of your notes' : ''].filter(Boolean)
-    // A search hit or recent session, offered to the anchor or to every chat.
-    const offer = (pin: Pin, label: string) => (
-      <Box key={`offer-${pinKey(pin)}`} flexDirection="row">
-        <Text key={`offer-label-${pinKey(pin)}`}>{`      + ${label} `}</Text>
-        {anchor && <Button key={`offer-anchor-${pinKey(pin)}`} label="pin to anchor" onPress={() => pinIt($, anchor.note, pin)} />}
-        <Button key={`offer-all-${pinKey(pin)}`} label="pin everywhere" onPress={() => pinEverywhere($, pin)} />
-      </Box>
-    )
     const PIN_ICON: Record<Pin['kind'], string> = { note: '▤', file: '📄', session: '◦', artifact: '◇', url: '🔗' }
     const pinKey = (pin: Pin): string => `${pin.kind}-${pin.target}`
     const onPins = (change: (text: string) => string) => (anchor ? writeTrail($, anchor.note, change) : undefined)
     // The note's Next items, then the card's sub-items not already among them.
     const openTasks = anchor ? [...(next ?? []), ...anchor.tasks.filter(task => !(next ?? []).some(one => one.text === task.text))] : []
+    type Tone = 'claude' | 'success' | 'remember' | 'suggestion'
+    // A card's title row: the title as text, its fold button at the trailing edge.
+    const head = (key: keyof View, title: string, tone?: Tone, button: string = `head-${key}`, hotkey?: string) => (
+      <Box key={`title-${key}`} flexDirection="row" justifyContent="space-between" alignItems="center" gap={1}>
+        <Text bold color={tone}>{title}</Text>
+        <Button key={button} plain dimColor label={shown[key] ? '▾ hide' : '▸ show'} hotkey={hotkey} onPress={flip(key)} />
+      </Box>
+    )
+    // A section's title row, larger than a card's.
+    const section = (key: keyof View, title: string) => (
+      <Box key={`title-${key}`} flexDirection="row" justifyContent="space-between" alignItems="center" gap={1} marginBottom={1}>
+        <Text bold size="heading">{title}</Text>
+        <Button key={`head-${key}`} plain dimColor label={shown[key] ? '▾ hide' : '▸ show'} onPress={flip(key)} />
+      </Box>
+    )
+    // A list row: what it is on the left, what you can do with it lined up on the right.
+    const line = (key: string, main: RenderChildren, actions: RenderChildren) => (
+      <Box key={key} flexDirection="row" justifyContent="space-between" alignItems="center" gap={1}>
+        <Box flexDirection="row" alignItems="center" flexShrink={1} gap={1}>{main}</Box>
+        <Box flexDirection="row" alignItems="center" flexShrink={0} gap={1}>{actions}</Box>
+      </Box>
+    )
+    // What every draft carries without being listed: switched under Setup.
+    const standing = [anchor && choice.project ? `notes for ${anchor.note}` : '', choice.aboutMe ? 'your overall context' : '', choice.openAugi ? 'a search of your notes' : ''].filter(Boolean)
+    // A search hit or recent session, offered to the anchor or to every chat.
+    const offer = (pin: Pin, label: string) => line(
+      `offer-${pinKey(pin)}`,
+      <Text key={`offer-label-${pinKey(pin)}`} wrap="truncate-end">{`+ ${label}`}</Text>,
+      [
+        anchor && <Button key={`offer-anchor-${pinKey(pin)}`} label="pin to anchor" onPress={() => pinIt($, anchor.note, pin)} />,
+        <Button key={`offer-all-${pinKey(pin)}`} label="pin everywhere" onPress={() => pinEverywhere($, pin)} />,
+      ],
+    )
+    const CARD = { flexDirection: 'column', borderStyle: 'round', paddingX: 1, marginBottom: 1 } as const
     const { answers } = await read($, asides)
     const answerOf = (one: Question): AsideAnswer | undefined => answers.find(other => other.when === one.when && other.text === one.text)
     const openQuestions = trail.questions.filter(one => !one.done)
@@ -2814,7 +2836,7 @@ export const register: Register = (on, options) => {
           <Text> </Text>
           {vaults.length > 0 && <Text>Your Obsidian vaults:</Text>}
           {vaults.slice(0, 9).map((vault, index) => (
-            <Button key={`vault-${index}`} label={`  ${vault.startsWith(P.home) ? `~${vault.slice(P.home.length)}` : vault}`} hotkey={String(index + 1)} onPress={() => setOption($, 'notesFolder', vault)} />
+            <Button key={`vault-${index}`} label={`${vault.startsWith(P.home) ? `~${vault.slice(P.home.length)}` : vault}`} hotkey={String(index + 1)} onPress={() => setOption($, 'notesFolder', vault)} />
           ))}
           {vaults.length > 0 && <Text dimColor>Or type another folder:</Text>}
           {vaults.length === 0 ? (
@@ -2848,12 +2870,12 @@ export const register: Register = (on, options) => {
           <Text> </Text>
           {hits.length > 0 && <Text>Found in your notes:</Text>}
           {hits.map((hit, at) => (
-            <Button key={`found-${at}`} label={`  ${hit}`} hotkey={String(at + 1)} onPress={() => setOption($, step.field, hit)} />
+            <Button key={`found-${at}`} label={`${hit}`} hotkey={String(at + 1)} onPress={() => setOption($, step.field, hit)} />
           ))}
           {hits.length === 0 && <Text dimColor>Nothing like it found in your notes.</Text>}
-          <Button key="use-starter" label={`  create a starter at ${step.starter}`} hotkey="v" onPress={() => useStarter($, step.field)} />
-          <Input key={`set-${step.field}`} label="  or type a path" placeholder={step.starter} value="" onSubmit={value => setOption($, step.field, value)} />
-          <Button key="skip-step" plain label="  skip for now" hotkey="e" onPress={() => skipStep($, step.field)} />
+          <Button key="use-starter" label={`create a starter at ${step.starter}`} hotkey="v" onPress={() => useStarter($, step.field)} />
+          <Input key={`set-${step.field}`} label="or type a path" placeholder={step.starter} value="" onSubmit={value => setOption($, step.field, value)} />
+          <Button key="skip-step" plain label="skip for now" hotkey="e" onPress={() => skipStep($, step.field)} />
           <Text> </Text>
           <Button key="start-over" plain label="← change the notes folder" onPress={() => startOver($)} />
           <Text dimColor>Saved in Claude Code's settings. Come back with /augi setup, or ⚙️ Setup in the pane.</Text>
@@ -2865,369 +2887,363 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         {gaps > 0 && <Text dimColor>{gaps} setup {gaps === 1 ? 'item needs' : 'items need'} you: open setup below.</Text>}
         {Svg && <Svg key="augi-face" source={AUGI_SVG} alt="Augi" width={40} height={40} />}
-        <Box key="section-chat" flexDirection="column">{head('chatOpen', `━ This chat${anchor ? ` · ${anchor.note}` : ''}`)}</Box>
+        <Box key="section-chat" flexDirection="column">{section('chatOpen', `This chat${anchor ? ` · ${anchor.note}` : ''}`)}</Box>
         {shown.chatOpen && (
-        <Box key="chat-body" flexDirection="column">
-        <Box key="card-anchor" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="claude">
-        {head('anchorOpen', `⚓ Anchor${anchor && !shown.anchorOpen ? ` · ${anchor.note}` : ''}`)}
-        {shown.anchorOpen && (
-        <Box key="anchor-body" flexDirection="column">
-        <Button key="anchor-menu" label={`${arrow(shown.anchorsOpen)} ${anchor ? anchor.note : 'pick a project or task'}`} hotkey="a" onPress={flip('anchorsOpen')} />
-        {shown.anchorsOpen && byColumn(cards).map(([column, list]) => (
-          <Box key={`column-${column}`} flexDirection="column">
-            <Text dimColor>  {column}</Text>
-            {list.map(card => (
-              <Box key={`card-box-${card.note}`} flexDirection="column">
-                <Button key={`card-${card.note}`} plain label={`    ${anchor?.note === card.note ? '●' : '○'} ${card.note}`} onPress={() => chooseAnchor($, card)} />
-                {card.tasks.map(task => task.note).filter((note): note is string => Boolean(note)).map(note => (
-                  <Button key={`card-sub-${card.note}-${note}`} plain label={`        ${anchor?.note === note ? '●' : '○'} ${note}`} onPress={() => chooseAnchor($, subCard(card, note))} />
-                ))}
-              </Box>
-            ))}
-          </Box>
-        ))}
-        {shown.anchorsOpen && anchor && <Button key="anchor-clear" plain label="    ○ no anchor" onPress={() => clearAnchor($)} />}
-        {!anchor && <Text dimColor>🧭 Season: {season}</Text>}
-        {anchor && (
-          <Button key="anchor-details" plain label={`${arrow(shown.detailsOpen)} outcome and next (${openTasks.length})`} onPress={flip('detailsOpen')} />
-        )}
-        {anchor && shown.detailsOpen && anchor.detail && <Text dimColor>{anchor.detail}</Text>}
-        {anchor && shown.detailsOpen && outcome && <Text>🎯 {outcome}</Text>}
-        {anchor && jira && (
-          <Box key="jira-linked" flexDirection="row">
-            {P.jiraSite
-              ? <Button key="jira-open" plain label={`🔗 ${jira}`} onPress={() => launch($, ['open', jiraBrowseUrl(P.jiraSite, jira)])} />
-              : <Text key="jira-key" dimColor>{`🔗 ${jira}`}</Text>}
-            <Text dimColor> </Text>
-            <Button key="jira-update" label="↑ update Jira" onPress={() => updateJira($)} />
-            <Button key="jira-unlink" plain label=" unlink" onPress={() => writeJira($, '')} />
-          </Box>
-        )}
-        {anchor && !jira && isJiraOn && (
-          <Box key="jira-unlinked" flexDirection="row">
-            <Input key="jira-link" label="🔗 " placeholder="paste a Jira key or link: Enter links it to this anchor" submitLabel="link" onSubmit={value => linkJira($, value)} />
-            <Button key="jira-find" label="find in Jira" onPress={() => findInJira($)} />
-          </Box>
-        )}
-        {anchor && shown.detailsOpen && openTasks.map(task => (
-          task.note
-            ? <Button key={`task-${task.text}`} plain label={`☐ ${task.text} ↗`} onPress={() => openByName($, task.note ?? '')} />
-            : <Text key={`task-${task.text}`}>☐ {task.text}</Text>
-        ))}
-        {anchor && (
-          <Box flexDirection="row">
-            <Button key="open-note" label="🧠 Human Notes" hotkey="p" onPress={() => (notePath ? openNote($, notePath) : openByName($, anchor.note))} />
-            <Text dimColor> | </Text>
-            <Button key="open-trail" label="🤖 Agent Log" hotkey="k" onPress={() => writeTrail($, anchor.note, text => text).then(() => openNote($, trailPath(anchor.note)))} />
-            {anchorArtifacts(pins).map(pin => (
-              <Box key={`anchor-artifact-box-${pin.target}`} flexDirection="row">
-                <Text dimColor> | </Text>
-                <Button key={`anchor-artifact-${pin.target}`} label={`◇ ${pin.label}`} onPress={() => openPin($, pin)} />
-              </Box>
-            ))}
-          </Box>
-        )}
-        {anchor && anchorFiles(pins).length > 0 && (
-          <Box key="anchor-files" flexDirection="row">
-            {anchorFiles(pins).map((pin, at) => (
-              <Box key={`anchor-file-box-${pinKey(pin)}`} flexDirection="row">
-                {at > 0 && <Text dimColor> | </Text>}
-                <Button key={`anchor-file-${pinKey(pin)}`} label={`📄 ${pin.label}`} onPress={() => openPin($, pin)} />
-              </Box>
-            ))}
-          </Box>
-        )}
-        {anchor && (
-          <Input
-            key={`capture-${trail.questions.length}`}
-            label="? "
-            placeholder="a question or side quest: Enter parks it in the Agent Log"
-            submitLabel="park it"
-            onSubmit={value => capture($, value)}
-          />
-        )}
-        {taskMode === '' && (
-          <Box key="task-buttons" flexDirection="row">
-            <Button key="task-new" label="＋ new task" onPress={() => update($, view, old => ({ ...old, taskMode: 'new' as const }))} />
-            {anchor && <Text dimColor> </Text>}
+          <Box key="chat-body" flexDirection="column">
+            <Box key="card-anchor" {...CARD} borderColor="claude">
+              {head('anchorOpen', `⚓ Anchor${anchor && !shown.anchorOpen ? ` · ${anchor.note}` : ''}`, 'claude')}
+              {shown.anchorOpen && (
+                <Box key="anchor-body" flexDirection="column">
+                  <Button key="anchor-menu" label={`${arrow(shown.anchorsOpen)} ${anchor ? anchor.note : 'pick a project or task'}`} hotkey="a" onPress={flip('anchorsOpen')} />
+                  {shown.anchorsOpen && (
+                    <Box key="anchor-list" flexDirection="column" paddingLeft={2} marginBottom={1}>
+                      {byColumn(cards).map(([column, list]) => (
+                        <Box key={`column-${column}`} flexDirection="column">
+                          <Text dimColor>{column}</Text>
+                          {list.map(card => (
+                            <Box key={`card-box-${card.note}`} flexDirection="column" paddingLeft={2}>
+                              <Button key={`card-${card.note}`} plain label={`${anchor?.note === card.note ? '●' : '○'} ${card.note}`} onPress={() => chooseAnchor($, card)} />
+                              {card.tasks.map(task => task.note).filter((note): note is string => Boolean(note)).map(note => (
+                                <Box key={`card-sub-box-${card.note}-${note}`} flexDirection="column" paddingLeft={2}>
+                                  <Button key={`card-sub-${card.note}-${note}`} plain label={`${anchor?.note === note ? '●' : '○'} ${note}`} onPress={() => chooseAnchor($, subCard(card, note))} />
+                                </Box>
+                              ))}
+                            </Box>
+                          ))}
+                        </Box>
+                      ))}
+                      {anchor && <Button key="anchor-clear" plain dimColor label="○ no anchor" onPress={() => clearAnchor($)} />}
+                    </Box>
+                  )}
+                  {!anchor && <Text dimColor>🧭 Season: {season}</Text>}
+                  {anchor && (
+                    <Box key="anchor-links" flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                      <Button key="open-note" label="🧠 Human Notes" hotkey="p" onPress={() => (notePath ? openNote($, notePath) : openByName($, anchor.note))} />
+                      <Button key="open-trail" label="🤖 Agent Log" hotkey="k" onPress={() => writeTrail($, anchor.note, text => text).then(() => openNote($, trailPath(anchor.note)))} />
+                      {anchorArtifacts(pins).map(pin => (
+                        <Button key={`anchor-artifact-${pin.target}`} label={`◇ ${pin.label}`} onPress={() => openPin($, pin)} />
+                      ))}
+                      {anchorFiles(pins).map(pin => (
+                        <Button key={`anchor-file-${pinKey(pin)}`} label={`📄 ${pin.label}`} onPress={() => openPin($, pin)} />
+                      ))}
+                    </Box>
+                  )}
+                  {anchor && jira && (
+                    <Box key="jira-linked" flexDirection="row" alignItems="center" gap={1}>
+                      {P.jiraSite
+                        ? <Button key="jira-open" plain label={`🔗 ${jira}`} onPress={() => launch($, ['open', jiraBrowseUrl(P.jiraSite, jira)])} />
+                        : <Text key="jira-key" dimColor>{`🔗 ${jira}`}</Text>}
+                      <Button key="jira-update" label="↑ update Jira" onPress={() => updateJira($)} />
+                      <Button key="jira-unlink" plain dimColor label="unlink" onPress={() => writeJira($, '')} />
+                    </Box>
+                  )}
+                  {anchor && !jira && isJiraOn && (
+                    <Box key="jira-unlinked" flexDirection="row" alignItems="center" gap={1}>
+                      <Input key="jira-link" label="🔗" placeholder="paste a Jira key or link: Enter links it to this anchor" submitLabel="link" onSubmit={value => linkJira($, value)} />
+                      <Button key="jira-find" label="find in Jira" onPress={() => findInJira($)} />
+                    </Box>
+                  )}
+                  {anchor && (
+                    <Button key="anchor-details" plain dimColor label={`${arrow(shown.detailsOpen)} outcome and next (${openTasks.length})`} onPress={flip('detailsOpen')} />
+                  )}
+                  {anchor && shown.detailsOpen && (
+                    <Box key="anchor-detail" flexDirection="column" paddingLeft={2} marginBottom={1}>
+                      {anchor.detail && <Text dimColor>{anchor.detail}</Text>}
+                      {outcome && <Text>🎯 {outcome}</Text>}
+                      {openTasks.map(task => (
+                        task.note
+                          ? <Button key={`task-${task.text}`} plain label={`☐ ${task.text} ↗`} onPress={() => openByName($, task.note ?? '')} />
+                          : <Text key={`task-${task.text}`}>☐ {task.text}</Text>
+                      ))}
+                    </Box>
+                  )}
+                  {anchor && (
+                    <Input
+                      key={`capture-${trail.questions.length}`}
+                      label="?"
+                      placeholder="a question or side quest: Enter parks it in the Agent Log"
+                      submitLabel="park it"
+                      onSubmit={value => capture($, value)}
+                    />
+                  )}
+                  {taskMode === '' && (
+                    <Box key="task-buttons" flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                      <Button key="task-new" label="＋ new task" onPress={() => update($, view, old => ({ ...old, taskMode: 'new' as const }))} />
+                      {anchor && (
+                        <Button key="task-sub" label={`＋ sub-task of ${anchor.note.length <= 32 ? anchor.note : `${anchor.note.slice(0, 31)}…`}`} onPress={() => update($, view, old => ({ ...old, taskMode: 'sub' as const }))} />
+                      )}
+                    </Box>
+                  )}
+                  {taskMode !== '' && (
+                    <Box key="task-form" flexDirection="column">
+                      <Input
+                        key={`task-title-${taskMode}`}
+                        label={taskMode === 'sub' ? '＋ sub-task' : '＋ new task'}
+                        placeholder={taskMode === 'sub' ? `title (add PROJ-123 to link Jira): Enter makes it under ${anchor?.note ?? 'the anchor'}` : 'title (add PROJ-123 to link Jira): Enter makes a standalone task'}
+                        submitLabel="create"
+                        autoFocus
+                        onSubmit={value => newTask($, value, taskMode)}
+                      />
+                      <Button key="task-cancel" plain dimColor label="cancel" onPress={() => update($, view, old => ({ ...old, taskMode: '' as const }))} />
+                    </Box>
+                  )}
+                  {madeTask.note && (
+                    <Box key="just-made" flexDirection="column" marginTop={1}>
+                      <Text dimColor>{`✓ just made: ${madeTask.note}`}</Text>
+                      <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                        <Button key="made-open" label="open" onPress={() => openNote($, madeTask.path)} />
+                        <Button key="made-define" label="define here" onPress={() => defineHere($)} />
+                        <Button key="made-copy" label="copy for a new chat" onPress={() => copyForNewChat($)} />
+                        {anchor?.note !== madeTask.note && <Button key="made-anchor" label="anchor on it" onPress={() => anchorOnMade($)} />}
+                        <Button key="made-dismiss" plain dimColor label="dismiss" onPress={() => update($, justMade, () => NO_TASK)} />
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </Box>
+
             {anchor && (
-              <Button key="task-sub" label={`＋ sub-task of ${anchor.note.length <= 32 ? anchor.note : `${anchor.note.slice(0, 31)}…`}`} onPress={() => update($, view, old => ({ ...old, taskMode: 'sub' as const }))} />
+              <Box key="card-trail" {...CARD} borderColor="success">
+                {head('trailOpen', `🌱 On ${anchor.note} · ${openQuestions.length} open, ${chats.length} ${chats.length === 1 ? 'chat' : 'chats'}`, 'success')}
+                {shown.trailOpen && (
+                  <Box key="trail-body" flexDirection="column">
+                    {openQuestions.length > 0 && <Text key="trail-questions" dimColor>Questions</Text>}
+                    {openQuestions.map(one => {
+                      const got = answerOf(one)
+
+                      return (
+                        <Box key={`question-${one.when}-${one.text}`} flexDirection="column">
+                          {line(
+                            `question-row-${one.when}-${one.text}`,
+                            <Button key={`ask-${one.when}`} plain label={`? ${one.text}`} onPress={() => draft($, null, one.text)} />,
+                            [
+                              got?.pending
+                                ? <Text key={`aside-wait-${one.when}`} dimColor>…</Text>
+                                : <Button key={`aside-${one.when}`} label="aside" onPress={() => aside($, one)} />,
+                              <Button key={`done-${one.when}`} label="done" onPress={() => writeTrail($, anchor.note, text => setDone(text, one, true))} />,
+                            ],
+                          )}
+                          {got && !got.pending && (
+                            <Box key={`aside-answer-${one.when}`} flexDirection="column" paddingLeft={2} marginBottom={1}>
+                              <Text key={`aside-text-${one.when}`} dimColor wrap="wrap">{got.answer}</Text>
+                              <Box flexDirection="row" alignItems="center" gap={1}>
+                                <Button key={`aside-keep-${one.when}`} label="keep" onPress={() => keepAside($, anchor.note, got)} />
+                                <Button key={`aside-drop-${one.when}`} dimColor label="drop" onPress={() => dropAside($, got)} />
+                              </Box>
+                            </Box>
+                          )}
+                        </Box>
+                      )
+                    })}
+                    {doneQuestions.length > 0 && (
+                      <Button key="show-done" plain dimColor label={`${arrow(shown.doneOpen)} done questions (${doneQuestions.length})`} onPress={flip('doneOpen')} />
+                    )}
+                    {shown.doneOpen && doneQuestions.map(one => line(
+                      `question-${one.when}-${one.text}`,
+                      <Text key={`done-text-${one.when}`} dimColor>{`✓ ${one.text}`}</Text>,
+                      <Button key={`reopen-${one.when}`} dimColor label="reopen" onPress={() => writeTrail($, anchor.note, text => setDone(text, one, false))} />,
+                    ))}
+                    {trail.saved.length > 0 && <Text key="trail-saved" dimColor>Saved notes</Text>}
+                    {trail.saved.map(name => (
+                      <Button key={`saved-${name}`} plain label={`▤ ${name}`} onPress={() => openByName($, name)} />
+                    ))}
+                    {chats.length > 0 && <Text key="trail-chats" dimColor>Chats</Text>}
+                    {chats.map(chat => line(
+                      `chat-row-${chat.id}`,
+                      <Button key={`chat-${chat.id}`} plain label={`◦ ${chat.when.slice(5)} ${chat.title}${chat.hidden ? ' (hidden)' : ''}`} onPress={() => copyResume($, chat)} />,
+                      <Button
+                        key={`hide-${chat.id}`}
+                        dimColor
+                        label={chat.hidden ? 'show' : 'hide'}
+                        onPress={() => writeTrail($, anchor.note, text => setHidden(text, chat.id, !chat.hidden))}
+                      />,
+                    ))}
+                    {trail.saved.length === 0 && chats.length === 0 && trail.questions.length === 0 && <Text dimColor>Nothing yet. Questions you park, chats you start and notes they save show up here.</Text>}
+                    {hiddenCount > 0 && (
+                      <Button key="show-hidden" plain dimColor label={`${shown.showHidden ? 'hide' : 'show'} hidden chats (${hiddenCount})`} hotkey="x" onPress={flip('showHidden')} />
+                    )}
+                  </Box>
+                )}
+              </Box>
             )}
-          </Box>
-        )}
-        {taskMode !== '' && (
-          <Box key="task-form" flexDirection="column">
-            <Input
-              key={`task-title-${taskMode}`}
-              label={taskMode === 'sub' ? '＋ sub-task ' : '＋ new task '}
-              placeholder={taskMode === 'sub' ? `title (add PROJ-123 to link Jira): Enter makes it under ${anchor?.note ?? 'the anchor'}` : 'title (add PROJ-123 to link Jira): Enter makes a standalone task'}
-              submitLabel="create"
-              autoFocus
-              onSubmit={value => newTask($, value, taskMode)}
-            />
-            <Button key="task-cancel" plain label="  cancel" onPress={() => update($, view, old => ({ ...old, taskMode: '' as const }))} />
-          </Box>
-        )}
-        {madeTask.note && (
-          <Box key="just-made" flexDirection="column">
-            <Text dimColor>{`✓ just made: ${madeTask.note}`}</Text>
-            <Box flexDirection="row">
-              <Button key="made-open" label="open" onPress={() => openNote($, madeTask.path)} />
-              <Button key="made-define" label="define here" onPress={() => defineHere($)} />
-              <Button key="made-copy" label="copy for a new chat" onPress={() => copyForNewChat($)} />
-              {anchor?.note !== madeTask.note && <Button key="made-anchor" label="anchor on it" onPress={() => anchorOnMade($)} />}
-              <Button key="made-dismiss" plain label=" dismiss" onPress={() => update($, justMade, () => NO_TASK)} />
+
+            {anchor && (
+              <Box key="card-pins" {...CARD} borderColor="remember">
+                {head('pinsOpen', `📌 Pinned to ${anchor.note} · ${pins.length}`, 'remember')}
+                {shown.pinsOpen && artifactsFirst(pins).map(pin => line(
+                  `pin-${pinKey(pin)}`,
+                  <Button key={`pin-tick-${pinKey(pin)}`} plain label={`${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => onPins(text => setPinOn(text, pin, !pin.on))} />,
+                  [
+                    <Button key={`pin-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />,
+                    <Button key={`pin-link-${pinKey(pin)}`} dimColor label="link" onPress={() => copyText($, pinLink(pin, pin.path))} />,
+                    <Button key={`pin-all-${pinKey(pin)}`} dimColor label="→ everywhere" onPress={() => moveEverywhere($, anchor.note, pin)} />,
+                    <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="unpin" onPress={() => onPins(text => removePin(text, pin))} />,
+                  ],
+                ))}
+                {shown.pinsOpen && pins.length === 0 && <Text dimColor>Nothing pinned. Ticked pins go into this anchor's drafts; the rest are links.</Text>}
+                {shown.pinsOpen && (
+                  <Input key={`pin-paste-${pins.length}`} label="⧉" placeholder="paste an artifact link, [[note]] or file path: Enter pins it to this anchor" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
+                )}
+              </Box>
+            )}
+
+            {ownFiles.length > 0 && (
+              <Box key="card-files" {...CARD} borderColor="subtle">
+                {head('touchedOpen', `📄 Files this chat touched · ${ownFiles.length}`)}
+                {shown.touchedOpen && shownFiles.map(one => {
+                  const pin = touchedPin(one.path, P.notes)
+                  const isPinned = pins.some(other => other.kind === pin.kind && other.target === pin.target)
+
+                  return line(
+                    `touched-${one.path}`,
+                    [
+                      <Text key={`touched-path-${one.path}`} wrap="truncate-start">{shortPath(one.path, P.notes, P.home, root)}</Text>,
+                      one.made && <Text key={`touched-new-${one.path}`} dimColor>new</Text>,
+                    ],
+                    [
+                      <Button key={`touched-open-${one.path}`} label="open" onPress={() => openPath($, one.path)} />,
+                      anchor && (isPinned
+                        ? <Text key={`touched-pinned-${one.path}`} dimColor>pinned</Text>
+                        : <Button key={`touched-pin-${one.path}`} label="pin" onPress={() => pinIt($, anchor.note, pin)} />),
+                    ],
+                  )
+                })}
+                {shown.touchedOpen && ownFiles.length > 5 && (
+                  <Button key="files-all" plain dimColor label={`${arrow(shown.filesOpen)} ${shown.filesOpen ? 'show fewer' : `show all (${ownFiles.length})`}`} onPress={flip('filesOpen')} />
+                )}
+                {shown.touchedOpen && !anchor && <Text dimColor>Pick an anchor to pin these to it, as links.</Text>}
+              </Box>
+            )}
+
+            <Box key="card-pad" {...CARD} borderColor="subtle">
+              {head('padOpen', `📝 Scratchpad · this chat${jotted.length > 0 ? ` · ${jotted.length}` : ''}`)}
+              {shown.padOpen && (
+                <Box key="pad-body" flexDirection="column">
+                  <Input
+                    key={`pad-input-${jotted.length}`}
+                    placeholder="a note to self: Enter keeps it here for this chat"
+                    submitLabel="keep"
+                    rows={2}
+                    onSubmit={value => jot($, value)}
+                  />
+                  {jotted.map((one, at) => line(
+                    `pad-row-${at}`,
+                    <Text key={`pad-text-${at}`} wrap="wrap">{`${one.when.slice(11, 16)} ${one.text}`}</Text>,
+                    [
+                      anchor && notePath && <Button key={`pad-save-${at}`} label="→ notes" onPress={() => saveToNotes($, [one])} />,
+                      <Button key={`pad-drop-${at}`} dimColor label="drop" onPress={() => unjot($, [one])} />,
+                    ],
+                  ))}
+                  {anchor && notePath && jotted.length >= 2 && (
+                    <Button key="pad-save-all" plain label="→ save all to Human Notes" onPress={() => saveToNotes($, jotted)} />
+                  )}
+                  {!(anchor && notePath) && <Text dimColor>{anchor ? `No note found for ${anchor.note}: entries stay here.` : 'Pick an anchor to save these to its Human Notes.'}</Text>}
+                </Box>
+              )}
             </Box>
           </Box>
         )}
-        </Box>
-        )}
-        </Box>
 
-        <Box key="card-trail" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="success" display={anchor ? 'flex' : 'none'}>
-        {anchor && head('trailOpen', `🌱 On ${anchor.note} · ${openQuestions.length} open, ${chats.length} ${chats.length === 1 ? 'chat' : 'chats'}`)}
-        {shown.trailOpen && (
-        <Box key="trail-body" flexDirection="column">
-        {anchor && openQuestions.map(one => {
-          const got = answerOf(one)
-
-          return (
-            <Box key={`question-${one.when}-${one.text}`} flexDirection="column">
-              <Box flexDirection="row">
-                <Button key={`ask-${one.when}`} plain label={`  ? ${one.text}`} onPress={() => draft($, null, one.text)} />
-                {got?.pending
-                  ? <Text key={`aside-wait-${one.when}`} dimColor> … </Text>
-                  : <Button key={`aside-${one.when}`} label="aside" onPress={() => aside($, one)} />}
-                <Button key={`done-${one.when}`} label="done" onPress={() => writeTrail($, anchor.note, text => setDone(text, one, true))} />
+        <Box key="section-anywhere" flexDirection="column">{section('anywhereOpen', 'Anywhere · your vault, lenses and setup')}</Box>
+        {shown.anywhereOpen && (
+          <Box key="anywhere-body" flexDirection="column">
+            <Box key="card-context" {...CARD} borderColor="remember">
+              {head('contextOpen', `📎 Context · ${contextCount} going in`, 'remember')}
+              {shown.contextOpen && (
+                <Box key="context-body" flexDirection="column" marginBottom={1}>
+                  <Text dimColor>Pins here go into every chat's draft, whatever its anchor. An anchor's own pins are under This chat.</Text>
+                  {standing.length > 0 && <Text key="standing" dimColor>{`+ ${standing.join(', ')} (switch these under Setup)`}</Text>}
+                  {!anchor && ownArtifacts.map(one => (
+                    <Text key={`made-${one.url}`} dimColor>{`◇ ${one.title}`}</Text>
+                  ))}
+                  {!anchor && ownArtifacts.length > 0 && <Text dimColor>Artifacts this chat published: picking an anchor keeps them with it.</Text>}
+                  {everywhere.map(pin => line(
+                    `all-${pinKey(pin)}`,
+                    <Button key={`all-tick-${pinKey(pin)}`} plain label={`${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => setEverywhere($, list => list.map(one => (samePin(one, pin) ? { ...one, on: !one.on } : one)))} />,
+                    [
+                      <Button key={`all-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />,
+                      <Button key={`all-link-${pinKey(pin)}`} dimColor label="link" onPress={() => copyText($, pinLink(pin, pin.path))} />,
+                      <Button key={`all-drop-${pinKey(pin)}`} dimColor label="unpin" onPress={() => setEverywhere($, list => list.filter(one => !samePin(one, pin)))} />,
+                    ],
+                  ))}
+                  <Input key="pin-search" label="🔎" placeholder="search notes to pin (OpenAugi): Enter searches" submitLabel="search" onSubmit={value => searchNotes($, value)} />
+                  {(hits ?? []).map(hit => offer(hit, hit.label))}
+                  {(hits ?? []).length > 0 && <Button key="hits-clear" plain dimColor label="clear results" onPress={() => update($, swatch, old => ({ ...old, hits: [] }))} />}
+                  <Input key={`all-paste-${everywhere.length}`} label="⧉" placeholder="paste an artifact link, [[note]] or file path: Enter pins it for every chat" submitLabel="pin" onSubmit={value => pinTyped($, value, 'everywhere')} />
+                  <Button key="sessions-menu" plain dimColor label={`${arrow(shown.sessionsOpen)} pin a recent coding session`} onPress={flip('sessionsOpen')} />
+                  {shown.sessionsOpen && sessions.length === 0 && <Text dimColor>No recent coding sessions found.</Text>}
+                  {shown.sessionsOpen && sessions.map(one => offer(sessionPin(one), `${one.repo} · ${ago(loadedAt, one.mtimeMs)} · ${one.title}`))}
+                </Box>
+              )}
+              <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                <Button key="draft" variant="primary" label="💬 draft a prompt with this context" hotkey="n" onPress={() => draft($, null)} />
+                <Button key="copy-draft" label="⧉ copy it for a new chat" onPress={() => copyDraft($)} />
               </Box>
-              {got && !got.pending && (
-                <Box key={`aside-answer-${one.when}`} flexDirection="column" paddingLeft={4}>
-                  <Text key={`aside-text-${one.when}`} dimColor wrap="wrap">{got.answer}</Text>
-                  <Box flexDirection="row">
-                    <Button key={`aside-keep-${one.when}`} label="keep" onPress={() => keepAside($, anchor.note, got)} />
-                    <Button key={`aside-drop-${one.when}`} label="drop" onPress={() => dropAside($, got)} />
+            </Box>
+
+            <Box key="card-lenses" {...CARD} borderColor="suggestion">
+              {head('lensesOpen', `🔍 Lenses (saved prompts) · ${lenses.length}`, 'suggestion', 'lens-menu', 'l')}
+              {shown.lensesOpen && lenses.map((lens, index) => line(
+                `lens-row-${lens.name}`,
+                <Button key={lens.name} plain label={lens.name} hotkey={index < 9 ? String(index + 1) : undefined} onPress={() => draft($, lens)} />,
+                <Button key={`edit-${lens.name}`} dimColor label="edit" hotkey={EDIT_KEYS[index]} onPress={() => openNote($, lens.path)} />,
+              ))}
+              {shown.lensesOpen && (
+                <Input key={`new-lens-${lenses.length}`} label="+ new lens" placeholder="name it: Enter opens it in your editor" submitLabel="create" onSubmit={value => newLens($, value)} />
+              )}
+              {shown.lensesOpen && <Button key="all-lenses" plain dimColor label="open the lens folder" hotkey="f" onPress={() => openFolder($, P.lenses)} />}
+            </Box>
+
+            <Box key="card-setup" {...CARD} borderColor="subtle">
+              {head('setupOpen', `⚙️ Setup${gaps > 0 ? ` · ${gaps} to fix` : ''}`, undefined, 'setup-menu', 'z')}
+              {shown.setupOpen && (
+                <Box key="setup-body" flexDirection="column">
+                  <Text bold>What goes into every draft</Text>
+                  <Button key="about-me" plain label={`${mark(choice.aboutMe)} my context note and board`} hotkey="m" onPress={() => update($, picks, old => ({ ...old, aboutMe: !old.aboutMe }))} />
+                  <Button key="pick-project" plain label={`${mark(choice.project)} the anchor's 🧠 human and 🤖 agent notes`} onPress={() => update($, picks, old => ({ ...old, project: !old.project }))} />
+                  <Button key="openaugi" plain label={`${mark(choice.openAugi)} a search of my notes (with OpenAugi)`} onPress={() => update($, picks, old => ({ ...old, openAugi: !old.openAugi }))} />
+                  <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                    <Button key="edit-context" label="✏️ edit my context" hotkey="s" onPress={() => openNote($, P.context)} />
+                    <Button key="open-board" label="📋 open the board" hotkey="d" onPress={() => openNote($, P.board)} />
+                  </Box>
+                  <Box key="setup-files" flexDirection="column" marginTop={1}>
+                    <Text bold>Files and folders</Text>
+                    {setup.map(item => (
+                      <Box key={`setup-${item.field}`} flexDirection="column">
+                        <Text>{`${item.ok ? '✓' : '✗'} ${item.label}: ${item.path.startsWith(`${P.notes}/`) ? item.path.slice(P.notes.length + 1) : item.path}`}</Text>
+                        {!item.ok && item.starter && <Button key={`starter-${item.field}`} label="create a starter" onPress={() => makeStarter($, item.field)} />}
+                        <Input
+                          key={`set-${item.field}`}
+                          label="path"
+                          value={String(settings[item.field as keyof Options] ?? '')}
+                          onSubmit={value => setOption($, item.field, value)}
+                        />
+                      </Box>
+                    ))}
+                    <Input key="set-logFolder" label="agent log folder" value={settings.logFolder || settings.trailFolder || ''} placeholder="OpenAugi/Agent-Logs" onSubmit={value => setOption($, 'logFolder', value)} />
+                    <Input key="set-taskFolder" label="new task folder" value={settings.taskFolder ?? ''} placeholder="the notes folder's root" onSubmit={value => setOption($, 'taskFolder', value)} />
+                  </Box>
+                  <Box key="setup-jira" flexDirection="column" marginTop={1}>
+                    <Text bold>Jira (optional)</Text>
+                    <Text dimColor>{`${jiraServer ? `Jira MCP server found: ${jiraServer}.` : 'No Jira MCP server found in this session.'} The pane links notes and drafts prompts; the chat talks to Jira.`}</Text>
+                    <Input key="set-jiraProject" label="project or board" value={settings.jiraProject ?? ''} placeholder="PROJ" onSubmit={value => setOption($, 'jiraProject', value)} />
+                    <Input key="set-jiraSite" label="site" value={settings.jiraSite ?? ''} placeholder="https://example.atlassian.net" onSubmit={value => setOption($, 'jiraSite', value)} />
+                    <Input key="set-jiraServer" label="MCP server" value={settings.jiraServer ?? ''} placeholder="as /mcp lists it; empty looks for one" onSubmit={value => setOption($, 'jiraServer', value)} />
+                  </Box>
+                  <Box key="setup-pane" flexDirection="column" marginTop={1}>
+                    <Text bold>The pane</Text>
+                    <Button key="set-openOnStart" plain label={`${mark(settings.openOnStart !== 'no')} open Augi with every new chat`} onPress={() => setOption($, 'openOnStart', settings.openOnStart === 'no' ? 'yes' : 'no')} />
+                    <Input key="set-lensPicks" label="lenses to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />
+                    {editorPicker}
+                    <Button key="start-over" plain dimColor label="← change the notes folder and run setup again" onPress={() => startOver($)} />
                   </Box>
                 </Box>
               )}
             </Box>
-          )
-        })}
-        {anchor && doneQuestions.length > 0 && (
-          <Button key="show-done" plain label={`  ${arrow(shown.doneOpen)} done questions (${doneQuestions.length})`} onPress={flip('doneOpen')} />
-        )}
-        {anchor && shown.doneOpen && doneQuestions.map(one => (
-          <Box key={`question-${one.when}-${one.text}`} flexDirection="row">
-            <Text dimColor>{`    ✓ ${one.text}`}</Text>
-            <Button key={`reopen-${one.when}`} label="reopen" onPress={() => writeTrail($, anchor.note, text => setDone(text, one, false))} />
-          </Box>
-        ))}
-        {anchor && trail.saved.map(name => (
-          <Button key={`saved-${name}`} plain label={`  ▤ ${name}`} onPress={() => openByName($, name)} />
-        ))}
-        {anchor && chats.map(chat => (
-          <Box key={`chat-${chat.id}`} flexDirection="row">
-            <Button key={`chat-${chat.id}`} plain label={`  ◦ ${chat.when.slice(5)} ${chat.title}${chat.hidden ? ' (hidden)' : ''}`} onPress={() => copyResume($, chat)} />
-            <Button
-              key={`hide-${chat.id}`}
-              label={chat.hidden ? 'show' : 'hide'}
-              onPress={() => writeTrail($, anchor.note, text => setHidden(text, chat.id, !chat.hidden))}
-            />
-          </Box>
-        ))}
-        {anchor && trail.saved.length === 0 && chats.length === 0 && trail.questions.length === 0 && <Text dimColor>  Nothing yet. Questions you park, chats you start and notes they save show up here.</Text>}
-        {anchor && hiddenCount > 0 && (
-          <Button key="show-hidden" label={`${shown.showHidden ? 'hide' : 'show'} hidden chats (${hiddenCount})`} hotkey="x" onPress={flip('showHidden')} />
-        )}
-        </Box>
-        )}
-        </Box>
-
-        {anchor && (
-          <Box key="card-pins" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="remember">
-            {head('pinsOpen', `📌 Pinned to ${anchor.note} · ${pins.length}`)}
-            {shown.pinsOpen && artifactsFirst(pins).map(pin => (
-              <Box key={`pin-${pinKey(pin)}`} flexDirection="row">
-                <Button key={`pin-tick-${pinKey(pin)}`} plain label={`  ${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label} `} onPress={() => onPins(text => setPinOn(text, pin, !pin.on))} />
-                <Button key={`pin-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />
-                <Button key={`pin-link-${pinKey(pin)}`} label="link" onPress={() => copyText($, pinLink(pin, pin.path))} />
-                <Button key={`pin-all-${pinKey(pin)}`} label="→ everywhere" onPress={() => moveEverywhere($, anchor.note, pin)} />
-                <Button key={`pin-drop-${pinKey(pin)}`} label="unpin" onPress={() => onPins(text => removePin(text, pin))} />
-              </Box>
-            ))}
-            {shown.pinsOpen && pins.length === 0 && <Text dimColor>  Nothing pinned. Ticked pins go into this anchor's drafts; the rest are links.</Text>}
-            {shown.pinsOpen && (
-              <Input key={`pin-paste-${pins.length}`} label="  ⧉ " placeholder="paste an artifact link, [[note]] or file path: Enter pins it to this anchor" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
-            )}
           </Box>
         )}
-
-        {ownFiles.length > 0 && (
-          <Box key="card-files" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="subtle">
-            {head('touchedOpen', `📄 Files this chat touched · ${ownFiles.length}`)}
-            {shown.touchedOpen && shownFiles.map(one => {
-              const pin = touchedPin(one.path, P.notes)
-              const isPinned = pins.some(other => other.kind === pin.kind && other.target === pin.target)
-
-              return (
-                <Box key={`touched-${one.path}`} flexDirection="row">
-                  <Text key={`touched-path-${one.path}`}>{`  ${shortPath(one.path, P.notes, P.home, root)} `}</Text>
-                  {one.made && <Text key={`touched-new-${one.path}`} dimColor>new </Text>}
-                  <Button key={`touched-open-${one.path}`} label="open" onPress={() => openPath($, one.path)} />
-                  {anchor && (isPinned
-                    ? <Text key={`touched-pinned-${one.path}`} dimColor> pinned</Text>
-                    : <Button key={`touched-pin-${one.path}`} label="pin" onPress={() => pinIt($, anchor.note, pin)} />)}
-                </Box>
-              )
-            })}
-            {shown.touchedOpen && ownFiles.length > 5 && (
-              <Button key="files-all" plain label={`  ${arrow(shown.filesOpen)} ${shown.filesOpen ? 'show fewer' : `show all (${ownFiles.length})`}`} onPress={flip('filesOpen')} />
-            )}
-            {shown.touchedOpen && !anchor && <Text dimColor>  Pick an anchor to pin these to it, as links.</Text>}
-          </Box>
-        )}
-
-        <Box key="card-pad" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="subtle">
-        {head('padOpen', `📝 Scratchpad · this chat${jotted.length > 0 ? ` · ${jotted.length}` : ''}`)}
-        {shown.padOpen && (
-        <Box key="pad-body" flexDirection="column">
-        <Input
-          key={`pad-input-${jotted.length}`}
-          label="  "
-          placeholder="a note to self: Enter keeps it here for this chat"
-          submitLabel="keep"
-          rows={2}
-          onSubmit={value => jot($, value)}
-        />
-        {jotted.map((one, at) => (
-          <Box key={`pad-row-${at}`} flexDirection="row">
-            <Text key={`pad-text-${at}`} dimColor>{`  ${one.when.slice(11, 16)} ${one.text} `}</Text>
-            {anchor && notePath && <Button key={`pad-save-${at}`} label="→ notes" onPress={() => saveToNotes($, [one])} />}
-            <Button key={`pad-drop-${at}`} label="drop" onPress={() => unjot($, [one])} />
-          </Box>
-        ))}
-        {anchor && notePath && jotted.length >= 2 && (
-          <Button key="pad-save-all" plain label="  → save all to Human Notes" onPress={() => saveToNotes($, jotted)} />
-        )}
-        {!(anchor && notePath) && <Text dimColor>{anchor ? `  No note found for ${anchor.note}: entries stay here.` : '  Pick an anchor to save these to its Human Notes.'}</Text>}
-        </Box>
-        )}
-        </Box>
-        </Box>
-        )}
-
-        <Box key="section-anywhere" flexDirection="column">{head('anywhereOpen', '━ Anywhere · your vault, lenses and setup')}</Box>
-        {shown.anywhereOpen && (
-        <Box key="anywhere-body" flexDirection="column">
-        <Box key="card-context" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="remember">
-        {head('contextOpen', `📎 Context · ${contextCount} going in`)}
-        {shown.contextOpen && (
-        <Box key="context-body" flexDirection="column">
-        <Text dimColor>Pins here go into every chat's draft, whatever its anchor. An anchor's own pins are under This chat.</Text>
-        {standing.length > 0 && <Text key="standing" dimColor>{`  + ${standing.join(', ')} (switch these under Setup)`}</Text>}
-        {!anchor && ownArtifacts.map(one => (
-          <Text key={`made-${one.url}`} dimColor>{`  ◇ ${one.title}`}</Text>
-        ))}
-        {!anchor && ownArtifacts.length > 0 && <Text dimColor>  Artifacts this chat published: picking an anchor keeps them with it.</Text>}
-        {everywhere.map(pin => (
-          <Box key={`all-${pinKey(pin)}`} flexDirection="row">
-            <Button key={`all-tick-${pinKey(pin)}`} plain label={`  ${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label} `} onPress={() => setEverywhere($, list => list.map(one => (samePin(one, pin) ? { ...one, on: !one.on } : one)))} />
-            <Button key={`all-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />
-            <Button key={`all-link-${pinKey(pin)}`} label="link" onPress={() => copyText($, pinLink(pin, pin.path))} />
-            <Button key={`all-drop-${pinKey(pin)}`} label="unpin" onPress={() => setEverywhere($, list => list.filter(one => !samePin(one, pin)))} />
-          </Box>
-        ))}
-        <Input key="pin-search" label="  🔎 " placeholder="search notes to pin (OpenAugi): Enter searches" submitLabel="search" onSubmit={value => searchNotes($, value)} />
-        {(hits ?? []).map(hit => offer(hit, hit.label))}
-        {(hits ?? []).length > 0 && <Button key="hits-clear" plain label="      clear results" onPress={() => update($, swatch, old => ({ ...old, hits: [] }))} />}
-        <Input key={`all-paste-${everywhere.length}`} label="  ⧉ " placeholder="paste an artifact link, [[note]] or file path: Enter pins it for every chat" submitLabel="pin" onSubmit={value => pinTyped($, value, 'everywhere')} />
-        <Button key="sessions-menu" plain label={`  ${arrow(shown.sessionsOpen)} ◦ pin a recent coding session`} onPress={flip('sessionsOpen')} />
-        {shown.sessionsOpen && sessions.length === 0 && <Text dimColor>      No recent coding sessions found.</Text>}
-        {shown.sessionsOpen && sessions.map(one => offer(sessionPin(one), `${one.repo} · ${ago(loadedAt, one.mtimeMs)} · ${one.title}`))}
-        </Box>
-        )}
-        <Box flexDirection="row">
-          <Button key="draft" variant="primary" label="💬 draft a prompt with this context" hotkey="n" onPress={() => draft($, null)} />
-          <Text dimColor> </Text>
-          <Button key="copy-draft" label="⧉ copy it for a new chat" onPress={() => copyDraft($)} />
-        </Box>
-        </Box>
-
-        <Box key="card-lenses" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="suggestion">
-        <Button key="lens-menu" label={`${arrow(shown.lensesOpen)} 🔍 Lenses (saved prompts) · ${lenses.length}`} hotkey="l" onPress={flip('lensesOpen')} />
-        {shown.lensesOpen && lenses.map((lens, index) => (
-          <Box key={lens.name} flexDirection="row">
-            <Button key={lens.name} label={`  ${lens.name}`} hotkey={index < 9 ? String(index + 1) : undefined} onPress={() => draft($, lens)} />
-            <Button key={`edit-${lens.name}`} label="edit" hotkey={EDIT_KEYS[index]} onPress={() => openNote($, lens.path)} />
-          </Box>
-        ))}
-        {shown.lensesOpen && (
-          <Input key={`new-lens-${lenses.length}`} label="  + new lens " placeholder="name it: Enter opens it in your editor" submitLabel="create" onSubmit={value => newLens($, value)} />
-        )}
-        {shown.lensesOpen && <Button key="all-lenses" label="  open the lens folder" hotkey="f" onPress={() => openFolder($, P.lenses)} />}
-        </Box>
-
-        <Box key="card-setup" flexDirection="column" borderStyle="round" paddingX={1} marginBottom={1} borderColor="subtle">
-        <Button key="setup-menu" label={`${arrow(shown.setupOpen)} ⚙️ Setup · overall context${gaps > 0 ? ` (${gaps} to fix)` : ''}`} hotkey="z" onPress={flip('setupOpen')} />
-        {shown.setupOpen && <Text bold>  What goes into every draft</Text>}
-        {shown.setupOpen && (
-          <Button key="about-me" plain label={`  ${mark(choice.aboutMe)} my context note and board`} hotkey="m" onPress={() => update($, picks, old => ({ ...old, aboutMe: !old.aboutMe }))} />
-        )}
-        {shown.setupOpen && (
-          <Button key="pick-project" plain label={`  ${mark(choice.project)} the anchor's 🧠 human and 🤖 agent notes`} onPress={() => update($, picks, old => ({ ...old, project: !old.project }))} />
-        )}
-        {shown.setupOpen && (
-          <Button key="openaugi" plain label={`  ${mark(choice.openAugi)} a search of my notes (with OpenAugi)`} onPress={() => update($, picks, old => ({ ...old, openAugi: !old.openAugi }))} />
-        )}
-        {shown.setupOpen && (
-          <Box flexDirection="row">
-            <Button key="edit-context" label="✏️ edit my context" hotkey="s" onPress={() => openNote($, P.context)} />
-            <Button key="open-board" label="📋 open the board" hotkey="d" onPress={() => openNote($, P.board)} />
-          </Box>
-        )}
-        {shown.setupOpen && <Text bold>  Files and folders</Text>}
-        {shown.setupOpen && setup.map(item => (
-          <Box key={`setup-${item.field}`} flexDirection="column">
-            <Text>{`  ${item.ok ? '✓' : '✗'} ${item.label}: ${item.path.startsWith(`${P.notes}/`) ? item.path.slice(P.notes.length + 1) : item.path}`}</Text>
-            {!item.ok && item.starter && <Button key={`starter-${item.field}`} label="    create a starter" onPress={() => makeStarter($, item.field)} />}
-            <Input
-              key={`set-${item.field}`}
-              label="    path"
-              value={String(settings[item.field as keyof Options] ?? '')}
-              onSubmit={value => setOption($, item.field, value)}
-            />
-          </Box>
-        ))}
-        {shown.setupOpen && (
-          <Input key="set-logFolder" label="  agent log folder" value={settings.logFolder || settings.trailFolder || ''} placeholder="OpenAugi/Agent-Logs" onSubmit={value => setOption($, 'logFolder', value)} />
-        )}
-        {shown.setupOpen && (
-          <Input key="set-taskFolder" label="  new task folder" value={settings.taskFolder ?? ''} placeholder="the notes folder's root" onSubmit={value => setOption($, 'taskFolder', value)} />
-        )}
-        {shown.setupOpen && <Text bold>  Jira (optional)</Text>}
-        {shown.setupOpen && (
-          <Text dimColor>{`  ${jiraServer ? `Jira MCP server found: ${jiraServer}.` : 'No Jira MCP server found in this session.'} The pane links notes and drafts prompts; the chat talks to Jira.`}</Text>
-        )}
-        {shown.setupOpen && (
-          <Input key="set-jiraProject" label="  project or board" value={settings.jiraProject ?? ''} placeholder="PROJ" onSubmit={value => setOption($, 'jiraProject', value)} />
-        )}
-        {shown.setupOpen && (
-          <Input key="set-jiraSite" label="  site" value={settings.jiraSite ?? ''} placeholder="https://example.atlassian.net" onSubmit={value => setOption($, 'jiraSite', value)} />
-        )}
-        {shown.setupOpen && (
-          <Input key="set-jiraServer" label="  MCP server" value={settings.jiraServer ?? ''} placeholder="as /mcp lists it; empty looks for one" onSubmit={value => setOption($, 'jiraServer', value)} />
-        )}
-        {shown.setupOpen && (
-          <Button key="set-openOnStart" plain label={`  ${mark(settings.openOnStart !== 'no')} open Augi with every new chat`} onPress={() => setOption($, 'openOnStart', settings.openOnStart === 'no' ? 'yes' : 'no')} />
-        )}
-        {shown.setupOpen && (
-          <Input key="set-lensPicks" label="  lenses to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />
-        )}
-        {shown.setupOpen && editorPicker}
-        {shown.setupOpen && <Button key="start-over" plain label="  ← change the notes folder and run setup again" onPress={() => startOver($)} />}
-        </Box>
-        </Box>
-        )}
-        <Button key="refresh" label="↻ refresh" hotkey="r" onPress={() => load($)} />
+        <Button key="refresh" plain dimColor label="↻ refresh" hotkey="r" onPress={() => load($)} />
       </Box>
     )
   })

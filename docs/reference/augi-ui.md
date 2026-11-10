@@ -62,9 +62,18 @@ pins, the files this chat touched, and the scratchpad. **Anywhere** holds what
 is not tied to one chat: the context picker (search, and the pins that go into
 every chat), the lenses, and setup.
 
-Both sections and every card fold: the title is a button (`▾` open, `▸`
-folded), and a folded card keeps its count in the title. Lenses and Setup start
-folded, everything else open. The fold state is kept for the session.
+Both sections and every card fold: each title row ends in a `▾ hide` /
+`▸ show` button, and a folded card keeps its count in the title. Lenses and
+Setup start folded, everything else open. The fold state is kept for the
+session.
+
+Layout rules, so the pane reads the same on the terminal and the desktop
+(where every Button, `plain` or not, is drawn as a native button): a title is
+text, never a button; a list row puts what it is on the left and its actions
+together at the right edge (the `line` helper); indentation is a Box's
+`paddingLeft`, never spaces in a label; rows space their children with `gap`,
+not divider characters; secondary actions (`unpin`, `hide`, `drop`, `cancel`)
+are `dimColor`, and the one primary button is the draft.
 
 - **Anchor** (`a`): a linked card from the board — a project or a task. The
   menu lists each card's linked sub-items (`\t- [ ] [[Child task]]`) indented
