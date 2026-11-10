@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren, ToolCallResult } from 'claude-code'
 
-import type { AsideAnswer, Asides, Card, Chat, JustMade, Lens, Made, MadeArtifact, Opened, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Touched, TouchedFile, Trail, View } from '../types'
+import type { Card, Chat, JustMade, Lens, Made, MadeArtifact, Opened, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Touched, TouchedFile, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -99,9 +99,9 @@ export type UsageEvent = { at: string; kind: 'press' | 'input' | 'sent'; what: s
 
 // Keys that end in something of the user's: `card-<note>`, `pin-open-<kind>-<target>`.
 const USAGE_PREFIXES = [
-  'card-sub', 'card', 'anchor-artifact', 'anchor-file', 'task', 'capture', 'ask', 'aside-keep', 'aside-drop', 'aside', 'done', 'reopen',
-  'saved', 'chat', 'hide', 'pin-tick', 'pin-open', 'pin-link', 'pin-all', 'pin-drop', 'pin-paste', 'touched-open', 'touched-pin',
-  'pad-input', 'pad-save', 'pad-drop', 'all-tick', 'all-open', 'all-link', 'all-drop', 'all-paste', 'offer-anchor', 'offer-all',
+  'card-sub', 'card', 'task', 'ask', 'done', 'reopen',
+  'saved', 'chat', 'hide', 'pin-tick', 'pin-open', 'pin-drop', 'pin-paste', 'touched-open', 'touched-pin',
+  'pad-input', 'pad-save', 'pad-ask', 'pad-drop', 'all-tick', 'all-open', 'all-drop', 'all-paste', 'offer-anchor', 'offer-all',
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
 // Whole keys that only look like one of those.
@@ -124,16 +124,16 @@ export const usageName = (element: string): string => {
 // Every control the pane draws, by its log name: what a report checks for never used.
 // tests/test_augi_ui_usage.py reads this file's Button and Input keys and fails when one is missing here.
 export const USAGE_FEATURES = [
-  'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'open-note', 'open-trail', 'anchor-artifact', 'anchor-file', 'anchor-details', 'task',
-  'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'capture', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
+  'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'open-note', 'open-trail', 'anchor-details', 'task',
+  'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
   'made-open', 'made-define', 'made-copy', 'made-anchor', 'made-dismiss',
-  'ask', 'aside', 'aside-keep', 'aside-drop', 'done', 'show-done', 'reopen', 'saved', 'chat', 'hide', 'show-hidden',
-  'pin-tick', 'pin-open', 'pin-link', 'pin-all', 'pin-drop', 'pin-paste',
-  'touched-open', 'touched-pin', 'files-all', 'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
-  'all-tick', 'all-open', 'all-link', 'all-drop', 'all-paste', 'pin-search', 'offer-anchor', 'offer-all', 'hits-clear', 'sessions-menu', 'draft', 'copy-draft', 'draft-sent',
+  'ask', 'done', 'show-done', 'reopen', 'saved', 'chat', 'hide', 'show-hidden',
+  'pin-tick', 'pin-open', 'pin-drop', 'pin-paste',
+  'touched-open', 'touched-pin', 'files-all', 'pad-input', 'pad-save', 'pad-ask', 'pad-drop', 'pad-save-all',
+  'all-tick', 'all-open', 'all-drop', 'all-paste', 'pin-search', 'offer-anchor', 'offer-all', 'hits-clear', 'sessions-menu', 'draft', 'copy-draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
-  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-trailOpen', 'head-pinsOpen', 'head-touchedOpen', 'head-padOpen', 'head-contextOpen',
+  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-trailOpen', 'head-pinsOpen', 'head-touchedOpen', 'head-padOpen', 'head-youOpen', 'head-contextOpen',
 ]
 
 // The log's lines as events; a line that is not one is skipped.
@@ -390,7 +390,7 @@ const swatch = atom(
   { shape: 'swatch-12' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
-const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, trailOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, contextOpen: true }
+const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, trailOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true, contextOpen: true }
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
   { aboutMe: true, openAugi: true, project: true } as Picks,
@@ -399,7 +399,7 @@ const picks = atom(
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
   { ...CARDS_OPEN, anchorsOpen: false, sessionsOpen: false, lensesOpen: false, showHidden: false, setupOpen: false, inOpen: true, doneOpen: false, detailsOpen: false, filesOpen: false, taskMode: '' } as View,
-  { shape: 'view-8' },
+  { shape: 'view-9' },
 )
 const made = atom(
   { plugin: 'augi-ui', key: 'made' } as const,
@@ -423,10 +423,6 @@ const pad = atom({ plugin: 'augi-ui', key: 'pad' } as const, [] as PadEntry[], {
 // session.start fills from it after a reload.
 const padDraft = atom({ plugin: 'augi-ui', key: 'padDraft' } as const, '' as string, { shape: 'pad-draft-1' })
 let typedPad = ''
-
-// Side answers to parked questions, and whether /btw exists: session state, so an
-// answer not kept goes with the session.
-const asides = atom({ plugin: 'augi-ui', key: 'asides' } as const, { btw: false, answers: [] } as Asides, { shape: 'asides-1' })
 
 // The session the pane was opened for by itself: it opens once a session, so a window
 // that attaches again does not reopen a pane the user closed.
@@ -1081,37 +1077,6 @@ export const parseTrail = (text: string): Trail => {
 
 const questionLine = (one: Question): string => `- [${one.done ? 'x' : ' '}] ${one.when} · ${one.text.replace(/\s+/g, ' ').trim()}`
 
-// Adds a question at the top of ## Questions, newest first. An older trail without
-// the section gets it above ## Chats.
-export const addQuestion = (text: string, one: Question): string => {
-  if (!one.text.trim()) {
-    return text
-  }
-  const lines = text.split('\n')
-  const at = lines.findIndex(line => line.trim() === '## Questions')
-  if (at >= 0) {
-    let first = at + 1
-    while (lines[first] === '') {
-      first += 1
-    }
-    if (QUESTION_LINE.test(lines[first] ?? '')) {
-      lines.splice(first, 0, questionLine(one))
-    } else {
-      lines.splice(at + 1, first - at - 1, '', questionLine(one), '')
-    }
-
-    return lines.join('\n')
-  }
-  const chats = lines.findIndex(line => line.trim() === '## Chats')
-  if (chats >= 0) {
-    lines.splice(chats, 0, '## Questions', '', questionLine(one), '')
-
-    return lines.join('\n')
-  }
-
-  return `${text.trimEnd()}\n\n## Questions\n\n${questionLine(one)}\n`
-}
-
 // Ticks a question done, or opens it again.
 export const setDone = (text: string, one: Question, done: boolean): string =>
   text
@@ -1122,34 +1087,6 @@ export const setDone = (text: string, one: Question, done: boolean): string =>
       return found && found[2] === one.when && found[3] === one.text ? questionLine({ ...one, done }) : line
     })
     .join('\n')
-
-// Keeps a side answer under its question as indented lines, so the question line (and
-// parseTrail) reads as before: `  - aside: <first line>`, further lines indented four.
-// A second keep replaces the indented lines already under the question. A question not
-// in the log, or an empty answer, changes nothing.
-export const addAnswer = (text: string, one: Question, answer: string): string => {
-  const said = answer.split('\n').map(line => line.trimEnd()).filter(line => line.trim())
-  const lines = text.split('\n')
-  const at = lines.findIndex(line => {
-    const found = line.match(QUESTION_LINE)
-
-    return Boolean(found && found[2] === one.when && found[3] === one.text)
-  })
-  if (at < 0 || said.length === 0) {
-    return text
-  }
-  // Only an earlier kept answer is replaced; other lines under the question stay.
-  let end = at + 1
-  if (/^  - aside: /.test(lines[end] ?? '')) {
-    end += 1
-    while (end < lines.length && /^ {4}\s*\S/.test(lines[end] ?? '')) {
-      end += 1
-    }
-  }
-  lines.splice(at + 1, end - at - 1, ...said.map((line, index) => (index === 0 ? `  - aside: ${line.trim()}` : `    ${line}`)))
-
-  return lines.join('\n')
-}
 
 // ## Context lines: `- [x] [[Note]]` for a note, `- [ ] kind: \`target\` · label` for the rest.
 const PIN_LINE = /^- \[([ x])\] (?:\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|(file|session|artifact|url): `([^`]+)`)(?: · (.*))?\s*$/
@@ -1279,15 +1216,6 @@ export const sessionPin = (one: Session): Pin => ({ on: true, kind: 'session', t
 // The command that picks a session back up: claude's by id, codex's by path.
 const resumeOf = (path: string): string =>
   !path.includes('/.codex/') && path.endsWith('.jsonl') ? `claude --resume ${baseName(path).replace(/\.jsonl$/, '')}` : path
-
-// What "link" copies: a note's full path, a file's path, a session's resume command, a URL.
-export const pinLink = (pin: Pin, path = ''): string => {
-  if (pin.kind === 'note') {
-    return path || `[[${pin.target}]]`
-  }
-
-  return pin.kind === 'session' ? resumeOf(pin.target) : pin.target
-}
 
 // The paths in an OpenAugi search answer, vault-relative, once each. Its text can
 // be the JSON itself or a { result } wrapping it as a string.
@@ -1434,12 +1362,6 @@ export const anchorPairs = (value: unknown): [string, string][] =>
 // This session's published artifacts with one more: a URL already listed takes the new title.
 export const withArtifact = (list: MadeArtifact[], one: MadeArtifact): MadeArtifact[] =>
   list.some(old => old.url === one.url) ? list.map(old => (old.url === one.url ? one : old)) : [...list, one]
-
-// The anchor's pinned artifacts for its card, newest first.
-export const anchorArtifacts = (pins: Pin[], limit = 3): Pin[] => pins.filter(pin => pin.kind === 'artifact').reverse().slice(0, limit)
-
-// The anchor's pinned files and notes for its card, as links: newest first.
-export const anchorFiles = (pins: Pin[], limit = 5): Pin[] => pins.filter(pin => pin.kind === 'file' || pin.kind === 'note').reverse().slice(0, limit)
 
 export const TOUCHED_KEPT = 30
 
@@ -1899,8 +1821,6 @@ async function load($: EngineInterface): Promise<void> {
   }
 
   await update($, swatch, () => next)
-  const btw = await hasBtw($)
-  await update($, asides, old => ({ ...old, btw }))
 }
 
 // The Jira MCP server this session has, read from its tool list (a plain read: nothing
@@ -2130,7 +2050,7 @@ async function fillOver($: EngineInterface, text: string): Promise<void> {
   } catch {
     had = ''
   }
-  if (had.trim() && !had.startsWith(DRAFT_HEAD) && !had.startsWith('/btw ')) {
+  if (had.trim() && !had.startsWith(DRAFT_HEAD)) {
     await $.ui.copy({ text: had })
     await $.ui.toast('Your unsent prompt was copied to the clipboard.')
   }
@@ -2147,56 +2067,6 @@ async function copyDraft($: EngineInterface): Promise<void> {
   const copied = await $.ui.copy({ text })
   const anchors = anchorFromDraft(text) ? 'Sent there, it anchors that chat here too.' : 'It names no anchor (the project notes are unticked or none is picked), so that chat stays unanchored.'
   await $.ui.toast(copied.isCopied ? `Copied: paste it into a new chat. ${anchors}` : `Couldn't copy the draft (${copied.reason}).`)
-}
-
-// A side answer to a parked question: /btw when this session has it (filled, not sent),
-// else a low-effort fork of this chat, its answer shown under the question to keep or drop.
-async function aside($: EngineInterface, one: Question): Promise<void> {
-  if ((await read($, asides)).btw) {
-    await fillOver($, `/btw ${one.text}`)
-
-    return
-  }
-  const isThis = (other: AsideAnswer): boolean => other.when === one.when && other.text === one.text
-  const others = (old: Asides): AsideAnswer[] => old.answers.filter(other => !isThis(other))
-  await update($, asides, old => ({ ...old, answers: [...others(old), { when: one.when, text: one.text, answer: '', pending: true }] }))
-  let said = ''
-  try {
-    const reply = await $.model.fork({ prompt: `${one.text}\n\nAnswer in a few short lines from what this chat already contains; don't go looking for more.`, effort: 'low' })
-    if (reply.isAnswered) {
-      said = reply.text.trim()
-    } else {
-      const why = reply.reason === 'nothing-to-fork' ? 'nothing to ask yet: this chat has no reply to fork'
-        : reply.reason === 'api-error' ? `the API answered ${reply.status ?? 'nothing'} (${reply.error})`
-        : reply.reason === 'empty-reply' ? 'the reply had no text'
-        : 'it was interrupted'
-      await $.ui.toast(`No side answer: ${why}.`)
-    }
-  } catch (error) {
-    await $.ui.toast(`No side answer: ${String(error)}`)
-  }
-  await update($, asides, old => ({ ...old, answers: said ? [...others(old), { when: one.when, text: one.text, answer: said, pending: false }] : others(old) }))
-}
-
-async function dropAside($: EngineInterface, one: AsideAnswer): Promise<void> {
-  await update($, asides, old => ({ ...old, answers: old.answers.filter(other => !(other.when === one.when && other.text === one.text)) }))
-}
-
-// Keeps a side answer under its question in the Agent Log; the question stays open.
-async function keepAside($: EngineInterface, note: string, one: AsideAnswer): Promise<void> {
-  await writeTrail($, note, text => addAnswer(text, { when: one.when, text: one.text, done: false }, one.answer))
-  await dropAside($, one)
-}
-
-// Whether this session has a /btw command; a list that fails reads as none.
-async function hasBtw($: EngineInterface): Promise<boolean> {
-  try {
-    const commands = await $.command.list()
-
-    return Array.isArray(commands) && commands.some(one => one.name === 'btw')
-  } catch {
-    return false
-  }
 }
 
 const withPaths = (pins: Pin[], pinPaths: Record<string, string>): Pin[] =>
@@ -2226,12 +2096,6 @@ async function pinEverywhere($: EngineInterface, pin: Pin): Promise<void> {
   const kept: Pin = found ? { ...pin, path: found } : pin
   await setEverywhere($, pins => (pins.some(one => samePin(one, pin)) ? pins : [...pins, kept]))
   await update($, swatch, old => ({ ...old, hits: old.hits.filter(one => !samePin(one, pin)) }))
-}
-
-// Moves an anchor's pin to the pins that go into every chat.
-async function moveEverywhere($: EngineInterface, note: string, pin: Pin): Promise<void> {
-  await pinEverywhere($, pin)
-  await writeTrail($, note, text => removePin(text, pin))
 }
 
 // A pasted link, [[note]] or path, pinned to the anchor or for every chat.
@@ -2297,7 +2161,7 @@ async function openPin($: EngineInterface, pin: Pin): Promise<void> {
     return pin.path ? openNote($, pin.path) : openByName($, pin.target)
   }
   if (pin.kind === 'session') {
-    return copyText($, pinLink(pin), 'A session reopens in a terminal. Copied')
+    return copyText($, resumeOf(pin.target), 'A session reopens in a terminal. Copied')
   }
   if (pin.kind === 'file') {
     return openPath($, pin.target)
@@ -2415,22 +2279,6 @@ async function recordChat($: EngineInterface, title: string): Promise<void> {
   const when = stamp(await $.clock.now())
 
   await writeTrail($, note, text => retitleChat(addChat(text, { id, when, title, hidden: false }), id, title))
-}
-
-// Parks a question or side quest on the anchor's trail without leaving the step you're in.
-async function capture($: EngineInterface, text: string): Promise<void> {
-  const { anchor } = await read($, swatch)
-  if (!text.trim()) {
-    return
-  }
-  if (!anchor) {
-    await $.ui.toast('Pick an anchor first: a captured question goes in its Agent Log.')
-
-    return
-  }
-  const when = stamp(await $.clock.now())
-
-  await writeTrail($, anchor.note, old => addQuestion(old, { when, text: text.trim(), done: false }))
 }
 
 // Remembers what is typed in the scratchpad's field, unsent.
@@ -2796,10 +2644,9 @@ export const register: Register = (on, options) => {
     const ended = await next(e)
     if (e.reason === 'clear' || e.reason === 'resume') {
       await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
-      // The scratchpad and unkept side answers were that chat's; they don't follow into the next.
+      // The scratchpad was that chat's; it doesn't follow into the next.
       await update($, pad, () => [])
       await typePad($, '')
-      await update($, asides, old => ({ ...old, answers: [] }))
       await update($, touched, () => ({ session: '', files: [] }))
       await update($, justMade, () => NO_TASK)
       await update($, view, old => ({ ...old, taskMode: '' as const }))
@@ -3001,8 +2848,6 @@ export const register: Register = (on, options) => {
       ],
     )
     const CARD = { flexDirection: 'column', borderStyle: 'round', paddingX: 1, marginBottom: 1 } as const
-    const { answers } = await read($, asides)
-    const answerOf = (one: Question): AsideAnswer | undefined => answers.find(other => other.when === one.when && other.text === one.text)
     const openQuestions = trail.questions.filter(one => !one.done)
     const doneQuestions = trail.questions.filter(one => one.done)
     const gaps = setup.filter(item => !item.ok).length
@@ -3115,17 +2960,10 @@ export const register: Register = (on, options) => {
                       {anchor && <Button key="anchor-clear" plain dimColor label="○ no anchor" onPress={() => clearAnchor($)} />}
                     </Box>
                   )}
-                  {!anchor && <Text dimColor>🧭 Season: {season}</Text>}
                   {anchor && (
                     <Box key="anchor-links" flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                       <Button key="open-note" label="🧠 Human Notes" hotkey="p" onPress={() => (notePath ? openNote($, notePath) : openByName($, anchor.note))} />
                       <Button key="open-trail" label="🤖 Agent Log" hotkey="k" onPress={() => writeTrail($, anchor.note, text => text).then(() => openNote($, trailPath(anchor.note)))} />
-                      {anchorArtifacts(pins).map(pin => (
-                        <Button key={`anchor-artifact-${pin.target}`} label={`◇ ${pin.label}`} onPress={() => openPin($, pin)} />
-                      ))}
-                      {anchorFiles(pins).map(pin => (
-                        <Button key={`anchor-file-${pinKey(pin)}`} label={`📄 ${pin.label}`} onPress={() => openPin($, pin)} />
-                      ))}
                     </Box>
                   )}
                   {anchor && jira && (
@@ -3156,15 +2994,6 @@ export const register: Register = (on, options) => {
                           : <Text key={`task-${task.text}`}>☐ {task.text}</Text>
                       ))}
                     </Box>
-                  )}
-                  {anchor && (
-                    <Input
-                      key={`capture-${trail.questions.length}`}
-                      label="?"
-                      placeholder="a question or side quest: Enter parks it in the Agent Log"
-                      submitLabel="park it"
-                      onSubmit={value => capture($, value)}
-                    />
                   )}
                   {taskMode === '' && (
                     <Box key="task-buttons" flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
@@ -3209,33 +3038,11 @@ export const register: Register = (on, options) => {
                 {shown.trailOpen && (
                   <Box key="trail-body" flexDirection="column">
                     {openQuestions.length > 0 && <Text key="trail-questions" dimColor>Questions</Text>}
-                    {openQuestions.map(one => {
-                      const got = answerOf(one)
-
-                      return (
-                        <Box key={`question-${one.when}-${one.text}`} flexDirection="column">
-                          {line(
-                            `question-row-${one.when}-${one.text}`,
-                            <Button key={`ask-${one.when}`} plain label={`? ${one.text}`} onPress={() => draft($, null, one.text)} />,
-                            [
-                              got?.pending
-                                ? <Text key={`aside-wait-${one.when}`} dimColor>…</Text>
-                                : <Button key={`aside-${one.when}`} label="aside" onPress={() => aside($, one)} />,
-                              <Button key={`done-${one.when}`} label="done" onPress={() => writeTrail($, anchor.note, text => setDone(text, one, true))} />,
-                            ],
-                          )}
-                          {got && !got.pending && (
-                            <Box key={`aside-answer-${one.when}`} flexDirection="column" paddingLeft={2} marginBottom={1}>
-                              <Text key={`aside-text-${one.when}`} dimColor wrap="wrap">{got.answer}</Text>
-                              <Box flexDirection="row" alignItems="center" gap={1}>
-                                <Button key={`aside-keep-${one.when}`} label="keep" onPress={() => keepAside($, anchor.note, got)} />
-                                <Button key={`aside-drop-${one.when}`} dimColor label="drop" onPress={() => dropAside($, got)} />
-                              </Box>
-                            </Box>
-                          )}
-                        </Box>
-                      )
-                    })}
+                    {openQuestions.map(one => line(
+                      `question-row-${one.when}-${one.text}`,
+                      <Button key={`ask-${one.when}`} plain label={`? ${one.text}`} onPress={() => draft($, null, one.text)} />,
+                      <Button key={`done-${one.when}`} dimColor label="done" onPress={() => writeTrail($, anchor.note, text => setDone(text, one, true))} />,
+                    ))}
                     {doneQuestions.length > 0 && (
                       <Button key="show-done" plain dimColor label={`${arrow(shown.doneOpen)} done questions (${doneQuestions.length})`} onPress={flip('doneOpen')} />
                     )}
@@ -3259,7 +3066,7 @@ export const register: Register = (on, options) => {
                         onPress={() => writeTrail($, anchor.note, text => setHidden(text, chat.id, !chat.hidden))}
                       />,
                     ))}
-                    {trail.saved.length === 0 && chats.length === 0 && trail.questions.length === 0 && <Text dimColor>Nothing yet. Questions you park, chats you start and notes they save show up here.</Text>}
+                    {trail.saved.length === 0 && chats.length === 0 && trail.questions.length === 0 && <Text dimColor>Nothing yet. Chats you start on this anchor and notes they save show up here.</Text>}
                     {hiddenCount > 0 && (
                       <Button key="show-hidden" plain dimColor label={`${shown.showHidden ? 'hide' : 'show'} hidden chats (${hiddenCount})`} hotkey="x" onPress={flip('showHidden')} />
                     )}
@@ -3271,17 +3078,15 @@ export const register: Register = (on, options) => {
             {anchor && (
               <Box key="card-pins" {...CARD} borderColor="remember">
                 {head('pinsOpen', `📌 Pinned to ${anchor.note} · ${pins.length}`, 'remember')}
+                {shown.pinsOpen && <Text key="pins-hint" dimColor>{pins.length === 0 ? 'Nothing pinned yet. ' : ''}☑ goes into this anchor's drafts · ☐ is a link only: press a pin to switch it.</Text>}
                 {shown.pinsOpen && artifactsFirst(pins).map(pin => line(
                   `pin-${pinKey(pin)}`,
                   <Button key={`pin-tick-${pinKey(pin)}`} plain label={`${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => onPins(text => setPinOn(text, pin, !pin.on))} />,
                   [
                     <Button key={`pin-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />,
-                    <Button key={`pin-link-${pinKey(pin)}`} dimColor label="link" onPress={() => copyText($, pinLink(pin, pin.path))} />,
-                    <Button key={`pin-all-${pinKey(pin)}`} dimColor label="→ everywhere" onPress={() => moveEverywhere($, anchor.note, pin)} />,
-                    <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="unpin" onPress={() => onPins(text => removePin(text, pin))} />,
+                    <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => onPins(text => removePin(text, pin))} />,
                   ],
                 ))}
-                {shown.pinsOpen && pins.length === 0 && <Text dimColor>Nothing pinned. Ticked pins go into this anchor's drafts; the rest are links.</Text>}
                 {shown.pinsOpen && (
                   <Input key={`pin-paste-${pins.length}`} label="⧉" placeholder="paste an artifact link, [[note]] or file path: Enter pins it to this anchor" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
                 )}
@@ -3322,7 +3127,7 @@ export const register: Register = (on, options) => {
                 <Box key="pad-body" flexDirection="column">
                   <Input
                     key={`pad-input-${jotted.length}`}
-                    placeholder="a note to self: Enter keeps it here for this chat"
+                    placeholder="a note, a question, a side quest: Enter keeps it here for this chat"
                     submitLabel="keep"
                     rows={2}
                     value={typedPad}
@@ -3333,6 +3138,7 @@ export const register: Register = (on, options) => {
                     `pad-row-${at}`,
                     <Text key={`pad-text-${at}`} wrap="wrap">{`${one.when.slice(11, 16)} ${one.text}`}</Text>,
                     [
+                      <Button key={`pad-ask-${at}`} label="→ ask" onPress={() => draft($, null, one.text)} />,
                       anchor && notePath && <Button key={`pad-save-${at}`} label="→ notes" onPress={() => saveToNotes($, [one])} />,
                       <Button key={`pad-drop-${at}`} dimColor label="drop" onPress={() => unjot($, [one])} />,
                     ],
@@ -3347,14 +3153,27 @@ export const register: Register = (on, options) => {
           </Box>
         )}
 
-        <Box key="section-anywhere" flexDirection="column">{section('anywhereOpen', 'Anywhere · your vault, lenses and setup')}</Box>
+        <Box key="section-anywhere" flexDirection="column">{section('anywhereOpen', 'Always · you, your context, lenses and setup')}</Box>
         {shown.anywhereOpen && (
           <Box key="anywhere-body" flexDirection="column">
+            <Box key="card-you" {...CARD} borderColor="claude">
+              {head('youOpen', '🧭 You', 'claude')}
+              {shown.youOpen && (
+                <Box key="you-body" flexDirection="column">
+                  <Text key="season" wrap="wrap">{`Season: ${season}`}</Text>
+                  <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                    <Button key="edit-context" label="✏️ my context" hotkey="s" onPress={() => openNote($, P.context)} />
+                    <Button key="open-board" label="📋 the board" hotkey="d" onPress={() => openNote($, P.board)} />
+                  </Box>
+                </Box>
+              )}
+            </Box>
+
             <Box key="card-context" {...CARD} borderColor="remember">
               {head('contextOpen', `📎 Context · ${contextCount} going in`, 'remember')}
               {shown.contextOpen && (
                 <Box key="context-body" flexDirection="column" marginBottom={1}>
-                  <Text dimColor>Pins here go into every chat's draft, whatever its anchor. An anchor's own pins are under This chat.</Text>
+                  <Text dimColor>Pins here go into every chat's draft, whatever its anchor (☑ on, ☐ kept but left out). An anchor's own pins are under This chat.</Text>
                   {standing.length > 0 && <Text key="standing" dimColor>{`+ ${standing.join(', ')} (switch these under Setup)`}</Text>}
                   {!anchor && ownArtifacts.map(one => (
                     <Text key={`made-${one.url}`} dimColor>{`◇ ${one.title}`}</Text>
@@ -3365,8 +3184,7 @@ export const register: Register = (on, options) => {
                     <Button key={`all-tick-${pinKey(pin)}`} plain label={`${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => setEverywhere($, list => list.map(one => (samePin(one, pin) ? { ...one, on: !one.on } : one)))} />,
                     [
                       <Button key={`all-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />,
-                      <Button key={`all-link-${pinKey(pin)}`} dimColor label="link" onPress={() => copyText($, pinLink(pin, pin.path))} />,
-                      <Button key={`all-drop-${pinKey(pin)}`} dimColor label="unpin" onPress={() => setEverywhere($, list => list.filter(one => !samePin(one, pin)))} />,
+                      <Button key={`all-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => setEverywhere($, list => list.filter(one => !samePin(one, pin)))} />,
                     ],
                   ))}
                   <Input key="pin-search" label="🔎" placeholder="search notes to pin (OpenAugi): Enter searches" submitLabel="search" onSubmit={value => searchNotes($, value)} />
@@ -3405,10 +3223,6 @@ export const register: Register = (on, options) => {
                   <Button key="about-me" plain label={`${mark(choice.aboutMe)} my context note and board`} hotkey="m" onPress={() => update($, picks, old => ({ ...old, aboutMe: !old.aboutMe }))} />
                   <Button key="pick-project" plain label={`${mark(choice.project)} the anchor's 🧠 human and 🤖 agent notes`} onPress={() => update($, picks, old => ({ ...old, project: !old.project }))} />
                   <Button key="openaugi" plain label={`${mark(choice.openAugi)} a search of my notes (with OpenAugi)`} onPress={() => update($, picks, old => ({ ...old, openAugi: !old.openAugi }))} />
-                  <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
-                    <Button key="edit-context" label="✏️ edit my context" hotkey="s" onPress={() => openNote($, P.context)} />
-                    <Button key="open-board" label="📋 open the board" hotkey="d" onPress={() => openNote($, P.board)} />
-                  </Box>
                   <Box key="setup-files" flexDirection="column" marginTop={1}>
                     <Text bold>Files and folders</Text>
                     {setup.map(item => (

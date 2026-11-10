@@ -6,7 +6,7 @@ export type SubItem = { text: string; note: string | null }
 // A Kanban card that links a note: the project or task an anchor points at.
 export type Card = { column: string; note: string; detail: string; tasks: SubItem[] }
 export type Chat = { id: string; when: string; title: string; hidden: boolean }
-// A question or side quest captured from the pane, kept on the trail under ## Questions.
+// A question an agent (or an older pane) left on the trail under ## Questions.
 export type Question = { when: string; text: string; done: boolean }
 // Something kept as context for an anchor, under ## Context on its trail. `on` is whether
 // it goes into the next draft; a note's target is its name, the rest a path or URL.
@@ -67,6 +67,8 @@ export type View = {
   pinsOpen: boolean
   touchedOpen: boolean
   padOpen: boolean
+  // The You card under Always: the season line, the context note and the board.
+  youOpen: boolean
   contextOpen: boolean
   anchorsOpen: boolean
   sessionsOpen: boolean
@@ -87,14 +89,8 @@ export type View = {
 export type JustMade = { note: string; path: string; jira: string }
 // The session id the pane last opened by itself for; `-` before any.
 export type Opened = { session: string }
-// A side answer to a parked question, by the question's `when` and text: `pending`
-// while the fork runs, then the answer until it is kept in the Agent Log or dropped.
-export type AsideAnswer = { when: string; text: string; answer: string; pending: boolean }
-// `btw`: whether this session has a /btw command, checked when the pane loads.
-export type Asides = { btw: boolean; answers: AsideAnswer[] }
-
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; touched: Shaped<Touched>; pad: Shaped<PadEntry[]>; asides: Shaped<Asides>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; touched: Shaped<Touched>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string> }
   }
 }

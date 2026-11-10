@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**augi-ui: fewer buttons, one place to type, and you above Setup.** A pin
+row is now the pin, `open` and `✕ unpin`: `link` and `→ everywhere` are gone
+(pin for every chat from the Context card), and the card says what the tick
+means. The Anchor card no longer repeats the pins as a row of buttons. The
+`?` question field and `aside` are gone: type it on the scratchpad and press
+`→ ask`. Questions an agent wrote in the Agent Log still list, with `done`.
+The second section is now **Always** and opens with a You card: your season
+line, `✏️ my context` and `📋 the board`, which used to sit inside Setup.
+
 **augi-ui: the pane opens in desktop chats, the scratchpad keeps what you
 type, and file paths are short.** Three fixes from a day of use. The pane
 never opened by itself in the desktop app or the editor, because those start

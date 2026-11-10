@@ -61,10 +61,12 @@ note or its Agent Log changed and reads them again if so, so two chats on one
 anchor see each other's questions, pins and tasks without a refresh.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
-chat is attached to: the anchor card, its questions, chats and saved notes, its
-pins, the files this chat touched, and the scratchpad. **Anywhere** holds what
-is not tied to one chat: the context picker (search, and the pins that go into
-every chat), the lenses, and setup.
+chat is attached to: the anchor card, its chats, questions and saved notes, its
+pins, the files this chat touched, and the scratchpad. **Always** holds what
+is not tied to one chat: the You card (the season line from the context note,
+`✏️ my context` and `📋 the board`), the context picker (search, and the pins
+that go into every chat), the lenses, and setup. Setup holds paths and
+switches only.
 
 Both sections and every card fold: each title row ends in a `▾ hide` /
 `▸ show` button, and a folded card keeps its count in the title. Lenses and
@@ -89,16 +91,14 @@ are `dimColor`, and the one primary button is the draft.
   anchor belongs to the chat session: a new session opens with none, and a
   reload or `claude --resume` of the session keeps it (`$.store`, keyed by
   session id). Choosing one records this chat in its Agent Log. The card shows
-  only the links (note, Agent Log, artifacts, Jira, and under them a row of
-  `📄` buttons that open its newest five pinned files and notes, however they
-  were pinned; see **Files**) until `▸ outcome and next (N)`
+  only the links (note, Agent Log, Jira; pins are in their own card below, not
+  repeated here) until `▸ outcome and next (N)`
   is opened: then the card's detail, the note's `🎯` outcome, and its open
   sub-items and the note's `# Next` checkboxes as tasks; one that links a
   note (`\t- [ ] [[Child task]]`) is a button that opens it, which is the whole
   parent/child story: the child's `Up:` line points back. A `jira:` key in the
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note
-  you write, `k` the Agent Log, and `◇` buttons open its newest three pinned
-  artifacts.
+  you write, `k` the Agent Log.
 - **New task** (two buttons in the Anchor card): `＋ new task` (always) and
   `＋ sub-task of <anchor>` (with an anchor). No field that makes a file is open
   until one is pressed: it opens a title field and `cancel`; an empty title or
@@ -151,12 +151,14 @@ are `dimColor`, and the one primary button is the draft.
   (listed first), notes, files, links and coding sessions. An artifact the chat
   publishes is pinned ticked; one published before an anchor was chosen is
   pinned when it is. Paste a link, `[[note]]` or path in that card to pin it to
-  the anchor. *Everywhere* pins (in the Context card, under Anywhere) go into
+  the anchor. *Everywhere* pins (in the Context card, under Always) go into
   every chat's draft whatever its anchor, and are kept in the plugin's store,
-  not in a note (the newest 50). Paste one in the Context card, press
-  `→ everywhere` on an anchor's pin to move it, or choose `pin everywhere` on a
-  search hit or a recent session (`pin to anchor` is offered beside it when the
-  chat has an anchor). A pin in both lists goes into the draft once.
+  not in a note (the newest 50). Paste one in the Context card, or choose
+  `pin everywhere` on a search hit or a recent session (`pin to anchor` is
+  offered beside it when the chat has an anchor). A pin in both lists goes into
+  the draft once. A pin row has two actions, `open` and `✕ unpin`; pressing the
+  pin itself switches its tick, and the card says what the tick means (☑ goes
+  into drafts, ☐ is a link only).
 - **Draft** (`n`): fills the prompt with that context. Nothing is sent until
   the user presses enter. `⧉ copy it for a new chat` copies the same text instead
   (the prompt box is left alone) to start a fresh chat on the anchor, say a
@@ -165,14 +167,10 @@ are `dimColor`, and the one primary button is the draft.
   with no anchor, that chat is anchored on it first and lands in the same Agent
   Log; a chat that already has an anchor keeps its own. A draft with the
   project context unticked names no anchor and attaches nothing.
-- **Questions**: parked with `?` in the Anchor card, listed under `On <anchor>`.
-  Pressing one drafts it as the instruction. `aside` asks it on the side: with
-  Claude Code's `/btw` command in the session (checked when the pane loads) it
-  fills `/btw <question>`, unsent; without it, a low-effort fork of this chat
-  answers from what the chat already holds, shown under the question with `keep`
-  (written under the question in the Agent Log as `  - aside: …`, the question
-  left open; a second keep replaces it) and `drop`. Unkept answers live in
-  session state only.
+- **Questions**: the pane has one place to type a thought, the scratchpad
+  (below). Questions an agent left under `## Questions` in the Agent Log are
+  still listed under `On <anchor>`: pressing one drafts it as the instruction,
+  `done` ticks it. The pane itself no longer writes that section.
 - **Lenses (saved prompts)** (`l`): run a lens with the same context; `+ new lens`
   takes a name, writes a skeleton file in the lens folder (never over one that's
   there) and opens it in your editor to paste the prompt.
@@ -192,8 +190,7 @@ are `dimColor`, and the one primary button is the draft.
   With an anchor, `pin` adds it to the Agent Log's `## Context` unticked (a
   markdown file in the notes folder as `[[note]]`, the rest as `file:`; a
   link, not prompt context, until ticked there) and the row then reads
-  `pinned`. Every pinned file or note, however it was pinned, is a `📄` button
-  in the Anchor card. A new note the chat writes in the notes folder is still
+  `pinned`. A new note the chat writes in the notes folder is still
   pinned unticked by itself.
 - **Usage log** (on by default; ⚙️ Setup → *count which controls I use* turns it
   off, as does `trackUsage: no`): one hook on `ui.press` and one on `ui.input`
@@ -218,12 +215,14 @@ are `dimColor`, and the one primary button is the draft.
 - **Scratchpad**: notes to self for this chat only, kept in session state (gone
   with the session). What is typed and not yet kept stays in the field: it is
   saved on every change, so a click away, a redraw or a reload does not lose
-  it, and Enter turns it into an entry. `→ notes` adds one to the anchor's own note as `- HH:MM text`
+  it, and Enter turns it into an entry. `→ ask` drafts an entry as the
+  instruction (unsent), so a question or side quest typed here is asked with
+  one press. `→ notes` adds one to the anchor's own note as `- HH:MM text`
   under its `# Journal`, beneath that day's dated heading (made if missing); with
   no anchor the entries just stay on the pad. This is the one place the pane
   writes the user's own note: only on their press, only their own words.
 - **Agent Log**: per anchor, a companion note that holds the pinned context,
-  open questions (with any kept side answers indented under them) and every
+  open questions and every
   chat anchored on it (titled `chat` until a draft
   sent from the pane names it). Its first line links the user's own note (so
   the note shows it as a backlink); agents never write that note (the pane does only for a
