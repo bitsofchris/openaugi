@@ -151,7 +151,7 @@ export const USAGE_FEATURES = [
   'ask', 'done', 'show-done', 'reopen', 'saved', 'chat', 'chat-task', 'chat-done', 'chat-reopen', 'chats-done',
   'pin-tick', 'pin-open', 'pin-drop', 'pin-paste',
   'touched-open', 'touched-pin', 'files-all', 'pad-input', 'pad-save', 'pad-ask', 'pad-today', 'pad-drop', 'pad-save-all',
-  'today-log', 'today-open', 'pick-today',
+  'today-log', 'today-open', 'pick-today', 'run-overview', 'run-standup',
   'all-tick', 'all-open', 'all-drop', 'all-paste', 'pin-search', 'offer-anchor', 'offer-all', 'hits-clear', 'sessions-menu', 'draft', 'copy-draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
@@ -522,10 +522,11 @@ const swatch = atom(
     hits: [],
     everywhere: [],
     lenses: [],
+    quick: { overview: '', standup: '' },
     sessions: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-15' },
+  { shape: 'swatch-16' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
 const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, trailOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true, todayOpen: true, contextOpen: true }
@@ -2158,6 +2159,7 @@ async function load($: EngineInterface): Promise<void> {
     today: await todayNow($, dailyPattern(P.daily, P.daily ? '' : await readOr($, P.obsidianDaily))),
     everywhere: storedPins(await $.store.get(PINS_KEY)),
     lenses: [],
+    quick: { overview: '', standup: '' },
     sessions: await recentSessions($),
     loadedAt: await $.clock.now(),
   }
@@ -2170,6 +2172,12 @@ async function load($: EngineInterface): Promise<void> {
   }
   for (const name of lensNames([...texts.keys()])) {
     next.lenses.push({ name, path: `${P.lenses}/${name}.md`, description: descriptionFrom(texts.get(name) ?? '') })
+  }
+  // Two lenses get a button of their own where they are used, when the lens folder has
+  // them, whatever the lens picks list: the wording stays a note the user can edit.
+  next.quick = {
+    overview: texts.has('overview') ? `${P.lenses}/overview.md` : '',
+    standup: texts.has('standup') ? `${P.lenses}/standup.md` : '',
   }
 
   await update($, swatch, () => next)
@@ -3322,7 +3330,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Input, Text } = $.ui.resolve(e)
     // Svg is drawn by the desktop, editor and phone, not the terminal.
     const Svg = e.surface === 'terminal' ? null : (($.ui.resolve(e) as unknown as { Svg?: typeof Text }).Svg ?? null)
-    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, trail, chatSeen, seenAt, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
+    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, quick, trail, chatSeen, seenAt, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
     const everywhere = (await read($, swatch)).everywhere ?? []
     // Jira shows only when it is on: a server found or named, a project or site set, or a key on the anchor.
     const isJiraOn = Boolean(jiraServer || P.jiraServer || P.jiraProject || P.jiraSite || jira)
@@ -3758,6 +3766,7 @@ export const register: Register = (on, options) => {
                   <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                     <Button key="edit-context" label="✏️ my context" hotkey="s" onPress={() => openNote($, P.context)} />
                     <Button key="open-board" label="📋 the board" hotkey="d" onPress={() => openNote($, P.board)} />
+                    {quick?.overview && <Button key="run-overview" label="🔭 what's open, what's next" onPress={() => draft($, { name: 'overview', path: quick.overview, description: '' })} />}
                   </Box>
                 </Box>
               )}
@@ -3779,6 +3788,7 @@ export const register: Register = (on, options) => {
                     {today.exists && (
                       <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                         <Button key="today-open" label="open" onPress={() => openNote($, today.path)} />
+                        {quick?.standup && <Button key="run-standup" label="draft my standup" onPress={() => draft($, { name: 'standup', path: quick.standup, description: '' })} />}
                         <Button key="pick-today" plain label={`${mark(choice.today)} goes into every draft`} onPress={() => update($, picks, old => ({ ...old, today: !old.today }))} />
                       </Box>
                     )}

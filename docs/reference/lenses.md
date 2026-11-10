@@ -66,7 +66,10 @@ full biography in the Persistent Memory Artifact shape; backed by
 `OpenAugi/lineage/<slug>.json` sidecar doubles as the mobile timeline
 payload), and the rest of the engine set — `currency-board`,
 `weekly-reflection`, `open-loops`, `chat-harvest`, `echoes`, `emerging`,
-`decision-audit`, `create-note-from-block`, `morning-briefing` — every lens
+`decision-audit`, `create-note-from-block`, `morning-briefing`, `overview`
+(every active anchor on the board: its open chats, open tasks and next step),
+`standup` (done / next / blocked from the daily note and the Agent Logs, as
+plain text) — every lens
 whose vault copy declares `kind: engine`, kept in sync by
 `scripts/sync_templates.py`. The old `distill-lens.md` / `nugget-lens.md`
 paths are pointer stubs.
@@ -82,7 +85,7 @@ about them:
 
 - **Batch** — runs over its default scope with no argument; "apply lens
   NAME" is a complete instruction. morning-briefing · open-loops ·
-  nuggets · content-pipeline · emerging · cluster-weather ·
+  overview · standup · nuggets · content-pipeline · emerging · cluster-weather ·
   decision-audit (picks its own decision from the stream).
 - **Targeted** — meaningless without a subject; the apply instruction
   must carry one ("distill X", "lineage of X"). distill · echoes ·

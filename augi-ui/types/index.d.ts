@@ -58,6 +58,8 @@ export type Swatch = {
   // Pins that go into every chat's draft, whatever its anchor; kept in the store.
   everywhere: Pin[]
   lenses: Lens[]
+  // The lenses that get a button where they are used, by path; empty when the lens folder has none.
+  quick: { overview: string; standup: string }
   sessions: Session[]
   loadedAt: number
 }

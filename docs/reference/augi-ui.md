@@ -67,7 +67,10 @@ The pane has two sections. **This chat** holds what belongs to the anchor this
 chat is attached to: the anchor card, its chats, questions and saved notes, its
 pins, the files this chat touched, and the scratchpad. **Always** holds what
 is not tied to one chat: the You card (the season line from the context note,
-`✏️ my context` and `📋 the board`), the Today card (below), the context picker (search, and the pins
+`✏️ my context`, `📋 the board`, and `🔭 what's open, what's next` when the
+lens folder has an `overview` lens: it drafts that lens, which reads the board
+and every anchor's Agent Log and answers with each anchor's open chats, open
+tasks and next step), the Today card (below), the context picker (search, and the pins
 that go into every chat), the lenses, and setup. Setup holds paths and
 switches only.
 
@@ -202,7 +205,10 @@ are `dimColor`, and the one primary button is the draft.
   template, so until it is made in the editor the card says so and offers no
   log field. Like the scratchpad's `→ notes`, a logged line is the user's own
   words written on their press. A standup or a plan for the day is a lens
-  that reads this note, not code.
+  that reads this note, not code: with a `standup` lens in the lens folder the
+  card has `draft my standup`. Both lenses ship with OpenAugi
+  (`templates/lenses/overview.md`, `standup.md`); their buttons show whatever
+  `lensPicks` lists, and editing the lens note changes what they ask.
 - **Context**: what the next chat is told to read. Three things go in without
   being listed, each a checkbox under Setup → *What goes into every draft*, all
   on by default: the anchor's human and agent notes, the context note and board
