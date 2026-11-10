@@ -1819,11 +1819,19 @@ test('touched files: newest first, one row per path, made sticks, capped', async
   expect(withTouched([one('/r/a.ts')], one('/r/b.ts'), 1)).toEqual([one('/r/b.ts')])
 })
 
-test('a touched path is short: notes-relative, then root-relative, then ~', async () => {
+test('a touched path is short: notes-relative, then root-relative, then ~, and never more than the name and two folders', async () => {
   expect(shortPath('/v/Ideas/A.md', '/v', '/Users/t', '/Users/t/r')).toBe('Ideas/A.md')
   expect(shortPath('/Users/t/r/src/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('src/a.ts')
   expect(shortPath('/Users/t/other/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('~/other/a.ts')
   expect(shortPath('/tmp/a.ts', '/v', '/Users/t', '')).toBe('/tmp/a.ts')
+  // A deep path keeps its last three parts, wherever it is.
+  expect(shortPath('/Users/t/r/packages/web/src/hooks/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('…/src/hooks/a.ts')
+  expect(shortPath('/v/Areas/Garden/Beds/North/A.md', '/v', '/Users/t', '')).toBe('…/Beds/North/A.md')
+  expect(shortPath('/Users/t/other/deep/down/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('…/deep/down/a.ts')
+  expect(shortPath('/opt/tools/share/lib/a.ts', '/v', '/Users/t', '')).toBe('…/share/lib/a.ts')
+  // Exactly three parts is not cut; a file at the root has no folder to show.
+  expect(shortPath('/Users/t/r/src/hooks/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('src/hooks/a.ts')
+  expect(shortPath('/Users/t/r/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts')
 })
 
 test('a vault note opens in the note editor, any other file in the file editor', async () => {
@@ -2018,8 +2026,98 @@ test('with openOnStart no, a new chat does not open the pane', { options: { ...O
     return { value: { isPlaced: true } }
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.attach', (_, e) => ({ clientId: e.clientId }))
   await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
   expect(opened).toBe(0)
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  expect(opened).toBe(0)
+})
+
+// A desktop chat starts through the SDK (no surface, not interactive) and its window attaches after.
+test('a desktop chat opens the pane when its window attaches, once a session: a reconnect or a second start does not reopen it', { options: OPTIONS }, async ($, on) => {
+  let opened = 0
+  const session = { id: 'desk-1' }
+  padHooks(except(on, ['ui.open', 'session.id']), new Map(), new Map(), [])
+  on('session.id', () => ({ value: session.id }))
+  on('ui.open', () => {
+    opened += 1
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.attach', (_, e) => ({ clientId: e.clientId }))
+  await $.session.start({ cwd: '/r', surface: null, isInteractive: false })
+  expect(opened).toBe(0)
+  // A phone joining opens nothing.
+  await $.session.attach({ surface: 'mobile', clientId: 'mobile:default' })
+  expect(opened).toBe(0)
+  const joined = await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  expect(joined.clientId).toBe('desktop:default')
+  expect(opened).toBe(1)
+  // The pane drew from loaded state: it is the real pane, not an empty one.
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ key: 'anchor-menu' })).toBeTruthy()
+  await ui.unmount()
+  // The window reconnects, and the module reloads (a settings change runs session.start again).
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  await $.session.start({ cwd: '/r', surface: null, isInteractive: false })
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  expect(opened).toBe(1)
+  // The editor's window counts too, in a session of its own.
+  session.id = 'code-1'
+  await $.session.attach({ surface: 'vscode', clientId: 'vscode:default' })
+  expect(opened).toBe(2)
+})
+
+test('a terminal chat that opened its pane at start does not open it again when a window attaches', { options: OPTIONS }, async ($, on) => {
+  let opened = 0
+  padHooks(except(on, ['ui.open']), new Map(), new Map(), [])
+  on('ui.open', () => {
+    opened += 1
+    return { value: { isPlaced: true } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.attach', (_, e) => ({ clientId: e.clientId }))
+  await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  expect(opened).toBe(1)
+})
+
+test('a failed open at attach never fails the attach', { options: OPTIONS }, async ($, on) => {
+  padHooks(except(on, ['ui.open']), new Map(), new Map(), [])
+  on('ui.open', () => {
+    throw new Error('no surface')
+  })
+  on('session.attach', (_, e) => ({ clientId: e.clientId }))
+  expect((await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })).clientId).toBe('desktop:default')
+})
+
+test('the scratchpad keeps what is typed and not yet kept: across a redraw, a remount and a reload; a submit clears it', { options: OPTIONS }, async ($, on) => {
+  padHooks(on, new Map(), new Map(), [])
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.command.run({ command: 'augi', args: '' })
+  let ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const typed = async (): Promise<string> => String((await ui.find({ key: 'pad-input-0' }))?.props?.value ?? '')
+  expect(await typed()).toBe('')
+  await ui.input({ key: 'pad-input-0', text: 'half a thou', kind: 'change' })
+  await ui.input({ key: 'pad-input-0', text: 'half a thought\nsecond line', kind: 'change' })
+  // Nothing was kept as an entry: it is still only typed.
+  expect(await ui.find({ key: 'pad-row-0' })).toBeFalsy()
+  // Another press redraws the pane: the field still holds the text.
+  await ui.press({ key: 'head-padOpen' })
+  await ui.press({ key: 'head-padOpen' })
+  expect(await typed()).toBe('half a thought\nsecond line')
+  // The pane is closed and drawn again (a click away and back).
+  await ui.unmount()
+  ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await typed()).toBe('half a thought\nsecond line')
+  // A reload of the module runs session.start again.
+  await $.session.start({ cwd: '/r', surface: null, isInteractive: false })
+  expect(await typed()).toBe('half a thought\nsecond line')
+  // Enter keeps it as an entry and empties the field.
+  await ui.input({ key: 'pad-input-0', text: 'half a thought\nsecond line' })
+  expect((await ui.find({ key: 'pad-row-0' }))?.text).toMatch(/half a thought/)
+  expect(String((await ui.find({ key: 'pad-input-1' }))?.props?.value ?? '')).toBe('')
+  await ui.unmount()
 })
 
 test('a control is logged by its name alone: a note, a path or an id in its key is dropped', () => {
@@ -2104,6 +2202,9 @@ test('with the usage log on, a press, a submit and a sent draft each append one 
   await ui.press({ key: 'anchor-menu' })
   await ui.press({ key: 'card-PMOC - Garden' })
   await ui.input({ key: 'capture-0', text: 'does the secret cache survive?' })
+  // Typing is not a use: only the submit is counted.
+  await ui.input({ key: 'pad-input-0', text: 'a secret half', kind: 'change' })
+  await ui.input({ key: 'pad-input-0', text: 'a secret half thought', kind: 'change' })
   await ui.press({ key: 'draft' })
   await $.prompt.submit({ text: filled[0] ?? '' })
 

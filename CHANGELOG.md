@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**augi-ui: the pane opens in desktop chats, the scratchpad keeps what you
+type, and file paths are short.** Three fixes from a day of use. The pane
+never opened by itself in the desktop app or the editor, because those start
+a session before any window exists; it now opens when the window attaches,
+once a session. Text typed in the scratchpad and not yet kept survives a
+click away, a redraw and a reload. *Files this chat touched* shows a file's
+name and at most the two folders above it. Typing in a field is no longer
+counted by the usage log; only the submit is.
+
 **augi-ui: every section folds, defaults move to Setup, and pins have two
 scopes.** The two sections and each card in the pane now fold from their
 title. The three things every draft carries (the anchor's notes, the context

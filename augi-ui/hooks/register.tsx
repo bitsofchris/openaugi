@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren, ToolCallResult } from 'claude-code'
 
-import type { AsideAnswer, Asides, Card, Chat, JustMade, Lens, Made, MadeArtifact, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Touched, TouchedFile, Trail, View } from '../types'
+import type { AsideAnswer, Asides, Card, Chat, JustMade, Lens, Made, MadeArtifact, Opened, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Touched, TouchedFile, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -217,16 +217,15 @@ export const isVaultNote = (path: string, notes: string): boolean => Boolean(not
 export const openArgv = (paths: Paths, path: string): string[] =>
   isVaultNote(path, paths.notes) ? editorArgv(paths.editor, paths.editorCommand, path) : editorArgv(paths.fileEditor, '', path)
 
-// A path made short to read: inside the notes folder or the session's root, relative; under home, ~/….
-export const shortPath = (path: string, notes: string, home: string, root = ''): string => {
-  if (notes && path.startsWith(`${notes}/`)) {
-    return path.slice(notes.length + 1)
-  }
-  if (root && path.startsWith(`${root}/`)) {
-    return path.slice(root.length + 1)
-  }
+// A path made short to read: relative to the notes folder or the session's root, else
+// ~/… under home; then only the file's name and the two folders it sits in, `…/` standing
+// for what was cut.
+export const shortPath = (path: string, notes: string, home: string, root = '', kept = 3): string => {
+  const base = [notes, root].find(one => one && path.startsWith(`${one}/`))
+  const relative = base ? path.slice(base.length + 1) : home && path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path
+  const parts = relative.split('/')
 
-  return home && path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path
+  return parts.length > kept ? `…/${parts.slice(-kept).join('/')}` : relative
 }
 
 // What setup still needs: the notes folder first, then the files the pane reads.
@@ -418,9 +417,20 @@ const touched = atom(
 // outlives a redraw or a reload of this module, but not the session.
 const pad = atom({ plugin: 'augi-ui', key: 'pad' } as const, [] as PadEntry[], { shape: 'pad-1' })
 
+// What is typed in the scratchpad's field and not yet kept: saved on every change, so it
+// is still there after a click away, a redraw or a reload. No drawing reads the atom (a
+// redraw per keystroke would fight the typing); the pane draws `typedPad`, which
+// session.start fills from it after a reload.
+const padDraft = atom({ plugin: 'augi-ui', key: 'padDraft' } as const, '' as string, { shape: 'pad-draft-1' })
+let typedPad = ''
+
 // Side answers to parked questions, and whether /btw exists: session state, so an
 // answer not kept goes with the session.
 const asides = atom({ plugin: 'augi-ui', key: 'asides' } as const, { btw: false, answers: [] } as Asides, { shape: 'asides-1' })
+
+// The session the pane was opened for by itself: it opens once a session, so a window
+// that attaches again does not reopen a pane the user closed.
+const opened = atom({ plugin: 'augi-ui', key: 'opened' } as const, { session: '-' } as Opened, { shape: 'opened-1' })
 
 // The task this chat just made: session state, cleared by its dismiss and on clear or resume.
 const NO_TASK: JustMade = { note: '', path: '', jira: '' }
@@ -2042,6 +2052,26 @@ function watchAnchor($: EngineInterface): void {
   }
 }
 
+// Opens the pane beside a new chat, once per session, unless that is turned off. Never
+// in the way of the session: a failure here only leaves the pane closed for /augi.
+async function openOnce($: EngineInterface): Promise<void> {
+  try {
+    if (settings.openOnStart === 'no') {
+      return
+    }
+    const id = (await $.session.id()) ?? ''
+    if ((await read($, opened)).session === id) {
+      return
+    }
+    await update($, opened, () => ({ session: id }))
+    await load($)
+    await $.ui.open({ id: PANE, title: 'Augi' })
+    watchAnchor($)
+  } catch {
+    // The pane stays closed; /augi opens it.
+  }
+}
+
 async function anchorSession($: EngineInterface, note: string): Promise<void> {
   await setSessionAnchor($, note)
   const { cards, loadedAt } = await read($, swatch)
@@ -2403,6 +2433,12 @@ async function capture($: EngineInterface, text: string): Promise<void> {
   await writeTrail($, anchor.note, old => addQuestion(old, { when, text: text.trim(), done: false }))
 }
 
+// Remembers what is typed in the scratchpad's field, unsent.
+async function typePad($: EngineInterface, text: string): Promise<void> {
+  typedPad = text
+  await update($, padDraft, () => text)
+}
+
 // Keeps a note to self on this chat's scratchpad, newest first. Nothing is written.
 async function jot($: EngineInterface, text: string): Promise<void> {
   if (!text.trim()) {
@@ -2410,6 +2446,7 @@ async function jot($: EngineInterface, text: string): Promise<void> {
   }
   const when = stamp(await $.clock.now())
 
+  await typePad($, '')
   await update($, pad, old => [{ when, text: text.trim() }, ...old])
 }
 
@@ -2717,6 +2754,8 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await ready($)
     await $.command.register({ name: 'augi', description: 'Show Augi pane: your anchor, its context and chats, and the lenses' })
+    // A reload starts this module's variables over: the unsent scratchpad text comes back.
+    typedPad = await read($, padDraft)
     // A settings change reloads the module; redraw an open pane with the new paths.
     const starter = await $.store.get('starter')
     if (typeof starter === 'string') {
@@ -2725,20 +2764,30 @@ export const register: Register = (on, options) => {
     }
     if ((await read($, swatch)).loadedAt > 0) {
       await load($)
+      // The reload dropped this module's timer; an open pane goes on following its anchor.
+      watchAnchor($)
     }
     // A new interactive chat opens with the pane beside it, unless that is turned off.
     // Never in the way of the session starting: a failure here only skips the pane.
-    try {
-      if (e.isInteractive && e.surface && settings.openOnStart !== 'no') {
-        await load($)
-        await $.ui.open({ id: PANE, title: 'Augi' })
-        watchAnchor($)
-      }
-    } catch {
-      // The pane stays closed; /augi opens it.
+    if (e.isInteractive && e.surface) {
+      await openOnce($)
     }
 
     return next(e)
+  })
+
+  // The desktop app and the editor start a session through the SDK: at session.start
+  // nothing draws yet, so the pane opens when their window attaches instead. Once a
+  // session: a reconnect does not bring back a pane the user closed. A phone joining
+  // opens nothing.
+  on('session.attach', async ($, e, next) => {
+    const joined = await next(e)
+    if (e.surface === 'desktop' || e.surface === 'vscode') {
+      await ready($)
+      await openOnce($)
+    }
+
+    return joined
   })
 
   // A /clear goes on in this process under a new session id with no session.start:
@@ -2749,6 +2798,7 @@ export const register: Register = (on, options) => {
       await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
       // The scratchpad and unkept side answers were that chat's; they don't follow into the next.
       await update($, pad, () => [])
+      await typePad($, '')
       await update($, asides, old => ({ ...old, answers: [] }))
       await update($, touched, () => ({ session: '', files: [] }))
       await update($, justMade, () => NO_TASK)
@@ -2808,7 +2858,8 @@ export const register: Register = (on, options) => {
 
   on('ui.input', async ($, e, next) => {
     const ran = await next(e)
-    if (e.plugin === 'augi-ui' && e.requestId === PANE) {
+    // A submit is a use; a change is typing, which is not counted.
+    if (e.plugin === 'augi-ui' && e.requestId === PANE && e.kind === 'submit') {
       await track($, 'input', e.element, e.surface)
     }
 
@@ -3274,6 +3325,8 @@ export const register: Register = (on, options) => {
                     placeholder="a note to self: Enter keeps it here for this chat"
                     submitLabel="keep"
                     rows={2}
+                    value={typedPad}
+                    onInput={value => typePad($, value)}
                     onSubmit={value => jot($, value)}
                   />
                   {jotted.map((one, at) => line(

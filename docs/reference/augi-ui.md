@@ -50,8 +50,12 @@ skipped. Starters are never written over an existing file.
 
 **The pane.**
 
-It opens with each new interactive chat (turn that off with `openOnStart`, or
-the switch under Setup). An open pane follows its anchor's files: every ten
+It opens with each new chat, once a session (turn that off with `openOnStart`,
+or the switch under Setup): in a terminal when the session starts; in the
+desktop app and the editor when their window attaches (`session.attach`),
+since those start a session with no surface to draw on yet. A window that
+reconnects does not reopen a pane you closed, and a headless run or a phone
+joining opens nothing. An open pane follows its anchor's files: every ten
 seconds, and when a prompt is sent, it checks whether the board, the anchor's
 note or its Agent Log changed and reads them again if so, so two chats on one
 anchor see each other's questions, pins and tasks without a refresh.
@@ -180,7 +184,9 @@ are `dimColor`, and the one primary button is the draft.
   per path, the newest five until `▸ show all (N)`, at most 30, kept in session
   state (a `/clear` starts a new list). Agent Logs and dot-folders of the notes
   folder are left out. A row shows the path made short (relative to the notes
-  folder or the session's working folder, else `~/…`), a dim `new` when the
+  folder or the session's working folder, else `~/…`, and never more than the
+  file's name and the two folders it sits in: `…/hooks/register.tsx`), a dim
+  `new` when the
   chat created the file, and `open`: a markdown note in the notes folder opens
   with `editor`, anything else with `fileEditor`; a file that is gone says so.
   With an anchor, `pin` adds it to the Agent Log's `## Context` unticked (a
@@ -192,7 +198,7 @@ are `dimColor`, and the one primary button is the draft.
 - **Usage log** (on by default; ⚙️ Setup → *count which controls I use* turns it
   off, as does `trackUsage: no`): one hook on `ui.press` and one on `ui.input`
   append a JSON line to `~/.openaugi/usage/augi-ui.jsonl` for every Button
-  pressed and Input submitted in the pane, and one more (`draft-sent`) when a
+  pressed and Input submitted in the pane (typing in a field is not logged), and one more (`draft-sent`) when a
   pane draft is sent. Nothing leaves the computer and there is no library: the
   line is appended by `sh`, so two chats can log at once. A line is
   `{ at, kind, what, lens?, anchored, surface }`: an ISO time; `press`, `input`
@@ -210,7 +216,9 @@ are `dimColor`, and the one primary button is the draft.
   not used: the plugin has no database access, and the openaugi database is the
   notes index, rebuilt by ingest.
 - **Scratchpad**: notes to self for this chat only, kept in session state (gone
-  with the session). `→ notes` adds one to the anchor's own note as `- HH:MM text`
+  with the session). What is typed and not yet kept stays in the field: it is
+  saved on every change, so a click away, a redraw or a reload does not lose
+  it, and Enter turns it into an entry. `→ notes` adds one to the anchor's own note as `- HH:MM text`
   under its `# Journal`, beneath that day's dated heading (made if missing); with
   no anchor the entries just stay on the pad. This is the one place the pane
   writes the user's own note: only on their press, only their own words.
