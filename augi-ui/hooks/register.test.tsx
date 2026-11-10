@@ -2003,11 +2003,12 @@ test('a chat is titled by its prompt\'s first line; a slash command titles nothi
 // A vault whose folder /r/garden last worked on PMOC - Garden. `state` can be changed
 // mid-test: the session id, its folder, and how long ago it began.
 const inheritHooks = (on: On, folders: [string, string][] = [['/r/garden', 'PMOC - Garden']], anchors: [string, string][] = []) => {
-  const state = { id: 'fresh', cwd: '/r/garden', age: 60_000 }
+  const state = { id: 'fresh', cwd: '/r/garden', age: 60_000, surfaces: ['terminal'] as ('terminal' | 'desktop')[] }
   const now = new Date(2026, 10, 8, 9, 30).getTime()
   const got = taskHooks(on, anchors, { '/v/PMOC - Garden.md': GARDEN_PLAIN, '/v/PMOC - Birdhouse.md': '### Outcome\n\nBirds move in.\n' }, state)
   got.store.set('folders', folders)
   on('session.cwd', () => ({ value: state.cwd }))
+  on('session.surfaces', () => ({ value: state.surfaces }))
   on('session.usage', () => ({ value: { startedAt: now - state.age, context: { window: 200000 }, rateLimits: [] } as never }))
   // When each file was last written, by path; a test moves a transcript's time forward.
   const seen: Record<string, number> = {}
@@ -2119,6 +2120,69 @@ test('no anchor is carried over to an older chat, a chat in another folder, or o
   await $.command.run({ command: 'augi', args: '' })
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  await ui.unmount()
+})
+
+test('no anchor is carried over to a headless run, or onto a note that is gone; a session resumed in this process shows its own stored anchor', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on, [['/r/garden', 'PMOC - Garden'], ['/r/pond', 'Renamed since']], [['earlier', 'PMOC - Birdhouse']])
+  on('session.end', (_, e) => ({ sessionId: e.sessionId }) as never)
+  // A run that draws nowhere: nobody could see, keep or change the anchor.
+  got.state.surfaces = []
+  await $.command.run({ command: 'augi', args: '' })
+  expect(anchorOf(got.store, 'fresh')).toBe(undefined)
+  // The folder's anchor names a note that is on no board and in no folder now.
+  got.state.surfaces = ['terminal']
+  got.state.id = 'pond'
+  got.state.cwd = '/r/pond'
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  expect(anchorOf(got.store, 'pond')).toBe(undefined)
+  await $.prompt.submit({ text: 'a first prompt' })
+  expect(got.written.size).toBe(0)
+
+  // /resume in this process: the pane drops the old session's anchor, then shows the resumed one's.
+  await $.session.end({ reason: 'resume', sessionId: 'pond' } as never)
+  got.state.id = 'earlier'
+  got.state.age = 5 * 3_600_000
+  await $.prompt.submit({ text: '/augi' })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
+  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('a → task field left open closes when its chat leaves the log or the anchor changes: the buttons are never lost', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on, [], [['parent', 'PMOC - Garden']])
+  got.state.id = 'parent'
+  const log = addChat(trailTemplate('PMOC - Garden', '2026-11-08'), { id: 'child-1', when: '2026-11-08 09:10', title: 'wire the sprinkler timer', done: false })
+  got.written.set(trailPath('PMOC - Garden'), log)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'chat-task-child-1' })
+  expect(await ui.find({ key: 'task-title-promote' })).toBeTruthy()
+  expect(await ui.find({ key: 'task-new' })).toBeFalsy()
+  // Another chat made it a task meanwhile (its line left this log): the field goes, the buttons return.
+  got.written.set(trailPath('PMOC - Garden'), removeChat(log, 'child-1'))
+  await ui.press({ key: 'refresh' })
+  expect(await ui.find({ key: 'task-title-promote' })).toBeFalsy()
+  expect(await ui.find({ key: 'task-new' })).toBeTruthy()
+  expect(await ui.find({ key: 'task-child' })).toBeTruthy()
+
+  // Open again, then pick another anchor: the field was for the anchor it left.
+  got.written.set(trailPath('PMOC - Garden'), log)
+  await ui.press({ key: 'refresh' })
+  await ui.press({ key: 'chat-task-child-1' })
+  await ui.press({ key: 'anchor-menu' })
+  await ui.press({ key: 'card-sub-PMOC - Garden-PMOC - Birdhouse' })
+  expect(await ui.find({ key: 'task-title-promote' })).toBeFalsy()
+  expect(await ui.find({ key: 'task-new' })).toBeTruthy()
+  // And with a field open, no anchor leaves only what needs none.
+  await ui.press({ key: 'task-sub' })
+  await ui.press({ key: 'anchor-menu' })
+  await ui.press({ key: 'anchor-clear' })
+  expect(await ui.find({ key: 'task-title-sub' })).toBeFalsy()
+  expect(await ui.find({ key: 'task-new' })).toBeTruthy()
   await ui.unmount()
 })
 
@@ -2722,13 +2786,24 @@ test('a terminal chat that opened its pane at start does not open it again when 
   expect(opened).toBe(1)
 })
 
-test('a failed open at attach never fails the attach', { options: OPTIONS }, async ($, on) => {
+test('a failed open at attach never fails the attach, and is tried again when the window attaches next', { options: OPTIONS }, async ($, on) => {
+  let tries = 0
   padHooks(except(on, ['ui.open']), new Map(), new Map(), [])
   on('ui.open', () => {
-    throw new Error('no surface')
+    tries += 1
+    if (tries === 1) {
+      throw new Error('no surface')
+    }
+    return { value: { isPlaced: true } }
   })
   on('session.attach', (_, e) => ({ clientId: e.clientId }))
   expect((await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })).clientId).toBe('desktop:default')
+  expect(tries).toBe(1)
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  expect(tries).toBe(2)
+  // It opened: a third attach leaves it alone.
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  expect(tries).toBe(2)
 })
 
 test('the scratchpad keeps what is typed and not yet kept: across a redraw, a remount and a reload; a submit clears it', { options: OPTIONS }, async ($, on) => {

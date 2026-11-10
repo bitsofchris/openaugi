@@ -2314,7 +2314,20 @@ async function inheritAnchor($: EngineInterface): Promise<boolean> {
     if (!note || (await $.clock.now()) - (await $.session.usage()).startedAt > NEW_SESSION_MS) {
       return false
     }
-    await $.store.set(ANCHORS_KEY, withAnchor(pairs, id, note))
+    // Never a headless run: nobody is there to see, keep or change it.
+    if ((await $.session.surfaces()).length === 0) {
+      return false
+    }
+    // Nor onto a note that was renamed or deleted since: the chat would be filed in a log for nothing.
+    if (!anchorCard(kanbanCards(await readOr($, P.board)), note) && !(await notePathOf($, note))) {
+      return false
+    }
+    // Read again: a pick made while the checks above ran is the session's choice.
+    const now = anchorPairs(await $.store.get(ANCHORS_KEY))
+    if (now.some(([one]) => one === id)) {
+      return false
+    }
+    await $.store.set(ANCHORS_KEY, withAnchor(now, id, note))
     await update($, inherited, () => ({ session: id, note, named: '' }))
 
     return true
@@ -2356,6 +2369,8 @@ async function anchorStamp($: EngineInterface, note: string, notePath: string): 
 // What the pane last saw of those files. Another chat on the same anchor writes the same
 // Agent Log; this is how this chat's pane notices and reads it again.
 let seenStamp = ''
+// A stored anchor whose note was not found, so the sync does not search for it every time.
+let unfound = ''
 let anchorWatch: { cancel: () => void } | null = null
 
 // Reads the board and the anchor again when one of its files changed since the pane
@@ -2367,11 +2382,18 @@ export async function resync($: EngineInterface): Promise<void> {
   }
   await resyncToday($)
   if (!anchor) {
-    // A chat cleared or resumed in this process is a new session: it starts on the folder's anchor too.
-    if (await inheritAnchor($)) {
+    // A chat cleared or resumed in this process is another session: it shows its own stored
+    // anchor, or, new, starts on the folder's as any new chat does.
+    const stored = await sessionAnchor($)
+    if ((stored && stored !== unfound) || (await inheritAnchor($))) {
       const { cards } = await read($, swatch)
       const found = await loadAnchor($, cards)
-      await update($, swatch, old => ({ ...old, ...found }))
+      if (found.anchor) {
+        await update($, swatch, old => ({ ...old, ...found }))
+      } else {
+        // Its note is gone: not looked for again on every sync.
+        unfound = stored ?? ''
+      }
     }
 
     return
@@ -2411,9 +2433,10 @@ async function openOnce($: EngineInterface): Promise<void> {
     if ((await read($, opened)).session === id) {
       return
     }
-    await update($, opened, () => ({ session: id }))
     await load($)
     await $.ui.open({ id: PANE, title: 'Augi' })
+    // Marked only once it has opened: a failed open is tried again when a window attaches.
+    await update($, opened, () => ({ session: id }))
     watchAnchor($)
   } catch {
     // The pane stays closed; /augi opens it.
@@ -2424,6 +2447,8 @@ async function anchorSession($: EngineInterface, note: string): Promise<void> {
   await setSessionAnchor($, note)
   await rememberFolder($, note)
   await keepInherited($)
+  // A field opened for the anchor it leaves (a sub-task, a child chat, a chat to make a task) closes.
+  await update($, view, old => ({ ...old, taskMode: '' as const, promote: '' }))
   const { cards, loadedAt } = await read($, swatch)
   if (loadedAt > 0) {
     const found = await loadAnchor($, cards)
@@ -2457,7 +2482,7 @@ async function clearAnchor($: EngineInterface): Promise<void> {
   await setSessionAnchor($, '')
   await keepInherited($)
   await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, chatFiles: {}, chatSeen: {}, seenAt: 0, pinPaths: {}, hits: [] }))
-  await update($, view, old => ({ ...old, anchorsOpen: false }))
+  await update($, view, old => ({ ...old, anchorsOpen: false, taskMode: '' as const, promote: '' }))
 }
 
 async function anchorNow($: EngineInterface): Promise<Anchor | null> {
@@ -3354,13 +3379,16 @@ export const register: Register = (on, options) => {
     const carried = await read($, inherited)
     const isCarried = Boolean(anchor) && carried.note === anchor?.note && carried.session === ownId
     // Every field but a standalone task's needs an anchor; with none it reads as closed.
-    const taskMode = shown.taskMode !== 'new' && !anchor ? '' : (shown.taskMode ?? '')
+    const openMode = shown.taskMode !== 'new' && !anchor ? '' : (shown.taskMode ?? '')
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
     const arrow = (isOpen: boolean): string => (isOpen ? '▾' : '▸')
     const flip = (key: keyof View) => () => update($, view, old => ({ ...old, [key]: !old[key] }))
     const openChats = trail.chats.filter(one => !one.done)
     const doneChats = trail.chats.filter(one => one.done)
     const promoting = trail.chats.find(one => one.id === shown.promote)
+    // A chat that left this log while its field was open (made a task from another chat,
+    // or removed by hand) leaves no field: the buttons are back.
+    const taskMode = openMode === 'promote' && !promoting ? '' : openMode
     // A chat's row: its goal, then when it was last active (its transcript, when it is on
     // this computer; else when it was filed).
     const chatLabel = (chat: Chat): string => `◦ ${chat.title}${chat.id === ownId ? ' (this chat)' : ''} · ${lastActive(chatSeen?.[chat.id] ?? 0, seenAt ?? 0) || chat.when.slice(5)}`

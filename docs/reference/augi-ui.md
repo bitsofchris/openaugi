@@ -100,7 +100,9 @@ are `dimColor`, and the one primary button is the draft.
   folder (a Claude Code worktree counts as its repository), and the card says
   so with `keep`, `change` and `no anchor`. Only a session that began in the
   last ten minutes is given one, so an older chat that never had an anchor is
-  left alone; `no anchor` sticks for the session; a draft pasted from another
+  left alone; a headless run is never given one, and neither is any chat when
+  the folder's anchor names a note that is no longer on the board or in the
+  notes folder; `no anchor` sticks for the session; a draft pasted from another
   anchor wins over one the chat only started on. A chat that is given its
   anchor this way is written to the Agent Log with its first prompt, not
   before, so a chat opened and abandoned leaves nothing there. Every anchored
