@@ -189,6 +189,26 @@ are `dimColor`, and the one primary button is the draft.
   `pinned`. Every pinned file or note, however it was pinned, is a `📄` button
   in the Anchor card. A new note the chat writes in the notes folder is still
   pinned unticked by itself.
+- **Usage log** (on by default; ⚙️ Setup → *count which controls I use* turns it
+  off, as does `trackUsage: no`): one hook on `ui.press` and one on `ui.input`
+  append a JSON line to `~/.openaugi/usage/augi-ui.jsonl` for every Button
+  pressed and Input submitted in the pane, and one more (`draft-sent`) when a
+  pane draft is sent. Nothing leaves the computer and there is no library: the
+  line is appended by `sh`, so two chats can log at once. A line is
+  `{ at, kind, what, lens?, anchored, surface }`: an ISO time; `press`, `input`
+  or `sent`; the control's name; the lens's name when a lens was run; whether
+  the chat had an anchor; `terminal` or `desktop`. `what` is the element's key
+  with anything of the user's taken off (`card-<note>` is `card`,
+  `pin-open-<kind>-<target>` is `pin-open`; `usageName`), so the log holds no
+  note name, path, chat id or typed text. `/augi usage` prints the report, and
+  Setup has `copy my usage report` and `clear the usage log`: counts for the
+  last 30 days, lenses run, and every control never pressed in the whole log.
+  **A new control is logged without any change**: its key is its name. When the
+  key ends in something of the user's, add its prefix to `USAGE_PREFIXES`; add
+  its name to `USAGE_FEATURES` either way, which `tests/test_augi_ui_usage.py`
+  enforces by reading the Button and Input keys out of the source. SQLite was
+  not used: the plugin has no database access, and the openaugi database is the
+  notes index, rebuilt by ingest.
 - **Scratchpad**: notes to self for this chat only, kept in session state (gone
   with the session). `→ notes` adds one to the anchor's own note as `- HH:MM text`
   under its `# Journal`, beneath that day's dated heading (made if missing); with

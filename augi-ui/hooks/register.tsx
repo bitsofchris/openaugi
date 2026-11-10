@@ -27,6 +27,8 @@ export type Options = {
   jiraProject: string
   jiraSite: string
   jiraServer: string
+  // `no` stops the usage log; anything else keeps it.
+  trackUsage: string
 }
 export type Paths = {
   home: string
@@ -39,6 +41,8 @@ export type Paths = {
   tasks: string
   claudeDir: string
   codexDir: string
+  // The usage log: one JSON line per pane press, on this computer only.
+  usage: string
   editor: string
   editorCommand: string
   fileEditor: string
@@ -70,6 +74,7 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
     tasks: options.taskFolder?.trim() ? within(notes, options.taskFolder, home) : notes,
     claudeDir: `${home}/.claude/projects`,
     codexDir: `${home}/.codex/sessions`,
+    usage: `${home}/.openaugi/usage/augi-ui.jsonl`,
     editor: options.editor || 'obsidian',
     editorCommand: options.editorCommand ?? '',
     fileEditor: options.fileEditor || 'vscode',
@@ -84,6 +89,98 @@ let P: Paths = resolvePaths({}, '')
 // Sets the paths the module works from; register calls it once HOME is known.
 export const configure = (paths: Paths): void => {
   P = paths
+}
+
+// ---- Usage: which pane controls get pressed, kept in a file on this computer ----
+
+// One line of the usage log. `what` is a control's name with anything of the user's
+// (a note, a path, a chat id) taken off; `lens` names the lens a lens press ran.
+export type UsageEvent = { at: string; kind: 'press' | 'input' | 'sent'; what: string; lens?: string; anchored: boolean; surface: string }
+
+// Keys that end in something of the user's: `card-<note>`, `pin-open-<kind>-<target>`.
+const USAGE_PREFIXES = [
+  'card-sub', 'card', 'anchor-artifact', 'anchor-file', 'task', 'capture', 'ask', 'aside-keep', 'aside-drop', 'aside', 'done', 'reopen',
+  'saved', 'chat', 'hide', 'pin-tick', 'pin-open', 'pin-link', 'pin-all', 'pin-drop', 'pin-paste', 'touched-open', 'touched-pin',
+  'pad-input', 'pad-save', 'pad-drop', 'all-tick', 'all-open', 'all-link', 'all-drop', 'all-paste', 'offer-anchor', 'offer-all',
+  'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
+].sort((one, other) => other.length - one.length)
+// Whole keys that only look like one of those.
+const USAGE_WHOLE = ['task-new', 'task-sub', 'task-cancel', 'task-title-new', 'task-title-sub', 'pad-save-all', 'edit-context']
+
+// A control's name for the log. A key nobody listed is logged as written unless it
+// looks like it carries a name or a path, so a new button is tracked without a change here.
+export const usageName = (element: string): string => {
+  if (USAGE_WHOLE.includes(element)) {
+    return element
+  }
+  const prefix = USAGE_PREFIXES.find(one => element.startsWith(`${one}-`))
+  if (prefix) {
+    return prefix
+  }
+
+  return /[\s/\\:.]/.test(element) || element.length > 40 ? 'other' : element
+}
+
+// Every control the pane draws, by its log name: what a report checks for never used.
+// tests/test_augi_ui_usage.py reads this file's Button and Input keys and fails when one is missing here.
+export const USAGE_FEATURES = [
+  'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'open-note', 'open-trail', 'anchor-artifact', 'anchor-file', 'anchor-details', 'task',
+  'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'capture', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
+  'made-open', 'made-define', 'made-copy', 'made-anchor', 'made-dismiss',
+  'ask', 'aside', 'aside-keep', 'aside-drop', 'done', 'show-done', 'reopen', 'saved', 'chat', 'hide', 'show-hidden',
+  'pin-tick', 'pin-open', 'pin-link', 'pin-all', 'pin-drop', 'pin-paste',
+  'touched-open', 'touched-pin', 'files-all', 'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
+  'all-tick', 'all-open', 'all-link', 'all-drop', 'all-paste', 'pin-search', 'offer-anchor', 'offer-all', 'hits-clear', 'sessions-menu', 'draft', 'copy-draft', 'draft-sent',
+  'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
+  'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
+  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-trailOpen', 'head-pinsOpen', 'head-touchedOpen', 'head-padOpen', 'head-contextOpen',
+]
+
+// The log's lines as events; a line that is not one is skipped.
+export const parseUsage = (text: string): UsageEvent[] => {
+  const events: UsageEvent[] = []
+  for (const line of text.split('\n')) {
+    try {
+      const one = JSON.parse(line) as Partial<UsageEvent> | null
+      if (one && typeof one.at === 'string' && typeof one.what === 'string') {
+        events.push({ at: one.at, kind: one.kind ?? 'press', what: one.what, ...(typeof one.lens === 'string' ? { lens: one.lens } : {}), anchored: Boolean(one.anchored), surface: one.surface ?? '' })
+      }
+    } catch {
+      // Not a JSON line: skip it.
+    }
+  }
+
+  return events
+}
+
+const tally = (names: string[]): [string, number][] => {
+  const counts = new Map<string, number>()
+  for (const name of names) {
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+
+  return [...counts].sort((one, other) => other[1] - one[1] || one[0].localeCompare(other[0]))
+}
+
+// What was used in the last `days` days, most first, then what never was.
+export const usageReport = (events: UsageEvent[], now: number, days = 30): string => {
+  const since = new Date(now - days * 86_400_000).toISOString()
+  const recent = events.filter(one => one.at >= since)
+  const used = tally(recent.map(one => one.what))
+  const lenses = tally(recent.filter(one => one.lens).map(one => one.lens ?? ''))
+  const never = USAGE_FEATURES.filter(name => !events.some(one => one.what === name))
+  const count = ([name, times]: [string, number]): string => `${String(times).padStart(5)}  ${name}`
+
+  return [
+    `Augi pane usage, last ${days} days: ${recent.length} events (${events.length} in the log, since ${events[0]?.at.slice(0, 10) ?? 'never'}).`,
+    '',
+    'Used:',
+    ...(used.length > 0 ? used.map(count) : ['  nothing yet']),
+    ...(lenses.length > 0 ? ['', 'Lenses run:', ...lenses.map(count)] : []),
+    '',
+    `Never used, in the whole log (${never.length}):`,
+    never.length > 0 ? `  ${never.join(', ')}` : '  nothing: every control has been pressed at least once',
+  ].join('\n')
 }
 
 export const EDITORS = ['obsidian', 'vscode', 'cursor', 'system', 'custom'] as const
@@ -2572,6 +2669,34 @@ async function setOption($: EngineInterface, field: string, value: string): Prom
   await $.config.set({ key: row.key, value })
 }
 
+// Appends one event to the usage log. It never fails a press: a log that can't be
+// written is a press that isn't counted.
+async function track($: EngineInterface, kind: UsageEvent['kind'], element: string, surface: string): Promise<void> {
+  if (settings.trackUsage === 'no') {
+    return
+  }
+  try {
+    const { anchor, lenses } = await read($, swatch)
+    const isLens = kind === 'press' && lenses.some(one => one.name === element)
+    const event: UsageEvent = {
+      at: new Date(await $.clock.now()).toISOString(),
+      kind,
+      what: isLens ? 'lens' : usageName(element),
+      ...(isLens ? { lens: element } : {}),
+      anchored: Boolean(anchor),
+      surface,
+    }
+    // One short line appended by the shell: two chats can log at once.
+    await $.process.run(['sh', '-c', 'mkdir -p "$(dirname "$2")" && printf \'%s\\n\' "$1" >> "$2"', 'sh', JSON.stringify(event), P.usage])
+  } catch {
+    // Not counted.
+  }
+}
+
+async function usageNow($: EngineInterface): Promise<string> {
+  return usageReport(parseUsage(await readOr($, P.usage)), await $.clock.now())
+}
+
 async function copyResume($: EngineInterface, chat: Chat): Promise<void> {
   await $.ui.copy({ text: `claude --resume ${chat.id}` })
   await $.ui.toast(`Copied: claude --resume ${chat.id}`)
@@ -2635,6 +2760,9 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'augi' }, async ($, e) => {
     await ready($)
+    if (e.args.trim() === 'usage') {
+      return { text: `${await usageNow($)}\n\nThe log is ${P.usage}. Turn it off under Setup in the pane.` }
+    }
     if (e.args.trim() === 'setup') {
       await $.store.delete(SKIPPED_KEY)
       await update($, view, old => ({ ...old, setupOpen: true }))
@@ -2655,6 +2783,7 @@ export const register: Register = (on, options) => {
         await ready($)
         await anchorFromPaste($, e.text)
         await recordChat($, title)
+        await track($, 'sent', 'draft-sent', '')
       } catch (error) {
         await $.ui.toast(`Augi couldn't record this chat: ${String(error)}`)
       }
@@ -2664,6 +2793,26 @@ export const register: Register = (on, options) => {
     resync($).catch(() => undefined)
 
     return next(e)
+  })
+
+  // Every press and submit in the pane is counted, by the control's name alone: what
+  // was typed and whose note it was on are not kept. A control added later is counted too.
+  on('ui.press', async ($, e, next) => {
+    const ran = await next(e)
+    if (e.plugin === 'augi-ui' && e.requestId === PANE) {
+      await track($, 'press', e.element, e.surface)
+    }
+
+    return ran
+  })
+
+  on('ui.input', async ($, e, next) => {
+    const ran = await next(e)
+    if (e.plugin === 'augi-ui' && e.requestId === PANE) {
+      await track($, 'input', e.element, e.surface)
+    }
+
+    return ran
   })
 
   // What an anchored chat makes goes on its anchor's context: an artifact it publishes,
@@ -3235,6 +3384,11 @@ export const register: Register = (on, options) => {
                     <Text bold>The pane</Text>
                     <Button key="set-openOnStart" plain label={`${mark(settings.openOnStart !== 'no')} open Augi with every new chat`} onPress={() => setOption($, 'openOnStart', settings.openOnStart === 'no' ? 'yes' : 'no')} />
                     <Input key="set-lensPicks" label="lenses to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />
+                    <Button key="set-trackUsage" plain label={`${mark(settings.trackUsage !== 'no')} count which controls I use (kept on this computer only)`} onPress={() => setOption($, 'trackUsage', settings.trackUsage === 'no' ? 'yes' : 'no')} />
+                    <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                      <Button key="usage-report" label="copy my usage report" onPress={() => usageNow($).then(text => $.ui.copy({ text })).then(() => $.ui.toast('Usage report copied. /augi usage prints it in the chat.'))} />
+                      <Button key="usage-clear" plain dimColor label="clear the usage log" onPress={() => $.fs.write(P.usage, '').then(() => $.ui.toast('Usage log cleared.'))} />
+                    </Box>
                     {editorPicker}
                     <Button key="start-over" plain dimColor label="← change the notes folder and run setup again" onPress={() => startOver($)} />
                   </Box>

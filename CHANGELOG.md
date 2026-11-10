@@ -12,6 +12,14 @@ in This chat; the Context card under Anywhere keeps a second list that goes
 into every chat's draft whatever its anchor (`→ everywhere` moves a pin there,
 search hits and recent sessions offer both). See `docs/reference/augi-ui.md`.
 
+**augi-ui: a local usage log.** The pane now counts which of its controls
+you press: one JSON line per press, submit and sent draft in
+`~/.openaugi/usage/augi-ui.jsonl`, naming the control only (never a note, a
+path or what you typed) and never leaving the computer. `/augi usage` prints
+what you used in the last 30 days and what you have never pressed. It is on by
+default; turn it off under Setup → *count which controls I use* or with
+`trackUsage: no`. A control added later is counted automatically.
+
 **augi-ui: a tidier pane.** Card and section titles are text with a small
 `hide` / `show` button at the right, list rows keep their actions lined up at
 the right edge, indentation and spacing come from the layout instead of spaces

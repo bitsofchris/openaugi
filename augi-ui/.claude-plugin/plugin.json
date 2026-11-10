@@ -103,6 +103,16 @@
         "yes",
         "no"
       ]
+    },
+    "trackUsage": {
+      "type": "string",
+      "title": "Count which controls I use",
+      "description": "yes keeps a local log of which pane controls are pressed (names only, never what you typed, and it never leaves this computer); no stops it. /augi usage prints the report.",
+      "default": "yes",
+      "options": [
+        "yes",
+        "no"
+      ]
     }
   }
 }

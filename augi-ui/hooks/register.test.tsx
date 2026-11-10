@@ -2,6 +2,7 @@ import type { On } from 'claude-code'
 import type { Pin } from '../types'
 import { expect, test } from 'claude-code/testing'
 
+import { parseUsage, usageName, usageReport } from './register'
 import { anchorFiles, extraPins, isListedTouch, storedPins, openArgv, shortPath, touchedPin, withTouched } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, withJira } from './register'
 import { addAnswer, addChat, addJournalEntry, anchorFromDraft,anchorArtifacts, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
@@ -32,6 +33,8 @@ const OPTIONS = {
   lensPicks: 'execution-focus, echoes',
   editor: 'obsidian',
   editorCommand: '',
+  // Off here so the tests that count what the pane runs see only that; the usage tests turn it on.
+  trackUsage: 'no',
 }
 configure(resolvePaths(OPTIONS, '/Users/t'))
 
@@ -2017,4 +2020,103 @@ test('with openOnStart no, a new chat does not open the pane', { options: { ...O
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/r', surface: 'terminal', isInteractive: true })
   expect(opened).toBe(0)
+})
+
+test('a control is logged by its name alone: a note, a path or an id in its key is dropped', () => {
+  expect(usageName('draft')).toBe('draft')
+  expect(usageName('card-PMOC - Garden')).toBe('card')
+  expect(usageName('card-sub-PMOC - Garden-Fix the gate')).toBe('card-sub')
+  expect(usageName('pin-open-file-/r/docs/ARCH.md')).toBe('pin-open')
+  expect(usageName('chat-own-session')).toBe('chat')
+  expect(usageName('task-Plant the beds')).toBe('task')
+  expect(usageName('task-new')).toBe('task-new')
+  expect(usageName('pad-save-all')).toBe('pad-save-all')
+  expect(usageName('pad-save-0')).toBe('pad-save')
+  expect(usageName('edit-echoes')).toBe('edit')
+  expect(usageName('edit-context')).toBe('edit-context')
+  // A button added later is logged as written, unless its key looks like a name or a path.
+  expect(usageName('new-button')).toBe('new-button')
+  expect(usageName('Sprinkler Benchmarks')).toBe('other')
+  expect(usageName('/r/docs/ARCH.md')).toBe('other')
+})
+
+test('the usage report counts the last 30 days, names the lenses run, and lists what was never pressed', () => {
+  const now = Date.parse('2022-03-31T12:00:00Z')
+  const log = [
+    JSON.stringify({ at: '2022-01-02T09:00:00.000Z', kind: 'press', what: 'refresh', anchored: false, surface: 'desktop' }),
+    JSON.stringify({ at: '2022-03-30T09:00:00.000Z', kind: 'press', what: 'draft', anchored: true, surface: 'desktop' }),
+    JSON.stringify({ at: '2022-03-30T09:01:00.000Z', kind: 'press', what: 'draft', anchored: true, surface: 'desktop' }),
+    JSON.stringify({ at: '2022-03-30T09:02:00.000Z', kind: 'press', what: 'lens', lens: 'echoes', anchored: true, surface: 'terminal' }),
+    'not a line', '', '{"at": 5}',
+  ].join('\n')
+  const events = parseUsage(log)
+  expect(events.length).toBe(4)
+  const report = usageReport(events, now)
+  expect(report).toContain('last 30 days: 3 events (4 in the log, since 2022-01-02)')
+  expect(report).toMatch(/Used:\n +2 {2}draft\n +1 {2}lens\n/)
+  expect(report).toMatch(/Lenses run:\n +1 {2}echoes/)
+  const never = report.split('Never used')[1] ?? ''
+  expect(never).toContain('copy-draft')
+  // Pressed once, long ago: not in the last 30 days, and not never used either.
+  expect(never).not.toMatch(/\brefresh\b/)
+  expect(never).not.toMatch(/ draft,/)
+  expect(usageReport([], now)).toContain('nothing yet')
+})
+
+test('with the usage log on, a press, a submit and a sent draft each append one line that names the control and nothing of the user\'s', { options: { ...OPTIONS, trackUsage: 'yes' } }, async ($, on) => {
+  const written = new Map<string, string>()
+  const lines: string[] = []
+  on('env.get', () => ({ value: '/Users/t' }))
+  on('command.register', () => ({ value: { command: 'augi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.id', () => ({ value: 'own-session' }))
+  on('clock.now', () => ({ value: Date.parse('2022-03-30T09:00:00Z') }))
+  const store = new Map<string, unknown>()
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.set', (_, e) => {
+    store.set(e.key, e.value)
+    return { value: undefined }
+  })
+  on('ui.toast', () => ({ value: undefined }))
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md'].includes(e.path) || e.path.endsWith('Kanban.md') || written.has(e.path) }))
+  on('fs.read', (_, e) => ({ value: written.get(e.path) ?? (e.path.endsWith('Kanban.md') ? BOARD_TEXT : '') }))
+  on('fs.write', (_, e) => {
+    written.set(e.path, e.text)
+    return { value: undefined }
+  })
+  on('fs.list', () => ({ value: [] }))
+  on('process.run', (_, e) => {
+    if (e.argv[0] === 'sh' && e.argv[e.argv.length - 1] === '/Users/t/.openaugi/usage/augi-ui.jsonl') {
+      lines.push(e.argv[e.argv.length - 2] ?? '')
+    }
+    return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  const filled: string[] = []
+  on('prompt.read', () => ({ value: { text: 'explain the cache', cursor: 0 } }))
+  on('prompt.fill', (_, e) => {
+    filled.push(e.text)
+    return { isFilled: true }
+  })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.press({ key: 'anchor-menu' })
+  await ui.press({ key: 'card-PMOC - Garden' })
+  await ui.input({ key: 'capture-0', text: 'does the secret cache survive?' })
+  await ui.press({ key: 'draft' })
+  await $.prompt.submit({ text: filled[0] ?? '' })
+
+  const events = parseUsage(lines.join('\n'))
+  expect(events.map(one => `${one.kind} ${one.what}`)).toEqual(['press anchor-menu', 'press card', 'input capture', 'press draft', 'sent draft-sent'])
+  expect(events.map(one => one.anchored)).toEqual([false, true, true, true, true])
+  expect(events[0]?.surface).toBe('desktop')
+  expect(events[0]?.at).toBe('2022-03-30T09:00:00.000Z')
+  expect(lines.join('\n')).not.toMatch(/Garden|secret|cache/)
+
+  // /augi usage prints the report from the log file.
+  written.set('/Users/t/.openaugi/usage/augi-ui.jsonl', lines.join('\n'))
+  const said = await $.command.run({ command: 'augi', args: 'usage' })
+  expect(JSON.stringify(said)).toContain('5 events')
+  await ui.unmount()
 })
