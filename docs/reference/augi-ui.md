@@ -57,11 +57,14 @@ note or its Agent Log changed and reads them again if so, so two chats on one
 anchor see each other's questions, pins and tasks without a refresh.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
-chat is attached to: the anchor card, its questions, chats and saved notes, the
-files this chat touched, and the scratchpad. **Anywhere** holds what is not
-tied to one chat: the context
-picker (pull notes, files, links and sessions from anywhere in the notes
-folder), the lenses, and setup.
+chat is attached to: the anchor card, its questions, chats and saved notes, its
+pins, the files this chat touched, and the scratchpad. **Anywhere** holds what
+is not tied to one chat: the context picker (search, and the pins that go into
+every chat), the lenses, and setup.
+
+Both sections and every card fold: the title is a button (`▾` open, `▸`
+folded), and a folded card keeps its count in the title. Lenses and Setup start
+folded, everything else open. The fold state is kept for the session.
 
 - **Anchor** (`a`): a linked card from the board — a project or a task. The
   menu lists each card's linked sub-items (`\t- [ ] [[Child task]]`) indented
@@ -125,11 +128,22 @@ folder), the lenses, and setup.
   status update from the note and Agent Log, shown first and posted as a comment
   only on a yes. A `jira-update.md` lens in the lens folder replaces that
   built-in wording.
-- **Context**: what the next chat is told to read — the anchor's notes, pinned
-  artifacts (listed first), notes, files, links and coding sessions (a
-  collapsed menu pins a recent Claude or Codex session), the context note and
-  board (`m`), and OpenAugi search. An artifact the chat publishes is pinned
-  ticked; one published before an anchor was chosen is pinned when it is.
+- **Context**: what the next chat is told to read. Three things go in without
+  being listed, each a checkbox under Setup → *What goes into every draft*, all
+  on by default: the anchor's human and agent notes, the context note and board
+  (`m`), and a search of the notes with OpenAugi. The Context card names the
+  ones that are on in one dim line.
+- **Pins** come in two scopes. *Pinned to `<anchor>`* (a card in This chat) is
+  the anchor's own list, kept under `## Context` in its Agent Log: artifacts
+  (listed first), notes, files, links and coding sessions. An artifact the chat
+  publishes is pinned ticked; one published before an anchor was chosen is
+  pinned when it is. Paste a link, `[[note]]` or path in that card to pin it to
+  the anchor. *Everywhere* pins (in the Context card, under Anywhere) go into
+  every chat's draft whatever its anchor, and are kept in the plugin's store,
+  not in a note (the newest 50). Paste one in the Context card, press
+  `→ everywhere` on an anchor's pin to move it, or choose `pin everywhere` on a
+  search hit or a recent session (`pin to anchor` is offered beside it when the
+  chat has an anchor). A pin in both lists goes into the draft once.
 - **Draft** (`n`): fills the prompt with that context. Nothing is sent until
   the user presses enter. `⧉ copy it for a new chat` copies the same text instead
   (the prompt box is left alone) to start a fresh chat on the anchor, say a

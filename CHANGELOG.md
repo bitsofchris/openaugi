@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+**augi-ui: every section folds, defaults move to Setup, and pins have two
+scopes.** The two sections and each card in the pane now fold from their
+title. The three things every draft carries (the anchor's notes, the context
+note and board, a search of the notes) are no longer rows in the Context card:
+they are checkboxes under Setup → *What goes into every draft*, and the card
+names the ones that are on in one line. An anchor's pins move to their own card
+in This chat; the Context card under Anywhere keeps a second list that goes
+into every chat's draft whatever its anchor (`→ everywhere` moves a pin there,
+search hits and recent sessions offer both). See `docs/reference/augi-ui.md`.
+
 ## 0.4.3 — 2026-11-09
 
 **Upgrading:** `pip install -U openaugi` (or `uv tool upgrade openaugi`). If

@@ -1,7 +1,8 @@
 import type { On } from 'claude-code'
+import type { Pin } from '../types'
 import { expect, test } from 'claude-code/testing'
 
-import { anchorFiles, isListedTouch, openArgv, shortPath, touchedPin, withTouched } from './register'
+import { anchorFiles, extraPins, isListedTouch, storedPins, openArgv, shortPath, touchedPin, withTouched } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, withJira } from './register'
 import { addAnswer, addChat, addJournalEntry, anchorFromDraft,anchorArtifacts, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, addQuestion, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, pinLink, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, setHidden, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
 
@@ -524,15 +525,21 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
   expect(await ui.find({ key: 'open-trail' })).toBeTruthy()
   expect(await ui.find({ key: 'edit-context' })).toBeFalsy()
   expect(await ui.find({ key: 'about-me' })).toBeFalsy()
+  // What every draft carries is switched under Setup, not listed in the Context card.
+  expect(await ui.find({ key: 'pick-project' })).toBeFalsy()
+  expect(await ui.find({ key: 'openaugi' })).toBeFalsy()
+  expect(await ui.find({ text: 'notes for PMOC - Garden, your overall context, a search of your notes' })).toBeTruthy()
   await ui.press({ key: 'setup-menu' })
   expect(await ui.find({ key: 'edit-context' })).toBeTruthy()
   expect(await ui.find({ key: 'open-board' })).toBeTruthy()
-  await ui.press({ key: 'setup-menu' })
-  // Project context ticks are real checkboxes: pressing one flips it in place.
+  // They are real checkboxes, on by default: pressing one flips it in place.
+  expect((await ui.find({ key: 'openaugi' }))?.text).toMatch(/^\s*☑/)
   expect((await ui.find({ key: 'pick-project' }))?.text).toMatch(/^\s*☑/)
   await ui.press({ key: 'pick-project' })
   expect((await ui.find({ key: 'pick-project' }))?.text).toMatch(/^\s*☐/)
+  expect(await ui.find({ text: 'notes for PMOC - Garden' })).toBeFalsy()
   await ui.press({ key: 'pick-project' })
+  await ui.press({ key: 'setup-menu' })
   await ui.press({ key: 'lens-menu' })
   await ui.press({ key: 'echoes' })
 
@@ -547,7 +554,6 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
   ])
   expect(await ui.find({ key: 'chat-own-session' })).toBeTruthy()
 
-  expect((await ui.find({ key: 'pick-project' }))?.text).toMatch(/^\s*☑/)
   expect(await ui.find({ key: `in-session-${'/Users/t/.claude/projects/-r-garden/new.jsonl'}` })).toBeFalsy()
 
   await ui.input({ key: 'capture-0', text: 'does the cache survive restarts?' })
@@ -779,9 +785,9 @@ test('pin context on an anchor: paste, search, tick, copy a link, unpin, and wha
   expect(pinsNow()).toEqual([{ on: true, kind: 'file', target: '/r/docs/ARCH.md', label: 'ARCH.md' }])
 
   await ui.input({ key: 'pin-search', text: 'sprinkler' })
-  await ui.press({ key: 'hit-Sprinkler Benchmarks' })
+  await ui.press({ key: 'offer-anchor-note-Sprinkler Benchmarks' })
   expect(pinsNow().map(pin => pin.target)).toEqual(['/r/docs/ARCH.md', 'Sprinkler Benchmarks'])
-  expect(await ui.find({ key: 'hit-Sprinkler Benchmarks' })).toBeFalsy()
+  expect(await ui.find({ key: 'offer-anchor-note-Sprinkler Benchmarks' })).toBeFalsy()
   await ui.press({ key: 'pin-link-note-Sprinkler Benchmarks' })
   expect(copied).toEqual(['/v/Notes/Sprinkler Benchmarks.md'])
 
@@ -805,7 +811,54 @@ test('pin context on an anchor: paste, search, tick, copy a link, unpin, and wha
   await $.tool.call({ tool: 'Write', file_path: '/tmp/scratch.md', content: 'x' })
   await $.tool.call({ tool: 'Write', file_path: '/v/AGENT/Slowly Changing Context.md', content: 'x' })
   expect(pinsNow().slice(2)).toEqual([{ on: false, kind: 'note', target: 'New Idea', label: 'New Idea' }])
+
+  // Pins for every chat live in the store, not on the anchor: pasted in the Context card,
+  // or moved there from the anchor. They go into the draft once, and untick and unpin in place.
+  await ui.input({ key: 'all-paste-0', text: '/r/docs/ARCH.md' })
+  expect(store.get('pins')).toEqual([{ on: true, kind: 'file', target: '/r/docs/ARCH.md', label: 'ARCH.md' }])
+  expect(pinsNow().some(pin => pin.target === '/r/docs/ARCH.md')).toBe(false)
+  await ui.press({ key: 'pin-all-note-Sprinkler Benchmarks' })
+  expect(pinsNow().some(pin => pin.target === 'Sprinkler Benchmarks')).toBe(false)
+  expect(storedPins(store.get('pins')).map(pin => pin.target)).toEqual(['/r/docs/ARCH.md', 'Sprinkler Benchmarks'])
+  await ui.press({ key: 'draft' })
+  const last = filled[filled.length - 1] ?? ''
+  expect(last.split('ARCH.md').length).toBe(2)
+  expect(last.split('Sprinkler Benchmarks').length).toBe(2)
+  await ui.press({ key: 'all-tick-file-/r/docs/ARCH.md' })
+  expect(storedPins(store.get('pins'))[0]?.on).toBe(false)
+  await ui.press({ key: 'all-drop-file-/r/docs/ARCH.md' })
+  expect(storedPins(store.get('pins')).map(pin => pin.target)).toEqual(['Sprinkler Benchmarks'])
+
+  // Every card and both sections fold from their title, and open again.
+  for (const [head, inside] of [['head-pinsOpen', 'pin-paste-2'], ['head-contextOpen', 'pin-search'], ['head-anchorOpen', 'anchor-menu'], ['head-padOpen', 'pad-input-0'], ['head-trailOpen', 'chat-own-session']] as const) {
+    expect(await ui.find({ key: inside })).toBeTruthy()
+    await ui.press({ key: head })
+    expect(await ui.find({ key: inside })).toBeFalsy()
+    await ui.press({ key: head })
+    expect(await ui.find({ key: inside })).toBeTruthy()
+  }
+  await ui.press({ key: 'head-chatOpen' })
+  expect(await ui.find({ key: 'head-anchorOpen' })).toBeFalsy()
+  expect(await ui.find({ key: 'pin-search' })).toBeTruthy()
+  await ui.press({ key: 'head-anywhereOpen' })
+  expect(await ui.find({ key: 'pin-search' })).toBeFalsy()
+  expect(await ui.find({ key: 'draft' })).toBeFalsy()
+  expect(await ui.find({ key: 'refresh' })).toBeTruthy()
   await ui.unmount()
+})
+
+test('pins for every chat: the store is read defensively, and a draft adds the ticked ones once, with or without an anchor', () => {
+  const arch: Pin = { on: true, kind: 'file', target: '/r/docs/ARCH.md', label: 'ARCH.md' }
+  const off: Pin = { on: false, kind: 'url', target: 'https://example.com', label: 'example' }
+  expect(storedPins([arch, off, { on: 'yes', kind: 'file', target: 'x', label: 'x' }, { on: true, kind: 'mood', target: 'x', label: 'x' }, null, 'x'])).toEqual([arch, off])
+  expect(storedPins(undefined)).toEqual([])
+  expect(extraPins([], [arch, off], false)).toEqual([arch])
+  expect(extraPins([arch], [arch], true)).toEqual([])
+  expect(extraPins([{ ...arch, on: false }], [arch], true)).toEqual([arch])
+  const none = { aboutMe: false, openAugi: false, project: false }
+  expect(buildDraft([], none, null, '', null, [arch, off]).split('ARCH.md').length).toBe(2)
+  expect(buildDraft([], none, null, '', null, [arch, off]).includes('example.com')).toBe(false)
+  expect(contextItems([], none, null, [arch, off]).map(item => item.key)).toEqual(['in-all-file-/r/docs/ARCH.md'])
 })
 
 test('Next lists the open checkboxes under the Next heading only', async () => {

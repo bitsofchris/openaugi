@@ -41,6 +41,8 @@ export type Swatch = {
   pinPaths: Record<string, string>
   // Notes a pane search found, to pin with a press.
   hits: Pin[]
+  // Pins that go into every chat's draft, whatever its anchor; kept in the store.
+  everywhere: Pin[]
   lenses: Lens[]
   sessions: Session[]
   loadedAt: number
@@ -57,8 +59,16 @@ export type Touched = { session: string; files: TouchedFile[] }
 export type PadEntry = { when: string; text: string }
 export type Picks = { aboutMe: boolean; openAugi: boolean; project: boolean }
 export type View = {
-  anchorsOpen: boolean
+  // The two sections and each card under them, folded or open.
+  chatOpen: boolean
+  anywhereOpen: boolean
+  anchorOpen: boolean
+  trailOpen: boolean
+  pinsOpen: boolean
+  touchedOpen: boolean
+  padOpen: boolean
   contextOpen: boolean
+  anchorsOpen: boolean
   sessionsOpen: boolean
   lensesOpen: boolean
   showHidden: boolean
