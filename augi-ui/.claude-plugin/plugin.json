@@ -1,6 +1,6 @@
 {
   "name": "augi-ui",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "augi-ui, the OpenAugi pane beside your agent chat: anchor on a Kanban project or task, split its work into child chats and track them, pin its context (notes, sessions, artifacts, links), keep today's note in view, run lenses, and keep an Agent Log per anchor. Drafts only; you press enter.",
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -116,6 +116,16 @@
       "type": "string",
       "title": "Open with every new chat",
       "description": "yes opens the Augi pane when a new interactive chat starts; no keeps it closed until you type /augi.",
+      "default": "yes",
+      "options": [
+        "yes",
+        "no"
+      ]
+    },
+    "tellChat": {
+      "type": "string",
+      "title": "Tell each chat its anchor",
+      "description": "yes tells a chat's own model which note it is anchored to and where its Agent Log is, beside your next prompt and out of your sight, so \"update the task note\" needs no path; no keeps the anchor in the pane only.",
       "default": "yes",
       "options": [
         "yes",

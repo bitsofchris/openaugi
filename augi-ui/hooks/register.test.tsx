@@ -5,6 +5,7 @@ import { expect, test } from 'claude-code/testing'
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
 import { folderKey, promptTitle } from './register'
+import { anchorBrief, anchorNews, unanchoredBrief } from './register'
 import { extraPins, isListedTouch, storedPins, openArgv, shortPath, touchedPin, withTouched } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
 import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, removePin, sessionPin, setPinOn, resumeCommand, setDone, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, removeChat, setChatDone, lastActive, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
@@ -1243,7 +1244,7 @@ const taskHooks = (on: On, anchors: [string, string][], notes: Record<string, st
   const transcript = '/Users/t/.claude/projects/-r-garden/own-session.jsonl'
   const written = new Map<string, string>()
   const store = new Map<string, unknown>([['anchors', anchors]])
-  const got = { written, store, transcript, filled: [] as string[], copied: [] as string[], ran: [] as string[][], toasts: [] as string[] }
+  const got = { written, store, transcript, filled: [] as string[], copied: [] as string[], ran: [] as string[][], toasts: [] as string[], beside: [] as string[][] }
   on('env.get', () => ({ value: '/Users/t' }))
   on('command.register', () => ({ value: { command: 'augi' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
@@ -1281,7 +1282,11 @@ const taskHooks = (on: On, anchors: [string, string][], notes: Record<string, st
     got.filled.push(e.text)
     return { isFilled: true }
   })
-  on('prompt.submit', (_, e) => ({ text: e.text }))
+  // What entered beside each prompt for the model, unseen by the user.
+  on('prompt.submit', (_, e) => {
+    got.beside.push([...(e.context ?? [])])
+    return { text: e.text }
+  })
 
   return got
 }
@@ -2123,6 +2128,115 @@ test('a new chat starts on the anchor last chosen in its folder, is filed there 
   await $.prompt.submit({ text: 'and the timer too' })
   expect(got.written.get(trailPath('PMOC - Garden'))).toBe(`${log}\n<!-- an edit made elsewhere -->\n`)
   await ui.unmount()
+})
+
+const GARDEN_ANCHOR = { note: 'PMOC - Garden', notePath: '/v/PMOC - Garden.md', trail: '/v/OpenAugi/Agent-Logs/Agent Log - PMOC - Garden.md' }
+const NOT_TOLD = { session: '', note: '', today: '', again: false }
+
+test('anchorBrief names the note, its Agent Log and today, says where writing goes, and asks for nothing', () => {
+  const text = anchorBrief(GARDEN_ANCHOR, '/v/Daily/2022-03-04.md')
+  expect(text.split('\n')[0]).toBe('Augi: this chat is anchored to [[PMOC - Garden]], the task or project it is working on.')
+  expect(text).toContain('- My note: "/v/PMOC - Garden.md".')
+  expect(text).toContain('- Its Agent Log: "/v/OpenAugi/Agent-Logs/Agent Log - PMOC - Garden.md".')
+  expect(text).toContain('- Today\'s note: "/v/Daily/2022-03-04.md".')
+  expect(text).toMatch(/"the task note"/)
+  expect(text).toMatch(/What you save goes in the Agent Log\. Add to my note only when I ask/)
+  expect(text.split('\n').at(-1)).toMatch(/not a request: write nothing there until I ask/)
+
+  // No daily note: no line for one. A note not found is looked for by name.
+  expect(anchorBrief(GARDEN_ANCHOR)).not.toMatch(/Today/)
+  expect(anchorBrief({ ...GARDEN_ANCHOR, notePath: '' })).toContain('- My note: (find it in my notes by name).')
+  // A change of anchor says which one it replaces.
+  expect(anchorBrief(GARDEN_ANCHOR, '', 'PMOC - Birdhouse').split('\n')[0]).toBe('Augi: this chat is now anchored to [[PMOC - Garden]], no longer to [[PMOC - Birdhouse]].')
+  expect(anchorBrief(GARDEN_ANCHOR, '', 'PMOC - Garden').split('\n')[0]).toMatch(/^Augi: this chat is anchored to/)
+})
+
+test('anchorNews tells a chat its anchor once, again when it changes or after a compaction, and one line for a new day', () => {
+  // Never told, no anchor: nothing to say.
+  expect(anchorNews(NOT_TOLD, 's1', null, '')).toBeNull()
+  const first = anchorNews(NOT_TOLD, 's1', GARDEN_ANCHOR, '/v/Daily/2022-03-04.md')
+  expect(first?.text).toBe(anchorBrief(GARDEN_ANCHOR, '/v/Daily/2022-03-04.md'))
+  expect(first?.next).toEqual({ session: 's1', note: 'PMOC - Garden', today: '/v/Daily/2022-03-04.md', again: false })
+  const knows = first?.next ?? NOT_TOLD
+  // Told already: silence.
+  expect(anchorNews(knows, 's1', GARDEN_ANCHOR, '/v/Daily/2022-03-04.md')).toBeNull()
+  // The day's note moved: one line, not the whole brief. A day with no note yet says nothing.
+  expect(anchorNews(knows, 's1', GARDEN_ANCHOR, '/v/Daily/2022-03-05.md')?.text).toBe('Augi: today\'s note is "/v/Daily/2022-03-05.md".')
+  expect(anchorNews(knows, 's1', GARDEN_ANCHOR, '')).toBeNull()
+  // Another anchor: the brief, naming the one it replaces.
+  const other = { note: 'PMOC - Birdhouse', notePath: '/v/PMOC - Birdhouse.md', trail: '/v/logs/b.md' }
+  expect(anchorNews(knows, 's1', other, '')?.text).toBe(anchorBrief(other, '', 'PMOC - Garden'))
+  // No anchor any more: one line, then silence.
+  const dropped = anchorNews(knows, 's1', null, '')
+  expect(dropped?.text).toBe(unanchoredBrief('PMOC - Garden'))
+  expect(anchorNews(dropped?.next ?? knows, 's1', null, '')).toBeNull()
+  // A compaction may have summarized it away: the whole brief again, as if new.
+  expect(anchorNews({ ...knows, again: true }, 's1', GARDEN_ANCHOR, '/v/Daily/2022-03-04.md')?.text).toBe(first?.text)
+  // What another session was told (before a /clear) is not what this one knows.
+  expect(anchorNews(knows, 's2', GARDEN_ANCHOR, '')?.text).toBe(anchorBrief(GARDEN_ANCHOR))
+  expect(anchorNews(knows, 's2', null, '')).toBeNull()
+})
+
+// What entered beside the prompt `send` submits, for the model: empty when nothing did.
+const sentWith = async (got: { beside: string[][] }, send: () => Promise<unknown>): Promise<string[]> => {
+  const before = got.beside.length
+  await send()
+
+  return got.beside.length > before ? got.beside[got.beside.length - 1] ?? [] : []
+}
+
+test('an anchored chat is told its anchor beside its first prompt, unseen, and again only when the anchor changes', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on)
+  on('session.compact', (_, e) => ({ messages: e.messages }))
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+
+  // A slash command carries nothing, and does not use up the telling.
+  expect(await sentWith(got, () => $.prompt.submit({ text: '/augi usage' }))).toEqual([])
+  // The first prompt carries the brief: the note, its log, and where writing goes.
+  const first = await sentWith(got, () => $.prompt.submit({ text: 'fix the sprinkler valve' }))
+  expect(first).toHaveLength(1)
+  expect(first[0]).toBe(anchorBrief({ note: 'PMOC - Garden', notePath: '/v/PMOC - Garden.md', trail: trailPath('PMOC - Garden') }))
+  // The log it names is there by then: the same prompt filed the chat in it.
+  expect(got.written.has(trailPath('PMOC - Garden'))).toBe(true)
+  // The next prompt carries nothing: the chat knows.
+  expect(await sentWith(got, () => $.prompt.submit({ text: 'and the timer too' }))).toEqual([])
+
+  // Another anchor picked in the pane: the next prompt says so, once.
+  await ui.press({ key: 'anchor-menu' })
+  await ui.press({ key: 'card-sub-PMOC - Garden-PMOC - Birdhouse' })
+  const moved = await sentWith(got, () => $.prompt.submit({ text: 'now the birdhouse' }))
+  expect(moved).toEqual([anchorBrief({ note: 'PMOC - Birdhouse', notePath: '/v/PMOC - Birdhouse.md', trail: trailPath('PMOC - Birdhouse') }, '', 'PMOC - Garden')])
+  expect(await sentWith(got, () => $.prompt.submit({ text: 'paint it' }))).toEqual([])
+
+  // A compaction may drop it from what the model reads: said again, in full.
+  await $.session.compact({ trigger: 'manual', messages: [{ role: 'user', text: 'where the sprinkler leaks', toolUses: [], toolResults: [] }] } as never)
+  expect((await sentWith(got, () => $.prompt.submit({ text: 'where were we' })))[0]).toMatch(/^Augi: this chat is anchored to \[\[PMOC - Birdhouse\]\]/)
+  expect(await sentWith(got, () => $.prompt.submit({ text: 'right' }))).toEqual([])
+
+  // No anchor, by choice: one line, then nothing.
+  await ui.press({ key: 'anchor-menu' })
+  await ui.press({ key: 'anchor-clear' })
+  expect(await sentWith(got, () => $.prompt.submit({ text: 'something else' }))).toEqual([unanchoredBrief('PMOC - Birdhouse')])
+  expect(await sentWith(got, () => $.prompt.submit({ text: 'more of it' }))).toEqual([])
+  await ui.unmount()
+})
+
+test('a chat with no anchor carries nothing, and a pasted draft that anchors it carries the brief with it', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on, [])
+  await $.command.run({ command: 'augi', args: '' })
+  // No anchor in this folder: nothing beside the prompt.
+  expect(await sentWith(got, () => $.prompt.submit({ text: 'hello' }))).toEqual([])
+  // A draft pasted from another chat anchors this one, and the same prompt carries the brief.
+  const draft = buildDraft([], { aboutMe: false, openAugi: false, project: true, today: false }, null, 'prune the roses', { note: 'PMOC - Garden', notePath: '/v/PMOC - Garden.md', trail: trailPath('PMOC - Garden') })
+  expect((await sentWith(got, () => $.prompt.submit({ text: draft })))[0]).toMatch(/^Augi: this chat is anchored to \[\[PMOC - Garden\]\]/)
+  expect(anchorOf(got.store, 'fresh')).toBe('PMOC - Garden')
+})
+
+test('tellChat: no keeps the anchor out of the chat', { options: { ...OPTIONS, tellChat: 'no' } }, async ($, on) => {
+  const got = inheritHooks(on)
+  await $.command.run({ command: 'augi', args: '' })
+  expect(await sentWith(got, () => $.prompt.submit({ text: 'fix the sprinkler valve' }))).toEqual([])
 })
 
 test('keep confirms a carried-over anchor; change opens the menu; no anchor sticks for the session', { options: OPTIONS }, async ($, on) => {

@@ -47,6 +47,7 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `jiraServer` | Optional. The Jira MCP server's name as `/mcp` lists it; empty looks for a likely one | — |
 | `lensPicks` | Lenses listed first, comma separated; empty lists all | — |
 | `openOnStart` | `yes` opens the pane when a new interactive chat starts; `no` keeps it closed until `/augi` | `yes` |
+| `tellChat` | `yes` tells each chat's own model its anchor (the note, its Agent Log, today's note) beside your next prompt, so "update the task note" needs no path; `no` keeps the anchor in the pane only | `yes` |
 
 Each missing file can be created as a starter, pointed at an existing note, or
 skipped. Starters are never written over an existing file.
@@ -106,7 +107,22 @@ are `dimColor`, and the one primary button is the draft.
   before, so a chat opened and abandoned leaves nothing there. Every anchored
   chat is titled in the log by its first prompt: a pane draft's lens and
   instruction, else the prompt's first line (a slash command titles nothing).
-  Choosing an anchor by hand records the chat at once, as `chat` until then. The card shows
+  Choosing an anchor by hand records the chat at once, as `chat` until then.
+  **The chat itself knows its anchor.** The pane's state is not something the
+  model can read, so the plugin says it: the first prompt sent on an anchor
+  carries a short block beside it for the model, not shown in the chat, naming
+  the note and its path, the Agent Log's path, today's note when there is one,
+  and the rule for writing (what the agent saves goes in the Agent Log; the
+  user's note gets a dated Journal entry only when they ask). After that
+  "update the task note", "log this" or "save this to the task" need no path.
+  It is sent once, and again only when something changed: the whole block for
+  another anchor or after a compaction (which may have summarized it away), one
+  line when the day's note is a new one, and one line when the anchor is
+  cleared. A slash command carries nothing. It goes beside a prompt, not into
+  the system prompt, because a chat's system prompt stays as first sent and
+  would not follow a change of anchor. It reads the session's stored anchor, so
+  it works with the pane closed. `tellChat: no` (⚙️ Setup, *tell each chat its
+  anchor*) turns it off. The card shows
   only the links (note, Agent Log, Jira; pins are in their own card below, not
   repeated here) until `▸ outcome and next (N)`
   is opened: then the card's detail, the note's `🎯` outcome, and its open

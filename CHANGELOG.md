@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**augi-ui 0.14.0: a chat knows its anchor.** Until now only a prompt drafted
+in the pane told the chat which note it was working on; an anchor picked or
+carried over in the pane was invisible to the model, so "update the task
+note" made it search or guess. Now the first prompt you send on an anchor
+carries a short block for the model, out of your sight: the note and its
+path, its Agent Log, today's note, and where writing goes (the Agent Log; your
+note's Journal only when you ask). It is sent once and again only when the
+anchor changes, after a compaction, or when the day's note is a new one. It
+asks for nothing by itself. Turn it off with `tellChat: no` (⚙️ Setup, *tell
+each chat its anchor*).
+
 The augi-ui entries below ship together as **augi-ui 0.13.0**
 (`/plugin update augi-ui`). Two things to do once after updating: if ⚙️ Setup
 shows `✗ task template`, press `use the current template`; and set a

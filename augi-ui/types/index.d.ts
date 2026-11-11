@@ -111,10 +111,14 @@ export type JustMade = { note: string; path: string; jira: string; where: string
 // chat in its folder: empty once the user keeps or changes it or the chat is filed.
 // `named` is `<session>|<anchor>` once this chat is in that anchor's log under a real title.
 export type Inherited = { session: string; note: string; named: string }
+// What this chat's model was last told about its anchor, beside one of the user's prompts:
+// the session it was told in, the anchor (empty for none), today's note's path (empty for
+// none), and `again` once a compaction may have dropped it from what the model reads.
+export type Told = { session: string; note: string; today: string; again: boolean }
 // The session id the pane last opened by itself for; `-` before any.
 export type Opened = { session: string }
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; touched: Shaped<Touched>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string>; inherited: Shaped<Inherited> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; touched: Shaped<Touched>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string>; inherited: Shaped<Inherited>; told: Shaped<Told> }
   }
 }

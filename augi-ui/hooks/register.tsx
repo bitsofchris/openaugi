@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren, ToolCallResult } from 'claude-code'
 
-import type { Card, Chat, Inherited, JustMade, Lens, Made, MadeArtifact, Opened, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Today, Touched, TouchedFile, Trail, View } from '../types'
+import type { Card, Chat, Inherited, JustMade, Lens, Made, MadeArtifact, Opened, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Today, Told, Touched, TouchedFile, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -36,6 +36,8 @@ export type Options = {
   jiraServer: string
   // `no` stops the usage log; anything else keeps it.
   trackUsage: string
+  // `no` keeps the anchor out of the chat's own context; anything else tells the chat.
+  tellChat: string
 }
 export type Paths = {
   home: string
@@ -612,6 +614,11 @@ const opened = atom({ plugin: 'augi-ui', key: 'opened' } as const, { session: '-
 // session and anchor whose log already has this chat under a real title.
 const NOT_INHERITED: Inherited = { session: '', note: '', named: '' }
 const inherited = atom({ plugin: 'augi-ui', key: 'inherited' } as const, NOT_INHERITED, { shape: 'inherited-1' })
+
+// What this chat's model was last told about its anchor, so it is told once and again only
+// when that changes. `again` is set by a compaction, which may have summarized it away.
+const NOT_TOLD: Told = { session: '', note: '', today: '', again: false }
+const told = atom({ plugin: 'augi-ui', key: 'told' } as const, NOT_TOLD, { shape: 'told-1' })
 
 // The task this chat just made: session state, cleared by its dismiss and on clear or resume.
 const NO_TASK: JustMade = { note: '', path: '', jira: '', where: '' }
@@ -1772,6 +1779,49 @@ export const buildDraft = (
   return lines.join('\n')
 }
 
+// What an anchored chat's model is told beside the user's next prompt, unseen by them:
+// which note the chat is on and where its writing goes, so "update the task note" needs
+// no path. `was` is the anchor it was told before. It says where; it asks for nothing.
+export const anchorBrief = (anchor: Anchor, today = '', was = ''): string => {
+  const where = anchor.notePath ? `"${anchor.notePath}"` : '(find it in my notes by name)'
+  const lines = [
+    was && was !== anchor.note
+      ? `Augi: this chat is now anchored to [[${anchor.note}]], no longer to [[${was}]].`
+      : `Augi: this chat is anchored to [[${anchor.note}]], the task or project it is working on.`,
+    `- My note: ${where}. It is mine: its outcome, what is next and its Journal.`,
+    `- Its Agent Log: "${anchor.trail}". Yours to write: links and decisions worth keeping under ## Context (one line each, with why), open questions under ## Questions, and "- [[<its name>]]" under ## Saved for a note you write for this work.`,
+  ]
+  if (today) {
+    lines.push(`- Today's note: "${today}".`)
+  }
+  lines.push('When I say "the task note", "the project note", "log this" or "save this to the task" without naming a file, I mean these. What you save goes in the Agent Log. Add to my note only when I ask for that ("update the task note"), as a dated entry at the top of its Journal: "### YYYY-MM-DD — <what happened>".')
+  lines.push('This says where things go. It is not a request: write nothing there until I ask.')
+
+  return lines.join('\n')
+}
+
+// The same, for a chat whose anchor was taken away after it was told one.
+export const unanchoredBrief = (was: string): string =>
+  `Augi: this chat is no longer anchored to [[${was}]]. Leave its note and its Agent Log alone unless I name them.`
+
+// And for a chat that already knows its anchor, when the day's note is another one.
+export const todayBrief = (today: string): string => `Augi: today's note is "${today}".`
+
+// What to tell the chat now, given what it was told (`before`): the whole brief for a new
+// anchor or after a compaction, one line when only today's note moved, null for no news.
+export const anchorNews = (before: Told, session: string, anchor: Anchor | null, today: string): { text: string; next: Told } | null => {
+  const last = before.session === session ? before : { session, note: '', today: '', again: false }
+  if (!anchor) {
+    return last.note ? { text: unanchoredBrief(last.note), next: { session, note: '', today: '', again: false } } : null
+  }
+  const next = { session, note: anchor.note, today, again: false }
+  if (last.note !== anchor.note || last.again) {
+    return { text: anchorBrief(anchor, today, last.note), next }
+  }
+
+  return today && today !== last.today ? { text: todayBrief(today), next } : null
+}
+
 // The anchor a draft names on its `- Project [[<note>]]:` line, exactly as written;
 // null for text that isn't ours or names no anchor.
 export const anchorFromDraft = (text: string): string | null => {
@@ -2823,6 +2873,46 @@ async function nameChat($: EngineInterface, drafted: string | null, text: string
   await update($, inherited, () => ({ session: '', note: '', named: key }))
 }
 
+// The path of today's note when there is one, read fresh enough for a prompt: the pane's
+// own copy once it has loaded, else worked out from the settings.
+async function todayPathNow($: EngineInterface): Promise<string> {
+  if ((await read($, swatch)).loadedAt > 0) {
+    await resyncToday($)
+    const { today } = await read($, swatch)
+
+    return today.exists ? today.path : ''
+  }
+  const today = await todayNow($, dailyPattern(P.daily, P.daily ? '' : await readOr($, P.obsidianDaily), P.daily ? '' : await readOr($, P.obsidianApp)))
+
+  return today.exists ? today.path : ''
+}
+
+// What this chat's model should hear about its anchor with the prompt being sent, or null
+// when it already knows. The session's stored anchor decides, so a closed pane tells too.
+async function tellNow($: EngineInterface): Promise<{ text: string; next: Told } | null> {
+  if (settings.tellChat === 'no') {
+    return null
+  }
+  const id = await $.session.id()
+  if (!id) {
+    return null
+  }
+  const note = await sessionAnchor($)
+  const before = await read($, told)
+  if (!note) {
+    return anchorNews(before, id, null, '')
+  }
+  const today = await todayPathNow($)
+  // Nothing new: the note is not looked up again.
+  if (!anchorNews(before, id, { note, notePath: '', trail: '' }, today)) {
+    return null
+  }
+  const shown = await read($, swatch)
+  const notePath = shown.anchor?.note === note && shown.notePath ? shown.notePath : await notePathOf($, note)
+
+  return anchorNews(before, id, { note, notePath, trail: trailPath(note) }, today)
+}
+
 // Remembers what is typed in the scratchpad's field, unsent.
 async function typePad($: EngineInterface, text: string): Promise<void> {
   typedPad = text
@@ -3319,10 +3409,38 @@ export const register: Register = (on, options) => {
       await $.ui.toast(`Augi couldn't record this chat: ${String(error)}`)
     }
 
+    // The chat's own model learns its anchor here: a block beside the prompt, not shown
+    // to the user, sent once and again only when the anchor changes. The system prompt
+    // would be the wrong place: a thread's stays as first sent. Never beside a slash
+    // command or a prompt the user did not type.
+    let news: Awaited<ReturnType<typeof tellNow>> = null
+    if (!e.command && !e.isMeta && !e.text.trim().startsWith('/')) {
+      news = await tellNow($).catch(() => null)
+    }
+
     // Sending a prompt is a good moment to catch up with what other chats wrote.
     resync($).catch(() => undefined)
 
-    return next(e)
+    if (!news) {
+      return next(e)
+    }
+    const entered = await next({ ...e, context: [...(e.context ?? []), news.text] })
+    if (!entered.drop) {
+      const said = news.next
+      await update($, told, () => said)
+    }
+
+    return entered
+  })
+
+  // A compaction may summarize the anchor away: the next prompt says it again.
+  on('session.compact', async ($, e, next) => {
+    const compacted = await next(e)
+    if (!e.agentId && !compacted.skip) {
+      await update($, told, old => ({ ...old, again: true }))
+    }
+
+    return compacted
   })
 
   // Every press and submit in the pane is counted, by the control's name alone: what
@@ -3962,6 +4080,7 @@ export const register: Register = (on, options) => {
                     <Text bold>The pane</Text>
                     <Button key="set-openOnStart" plain label={`${mark(settings.openOnStart !== 'no')} open Augi with every new chat`} onPress={() => setOption($, 'openOnStart', settings.openOnStart === 'no' ? 'yes' : 'no')} />
                     <Input key="set-lensPicks" label="lenses to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />
+                    <Button key="set-tellChat" plain label={`${mark(settings.tellChat !== 'no')} tell each chat its anchor (so "update the task note" needs no path)`} onPress={() => setOption($, 'tellChat', settings.tellChat === 'no' ? 'yes' : 'no')} />
                     <Button key="set-trackUsage" plain label={`${mark(settings.trackUsage !== 'no')} count which controls I use (kept on this computer only)`} onPress={() => setOption($, 'trackUsage', settings.trackUsage === 'no' ? 'yes' : 'no')} />
                     <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                       <Button key="usage-report" label="copy my usage report" onPress={() => usageNow($).then(text => $.ui.copy({ text })).then(() => $.ui.toast('Usage report copied. /augi usage prints it in the chat.'))} />
