@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+**augi-ui 0.15.0: a smaller pane.** Three things added in 0.13.0 turned out
+not to earn their room and are gone. The **Chats on `<anchor>`** card (the
+list of chats, `done`, `reopen`, `→ task`, and the agent's questions and saved
+notes under it): chats are still filed in the anchor's Agent Log, which is
+where to read them. `＋ child chat` and both `copy … for a new chat` buttons:
+a new chat in the folder already starts on the anchor and knows its task
+note, so there is one way to draft, `💬 draft a prompt with this context`.
+And in both pin lists the name now opens the pin (a session copies its resume
+command) while the box in front of it is the tick; the `open` button is gone
+and `✕ unpin` stays. Nothing in the notes folder changes shape: an Agent Log
+keeps its `## Chats`, `## Questions` and `## Saved` sections.
+
+**augi-ui: `＋ new task` moves the chat onto the new task.** A standalone task
+is the chat starting something of its own, so the task becomes the chat's
+anchor as it is made and the draft button carries its context at once; before,
+the chat stayed on the old anchor until `anchor on it` was pressed. `＋ sub-task`
+is unchanged: the chat stays on the anchor the sub-task belongs to.
+
 **augi-ui 0.14.0: a chat knows its anchor.** Until now only a prompt drafted
 in the pane told the chat which note it was working on; an anchor picked or
 carried over in the pane was invisible to the model, so "update the task
@@ -26,16 +44,12 @@ an existing vault gets it from `src/openaugi/templates/lenses/`), run from
 the lens list like any other.
 
 **augi-ui: chats are free, tasks are earned.** Splitting a task into parallel
-chats used to mean a note, a board line and an anchor switch for each. Now:
-`＋ child chat` on the anchor takes a one-line goal and copies a draft for a
-new chat; nothing is written, and once sent that chat is listed on the anchor
-under its goal. The card that listed chats is now **Chats on `<anchor>`**: one
-row per open chat with its goal and when it was last active, `done` to fold
-it away, and `→ task` to turn a chat that outgrew its session into a task in
-one press (the note, the line under the anchor's card, its own Agent Log, and
-the chat moved there and anchored on it). In the Agent Log a finished chat is
-now marked `(done)`; logs that say `(hidden)` read the same. `＋ sub-task` and
-`＋ new task` are unchanged.
+chats used to mean a note, a board line and an anchor switch for each. Now a
+chat on the anchor is enough: nothing is written for it but a line in the
+anchor's Agent Log, titled by its first prompt. In the log a finished chat is
+marked `(done)`; logs that say `(hidden)` read the same. `＋ sub-task` and
+`＋ new task` are unchanged. (0.13.0 also shipped a `＋ child chat` button and
+a **Chats on `<anchor>`** card with `done` and `→ task`; 0.15.0 removed them.)
 
 **augi-ui: a new chat starts on your last anchor.** Opening a chat no longer
 begins with picking an anchor: it starts on the one last chosen in that

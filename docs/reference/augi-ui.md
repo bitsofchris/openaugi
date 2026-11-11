@@ -1,6 +1,6 @@
 ---
 name: augi-ui
-description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, split its work into child chats and track them, pick the context a chat gets, keep today's note in view, run lenses, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
+description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, tell the chat which note it is on, pick the context a chat gets, keep today's note in view, run lenses, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
 ---
 
 # augi-ui — the pane beside your agent chat
@@ -62,10 +62,10 @@ reconnects does not reopen a pane you closed, and a headless run or a phone
 joining opens nothing. An open pane follows its anchor's files: every ten
 seconds, and when a prompt is sent, it checks whether the board, the anchor's
 note or its Agent Log changed and reads them again if so, so two chats on one
-anchor see each other's questions, pins and tasks without a refresh.
+anchor see each other's pins and tasks without a refresh.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
-chat is attached to: the anchor card, its chats, questions and saved notes, its
+chat is attached to: the anchor card, its
 pins, the files this chat touched, and the scratchpad. **Always** holds what
 is not tied to one chat: the You card (the season line from the context note,
 `✏️ my context`, `📋 the board` and today's note: see **Today** below), the
@@ -131,32 +131,14 @@ are `dimColor`, and the one primary button is the draft.
   parent/child story: the child's `Up:` line points back. A `jira:` key in the
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note
   you write, `k` the Agent Log.
-- **Chats, child chats and tasks: chats are free, tasks are earned.** A piece
-  of an anchor's work gets a chat, not a note; a chat becomes a task only when
-  it has outgrown a chat. Three steps, each one press:
-  - `＋ child chat` (Anchor card, with an anchor) asks for the chat's goal in
-    one line and copies a draft for a new chat: the anchor's context with the
-    goal as the instruction. The pane starts no session and writes nothing;
-    paste the draft into a new chat and send it. That chat is then anchored on
-    the same anchor and listed under it with the goal as its title.
-  - **`🌱 Chats on <anchor>`** (its own card) is the list of every open chat on
-    the anchor: its goal (its first prompt, or the goal it was started with),
-    `(this chat)` on the row of the chat you are in, and when it was last
-    active (its transcript's time when that is on this computer, the newest
-    twelve followed on the ten-second sync; else when it was filed). Pressing
-    a row copies `claude --resume <id>`. `done` folds a chat under
-    `▸ done chats (N)`, where `reopen` brings it back. In the Agent Log a
-    chat is one line under `## Chats`, a finished one marked `(done)` (a log
-    written while that was called `(hidden)` reads the same).
-  - `→ task` on a chat's row makes that chat a task of the anchor: the title
-    field opens with the chat's goal, and Enter writes the note (`Up:` the
-    anchor), a linked sub-item under the anchor's card, and the task's own
-    Agent Log with the anchor and the chat's transcript pinned. The chat's
-    line moves from the anchor's log to the task's, and the chat is anchored
-    on the task from then on: its own pane follows on its next sync, and when
-    it is this chat the pane moves at once.
-  `＋ sub-task` and `＋ new task` (below) stay for work known to be a task from
-  the start.
+- **Chats.** A piece of an anchor's work gets a chat, not a note. A new chat
+  needs no button: open one in the same folder and it starts on the anchor, is
+  filed in the Agent Log under `## Chats` with its first prompt as its title,
+  and its model is told the anchor. The pane keeps no list of those chats: the
+  Agent Log is the record (`k` opens it), and the `overview` lens reads it.
+  A line there is `- <when> · <title> · \`<id>\``; one ending in `(done)` (or
+  the older `(hidden)`) reads as finished, which is the agent's or the user's
+  to write.
 - **New task** (two buttons in the Anchor card): `＋ new task` (always) and
   `＋ sub-task of <anchor>` (with an anchor). No field that makes a file is open
   until one is pressed: it opens a title field and `cancel`; an empty title or
@@ -174,15 +156,17 @@ are `dimColor`, and the one primary button is the draft.
   sub-item gets it beside it under the same card; an anchor not on the board
   gets a top-level card at the end of the `taskColumn` setting's column, else the first, and the toast says
   which), and the anchor pinned, ticked, in the child's Agent Log so the two
-  share context. Either way this chat's transcript is pinned there too, the
-  board is read back into the pane, and **the chat's anchor and prompt box are
-  left alone**. A `✓ just made` row says where on the board it went and
+  share context. Either way this chat's transcript is pinned there too and the
+  board is read back into the pane. **A new task moves the chat onto it**: it
+  is this chat starting something of its own, so the task becomes the chat's
+  anchor (and the folder's, for the next new chat), the chat is filed in its
+  Agent Log, and the next draft carries its context. **A sub-task leaves the
+  chat on its anchor**: it is a piece of that work. The prompt box is left
+  alone either way. A `✓ just made` row says where on the board it went and
   offers: `open` (the note in the editor), `open the board`, `define here` (an unsent draft in this chat's box asking it to fill
   in the note's Outcome and Verify and the Agent Log's `## Context`, and with
   Jira on and no key typed to find the task's issue; a half-typed prompt goes to
-  the clipboard first), `copy for a new chat` (a context draft whose project
-  line names the new task, so pasting it into a fresh chat anchors that chat on
-  it), `anchor on it`, and `dismiss`. The row is this chat's: `/clear` and a
+  the clipboard first), `anchor on it` (for a sub-task; a new task already is the anchor), and `dismiss`. The row is this chat's: `/clear` and a
   resume drop it. It never writes over a note that already exists.
   **The template.** The notes folder's own `OpenAugi/AGENT/templates/Task.md`
   wins over the built-in one, so a folder set up before the template changed
@@ -243,21 +227,21 @@ are `dimColor`, and the one primary button is the draft.
   not in a note (the newest 50). Paste one in the Context card, or choose
   `pin everywhere` on a search hit or a recent session (`pin to anchor` is
   offered beside it when the chat has an anchor). A pin in both lists goes into
-  the draft once. A pin row has two actions, `open` and `✕ unpin`; pressing the
-  pin itself switches its tick, and the card says what the tick means (☑ goes
-  into drafts, ☐ is a link only).
+  the draft once. A pin row is its box, its name and `✕ unpin`: pressing the
+  name opens the pin (a session copies its resume command), pressing the box
+  switches its tick, and the card says what the tick means (☑ goes into
+  drafts, ☐ is a link only).
 - **Draft** (`n`): fills the prompt with that context. Nothing is sent until
-  the user presses enter. `⧉ copy it for a new chat` copies the same text instead
-  (the prompt box is left alone) to start a fresh chat on the anchor, say a
-  manager chat that reads the Agent Log's list of every chat on it. The draft's
+  the user presses enter. It is the one way to draft: the context is that of
+  the chat's anchor: a new task just made already is the anchor, a sub-task is one `anchor on it` away. The draft's
   `- Project [[<note>]]:` line names the anchor, so when it is sent in a chat
   with no anchor, that chat is anchored on it first and lands in the same Agent
   Log; a chat that already has an anchor keeps its own. A draft with the
   project context unticked names no anchor and attaches nothing.
 - **Questions**: the pane has one place to type a thought, the scratchpad
-  (below). Questions an agent left under `## Questions` in the Agent Log are
-  still listed in the `Chats on <anchor>` card, under its chats: pressing one drafts it as the instruction,
-  `done` ticks it. The pane itself no longer writes that section.
+  (below), and `→ ask` there drafts an entry as the instruction. Questions an
+  agent left under `## Questions` in the Agent Log stay in the log (`k` opens
+  it); the pane neither lists nor writes that section.
 - **Lenses (saved prompts)** (`l`): run a lens with the same context; `+ new lens`
   takes a name, writes a skeleton file in the lens folder (never over one that's
   there) and opens it in your editor to paste the prompt.

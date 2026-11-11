@@ -46,11 +46,6 @@ export type Swatch = {
   taskTemplate: 'built-in' | 'yours' | 'old'
   today: Today
   trail: Trail
-  // The anchor's open chats whose transcripts are on this computer, by chat id: the file,
-  // and when it was last written. `seenAt` is when those were read.
-  chatFiles: Record<string, string>
-  chatSeen: Record<string, number>
-  seenAt: number
   // Where each pinned note was found, by name.
   pinPaths: Record<string, string>
   // Notes a pane search found, to pin with a press.
@@ -78,7 +73,6 @@ export type View = {
   chatOpen: boolean
   anywhereOpen: boolean
   anchorOpen: boolean
-  trailOpen: boolean
   pinsOpen: boolean
   touchedOpen: boolean
   padOpen: boolean
@@ -88,19 +82,14 @@ export type View = {
   anchorsOpen: boolean
   sessionsOpen: boolean
   lensesOpen: boolean
-  // The finished chats of the anchor, folded away by default.
-  chatsDoneOpen: boolean
   setupOpen: boolean
   inOpen: boolean
-  doneOpen: boolean
   // The Anchor card's detail, outcome and open tasks, folded away by default.
   detailsOpen: boolean
   // The Files card lists every touched file, not just the newest five.
   filesOpen: boolean
   // Which field is open in the Anchor card: none, a standalone task, or a sub-task of the anchor.
-  // `child` asks for a child chat's goal; `promote` turns the chat `promote` into a task.
-  taskMode: '' | 'new' | 'sub' | 'child' | 'promote'
-  promote: string
+  taskMode: '' | 'new' | 'sub'
   // How many lines the You card has logged to today's note this session: it empties the log field after each.
   logged: number
 }

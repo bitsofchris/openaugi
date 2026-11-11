@@ -125,13 +125,13 @@ export type UsageEvent = { at: string; kind: 'press' | 'input' | 'sent'; what: s
 
 // Keys that end in something of the user's: `card-<note>`, `pin-open-<kind>-<target>`.
 const USAGE_PREFIXES = [
-  'card-sub', 'card', 'task', 'ask', 'done', 'reopen',
-  'saved', 'chat', 'chat-task', 'chat-done', 'chat-reopen', 'pin-tick', 'pin-open', 'pin-drop', 'pin-paste', 'touched-open', 'touched-pin',
+  'card-sub', 'card', 'task',
+  'pin-tick', 'pin-open', 'pin-drop', 'pin-paste', 'touched-open', 'touched-pin',
   'pad-input', 'pad-save', 'pad-ask', 'pad-today', 'pad-drop', 'today-log', 'all-tick', 'all-open', 'all-drop', 'all-paste', 'offer-anchor', 'offer-all',
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
 // Whole keys that only look like one of those.
-const USAGE_WHOLE = ['task-new', 'task-sub', 'task-child', 'task-cancel', 'task-title-new', 'task-title-sub', 'task-title-child', 'task-title-promote', 'pad-save-all', 'edit-context']
+const USAGE_WHOLE = ['task-new', 'task-sub', 'task-cancel', 'task-title-new', 'task-title-sub', 'pad-save-all', 'edit-context']
 
 // A control's name for the log. A key nobody listed is logged as written unless it
 // looks like it carries a name or a path, so a new button is tracked without a change here.
@@ -151,16 +151,15 @@ export const usageName = (element: string): string => {
 // tests/test_augi_ui_usage.py reads this file's Button and Input keys and fails when one is missing here.
 export const USAGE_FEATURES = [
   'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'open-trail', 'anchor-details', 'task',
-  'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-child', 'task-title-new', 'task-title-sub', 'task-title-child', 'task-title-promote', 'task-cancel',
-  'made-open', 'made-board', 'made-define', 'made-copy', 'made-anchor', 'made-dismiss', 'template-update',
-  'ask', 'done', 'show-done', 'reopen', 'saved', 'chat', 'chat-task', 'chat-done', 'chat-reopen', 'chats-done',
+  'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
+  'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss', 'template-update',
   'pin-tick', 'pin-open', 'pin-drop', 'pin-paste',
   'touched-open', 'touched-pin', 'files-all', 'pad-input', 'pad-save', 'pad-ask', 'pad-today', 'pad-drop', 'pad-save-all',
   'today-log', 'today-open', 'today-make', 'pick-today',
-  'all-tick', 'all-open', 'all-drop', 'all-paste', 'pin-search', 'offer-anchor', 'offer-all', 'hits-clear', 'sessions-menu', 'draft', 'copy-draft', 'draft-sent',
+  'all-tick', 'all-open', 'all-drop', 'all-paste', 'pin-search', 'offer-anchor', 'offer-all', 'hits-clear', 'sessions-menu', 'draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
-  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-trailOpen', 'head-pinsOpen', 'head-touchedOpen', 'head-padOpen', 'head-youOpen', 'head-contextOpen',
+  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-pinsOpen', 'head-touchedOpen', 'head-padOpen', 'head-youOpen', 'head-contextOpen',
 ]
 
 // The log's lines as events; a line that is not one is skipped.
@@ -558,9 +557,6 @@ const swatch = atom(
     taskTemplate: 'built-in',
     today: NO_TODAY,
     trail: EMPTY_TRAIL,
-    chatFiles: {},
-    chatSeen: {},
-    seenAt: 0,
     pinPaths: {},
     hits: [],
     everywhere: [],
@@ -571,7 +567,7 @@ const swatch = atom(
   { shape: 'swatch-18' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
-const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, trailOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true, contextOpen: true }
+const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true, contextOpen: true }
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
   { aboutMe: true, openAugi: true, project: true, today: true } as Picks,
@@ -579,7 +575,7 @@ const picks = atom(
 )
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
-  { ...CARDS_OPEN, anchorsOpen: false, sessionsOpen: false, lensesOpen: false, chatsDoneOpen: false, setupOpen: false, inOpen: true, doneOpen: false, detailsOpen: false, filesOpen: false, taskMode: '', promote: '', logged: 0 } as View,
+  { ...CARDS_OPEN, anchorsOpen: false, sessionsOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, filesOpen: false, taskMode: '', logged: 0 } as View,
   { shape: 'view-12' },
 )
 const made = atom(
@@ -1286,19 +1282,6 @@ export const parseTrail = (text: string): Trail => {
   return { questions, chats, saved, pins }
 }
 
-const questionLine = (one: Question): string => `- [${one.done ? 'x' : ' '}] ${one.when} · ${one.text.replace(/\s+/g, ' ').trim()}`
-
-// Ticks a question done, or opens it again.
-export const setDone = (text: string, one: Question, done: boolean): string =>
-  text
-    .split('\n')
-    .map(line => {
-      const found = line.match(QUESTION_LINE)
-
-      return found && found[2] === one.when && found[3] === one.text ? questionLine({ ...one, done }) : line
-    })
-    .join('\n')
-
 // ## Context lines: `- [x] [[Note]]` for a note, `- [ ] kind: \`target\` · label` for the rest.
 const PIN_LINE = /^- \[([ x])\] (?:\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|(file|session|artifact|url): `([^`]+)`)(?: · (.*))?\s*$/
 
@@ -1519,34 +1502,6 @@ export const addChat = (text: string, chat: Chat): string => {
   lines.splice(at + 2, 0, chatLine(chat))
 
   return lines.join('\n')
-}
-
-// Marks a chat finished, or open again; its line stays where it is.
-export const setChatDone = (text: string, id: string, done: boolean): string =>
-  text
-    .split('\n')
-    .map(line => {
-      const found = line.match(CHAT_LINE)
-
-      return found && found[3] === id ? chatLine({ when: found[1] ?? '', title: found[2] ?? '', id, done }) : line
-    })
-    .join('\n')
-
-// Takes a chat's line out of the log (it moved to another anchor's); every other line stays.
-export const removeChat = (text: string, id: string): string =>
-  text
-    .split('\n')
-    .filter(line => line.match(CHAT_LINE)?.[3] !== id)
-    .join('\n')
-
-// When a chat was last active, short: the time today, else the month and day. Empty when unknown.
-export const lastActive = (mtimeMs: number, now: number): string => {
-  if (!mtimeMs) {
-    return ''
-  }
-  const at = stamp(mtimeMs)
-
-  return at.slice(0, 10) === stamp(now).slice(0, 10) ? at.slice(11) : at.slice(5, 10)
 }
 
 // Names a chat recorded with the placeholder title; a real title stays as it is.
@@ -1969,7 +1924,7 @@ async function moveOldTrail($: EngineInterface, note: string): Promise<void> {
 }
 
 // Reads the anchored card's note and Agent Log; the rest of the pane stays as it was.
-async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'jira' | 'trail' | 'chatFiles' | 'chatSeen' | 'seenAt' | 'pinPaths' | 'hits'>> {
+async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'jira' | 'trail' | 'pinPaths' | 'hits'>> {
   const chosen = await sessionAnchor($)
   let anchor = chosen ? anchorCard(cards, chosen) : null
   // A note not on the board (a pasted draft named it, or it left the board) still
@@ -1979,7 +1934,7 @@ async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatc
     anchor = { column: '', note: chosen, detail: '', tasks: [] }
   }
   if (!anchor) {
-    return { anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, chatFiles: {}, chatSeen: {}, seenAt: 0, pinPaths: {}, hits: [] }
+    return { anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }
   }
   const notePath = bare || (await notePathOf($, anchor.note))
   const noteText = notePath ? await $.fs.read(notePath) : ''
@@ -1990,8 +1945,6 @@ async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatc
     pinPaths[pin.target] = await notePathOf($, pin.target)
   }
 
-  const chatFiles = await transcriptsOf($, trail.chats.filter(one => !one.done).map(one => one.id))
-
   return {
     anchor,
     notePath,
@@ -1999,66 +1952,8 @@ async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatc
     next: nextFrom(noteText),
     jira: jiraFrom(noteText),
     trail,
-    chatFiles,
-    chatSeen: await seenOf($, chatFiles),
-    seenAt: await $.clock.now(),
     pinPaths,
     hits: [],
-  }
-}
-
-// How many open chats the pane looks up transcripts for.
-const CHATS_FOLLOWED = 12
-
-// Where the transcripts of these chats are, by chat id: one search of the Claude projects
-// folder for the newest few. A chat whose transcript is not on this computer has none.
-async function transcriptsOf($: EngineInterface, ids: string[]): Promise<Record<string, string>> {
-  const wanted = ids.slice(0, CHATS_FOLLOWED).filter(id => /^[\w-]+$/.test(id))
-  const files: Record<string, string> = {}
-  try {
-    if (wanted.length === 0 || !(await $.fs.exists(P.claudeDir))) {
-      return files
-    }
-    const names = wanted.flatMap((id, at) => [...(at > 0 ? ['-o'] : []), '-name', `${id}.jsonl`])
-    const { stdout } = await $.process.run(['find', P.claudeDir, '-maxdepth', '2', '(', ...names, ')'])
-    for (const path of stdout.split('\n').filter(Boolean)) {
-      const id = baseName(path).replace(/\.jsonl$/, '')
-      if (wanted.includes(id) && path.startsWith(`${P.claudeDir}/`)) {
-        files[id] = path
-      }
-    }
-  } catch {
-    // No transcripts found: the chats list without a last-active time.
-  }
-
-  return files
-}
-
-// When each of those transcripts was last written, by chat id.
-async function seenOf($: EngineInterface, files: Record<string, string>): Promise<Record<string, number>> {
-  const seen: Record<string, number> = {}
-  for (const [id, path] of Object.entries(files)) {
-    try {
-      seen[id] = (await $.fs.stat(path)).mtimeMs
-    } catch {
-      // Gone since: no time shown.
-    }
-  }
-
-  return seen
-}
-
-// Follows the open chats' transcripts between full reads: a stat each, and a redraw only
-// when one of them was written since.
-async function resyncChats($: EngineInterface): Promise<void> {
-  const { chatFiles, chatSeen } = await read($, swatch)
-  if (Object.keys(chatFiles ?? {}).length === 0) {
-    return
-  }
-  const seen = await seenOf($, chatFiles)
-  if (Object.keys(seen).some(id => seen[id] !== chatSeen[id])) {
-    const seenAt = await $.clock.now()
-    await update($, swatch, old => ({ ...old, chatSeen: seen, seenAt }))
   }
 }
 
@@ -2509,8 +2404,6 @@ export async function resync($: EngineInterface): Promise<void> {
   }
   const stamp = await anchorStamp($, anchor.note, notePath)
   if (stamp === seenStamp) {
-    await resyncChats($)
-
     return
   }
   seenStamp = stamp
@@ -2556,8 +2449,8 @@ async function anchorSession($: EngineInterface, note: string): Promise<void> {
   await setSessionAnchor($, note)
   await rememberFolder($, note)
   await keepInherited($)
-  // A field opened for the anchor it leaves (a sub-task, a child chat, a chat to make a task) closes.
-  await update($, view, old => ({ ...old, taskMode: '' as const, promote: '' }))
+  // A field opened for the anchor it leaves (a sub-task, a chat to make a task) closes.
+  await update($, view, old => ({ ...old, taskMode: '' as const }))
   const { cards, loadedAt } = await read($, swatch)
   if (loadedAt > 0) {
     const found = await loadAnchor($, cards)
@@ -2590,8 +2483,8 @@ async function anchorFromPaste($: EngineInterface, text: string): Promise<void> 
 async function clearAnchor($: EngineInterface): Promise<void> {
   await setSessionAnchor($, '')
   await keepInherited($)
-  await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, chatFiles: {}, chatSeen: {}, seenAt: 0, pinPaths: {}, hits: [] }))
-  await update($, view, old => ({ ...old, anchorsOpen: false, taskMode: '' as const, promote: '' }))
+  await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
+  await update($, view, old => ({ ...old, anchorsOpen: false, taskMode: '' as const }))
 }
 
 async function anchorNow($: EngineInterface): Promise<Anchor | null> {
@@ -2627,14 +2520,6 @@ async function fillOver($: EngineInterface, text: string): Promise<void> {
 
 async function draft($: EngineInterface, lens: Lens | null, about?: string): Promise<void> {
   await $.prompt.fill({ text: await draftText($, lens, about), mode: 'replace' })
-}
-
-// The same draft, copied to start a new chat with; the prompt box is left alone.
-async function copyDraft($: EngineInterface): Promise<void> {
-  const text = await draftText($, null)
-  const copied = await $.ui.copy({ text })
-  const anchors = anchorFromDraft(text) ? 'Sent there, it anchors that chat here too.' : 'It names no anchor (the project notes are unticked or none is picked), so that chat stays unanchored.'
-  await $.ui.toast(copied.isCopied ? `Copied: paste it into a new chat. ${anchors}` : `Couldn't copy the draft (${copied.reason}).`)
 }
 
 const withPaths = (pins: Pin[], pinPaths: Record<string, string>): Pin[] =>
@@ -2834,11 +2719,6 @@ async function writeTrail($: EngineInterface, note: string, change: (text: strin
     await $.fs.write(path, text)
   }
   await update($, swatch, current => (current.anchor?.note === note ? { ...current, trail: parseTrail(text) } : current))
-}
-
-// Marks a chat on this anchor finished or open again.
-async function chatDone($: EngineInterface, note: string, id: string, done: boolean): Promise<void> {
-  await writeTrail($, note, text => setChatDone(text, id, done))
 }
 
 // Puts this chat in its anchor's Agent Log, or names it there if it went in as the
@@ -3044,8 +2924,10 @@ async function madeTask($: EngineInterface, one: { name: string; path: string; j
 // A new task from this chat, on the user's press: standalone ('new': a card in the
 // anchor's column, else the task column setting's, else the first) or a sub-task of the
 // anchor ('sub': the anchor pinned in its Agent Log so the two share context). This chat's
-// transcript is pinned to it too. The chat's anchor and its prompt box are left alone:
-// the just-made row offers the next step.
+// transcript is pinned to it too. A standalone task is this chat starting something of
+// its own, so the chat moves onto it: the next draft carries the new task's context. A
+// sub-task is a piece of the anchor's work, so the chat stays where it is and the
+// just-made row offers `anchor on it`. The prompt box is left alone either way.
 async function newTask($: EngineInterface, typed: string, mode: 'new' | 'sub'): Promise<void> {
   await update($, view, old => ({ ...old, taskMode: '' as const }))
   const anchored = (await read($, swatch)).anchor
@@ -3066,61 +2948,10 @@ async function newTask($: EngineInterface, typed: string, mode: 'new' | 'sub'): 
 
     return transcript ? addPin(withParent, { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' }) : withParent
   })
-  await madeTask($, made)
-}
-
-// A child chat of the anchor: a piece of its work that gets a chat of its own, not a
-// note. The goal is one line; the draft for a new chat is copied (the pane starts no
-// session), and once sent there that chat is anchored here and listed with the goal as
-// its title. Nothing is written until then. The prompt box is left alone.
-async function childChat($: EngineInterface, typed: string): Promise<void> {
-  await update($, view, old => ({ ...old, taskMode: '' as const }))
-  const goal = typed.replace(/\s+/g, ' ').trim()
-  const anchor = await anchorNow($)
-  if (!goal || !anchor) {
-    await $.ui.toast(goal ? 'Pick an anchor first: a child chat works on it.' : 'No goal: nothing copied.')
-
-    return
+  await madeTask($, made, mode === 'new' ? ' This chat is anchored on it now.' : '')
+  if (mode === 'new') {
+    await anchorOnMade($)
   }
-  const { trail, pinPaths, everywhere, today } = await read($, swatch)
-  const choice = { ...(await read($, picks)), project: true }
-  const text = buildDraft(withPaths(trail.pins ?? [], pinPaths), choice, null, goal, anchor, everywhere ?? [], today.exists ? today.path : '')
-  const copied = await $.ui.copy({ text })
-  await $.ui.toast(copied.isCopied ? `Copied: paste it into a new chat and send. It then shows under Chats on ${anchor.note} as "${goal.slice(0, 40)}".` : `Couldn't copy the draft (${copied.reason}).`)
-}
-
-// A chat on the anchor that outgrew a chat becomes a task, on one press: the note (`Up:`
-// the anchor), a linked sub-item under the anchor's card, and its own Agent Log with the
-// anchor and the chat's transcript pinned. The chat's line moves from the anchor's log to
-// the task's, and the chat is anchored on the task from then on, wherever it runs.
-async function promoteChat($: EngineInterface, typed: string, id: string): Promise<void> {
-  await update($, view, old => ({ ...old, taskMode: '' as const, promote: '' }))
-  const { anchor, trail, chatFiles } = await read($, swatch)
-  const chat = trail.chats.find(one => one.id === id)
-  if (!anchor || !chat) {
-    await $.ui.toast('That chat is no longer listed here: nothing made.')
-
-    return
-  }
-  const made = await makeTask($, typed, anchor.note, '')
-  if (!made) {
-    return
-  }
-  const own = await $.session.id()
-  const transcript = chatFiles?.[id] ?? (id === own ? await ownTranscript($) : '')
-  await writeTrail($, made.name, text => {
-    const withParent = addPin(text, { on: true, kind: 'note', target: anchor.note, label: anchor.note })
-    const withChat = addChat(withParent, { ...chat, title: chat.title === CHAT_PLACEHOLDER ? made.name : chat.title, done: false })
-
-    return transcript ? addPin(withChat, { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' }) : withChat
-  })
-  await writeTrail($, anchor.note, text => removeChat(text, id))
-  // That chat's anchor is the task now. Another session's pane follows on its next sync.
-  await $.store.set(ANCHORS_KEY, withAnchor(anchorPairs(await $.store.get(ANCHORS_KEY)), id, made.name))
-  if (id === own) {
-    await anchorSession($, made.name)
-  }
-  await madeTask($, made, id === own ? ' This chat is anchored on it now.' : ' That chat is anchored on it now.')
 }
 
 // Replaces the notes folder's task template with the shipped one, on the user's press. The
@@ -3144,21 +2975,6 @@ async function defineHere($: EngineInterface): Promise<void> {
   // A typed key is already linked: the draft asks for no search then.
   const ask = one.jira ? null : await jiraAsk($)
   await fillOver($, newTaskDraft(one.path, trailPath(one.note), one.note, ask))
-}
-
-// A context draft anchored on the just-made task, copied: pasted into a new chat, it
-// anchors that chat on the task (anchorFromDraft). The prompt box is left alone.
-async function copyForNewChat($: EngineInterface): Promise<void> {
-  const one = await read($, justMade)
-  if (!one.note) {
-    return
-  }
-  const pins = parseTrail(await readOr($, trailPath(one.note))).pins
-  const choice = { ...(await read($, picks)), project: true }
-  const { everywhere, today } = await read($, swatch)
-  const text = buildDraft(pins, choice, null, '', { note: one.note, notePath: one.path, trail: trailPath(one.note) }, everywhere ?? [], today.exists ? today.path : '')
-  const copied = await $.ui.copy({ text })
-  await $.ui.toast(copied.isCopied ? `Copied: paste it into a new chat to work on ${one.note} there; it anchors that chat on it.` : `Couldn't copy the draft (${copied.reason}).`)
 }
 
 // Makes the just-made task this chat's anchor.
@@ -3301,11 +3117,6 @@ async function usageNow($: EngineInterface): Promise<string> {
   return usageReport(parseUsage(await readOr($, P.usage)), await $.clock.now())
 }
 
-async function copyResume($: EngineInterface, chat: Chat): Promise<void> {
-  await $.ui.copy({ text: `claude --resume ${chat.id}` })
-  await $.ui.toast(`Copied: claude --resume ${chat.id}`)
-}
-
 const byColumn = (cards: Card[]): [string, Card[]][] => {
   const groups = new Map<string, Card[]>()
   for (const card of cards) {
@@ -3363,13 +3174,13 @@ export const register: Register = (on, options) => {
   on('session.end', async ($, e, next) => {
     const ended = await next(e)
     if (e.reason === 'clear' || e.reason === 'resume') {
-      await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, chatFiles: {}, chatSeen: {}, seenAt: 0, pinPaths: {}, hits: [] }))
+      await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
       // The scratchpad was that chat's; it doesn't follow into the next.
       await update($, pad, () => [])
       await typePad($, '')
       await update($, touched, () => ({ session: '', files: [] }))
       await update($, justMade, () => NO_TASK)
-      await update($, view, old => ({ ...old, taskMode: '' as const, promote: '' }))
+      await update($, view, old => ({ ...old, taskMode: '' as const }))
     }
 
     return ended
@@ -3532,7 +3343,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Input, Text } = $.ui.resolve(e)
     // Svg is drawn by the desktop, editor and phone, not the terminal.
     const Svg = e.surface === 'terminal' ? null : (($.ui.resolve(e) as unknown as { Svg?: typeof Text }).Svg ?? null)
-    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, trail, chatSeen, seenAt, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
+    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
     const everywhere = (await read($, swatch)).everywhere ?? []
     // Jira shows only when it is on: a server found or named, a project or site set, or a key on the anchor.
     const isJiraOn = Boolean(jiraServer || P.jiraServer || P.jiraProject || P.jiraSite || jira)
@@ -3556,19 +3367,12 @@ export const register: Register = (on, options) => {
     const carried = await read($, inherited)
     const isCarried = Boolean(anchor) && carried.note === anchor?.note && carried.session === ownId
     // Every field but a standalone task's needs an anchor; with none it reads as closed.
-    const openMode = shown.taskMode !== 'new' && !anchor ? '' : (shown.taskMode ?? '')
+    // A mode this pane no longer has (an older one's child-chat or chat-to-task form) is no form.
+    const storedMode = shown.taskMode === 'new' || shown.taskMode === 'sub' ? shown.taskMode : ''
+    const taskMode = storedMode !== 'new' && !anchor ? '' : storedMode
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
     const arrow = (isOpen: boolean): string => (isOpen ? '▾' : '▸')
     const flip = (key: keyof View) => () => update($, view, old => ({ ...old, [key]: !old[key] }))
-    const openChats = trail.chats.filter(one => !one.done)
-    const doneChats = trail.chats.filter(one => one.done)
-    const promoting = trail.chats.find(one => one.id === shown.promote)
-    // A chat that left this log while its field was open (made a task from another chat,
-    // or removed by hand) leaves no field: the buttons are back.
-    const taskMode = openMode === 'promote' && !promoting ? '' : openMode
-    // A chat's row: its goal, then when it was last active (its transcript, when it is on
-    // this computer; else when it was filed).
-    const chatLabel = (chat: Chat): string => `◦ ${chat.title}${chat.id === ownId ? ' (this chat)' : ''} · ${lastActive(chatSeen?.[chat.id] ?? 0, seenAt ?? 0) || chat.when.slice(5)}`
     const pins = withPaths(trail.pins ?? [], pinPaths ?? {})
     const contextCount = contextItems(pins, choice, anchor ? { note: anchor.note, notePath, trail: trailPath(anchor.note) } : null, everywhere, today.exists ? today.path : '').length
     const PIN_ICON: Record<Pin['kind'], string> = { note: '▤', file: '📄', session: '◦', artifact: '◇', url: '🔗' }
@@ -3610,8 +3414,6 @@ export const register: Register = (on, options) => {
       ],
     )
     const CARD = { flexDirection: 'column', borderStyle: 'round', paddingX: 1, marginBottom: 1 } as const
-    const openQuestions = trail.questions.filter(one => !one.done)
-    const doneQuestions = trail.questions.filter(one => one.done)
     const gaps = setup.filter(item => !item.ok).length + (taskTemplate === 'old' ? 1 : 0)
     const short = (path: string): string => (path.startsWith(`${P.notes}/`) ? path.slice(P.notes.length + 1) : path.startsWith(P.home) ? `~${path.slice(P.home.length)}` : path)
     const step = setup[0]?.ok ? STEPS.find(one => !skipped.includes(one.field) && !setup.find(item => item.field === one.field)?.ok) : undefined
@@ -3769,7 +3571,6 @@ export const register: Register = (on, options) => {
                   )}
                   {taskMode === '' && (
                     <Box key="task-buttons" flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
-                      {anchor && <Button key="task-child" label="＋ child chat" onPress={() => update($, view, old => ({ ...old, taskMode: 'child' as const }))} />}
                       {anchor && (
                         <Button key="task-sub" label={`＋ sub-task of ${anchor.note.length <= 32 ? anchor.note : `${anchor.note.slice(0, 31)}…`}`} onPress={() => update($, view, old => ({ ...old, taskMode: 'sub' as const }))} />
                       )}
@@ -3789,35 +3590,6 @@ export const register: Register = (on, options) => {
                       <Button key="task-cancel" plain dimColor label="cancel" onPress={() => update($, view, old => ({ ...old, taskMode: '' as const }))} />
                     </Box>
                   )}
-                  {taskMode === 'child' && (
-                    <Box key="task-form" flexDirection="column">
-                      <Text dimColor wrap="wrap">A piece of this work in a chat of its own: no note, no card. It is listed under Chats with this goal.</Text>
-                      <Input
-                        key="task-title-child"
-                        label="＋ child chat"
-                        placeholder="its goal in one line: Enter copies a draft to paste into a new chat"
-                        submitLabel="copy"
-                        autoFocus
-                        onSubmit={value => childChat($, value)}
-                      />
-                      <Button key="task-cancel" plain dimColor label="cancel" onPress={() => update($, view, old => ({ ...old, taskMode: '' as const }))} />
-                    </Box>
-                  )}
-                  {taskMode === 'promote' && promoting && (
-                    <Box key="task-form" flexDirection="column">
-                      <Text dimColor wrap="wrap">{`Make this chat a task of ${anchor?.note ?? 'the anchor'}: a note, a line under its card, and the chat moves to the task's log.`}</Text>
-                      <Input
-                        key={`task-title-promote`}
-                        label="→ task"
-                        placeholder="the task's title: Enter makes it"
-                        value={promoting.title === CHAT_PLACEHOLDER ? '' : promoting.title}
-                        submitLabel="create"
-                        autoFocus
-                        onSubmit={value => promoteChat($, value, promoting.id)}
-                      />
-                      <Button key="task-cancel" plain dimColor label="cancel" onPress={() => update($, view, old => ({ ...old, taskMode: '' as const, promote: '' }))} />
-                    </Box>
-                  )}
                   {madeTask.note && (
                     <Box key="just-made" flexDirection="column" marginTop={1}>
                       <Text dimColor>{`✓ just made: ${madeTask.note}`}</Text>
@@ -3826,7 +3598,6 @@ export const register: Register = (on, options) => {
                         <Button key="made-open" label="open" onPress={() => openNote($, madeTask.path)} />
                         <Button key="made-board" label="open the board" onPress={() => openNote($, P.board)} />
                         <Button key="made-define" label="define here" onPress={() => defineHere($)} />
-                        <Button key="made-copy" label="copy for a new chat" onPress={() => copyForNewChat($)} />
                         {anchor?.note !== madeTask.note && <Button key="made-anchor" label="anchor on it" onPress={() => anchorOnMade($)} />}
                         <Button key="made-dismiss" plain dimColor label="dismiss" onPress={() => update($, justMade, () => NO_TASK)} />
                       </Box>
@@ -3837,61 +3608,16 @@ export const register: Register = (on, options) => {
             </Box>
 
             {anchor && (
-              <Box key="card-trail" {...CARD} borderColor="success">
-                {head('trailOpen', `🌱 Chats on ${anchor.note} · ${openChats.length} open${openQuestions.length > 0 ? `, ${openQuestions.length} ${openQuestions.length === 1 ? 'question' : 'questions'}` : ''}`, 'success')}
-                {shown.trailOpen && (
-                  <Box key="trail-body" flexDirection="column">
-                    {openChats.map(chat => line(
-                      `chat-row-${chat.id}`,
-                      <Button key={`chat-${chat.id}`} plain label={chatLabel(chat)} onPress={() => copyResume($, chat)} />,
-                      [
-                        <Button key={`chat-task-${chat.id}`} label="→ task" onPress={() => update($, view, old => ({ ...old, anchorOpen: true, taskMode: 'promote' as const, promote: chat.id }))} />,
-                        <Button key={`chat-done-${chat.id}`} dimColor label="done" onPress={() => chatDone($, anchor.note, chat.id, true)} />,
-                      ],
-                    ))}
-                    {openChats.length === 0 && <Text key="trail-empty" dimColor wrap="wrap">No open chats. A chat anchored here is listed with its first prompt; ＋ child chat starts one with a goal.</Text>}
-                    {doneChats.length > 0 && (
-                      <Button key="chats-done" plain dimColor label={`${arrow(shown.chatsDoneOpen)} done chats (${doneChats.length})`} hotkey="x" onPress={flip('chatsDoneOpen')} />
-                    )}
-                    {shown.chatsDoneOpen && doneChats.map(chat => line(
-                      `chat-row-${chat.id}`,
-                      <Button key={`chat-${chat.id}`} plain dimColor label={`✓ ${chat.title} · ${chat.when.slice(5, 10)}`} onPress={() => copyResume($, chat)} />,
-                      <Button key={`chat-reopen-${chat.id}`} dimColor label="reopen" onPress={() => chatDone($, anchor.note, chat.id, false)} />,
-                    ))}
-                    {openQuestions.length > 0 && <Text key="trail-questions" dimColor>Questions</Text>}
-                    {openQuestions.map(one => line(
-                      `question-row-${one.when}-${one.text}`,
-                      <Button key={`ask-${one.when}`} plain label={`? ${one.text}`} onPress={() => draft($, null, one.text)} />,
-                      <Button key={`done-${one.when}`} dimColor label="done" onPress={() => writeTrail($, anchor.note, text => setDone(text, one, true))} />,
-                    ))}
-                    {doneQuestions.length > 0 && (
-                      <Button key="show-done" plain dimColor label={`${arrow(shown.doneOpen)} done questions (${doneQuestions.length})`} onPress={flip('doneOpen')} />
-                    )}
-                    {shown.doneOpen && doneQuestions.map(one => line(
-                      `question-${one.when}-${one.text}`,
-                      <Text key={`done-text-${one.when}`} dimColor>{`✓ ${one.text}`}</Text>,
-                      <Button key={`reopen-${one.when}`} dimColor label="reopen" onPress={() => writeTrail($, anchor.note, text => setDone(text, one, false))} />,
-                    ))}
-                    {trail.saved.length > 0 && <Text key="trail-saved" dimColor>Saved notes</Text>}
-                    {trail.saved.map(name => (
-                      <Button key={`saved-${name}`} plain label={`▤ ${name}`} onPress={() => openByName($, name)} />
-                    ))}
-                  </Box>
-                )}
-              </Box>
-            )}
-
-            {anchor && (
               <Box key="card-pins" {...CARD} borderColor="remember">
                 {head('pinsOpen', `📌 Pinned to ${anchor.note} · ${pins.length}`, 'remember')}
-                {shown.pinsOpen && <Text key="pins-hint" dimColor>{pins.length === 0 ? 'Nothing pinned yet. ' : ''}☑ goes into this anchor's drafts · ☐ is a link only: press a pin to switch it.</Text>}
+                {shown.pinsOpen && <Text key="pins-hint" dimColor wrap="wrap">{pins.length === 0 ? 'Nothing pinned yet. ' : ''}☑ goes into this anchor's drafts · ☐ is a link only: press the box to switch it, the name to open it.</Text>}
                 {shown.pinsOpen && artifactsFirst(pins).map(pin => line(
                   `pin-${pinKey(pin)}`,
-                  <Button key={`pin-tick-${pinKey(pin)}`} plain label={`${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => onPins(text => setPinOn(text, pin, !pin.on))} />,
                   [
-                    <Button key={`pin-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />,
-                    <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => onPins(text => removePin(text, pin))} />,
+                    <Button key={`pin-tick-${pinKey(pin)}`} plain label={mark(pin.on)} onPress={() => onPins(text => setPinOn(text, pin, !pin.on))} />,
+                    <Button key={`pin-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => openPin($, pin)} />,
                   ],
+                  <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => onPins(text => removePin(text, pin))} />,
                 ))}
                 {shown.pinsOpen && (
                   <Input key={`pin-paste-${pins.length}`} label="⧉" placeholder="paste an artifact link, [[note]] or file path: Enter pins it to this anchor" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
@@ -3995,7 +3721,7 @@ export const register: Register = (on, options) => {
               {head('contextOpen', `📎 Context · ${contextCount} going in`, 'remember')}
               {shown.contextOpen && (
                 <Box key="context-body" flexDirection="column" marginBottom={1}>
-                  <Text dimColor>Pins here go into every chat's draft, whatever its anchor (☑ on, ☐ kept but left out). An anchor's own pins are under This chat.</Text>
+                  <Text dimColor>Pins here go into every chat's draft, whatever its anchor (☑ on, ☐ kept but left out; press the box to switch, the name to open). An anchor's own pins are under This chat.</Text>
                   {standing.length > 0 && <Text key="standing" dimColor>{`+ ${standing.join(', ')} (switch these under Setup)`}</Text>}
                   {!anchor && ownArtifacts.map(one => (
                     <Text key={`made-${one.url}`} dimColor>{`◇ ${one.title}`}</Text>
@@ -4003,11 +3729,11 @@ export const register: Register = (on, options) => {
                   {!anchor && ownArtifacts.length > 0 && <Text dimColor>Artifacts this chat published: picking an anchor keeps them with it.</Text>}
                   {everywhere.map(pin => line(
                     `all-${pinKey(pin)}`,
-                    <Button key={`all-tick-${pinKey(pin)}`} plain label={`${mark(pin.on)} ${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => setEverywhere($, list => list.map(one => (samePin(one, pin) ? { ...one, on: !one.on } : one)))} />,
                     [
-                      <Button key={`all-open-${pinKey(pin)}`} label={pin.kind === 'session' ? 'resume' : 'open'} onPress={() => openPin($, pin)} />,
-                      <Button key={`all-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => setEverywhere($, list => list.filter(one => !samePin(one, pin)))} />,
+                      <Button key={`all-tick-${pinKey(pin)}`} plain label={mark(pin.on)} onPress={() => setEverywhere($, list => list.map(one => (samePin(one, pin) ? { ...one, on: !one.on } : one)))} />,
+                      <Button key={`all-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => openPin($, pin)} />,
                     ],
+                    <Button key={`all-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => setEverywhere($, list => list.filter(one => !samePin(one, pin)))} />,
                   ))}
                   <Input key="pin-search" label="🔎" placeholder="search notes to pin (OpenAugi): Enter searches" submitLabel="search" onSubmit={value => searchNotes($, value)} />
                   {(hits ?? []).map(hit => offer(hit, hit.label))}
@@ -4018,10 +3744,7 @@ export const register: Register = (on, options) => {
                   {shown.sessionsOpen && sessions.map(one => offer(sessionPin(one), `${one.repo} · ${ago(loadedAt, one.mtimeMs)} · ${one.title}`))}
                 </Box>
               )}
-              <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
-                <Button key="draft" variant="primary" label="💬 draft a prompt with this context" hotkey="n" onPress={() => draft($, null)} />
-                <Button key="copy-draft" label="⧉ copy it for a new chat" onPress={() => copyDraft($)} />
-              </Box>
+              <Button key="draft" variant="primary" label="💬 draft a prompt with this context" hotkey="n" onPress={() => draft($, null)} />
             </Box>
 
             <Box key="card-lenses" {...CARD} borderColor="suggestion">
