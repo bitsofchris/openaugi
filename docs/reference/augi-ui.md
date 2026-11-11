@@ -242,7 +242,9 @@ are `dimColor`, and the one primary button is the draft.
   (below), and `→ ask` there drafts an entry as the instruction. Questions an
   agent left under `## Questions` in the Agent Log stay in the log (`k` opens
   it); the pane neither lists nor writes that section.
-- **Lenses (saved prompts)** (`l`): run a lens with the same context; `+ new lens`
+- **Saved prompts** (`l`): the pane's name for lenses, since the card is a
+  row of buttons that each run a saved prompt; the files, the folder and the
+  settings still say lens. Run one with the same context; `+ new prompt`
   takes a name, writes a skeleton file in the lens folder (never over one that's
   there) and opens it in your editor to paste the prompt.
   Every lens in the lens folder is listed; the `lensPicks` setting narrows and orders

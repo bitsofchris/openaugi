@@ -202,7 +202,7 @@ export const usageReport = (events: UsageEvent[], now: number, days = 30): strin
     '',
     'Used:',
     ...(used.length > 0 ? used.map(count) : ['  nothing yet']),
-    ...(lenses.length > 0 ? ['', 'Lenses run:', ...lenses.map(count)] : []),
+    ...(lenses.length > 0 ? ['', 'Saved prompts run:', ...lenses.map(count)] : []),
     '',
     `Never used, in the whole log (${never.length}):`,
     never.length > 0 ? `  ${never.join(', ')}` : '  nothing: every control has been pressed at least once',
@@ -399,7 +399,7 @@ export const setupItems = (paths: Paths, found: Set<string>): SetupItem[] => [
   { field: 'notesFolder', label: 'notes folder', path: paths.notes, ok: Boolean(paths.notes) && found.has(paths.notes), starter: false },
   { field: 'contextNote', label: 'context note', path: paths.context, ok: found.has(paths.context), starter: true },
   { field: 'boardNote', label: 'board', path: paths.board, ok: found.has(paths.board), starter: true },
-  { field: 'lensFolder', label: 'lens folder', path: paths.lenses, ok: found.has(paths.lenses), starter: true },
+  { field: 'lensFolder', label: 'saved prompts folder', path: paths.lenses, ok: found.has(paths.lenses), starter: true },
 ]
 
 // Obsidian keeps its vault list in obsidian.json: the open vault first, then the most recently used.
@@ -428,7 +428,7 @@ export const obsidianConfigs = (home: string, appData: string): string[] => [
 export const STEPS: { field: string; title: string; why: string; starter: string }[] = [
   { field: 'boardNote', title: 'Your board', why: 'The Kanban note your projects live on. Its cards become the anchors you pick from.', starter: 'Kanban.md' },
   { field: 'contextNote', title: 'Your context note', why: 'A note about you and this season: what you are focused on and how you like to work.', starter: 'OpenAugi/AGENT/Slowly Changing Context.md' },
-  { field: 'lensFolder', title: 'Your lens folder', why: 'A folder of saved prompts, one note each. They show under Lenses.', starter: 'OpenAugi/AGENT/lenses' },
+  { field: 'lensFolder', title: 'Your saved prompts folder', why: 'A folder of saved prompts, one note each. They show under Saved prompts.', starter: 'OpenAugi/AGENT/lenses' },
 ]
 
 // Search output (one path per line, newest first) as paths inside the notes folder, the first few.
@@ -3131,7 +3131,7 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     await ready($)
-    await $.command.register({ name: 'augi', description: 'Show Augi pane: your anchor, its context and chats, and the lenses' })
+    await $.command.register({ name: 'augi', description: 'Show Augi pane: your anchor, its context, and your saved prompts' })
     // A reload starts this module's variables over: the unsent scratchpad text comes back.
     typedPad = await read($, padDraft)
     // A settings change reloads the module; redraw an open pane with the new paths.
@@ -3199,7 +3199,7 @@ export const register: Register = (on, options) => {
     await $.ui.open({ id: PANE, title: 'Augi' })
     watchAnchor($)
 
-    return { text: 'Augi is open. Pick an anchor, tick its context, then draft a prompt or run a lens. It only drafts; you press enter.' }
+    return { text: 'Augi is open. Pick an anchor, tick its context, then draft a prompt or run a saved prompt. It only drafts; you press enter.' }
   })
 
   // An anchored chat goes on its anchor's log with its first prompt: titled by a pane
@@ -3441,7 +3441,7 @@ export const register: Register = (on, options) => {
       return (
         <Box flexDirection="column">
           <Text bold>Set up Augi</Text>
-          <Text>Augi works from a folder of markdown notes: a context note about you, a board of projects to anchor on, and lenses (saved prompts). Start with the folder.</Text>
+          <Text>Augi works from a folder of markdown notes: a context note about you, a board of projects to anchor on, and saved prompts. Start with the folder.</Text>
           <Text> </Text>
           {vaults.length > 0 && <Text>Your Obsidian vaults:</Text>}
           {vaults.slice(0, 9).map((vault, index) => (
@@ -3457,7 +3457,7 @@ export const register: Register = (on, options) => {
           <Text> </Text>
           {editorPicker}
           <Text> </Text>
-          <Text dimColor>Next you point Augi at your context note, board and lenses, or let it create starters. All of it is also in /config under augi.</Text>
+          <Text dimColor>Next you point Augi at your context note, board and saved prompts, or let it create starters. All of it is also in /config under augi.</Text>
         </Box>
       )
     }
@@ -3686,7 +3686,7 @@ export const register: Register = (on, options) => {
           </Box>
         )}
 
-        <Box key="section-anywhere" flexDirection="column">{section('anywhereOpen', 'Always · you, your context, lenses and setup')}</Box>
+        <Box key="section-anywhere" flexDirection="column">{section('anywhereOpen', 'Always · you, your context, saved prompts and setup')}</Box>
         {shown.anywhereOpen && (
           <Box key="anywhere-body" flexDirection="column">
             <Box key="card-you" {...CARD} borderColor="claude">
@@ -3748,16 +3748,16 @@ export const register: Register = (on, options) => {
             </Box>
 
             <Box key="card-lenses" {...CARD} borderColor="suggestion">
-              {head('lensesOpen', `🔍 Lenses (saved prompts) · ${lenses.length}`, 'suggestion', 'lens-menu', 'l')}
+              {head('lensesOpen', `🔍 Saved prompts · ${lenses.length}`, 'suggestion', 'lens-menu', 'l')}
               {shown.lensesOpen && lenses.map((lens, index) => line(
                 `lens-row-${lens.name}`,
                 <Button key={lens.name} plain label={lens.name} hotkey={index < 9 ? String(index + 1) : undefined} onPress={() => draft($, lens)} />,
                 <Button key={`edit-${lens.name}`} dimColor label="edit" hotkey={EDIT_KEYS[index]} onPress={() => openNote($, lens.path)} />,
               ))}
               {shown.lensesOpen && (
-                <Input key={`new-lens-${lenses.length}`} label="+ new lens" placeholder="name it: Enter opens it in your editor" submitLabel="create" onSubmit={value => newLens($, value)} />
+                <Input key={`new-lens-${lenses.length}`} label="+ new prompt" placeholder="name it: Enter opens it in your editor" submitLabel="create" onSubmit={value => newLens($, value)} />
               )}
-              {shown.lensesOpen && <Button key="all-lenses" plain dimColor label="open the lens folder" hotkey="f" onPress={() => openFolder($, P.lenses)} />}
+              {shown.lensesOpen && <Button key="all-lenses" plain dimColor label="open the prompts folder" hotkey="f" onPress={() => openFolder($, P.lenses)} />}
             </Box>
 
             <Box key="card-setup" {...CARD} borderColor="subtle">
@@ -3802,7 +3802,7 @@ export const register: Register = (on, options) => {
                   <Box key="setup-pane" flexDirection="column" marginTop={1}>
                     <Text bold>The pane</Text>
                     <Button key="set-openOnStart" plain label={`${mark(settings.openOnStart !== 'no')} open Augi with every new chat`} onPress={() => setOption($, 'openOnStart', settings.openOnStart === 'no' ? 'yes' : 'no')} />
-                    <Input key="set-lensPicks" label="lenses to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />
+                    <Input key="set-lensPicks" label="prompts to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />
                     <Button key="set-tellChat" plain label={`${mark(settings.tellChat !== 'no')} tell each chat its anchor (so "update the task note" needs no path)`} onPress={() => setOption($, 'tellChat', settings.tellChat === 'no' ? 'yes' : 'no')} />
                     <Button key="set-trackUsage" plain label={`${mark(settings.trackUsage !== 'no')} count which controls I use (kept on this computer only)`} onPress={() => setOption($, 'trackUsage', settings.trackUsage === 'no' ? 'yes' : 'no')} />
                     <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>

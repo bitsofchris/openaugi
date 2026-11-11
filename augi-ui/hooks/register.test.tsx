@@ -958,7 +958,7 @@ test('a new lens is written once from its name, opened in the editor, and listed
 
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ text: /Lenses \(saved prompts\) · 1/ })).toBeTruthy()
+  expect(await ui.find({ text: /Saved prompts · 1/ })).toBeTruthy()
   await ui.press({ key: 'lens-menu' })
   await ui.input({ key: 'new-lens-1', text: 'check my tests' })
   expect(written.get('/v/lenses/check-my-tests.md')).toBe(newLensSkeleton('check-my-tests'))
@@ -2840,7 +2840,7 @@ test('the usage report counts the last 30 days, names the lenses run, and lists 
   const report = usageReport(events, now)
   expect(report).toContain('last 30 days: 3 events (4 in the log, since 2022-01-02)')
   expect(report).toMatch(/Used:\n +2 {2}draft\n +1 {2}lens\n/)
-  expect(report).toMatch(/Lenses run:\n +1 {2}echoes/)
+  expect(report).toMatch(/Saved prompts run:\n +1 {2}echoes/)
   const never = report.split('Never used')[1] ?? ''
   expect(never).toContain('made-anchor')
   // Pressed once, long ago: not in the last 30 days, and not never used either.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**augi-ui 0.15.1: the Lenses card is called Saved prompts.** In the pane only:
+the card's title, `+ new prompt`, `open the prompts folder`, the Setup labels
+and the `/augi usage` report. The files are still lenses in the lens folder,
+and the settings keep their names (`lensFolder`, `lensPicks`).
+
 **augi-ui 0.15.0: a smaller pane.** Three things added in 0.13.0 turned out
 not to earn their room and are gone. The **Chats on `<anchor>`** card (the
 list of chats, `done`, `reopen`, `→ task`, and the agent's questions and saved
