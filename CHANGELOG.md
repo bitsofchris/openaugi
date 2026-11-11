@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**Two lenses that keep the board honest: `board-sync` and `jira-pull`.** Both
+are on-demand, answer in chat, and write nothing until the user picks rows by
+number. `board-sync` reads every open card, its note, its Agent Log and the
+state of any pull request linked there (`gh pr view` when it is installed),
+and proposes only what the evidence supports: a sub-item to tick, a clause
+that has gone stale, a pull-request link to pin in the Agent Log, a move on a
+board whose columns are stages. It never adds, deletes or reorders a card.
+`jira-pull` lists the user's open Jira issues with whatever Jira tools the
+chat has, matches them to the notes that already carry a `Jira:` key or are
+plainly the same work, and for the rest proposes a task note from the task
+template and where its card would go. It reads Jira and never writes to it.
+In the pane both show under Saved prompts.
+
 **augi-ui 0.16.0: one place to pin, and a pin is a plain bullet.** The
 Context card under Always is gone, with what only it held: the pins kept for
 every chat, the note search, and the list of recent coding sessions to pin.

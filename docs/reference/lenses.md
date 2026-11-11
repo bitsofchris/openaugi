@@ -68,7 +68,11 @@ payload), and the rest of the engine set — `currency-board`,
 `weekly-reflection`, `open-loops`, `chat-harvest`, `echoes`, `emerging`,
 `decision-audit`, `create-note-from-block`, `morning-briefing`, `overview`
 (every active anchor on the board: its open chats, open tasks and next
-step) — every lens
+step), `board-sync` (each open card against what its note, Agent Log and
+pull requests say happened: numbered edits proposed in chat, made only for
+the rows the user picks) and `jira-pull` (the user's open Jira issues
+against the task notes on the board: in step, to link, or a new task and
+where its card would go; Jira is only read) — every lens
 whose vault copy declares `kind: engine`, kept in sync by
 `scripts/sync_templates.py`. The old `distill-lens.md` / `nugget-lens.md`
 paths are pointer stubs.
@@ -84,8 +88,9 @@ about them:
 
 - **Batch** — runs over its default scope with no argument; "apply lens
   NAME" is a complete instruction. morning-briefing · open-loops ·
-  overview · nuggets · content-pipeline · emerging · cluster-weather ·
-  decision-audit (picks its own decision from the stream).
+  overview · board-sync · jira-pull · nuggets · content-pipeline ·
+  emerging · cluster-weather · decision-audit (picks its own decision
+  from the stream).
 - **Targeted** — meaningless without a subject; the apply instruction
   must carry one ("distill X", "lineage of X"). distill · echoes ·
   idea-lineage. A targeted lens's `scope` MUST say so explicitly
