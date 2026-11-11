@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+**augi-ui 0.16.0: one place to pin, and a pin is a plain bullet.** The
+Context card under Always is gone, with what only it held: the pins kept for
+every chat, the note search, and the list of recent coding sessions to pin.
+What is left is the `📌 Pinned to <anchor>` card in This chat: the pins, a
+field to paste one into, `✕ unpin`, and the one draft button under them
+(`💬 draft a prompt with this context`, still `n`). A pin row has no tick box
+any more, because a pin has one state: it goes into the anchor's drafts. A pin
+kept for every chat by an older pane stays in the plugin's store but goes into
+no draft.
+
+On the Agent Log a pin is now written `- [[note]] · why it matters` (or
+`- file: \`path\` · label`), a plain bullet instead of a ticked box, so a line
+a chat adds under `## Context` in that shape is a pin too. **Unpinning ticks the
+line off** (`- [x] …`) and keeps it on the log as a record; pinning the same
+thing again turns it back into a bullet. A log written before this ticked what
+it pinned: there every `- [x]` and `- [ ]` pin line reads as a pin (a
+"link only" pin is now simply a pin), and the pane rewrites them as bullets,
+with a new intro line, the next time it writes that log. Until then unpinning
+on such a log removes the line. Files pinned from the Files card and notes the
+chat writes are pinned like any other, not as links.
+
+Also: a row under `📄 Files this chat touched` names the file first and its
+folder after it (`register.tsx · augi-ui/hooks`), so a narrow pane cuts the
+folder and not the name. And the `today's note goes into every draft` box
+moved from the You card to Setup → *What goes into every draft*, beside the
+other three.
+
 **augi-ui 0.15.1: the Lenses card is called Saved prompts.** In the pane only:
 the card's title, `+ new prompt`, `open the prompts folder`, the Setup labels
 and the `/augi usage` report. The files are still lenses in the lens folder,

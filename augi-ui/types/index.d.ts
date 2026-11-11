@@ -1,5 +1,4 @@
 export type Lens = { name: string; path: string; description: string }
-export type Session = { path: string; tool: 'claude' | 'codex'; repo: string; title: string; mtimeMs: number }
 // An open checkbox under a card or a note's Next heading. `note` is the first
 // wikilink's target, so a sub-item that links a child task opens it.
 export type SubItem = { text: string; note: string | null }
@@ -10,9 +9,10 @@ export type Card = { column: string; note: string; detail: string; tasks: SubIte
 export type Chat = { id: string; when: string; title: string; done: boolean }
 // A question an agent (or an older pane) left on the trail under ## Questions.
 export type Question = { when: string; text: string; done: boolean }
-// Something kept as context for an anchor, under ## Context on its trail. `on` is whether
-// it goes into the next draft; a note's target is its name, the rest a path or URL.
-// `path` is set on search hits only: where the note was found.
+// Something pinned to an anchor, a line under ## Context on its Agent Log. `on` is whether
+// it is still pinned (listed in the pane, named in the next draft): unpinning ticks the line
+// off and keeps it. A note's target is its name, the rest a path or URL; `path` is where a
+// pinned note was found.
 export type PinKind = 'note' | 'file' | 'session' | 'artifact' | 'url'
 export type Pin = { on: boolean; kind: PinKind; target: string; label: string; path?: string }
 // The anchor's Agent Log (once called its trail): the companion note agents write.
@@ -48,12 +48,7 @@ export type Swatch = {
   trail: Trail
   // Where each pinned note was found, by name.
   pinPaths: Record<string, string>
-  // Notes a pane search found, to pin with a press.
-  hits: Pin[]
-  // Pins that go into every chat's draft, whatever its anchor; kept in the store.
-  everywhere: Pin[]
   lenses: Lens[]
-  sessions: Session[]
   loadedAt: number
 }
 // An artifact this chat published: its URL and the title it was published under.
@@ -78,9 +73,7 @@ export type View = {
   padOpen: boolean
   // The You card under Always: the season line, the context note, the board and today's note.
   youOpen: boolean
-  contextOpen: boolean
   anchorsOpen: boolean
-  sessionsOpen: boolean
   lensesOpen: boolean
   setupOpen: boolean
   inOpen: boolean

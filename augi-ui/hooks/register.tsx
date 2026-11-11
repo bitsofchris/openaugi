@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren, ToolCallResult } from 'claude-code'
 
-import type { Card, Chat, Inherited, JustMade, Lens, Made, MadeArtifact, Opened, PadEntry, Picks, Pin, PinKind, Question, Session, SetupItem, SubItem, Swatch, Today, Told, Touched, TouchedFile, Trail, View } from '../types'
+import type { Card, Chat, Inherited, JustMade, Lens, Made, MadeArtifact, Opened, PadEntry, Picks, Pin, PinKind, Question, SetupItem, SubItem, Swatch, Today, Told, Touched, TouchedFile, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -60,7 +60,6 @@ export type Paths = {
   // Obsidian's own settings for this notes folder: where it puts a new note by default.
   obsidianApp: string
   claudeDir: string
-  codexDir: string
   // The usage log: one JSON line per pane press, on this computer only.
   usage: string
   editor: string
@@ -99,7 +98,6 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
     obsidianDaily: `${notes}/.obsidian/daily-notes.json`,
     obsidianApp: `${notes}/.obsidian/app.json`,
     claudeDir: `${home}/.claude/projects`,
-    codexDir: `${home}/.codex/sessions`,
     usage: `${home}/.openaugi/usage/augi-ui.jsonl`,
     editor: options.editor || 'obsidian',
     editorCommand: options.editorCommand ?? '',
@@ -126,8 +124,8 @@ export type UsageEvent = { at: string; kind: 'press' | 'input' | 'sent'; what: s
 // Keys that end in something of the user's: `card-<note>`, `pin-open-<kind>-<target>`.
 const USAGE_PREFIXES = [
   'card-sub', 'card', 'task',
-  'pin-tick', 'pin-open', 'pin-drop', 'pin-paste', 'touched-open', 'touched-pin',
-  'pad-input', 'pad-save', 'pad-ask', 'pad-today', 'pad-drop', 'today-log', 'all-tick', 'all-open', 'all-drop', 'all-paste', 'offer-anchor', 'offer-all',
+  'pin-open', 'pin-drop', 'pin-paste', 'touched-open', 'touched-pin',
+  'pad-input', 'pad-save', 'pad-ask', 'pad-today', 'pad-drop', 'today-log',
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
 // Whole keys that only look like one of those.
@@ -153,13 +151,13 @@ export const USAGE_FEATURES = [
   'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'open-trail', 'anchor-details', 'task',
   'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
   'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss', 'template-update',
-  'pin-tick', 'pin-open', 'pin-drop', 'pin-paste',
+  'pin-open', 'pin-drop', 'pin-paste',
   'touched-open', 'touched-pin', 'files-all', 'pad-input', 'pad-save', 'pad-ask', 'pad-today', 'pad-drop', 'pad-save-all',
   'today-log', 'today-open', 'today-make', 'pick-today',
-  'all-tick', 'all-open', 'all-drop', 'all-paste', 'pin-search', 'offer-anchor', 'offer-all', 'hits-clear', 'sessions-menu', 'draft', 'draft-sent',
+  'draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
-  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-pinsOpen', 'head-touchedOpen', 'head-padOpen', 'head-youOpen', 'head-contextOpen',
+  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-pinsOpen', 'head-touchedOpen', 'head-padOpen', 'head-youOpen',
 ]
 
 // The log's lines as events; a line that is not one is skipped.
@@ -252,6 +250,16 @@ export const shortPath = (path: string, notes: string, home: string, root = '', 
   const parts = relative.split('/')
 
   return parts.length > kept ? `…/${parts.slice(-kept).join('/')}` : relative
+}
+
+// The same path with the file's name first, so a row cut short at its end still names
+// the file: `name · folder`, the folder as `shortPath` writes it (the last two kept).
+export const nameFirst = (path: string, notes: string, home: string, root = ''): string => {
+  const at = path.lastIndexOf('/')
+  const folder = at > 0 ? shortPath(path.slice(0, at), notes, home, root, 2) : ''
+  const isBase = [notes, root].some(one => one && path.slice(0, Math.max(at, 0)) === one)
+
+  return folder && !isBase ? `${path.slice(at + 1)} · ${folder}` : path.slice(at + 1)
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -506,7 +514,6 @@ export const starterLens = (): string =>
     '',
   ].join('\n')
 
-const SESSION_KEYS = 'abcde'
 // No `p`: it opens the anchor's note while the lens menu is open.
 const EDIT_KEYS = 'qwtyui'
 const PANE = 'augi'
@@ -515,7 +522,6 @@ const SYNC_MS = 10000
 // Augi's face (an otter, for old times' sake) on surfaces that draw Svg (desktop, editor, phone); the terminal skips it.
 const AUGI_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="14" cy="16" r="7" fill="#8a5a3b"/><circle cx="50" cy="16" r="7" fill="#8a5a3b"/><circle cx="14" cy="16" r="3.5" fill="#5e3b25"/><circle cx="50" cy="16" r="3.5" fill="#5e3b25"/><circle cx="32" cy="34" r="24" fill="#a06a45"/><ellipse cx="32" cy="43" rx="15" ry="11" fill="#e8cfb0"/><circle cx="23" cy="30" r="3.2" fill="#2b1a10"/><circle cx="41" cy="30" r="3.2" fill="#2b1a10"/><circle cx="24" cy="29" r="1" fill="#fff"/><circle cx="42" cy="29" r="1" fill="#fff"/><ellipse cx="32" cy="38" rx="4.5" ry="3" fill="#2b1a10"/><path d="M32 41v3M28 46q4 3 8 0" stroke="#2b1a10" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M20 41l-9-2M20 44l-9 1M44 41l9-2M44 44l9 1" stroke="#5e3b25" stroke-width="1" stroke-linecap="round"/></svg>'
 const DRAFT_HEAD = 'Context for this chat:'
-const HEAD_BYTES = '65536'
 // Each chat session's anchor, as [session id, note] pairs, oldest first. The anchor
 // belongs to the session: a new one opens with none; a reload or a resume keeps it.
 const ANCHORS_KEY = 'anchors'
@@ -532,8 +538,6 @@ export const CHAT_PLACEHOLDER = 'chat'
 // The setup steps someone chose to skip; /augi setup clears it.
 const SKIPPED_KEY = 'skipped'
 // Pins that go into every chat's draft, whatever its anchor: kept in the store, newest last.
-const PINS_KEY = 'pins'
-const PINS_KEPT = 50
 export const EMPTY_TRAIL: Trail = { questions: [], chats: [], saved: [], pins: [] }
 // No daily note: the Today card is not drawn.
 const NO_TODAY: Today = { pattern: '', path: '', day: '', exists: false, todo: [], mtime: 0 }
@@ -558,16 +562,13 @@ const swatch = atom(
     today: NO_TODAY,
     trail: EMPTY_TRAIL,
     pinPaths: {},
-    hits: [],
-    everywhere: [],
     lenses: [],
-    sessions: [],
     loadedAt: 0,
   } as Swatch,
   { shape: 'swatch-18' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
-const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true, contextOpen: true }
+const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true }
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
   { aboutMe: true, openAugi: true, project: true, today: true } as Picks,
@@ -575,7 +576,7 @@ const picks = atom(
 )
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
-  { ...CARDS_OPEN, anchorsOpen: false, sessionsOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, filesOpen: false, taskMode: '', logged: 0 } as View,
+  { ...CARDS_OPEN, anchorsOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, filesOpen: false, taskMode: '', logged: 0 } as View,
   { shape: 'view-12' },
 )
 const made = atom(
@@ -1193,22 +1194,35 @@ export const trailTemplate = (note: string, today: string): string =>
     '',
   ].join('\n')
 
+// What the intro says of ## Context since pins became bullets. A log that carries it is in
+// today's form; one that doesn't still ticks what it pins (see `tidyTrail`).
+const PINS_ARE_BULLETS = 'Context lines are `- [[note]] · why it matters`'
+// Whether a log is from before that: every pin line in it is a pin, whatever its box.
+const isOldLog = (text: string): boolean => !text.includes(PINS_ARE_BULLETS)
+
 // The log's first body line links the human note, so the note shows it as a backlink.
 const logIntro = (note: string): string =>
-  `Human note: [[${note}]]. Context lines are \`- [x] [[note]] · why it matters\` (ticked goes into the next draft). Each chat is one line: when it started, its goal, its id; one that is finished stays listed, marked \`(done)\`.`
+  `Human note: [[${note}]]. ${PINS_ARE_BULLETS}: each is pinned and goes into the next draft; one ticked off (\`- [x]\`) was unpinned. Each chat is one line: when it started, its goal, its id; one that is finished stays listed, marked \`(done)\`.`
 // The intros earlier versions wrote, replaced with the current one when the pane writes the log.
 const oldLogIntros = (note: string): string[] => [
+  `Human note: [[${note}]]. Context lines are \`- [x] [[note]] · why it matters\` (ticked goes into the next draft). Each chat is one line: when it started, its goal, its id; one that is finished stays listed, marked \`(done)\`.`,
   `Project: [[${note}]], embedded there under # Agent Log. Context lines are \`- [x] [[note]] · why it matters\` (ticked goes into the next draft). Hidden chats stay listed, marked \`(hidden)\`.`,
   `Human note: [[${note}]]. Context lines are \`- [x] [[note]] · why it matters\` (ticked goes into the next draft). Hidden chats stay listed, marked \`(hidden)\`.`,
 ]
 
 // An older log in the current shape: no title H1 (Agent Log or Trail), no seen box,
-// the human-note link first. Removes only those exact lines and the blank each leaves.
+// the human-note link first, its pins as bullets (ticked or not, each was a pin). Removes
+// only those exact lines and the blank each leaves.
 export const tidyTrail = (text: string, note: string): string => {
   const dropped = new Set([`# ${logName(note)}`, `# Trail - ${safe(note)}`, '- [ ] seen', '- [x] seen'])
+  const isOld = isOldLog(text)
   const lines: string[] = []
   let gap = false
-  for (const line of text.split('\n')) {
+  let section = ''
+  for (const each of text.split('\n')) {
+    section = each.match(/^## (.+)$/)?.[1]?.trim() ?? section
+    const pin = isOld && section === 'Context' ? parsePin(each, true) : null
+    const line = pin ? pinLine(pin) : each
     if (dropped.has(line)) {
       gap = gap || lines.length === 0 || lines[lines.length - 1] === ''
       continue
@@ -1245,6 +1259,7 @@ export const parseTrail = (text: string): Trail => {
   const chats: Chat[] = []
   const saved: string[] = []
   const pins: Pin[] = []
+  const isOld = isOldLog(text)
   let section = ''
 
   for (const line of text.split('\n')) {
@@ -1266,7 +1281,7 @@ export const parseTrail = (text: string): Trail => {
       }
     }
     if (section === 'Context') {
-      const pin = parsePin(line)
+      const pin = parsePin(line, isOld)
       if (pin) {
         pins.push(pin)
       }
@@ -1282,15 +1297,18 @@ export const parseTrail = (text: string): Trail => {
   return { questions, chats, saved, pins }
 }
 
-// ## Context lines: `- [x] [[Note]]` for a note, `- [ ] kind: \`target\` · label` for the rest.
-const PIN_LINE = /^- \[([ x])\] (?:\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|(file|session|artifact|url): `([^`]+)`)(?: · (.*))?\s*$/
+// ## Context lines: `- [[Note]] · label` for a note, `- kind: \`target\` · label` for the
+// rest. A pin is a plain bullet (an open box reads the same); `- [x]` is one that was
+// unpinned: kept on the log, out of the pane and the drafts.
+const PIN_LINE = /^- (?:\[([ x])\] )?(?:\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|(file|session|artifact|url): `([^`]+)`)(?: · (.*))?\s*$/
 
-export const parsePin = (line: string): Pin | null => {
+// `isOld` reads a line from a log of before bullets, where a tick meant pinned.
+export const parsePin = (line: string, isOld = false): Pin | null => {
   const found = line.match(PIN_LINE)
   if (!found) {
     return null
   }
-  const on = found[1] === 'x'
+  const on = isOld || found[1] !== 'x'
   if (found[2]) {
     return { on, kind: 'note', target: found[2].trim(), label: (found[5] ?? '').trim() || found[2].trim() }
   }
@@ -1301,7 +1319,7 @@ export const parsePin = (line: string): Pin | null => {
 const clean = (text: string): string => text.replace(/[`\n]/g, ' ').replace(/\s+/g, ' ').trim()
 
 export const pinLine = (pin: Pin): string => {
-  const box = `- [${pin.on ? 'x' : ' '}]`
+  const box = pin.on ? '-' : '- [x]'
   if (pin.kind === 'note') {
     return pin.label && pin.label !== pin.target ? `${box} [[${pin.target}]] · ${clean(pin.label)}` : `${box} [[${pin.target}]]`
   }
@@ -1312,11 +1330,13 @@ export const pinLine = (pin: Pin): string => {
 
 const samePin = (a: Pin, b: Pin): boolean => a.kind === b.kind && a.target === b.target
 
-// Adds a pin at the end of ## Context; one already there stays as it is. A trail
-// without the section gets it above ## Questions, or at the end.
+// Adds a pin at the end of ## Context; one already there stays where it is, pinned
+// again if it had been unpinned. A trail without the section gets it above
+// ## Questions, or at the end.
 export const addPin = (text: string, pin: Pin): string => {
-  if (parseTrail(text).pins.some(one => samePin(one, pin))) {
-    return text
+  const had = parseTrail(text).pins.find(one => samePin(one, pin))
+  if (had) {
+    return had.on ? text : changePin(text, pin, one => ({ ...one, on: true }))
   }
   const lines = text.split('\n')
   const at = lines.findIndex(line => line.trim() === '## Context')
@@ -1348,7 +1368,8 @@ export const addPin = (text: string, pin: Pin): string => {
   return `${text.trimEnd()}\n\n## Context\n\n${pinLine(pin)}\n`
 }
 
-const changePin = (text: string, pin: Pin, change: (one: Pin) => Pin | null): string => {
+function changePin(text: string, pin: Pin, change: (one: Pin) => Pin | null): string {
+  const isOld = isOldLog(text)
   let section = ''
   const out: string[] = []
   for (const line of text.split('\n')) {
@@ -1356,7 +1377,7 @@ const changePin = (text: string, pin: Pin, change: (one: Pin) => Pin | null): st
     if (heading) {
       section = heading[1].trim()
     }
-    const found = section === 'Context' ? parsePin(line) : null
+    const found = section === 'Context' ? parsePin(line, isOld) : null
     if (found && samePin(found, pin)) {
       const next = change(found)
       if (next) {
@@ -1370,9 +1391,9 @@ const changePin = (text: string, pin: Pin, change: (one: Pin) => Pin | null): st
   return out.join('\n')
 }
 
-export const setPinOn = (text: string, pin: Pin, on: boolean): string => changePin(text, pin, one => ({ ...one, on }))
-
-export const removePin = (text: string, pin: Pin): string => changePin(text, pin, () => null)
+// Unpins: the line stays on the log, ticked off. A log from before bullets has no way to
+// say that (its ticks were pins), so there the line goes.
+export const removePin = (text: string, pin: Pin): string => changePin(text, pin, one => (isOldLog(text) ? null : { ...one, on: false }))
 
 const baseName = (path: string): string => path.split('/').pop() ?? path
 
@@ -1405,68 +1426,11 @@ export const pinFrom = (input: string, notes: string, home: string): Pin | null 
   return { on: true, kind: 'file', target: path, label: baseName(path) }
 }
 
-export const sessionPin = (one: Session): Pin => ({ on: true, kind: 'session', target: one.path, label: `${one.repo} · ${one.title}` })
-
 // The command that picks a session back up: claude's by id, codex's by path.
 const resumeOf = (path: string): string =>
   !path.includes('/.codex/') && path.endsWith('.jsonl') ? `claude --resume ${baseName(path).replace(/\.jsonl$/, '')}` : path
 
-// The paths in an OpenAugi search answer, vault-relative, once each. Its text can
-// be the JSON itself or a { result } wrapping it as a string.
-export const pathsFromSearch = (text: string): string[] => {
-  let value: unknown = text
-  for (let depth = 0; depth < 3 && typeof value === 'string'; depth += 1) {
-    try {
-      value = JSON.parse(value)
-    } catch {
-      return []
-    }
-    if (value && typeof value === 'object' && typeof (value as { result?: unknown }).result === 'string') {
-      value = (value as { result: string }).result
-    }
-  }
-  const results = (value as { results?: unknown })?.results
-  const paths: string[] = []
-  for (const one of Array.isArray(results) ? results : []) {
-    const path = (one as { source_path?: unknown })?.source_path
-    if (typeof path === 'string' && path.endsWith('.md') && !paths.includes(path)) {
-      paths.push(path)
-    }
-  }
-
-  return paths
-}
-
-// Exactly what a draft from the pane puts in, in the order the draft names it.
-export type ContextItem = { key: string; label: string; path: string; kind: 'note' | 'pin' | 'search' }
-
-export const contextItems = (pins: Pin[], choice: Picks, anchor: Anchor | null, everywhere: Pin[] = [], today = ''): ContextItem[] => {
-  const items: ContextItem[] = []
-  if (anchor && choice.project) {
-    items.push({ key: 'in-note', label: anchor.note, path: anchor.notePath, kind: 'note' })
-    items.push({ key: 'in-trail', label: `Trail - ${anchor.note}`, path: anchor.trail, kind: 'note' })
-  }
-  for (const pin of anchor ? pins.filter(one => one.on) : []) {
-    items.push({ key: `in-pin-${pin.kind}-${pin.target}`, label: pin.label, path: pin.kind === 'note' ? pin.path ?? '' : pin.target, kind: 'pin' })
-  }
-  for (const pin of extraPins(pins, everywhere, Boolean(anchor))) {
-    items.push({ key: `in-all-${pin.kind}-${pin.target}`, label: pin.label, path: pin.kind === 'note' ? pin.path ?? '' : pin.target, kind: 'pin' })
-  }
-  if (choice.aboutMe) {
-    items.push({ key: 'in-context', label: noteName(P.context), path: P.context, kind: 'note' })
-    items.push({ key: 'in-board', label: noteName(P.board), path: P.board, kind: 'note' })
-  }
-  if (today && choice.today) {
-    items.push({ key: 'in-today', label: noteName(today), path: today, kind: 'note' })
-  }
-  if (choice.openAugi) {
-    items.push({ key: 'in-search', label: 'notes the chat finds by searching (it names them in its answer)', path: '', kind: 'search' })
-  }
-
-  return items
-}
-
-// One draft line for a ticked pin.
+// One draft line for a pin.
 const pinDraftLine = (pin: Pin): string => {
   if (pin.kind === 'note') {
     return pin.path ? `- Note: "${pin.path}" (${pin.target}).` : `- Note: [[${pin.target}]] (find it in "${P.notes}").`
@@ -1484,7 +1448,6 @@ const pinDraftLine = (pin: Pin): string => {
 const noteName = (path: string): string => (path.split('/').pop() ?? path).replace(/\.md$/, '')
 
 // A Claude session file is named by its id, so a click can copy the resume command.
-export const resumeCommand = (session: Session): string => (session.tool === 'claude' ? resumeOf(session.path) : session.path)
 
 const chatLine = (chat: Chat): string =>
   `- ${chat.when} · ${chat.title.replace(/·|`/g, ' ').trim()} · \`${chat.id}\`${chat.done ? ' (done)' : ''}`
@@ -1538,21 +1501,6 @@ export const promptTitle = (text: string): string => {
   return first.startsWith('/') ? '' : first.replace(/<[^>]+>/g, ' ').replace(/[·`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 70)
 }
 
-const PIN_KINDS: PinKind[] = ['note', 'file', 'session', 'artifact', 'url']
-
-// What the store holds under the pins key, read defensively.
-export const storedPins = (value: unknown): Pin[] =>
-  Array.isArray(value)
-    ? value.filter((one): one is Pin => {
-        const pin = one as Partial<Pin> | null
-        return Boolean(pin) && typeof pin?.on === 'boolean' && typeof pin.target === 'string' && typeof pin.label === 'string' && PIN_KINDS.includes(pin.kind as PinKind)
-      })
-    : []
-
-// The everywhere pins a draft adds: ticked, and not already going in from the anchor.
-export const extraPins = (pins: Pin[], everywhere: Pin[], hasAnchor: boolean): Pin[] =>
-  everywhere.filter(one => one.on && !(hasAnchor && pins.some(other => other.on && samePin(one, other))))
-
 // What the store holds under the anchors key, read defensively.
 export const anchorPairs = (value: unknown): [string, string][] =>
   Array.isArray(value)
@@ -1576,15 +1524,15 @@ export const withTouched = (list: TouchedFile[], one: TouchedFile, kept = TOUCHE
 export const isListedTouch = (path: string, notes: string, trails: string): boolean =>
   Boolean(path) && !(trails && path.startsWith(`${trails}/`)) && !(notes && path.startsWith(`${notes}/`) && path.slice(notes.length).includes('/.'))
 
-// A touched file as a pin, unticked (a link, not prompt context): a vault note by name, else the file.
+// A touched file as a pin: a vault note by name, else the file.
 export const touchedPin = (path: string, notes: string): Pin => {
   if (isVaultNote(path, notes)) {
     const name = baseName(path).replace(/\.md$/, '')
 
-    return { on: false, kind: 'note', target: name, label: name, path }
+    return { on: true, kind: 'note', target: name, label: name, path }
   }
 
-  return { on: false, kind: 'file', target: path, label: baseName(path) }
+  return { on: true, kind: 'file', target: path, label: baseName(path) }
 }
 
 // Pins as the context card lists them: artifacts first, each group in its order.
@@ -1609,94 +1557,16 @@ export const stamp = (ms: number): string => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-const repoFrom =(cwd: string): string => cwd.split('/').filter(Boolean).pop() ?? 'unknown'
-
-const oneLine = (text: string): string =>
-  text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 50)
-
-const firstUserText = (content: unknown): string => {
-  if (typeof content === 'string') {
-    return content
-  }
-  if (Array.isArray(content)) {
-    const block = content.find(one => one?.type === 'text')
-
-    return typeof block?.text === 'string' ? block.text : ''
-  }
-
-  return ''
-}
-
-// Reads the start of a Claude Code transcript. Null for what isn't a person's
-// coding session: headless runs, and tasks the OpenAugi watcher dispatched.
-export const parseClaudeHead = (raw: string): { repo: string; title: string } | null => {
-  let cwd = ''
-  let prompt = ''
-  let title = ''
-
-  for (const line of raw.split('\n')) {
-    let row: Record<string, any>
-    try {
-      row = JSON.parse(line)
-    } catch {
-      continue
-    }
-    if (row.type === 'custom-title' && typeof row.customTitle === 'string') {
-      title = row.customTitle
-    }
-    if (row.type === 'user' && !row.isMeta && !row.isSidechain && !prompt) {
-      if (row.entrypoint === 'sdk-cli') {
-        return null
-      }
-      const text = firstUserText(row.message?.content)
-      // A slash command's own rows are not what the session is about.
-      if (text && !text.startsWith('<')) {
-        prompt = text
-        cwd = typeof row.cwd === 'string' ? row.cwd : ''
-      }
-    }
-  }
-  // An Augi chat opens with our own draft, so it isn't a coding session either.
-  if (!prompt || prompt.startsWith('Read your skill file first') || prompt.startsWith(DRAFT_HEAD)) {
-    return null
-  }
-
-  return { repo: repoFrom(cwd), title: oneLine(title || prompt) }
-}
-
-// A Codex session_meta line can outrun the bytes read, so this matches text.
-// Null for a thread an agent spawned rather than a person.
-export const parseCodexHead = (raw: string): { repo: string; title: string } | null => {
-  if (!raw.includes('"thread_source":"user"')) {
-    return null
-  }
-  const cwd = raw.match(/"cwd":"([^"]+)"/)?.[1] ?? ''
-
-  return { repo: repoFrom(cwd), title: 'Codex session' }
-}
-
-export const ago = (now: number, then: number): string => {
-  const minutes = Math.max(0, Math.round((now - then) / 60000))
-  if (minutes < 60) {
-    return `${minutes}m`
-  }
-  const hours = Math.round(minutes / 60)
-
-  return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`
-}
-
 export type Anchor = { note: string; notePath: string; trail: string }
 
 // `pins` are the anchor's pinned context, a note's `path` filled where it was found;
-// `everywhere` the pins that go into every chat; `today` the path of today's note when
-// there is one.
+// `today` the path of today's note when there is one.
 export const buildDraft = (
   pins: Pin[],
   choice: Picks,
   lens: Lens | null,
   typed: string,
   anchor: Anchor | null = null,
-  everywhere: Pin[] = [],
   today = '',
 ): string => {
   const lines = [DRAFT_HEAD]
@@ -1707,9 +1577,6 @@ export const buildDraft = (
     lines.push(`- Project [[${anchor.note}]]: ${where}, my note (outcome, Next, Journal), and its Agent Log "${anchor.trail}": the context, questions, chats and notes saved on it so far. Read both.`)
   }
   for (const pin of anchor ? pins.filter(one => one.on) : []) {
-    lines.push(pinDraftLine(pin))
-  }
-  for (const pin of extraPins(pins, everywhere, Boolean(anchor))) {
     lines.push(pinDraftLine(pin))
   }
   if (choice.aboutMe) {
@@ -1727,7 +1594,7 @@ export const buildDraft = (
   lines.push('Reply in at most 10 lines: what you found or did, then anything you need from me. No walls of text.')
   lines.push("Don't change any files unless my instruction asks you to.")
   if (anchor) {
-    lines.push(`Write only to the Agent Log, never to my note. If you write a note for this, add "- [[<its name>]]" under ## Saved there; if you find something worth keeping for this project, add "- [ ] [[<note>]] · <why it matters>" under ## Context.`)
+    lines.push(`Write only to the Agent Log, never to my note. If you write a note for this, add "- [[<its name>]]" under ## Saved there; if you find something worth keeping for this project, add "- [[<note>]] · <why it matters>" under ## Context, which pins it.`)
   }
   lines.push(`Instruction: ${typed}`)
 
@@ -1744,7 +1611,7 @@ export const anchorBrief = (anchor: Anchor, today = '', was = ''): string => {
       ? `Augi: this chat is now anchored to [[${anchor.note}]], no longer to [[${was}]].`
       : `Augi: this chat is anchored to [[${anchor.note}]], the task or project it is working on.`,
     `- My note: ${where}. It is mine: its outcome, what is next and its Journal.`,
-    `- Its Agent Log: "${anchor.trail}". Yours to write: links and decisions worth keeping under ## Context (one line each, with why), open questions under ## Questions, and "- [[<its name>]]" under ## Saved for a note you write for this work.`,
+    `- Its Agent Log: "${anchor.trail}". Yours to write: what is worth keeping under ## Context (one line each, with why; "- [[<note>]] · <why>" pins a note to this work), open questions under ## Questions, and "- [[<its name>]]" under ## Saved for a note you write for this work.`,
   ]
   if (today) {
     lines.push(`- Today's note: "${today}".`)
@@ -1799,107 +1666,6 @@ export const typedFrom = (box: string): string => {
 export const toggled = (list: string[], item: string): string[] =>
   list.includes(item) ? list.filter(one => one !== item) : [...list, item]
 
-// Codex multi-agent runs write several rollouts in the same second, all marked as
-// the person's. Keep the newest of each, named by the timestamp in its file name.
-export const onePerCodexRun = (sessions: Session[]): Session[] => {
-  const seen = new Set<string>()
-
-  return sessions.filter(one => {
-    const run = one.tool === 'codex' ? one.path.match(/rollout-([\dT-]+?)-[0-9a-f]{8}-/)?.[1] : undefined
-    if (!run) {
-      return true
-    }
-    if (seen.has(run)) {
-      return false
-    }
-    seen.add(run)
-
-    return true
-  })
-}
-
-async function headOf($: EngineInterface, path: string): Promise<string> {
-  const { stdout } = await $.process.run(['head', '-c', HEAD_BYTES, path])
-
-  return stdout
-}
-
-async function claudeCandidates($: EngineInterface): Promise<Session[]> {
-  const found: Session[] = []
-
-  if (!(await $.fs.exists(P.claudeDir))) {
-    return found
-  }
-  for (const dir of await $.fs.list(P.claudeDir)) {
-    if (dir.kind === 'dir' && !dir.name.startsWith('-private-tmp')) {
-      const files = await $.fs.list(`${P.claudeDir}/${dir.name}`)
-      for (const file of files) {
-        if (file.name.endsWith('.jsonl')) {
-          found.push({
-            path: `${P.claudeDir}/${dir.name}/${file.name}`,
-            tool: 'claude',
-            repo: '',
-            title: '',
-            mtimeMs: file.mtimeMs,
-          })
-        }
-      }
-    }
-  }
-
-  return found
-}
-
-// Codex keeps sessions under year/month/day, so the newest two days cover "recent".
-async function codexCandidates($: EngineInterface): Promise<Session[]> {
-  const found: Session[] = []
-  if (!(await $.fs.exists(P.codexDir))) {
-    return found
-  }
-  const days: string[] = []
-
-  for (const year of await $.fs.list(P.codexDir)) {
-    for (const month of await $.fs.list(`${P.codexDir}/${year.name}`)) {
-      for (const day of await $.fs.list(`${P.codexDir}/${year.name}/${month.name}`)) {
-        days.push(`${P.codexDir}/${year.name}/${month.name}/${day.name}`)
-      }
-    }
-  }
-  for (const day of days.sort().slice(-2)) {
-    for (const file of await $.fs.list(day)) {
-      if (file.name.endsWith('.jsonl')) {
-        found.push({ path: `${day}/${file.name}`, tool: 'codex', repo: '', title: '', mtimeMs: file.mtimeMs })
-      }
-    }
-  }
-
-  return found
-}
-
-async function recentSessions($: EngineInterface): Promise<Session[]> {
-  const own = await $.session.id()
-  const all = onePerCodexRun(
-    [...(await claudeCandidates($)), ...(await codexCandidates($))]
-      .filter(one => !own || !one.path.includes(own))
-      .sort((a, b) => b.mtimeMs - a.mtimeMs),
-  ).slice(0, 400)
-  const kept: Session[] = []
-
-  for (const one of all) {
-    if (kept.length === SESSION_KEYS.length) {
-      break
-    }
-    const raw = await headOf($, one.path)
-    const parsed = one.tool === 'claude' ? parseClaudeHead(raw) : parseCodexHead(raw)
-    if (parsed) {
-      kept.push({ ...one, ...parsed })
-    }
-  }
-
-  return kept
-}
-
-
 async function notePathOf($: EngineInterface, note: string): Promise<string> {
   const { stdout } = await $.process.run([
     'find', P.notes, '-name', `${note}.md`, '-not', '-path', '*/.git/*', '-not', '-path', '*/.obsidian/*', '-not', '-path', '*/.claude/*',
@@ -1924,7 +1690,7 @@ async function moveOldTrail($: EngineInterface, note: string): Promise<void> {
 }
 
 // Reads the anchored card's note and Agent Log; the rest of the pane stays as it was.
-async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'jira' | 'trail' | 'pinPaths' | 'hits'>> {
+async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'jira' | 'trail' | 'pinPaths'>> {
   const chosen = await sessionAnchor($)
   let anchor = chosen ? anchorCard(cards, chosen) : null
   // A note not on the board (a pasted draft named it, or it left the board) still
@@ -1934,14 +1700,14 @@ async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatc
     anchor = { column: '', note: chosen, detail: '', tasks: [] }
   }
   if (!anchor) {
-    return { anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }
+    return { anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {} }
   }
   const notePath = bare || (await notePathOf($, anchor.note))
   const noteText = notePath ? await $.fs.read(notePath) : ''
   await moveOldTrail($, anchor.note)
   const trail = parseTrail(await readOr($, trailPath(anchor.note)))
   const pinPaths: Record<string, string> = {}
-  for (const pin of trail.pins.filter(one => one.kind === 'note')) {
+  for (const pin of trail.pins.filter(one => one.on && one.kind === 'note')) {
     pinPaths[pin.target] = await notePathOf($, pin.target)
   }
 
@@ -1953,7 +1719,6 @@ async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatc
     jira: jiraFrom(noteText),
     trail,
     pinPaths,
-    hits: [],
   }
 }
 
@@ -2168,9 +1933,7 @@ async function load($: EngineInterface): Promise<void> {
     jiraServer: await jiraServerNow($),
     taskTemplate: taskTemplateState(await readOr($, P.taskTemplate)),
     today: await todayNow($, dailyPattern(P.daily, P.daily ? '' : await readOr($, P.obsidianDaily), P.daily ? '' : await readOr($, P.obsidianApp))),
-    everywhere: storedPins(await $.store.get(PINS_KEY)),
     lenses: [],
-    sessions: await recentSessions($),
     loadedAt: await $.clock.now(),
   }
 
@@ -2409,7 +2172,7 @@ export async function resync($: EngineInterface): Promise<void> {
   seenStamp = stamp
   const cards = kanbanCards(await readOr($, P.board))
   const found = await loadAnchor($, cards)
-  await update($, swatch, old => (old.anchor?.note === anchor.note ? { ...old, cards, ...found, hits: old.hits } : old))
+  await update($, swatch, old => (old.anchor?.note === anchor.note ? { ...old, cards, ...found } : old))
 }
 
 // Checks the anchor's files every few seconds while the pane is open in this process.
@@ -2483,7 +2246,7 @@ async function anchorFromPaste($: EngineInterface, text: string): Promise<void> 
 async function clearAnchor($: EngineInterface): Promise<void> {
   await setSessionAnchor($, '')
   await keepInherited($)
-  await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
+  await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {} }))
   await update($, view, old => ({ ...old, anchorsOpen: false, taskMode: '' as const }))
 }
 
@@ -2495,11 +2258,11 @@ async function anchorNow($: EngineInterface): Promise<Anchor | null> {
 
 // `about` replaces what's typed in the prompt box: a captured question, for one.
 async function draftText($: EngineInterface, lens: Lens | null, about?: string): Promise<string> {
-  const { trail, pinPaths, everywhere, today } = await read($, swatch)
+  const { trail, pinPaths, today } = await read($, swatch)
   const choice = await read($, picks)
   const typed = about ?? typedFrom((await $.prompt.read()).text)
 
-  return buildDraft(withPaths(trail.pins ?? [], pinPaths), choice, lens, typed, await anchorNow($), everywhere ?? [], today.exists ? today.path : '')
+  return buildDraft(withPaths(trail.pins ?? [], pinPaths), choice, lens, typed, await anchorNow($), today.exists ? today.path : '')
 }
 
 // Fills the prompt box with a pane draft. A prompt the user was typing is not lost:
@@ -2533,75 +2296,20 @@ async function pinIt($: EngineInterface, note: string, pin: Pin): Promise<void> 
     await update($, swatch, old => ({ ...old, pinPaths: { ...old.pinPaths, [pin.target]: found } }))
   }
   await writeTrail($, note, text => addPin(text, kept))
-  await update($, swatch, old => ({ ...old, hits: old.hits.filter(one => !(one.kind === pin.kind && one.target === pin.target)) }))
 }
 
-// Rewrites the pins that go into every chat, in the store and in the pane.
-async function setEverywhere($: EngineInterface, change: (pins: Pin[]) => Pin[]): Promise<void> {
-  const pins = change(storedPins(await $.store.get(PINS_KEY))).slice(-PINS_KEPT)
-  await $.store.set(PINS_KEY, pins)
-  await update($, swatch, old => ({ ...old, everywhere: pins }))
-}
-
-// Pins something for every chat. A note keeps where it was found, as on a trail.
-async function pinEverywhere($: EngineInterface, pin: Pin): Promise<void> {
-  const found = pin.kind === 'note' ? pin.path || (await notePathOf($, pin.target)) : ''
-  const kept: Pin = found ? { ...pin, path: found } : pin
-  await setEverywhere($, pins => (pins.some(one => samePin(one, pin)) ? pins : [...pins, kept]))
-  await update($, swatch, old => ({ ...old, hits: old.hits.filter(one => !samePin(one, pin)) }))
-}
-
-// A pasted link, [[note]] or path, pinned to the anchor or for every chat.
-async function pinTyped($: EngineInterface, value: string, where: 'anchor' | 'everywhere' = 'anchor'): Promise<void> {
+// A pasted link, [[note]] or path, pinned to the anchor.
+async function pinTyped($: EngineInterface, value: string): Promise<void> {
   const { anchor } = await read($, swatch)
   const pin = pinFrom(value, P.notes, P.home)
-  if (!pin || (where === 'anchor' && !anchor)) {
+  if (!pin || !anchor) {
     return
   }
   if ((pin.kind === 'file' || pin.kind === 'session') && !(await $.fs.exists(pin.target))) {
     await $.ui.toast(`Not found: ${pin.target}`)
     return
   }
-  if (where === 'everywhere' || !anchor) {
-    await pinEverywhere($, pin)
-    return
-  }
   await pinIt($, anchor.note, pin)
-}
-
-// OpenAugi's semantic search first; a file-name match when it finds nothing or isn't there.
-async function searchNotes($: EngineInterface, query: string): Promise<void> {
-  const asked = query.trim()
-  if (!asked) {
-    await update($, swatch, old => ({ ...old, hits: [] }))
-    return
-  }
-  let paths: string[] = []
-  try {
-    const answer = await $.mcp.call('openaugi', 'search', { query: asked, k: 20 })
-    const text = (answer.content ?? []).map(block => (block.type === 'text' ? block.text ?? '' : '')).join('')
-    paths = pathsFromSearch(text).map(rel => `${P.notes}/${rel}`)
-  } catch {
-    paths = []
-  }
-  if (paths.length === 0) {
-    const pattern = `*${asked.replace(/[*?[\]]/g, '')}*.md`
-    const { stdout } = await $.process.run(['find', P.notes, '-path', '*/.*', '-prune', '-o', '-type', 'f', '-iname', pattern, '-print'])
-    paths = stdout.split('\n').filter(Boolean)
-  }
-  const { trail, everywhere } = await read($, swatch)
-  const hits: Pin[] = []
-  for (const path of paths) {
-    const name = baseName(path).replace(/\.md$/, '')
-    const isPinned = [...(trail.pins ?? []), ...(everywhere ?? [])].some(one => one.kind === 'note' && one.target === name)
-    if (!isPinned && !hits.some(one => one.target === name)) {
-      hits.push({ on: true, kind: 'note', target: name, label: name, path })
-    }
-  }
-  await update($, swatch, old => ({ ...old, hits: hits.slice(0, 5) }))
-  if (hits.length === 0) {
-    await $.ui.toast(`No notes found for "${asked}".`)
-  }
 }
 
 async function copyText($: EngineInterface, text: string, said = 'Copied'): Promise<void> {
@@ -2686,7 +2394,7 @@ async function rememberArtifact($: EngineInterface, one: MadeArtifact): Promise<
   await update($, made, old => ({ session: id, artifacts: withArtifact(old.session === id ? old.artifacts : [], one) }))
 }
 
-// An artifact the chat published, pinned ticked: it sticks to the anchor as context.
+// An artifact the chat published, pinned: it sticks to the anchor as context.
 const artifactPin = (one: MadeArtifact): Pin => ({ on: true, kind: 'artifact', target: one.url, label: one.title })
 
 export const ARTIFACT_URL = /https:\/\/claude\.ai\/(?:code\/)?artifact\/[\w-]+/
@@ -3174,7 +2882,7 @@ export const register: Register = (on, options) => {
   on('session.end', async ($, e, next) => {
     const ended = await next(e)
     if (e.reason === 'clear' || e.reason === 'resume') {
-      await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {}, hits: [] }))
+      await update($, swatch, old => ({ ...old, anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {} }))
       // The scratchpad was that chat's; it doesn't follow into the next.
       await update($, pad, () => [])
       await typePad($, '')
@@ -3330,7 +3038,7 @@ export const register: Register = (on, options) => {
       if (note && ran.deny === undefined && !ran.isError) {
         const name = baseName(path).replace(/\.md$/, '')
         await update($, swatch, old => ({ ...old, pinPaths: { ...old.pinPaths, [name]: path } }))
-        await writeTrail($, note, text => addPin(text, { on: false, kind: 'note', target: name, label: name }))
+        await writeTrail($, note, text => addPin(text, { on: true, kind: 'note', target: name, label: name }))
       }
     } catch (error) {
       await $.ui.toast(`Augi couldn't pin this note: ${String(error)}`)
@@ -3343,13 +3051,11 @@ export const register: Register = (on, options) => {
     const { Box, Button, Input, Text } = $.ui.resolve(e)
     // Svg is drawn by the desktop, editor and phone, not the terminal.
     const Svg = e.surface === 'terminal' ? null : (($.ui.resolve(e) as unknown as { Svg?: typeof Text }).Svg ?? null)
-    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, trail, pinPaths, hits, lenses, sessions, loadedAt } = await read($, swatch)
-    const everywhere = (await read($, swatch)).everywhere ?? []
+    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, trail, pinPaths, lenses } = await read($, swatch)
     // Jira shows only when it is on: a server found or named, a project or site set, or a key on the anchor.
     const isJiraOn = Boolean(jiraServer || P.jiraServer || P.jiraProject || P.jiraSite || jira)
     const choice = await read($, picks)
     const shown = await read($, view)
-    const ownArtifacts = await sessionArtifacts($)
     const ownFiles = await sessionTouched($)
     let root = ''
     if (ownFiles.length > 0) {
@@ -3373,8 +3079,8 @@ export const register: Register = (on, options) => {
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
     const arrow = (isOpen: boolean): string => (isOpen ? '▾' : '▸')
     const flip = (key: keyof View) => () => update($, view, old => ({ ...old, [key]: !old[key] }))
-    const pins = withPaths(trail.pins ?? [], pinPaths ?? {})
-    const contextCount = contextItems(pins, choice, anchor ? { note: anchor.note, notePath, trail: trailPath(anchor.note) } : null, everywhere, today.exists ? today.path : '').length
+    // What is pinned now: a line ticked off on the log was unpinned.
+    const pins = withPaths((trail.pins ?? []).filter(pin => pin.on), pinPaths ?? {})
     const PIN_ICON: Record<Pin['kind'], string> = { note: '▤', file: '📄', session: '◦', artifact: '◇', url: '🔗' }
     const pinKey = (pin: Pin): string => `${pin.kind}-${pin.target}`
     const onPins = (change: (text: string) => string) => (anchor ? writeTrail($, anchor.note, change) : undefined)
@@ -3401,17 +3107,6 @@ export const register: Register = (on, options) => {
         <Box flexDirection="row" alignItems="center" flexShrink={1} gap={1}>{main}</Box>
         <Box flexDirection="row" alignItems="center" flexShrink={0} gap={1}>{actions}</Box>
       </Box>
-    )
-    // What every draft carries without being listed: switched under Setup.
-    const standing = [anchor && choice.project ? `notes for ${anchor.note}` : '', choice.aboutMe ? 'your overall context' : '', choice.today && today.exists ? "today's note" : '', choice.openAugi ? 'a search of your notes' : ''].filter(Boolean)
-    // A search hit or recent session, offered to the anchor or to every chat.
-    const offer = (pin: Pin, label: string) => line(
-      `offer-${pinKey(pin)}`,
-      <Text key={`offer-label-${pinKey(pin)}`} wrap="truncate-end">{`+ ${label}`}</Text>,
-      [
-        anchor && <Button key={`offer-anchor-${pinKey(pin)}`} label="pin to anchor" onPress={() => pinIt($, anchor.note, pin)} />,
-        <Button key={`offer-all-${pinKey(pin)}`} label="pin everywhere" onPress={() => pinEverywhere($, pin)} />,
-      ],
     )
     const CARD = { flexDirection: 'column', borderStyle: 'round', paddingX: 1, marginBottom: 1 } as const
     const gaps = setup.filter(item => !item.ok).length + (taskTemplate === 'old' ? 1 : 0)
@@ -3607,23 +3302,19 @@ export const register: Register = (on, options) => {
               )}
             </Box>
 
-            {anchor && (
-              <Box key="card-pins" {...CARD} borderColor="remember">
-                {head('pinsOpen', `📌 Pinned to ${anchor.note} · ${pins.length}`, 'remember')}
-                {shown.pinsOpen && <Text key="pins-hint" dimColor wrap="wrap">{pins.length === 0 ? 'Nothing pinned yet. ' : ''}☑ goes into this anchor's drafts · ☐ is a link only: press the box to switch it, the name to open it.</Text>}
-                {shown.pinsOpen && artifactsFirst(pins).map(pin => line(
-                  `pin-${pinKey(pin)}`,
-                  [
-                    <Button key={`pin-tick-${pinKey(pin)}`} plain label={mark(pin.on)} onPress={() => onPins(text => setPinOn(text, pin, !pin.on))} />,
-                    <Button key={`pin-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => openPin($, pin)} />,
-                  ],
-                  <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => onPins(text => removePin(text, pin))} />,
-                ))}
-                {shown.pinsOpen && (
-                  <Input key={`pin-paste-${pins.length}`} label="⧉" placeholder="paste an artifact link, [[note]] or file path: Enter pins it to this anchor" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
-                )}
-              </Box>
-            )}
+            <Box key="card-pins" {...CARD} borderColor="remember">
+              {head('pinsOpen', anchor ? `📌 Pinned to ${anchor.note} · ${pins.length}` : '📌 Context', 'remember')}
+              {shown.pinsOpen && anchor && artifactsFirst(pins).map(pin => line(
+                `pin-${pinKey(pin)}`,
+                <Button key={`pin-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => openPin($, pin)} />,
+                <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => onPins(text => removePin(text, pin))} />,
+              ))}
+              {shown.pinsOpen && anchor && (
+                <Input key={`pin-paste-${pins.length}`} label="⧉" placeholder="paste a [[note]], file path or link: Enter pins it" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
+              )}
+              {shown.pinsOpen && !anchor && <Text key="pins-none" dimColor wrap="wrap">Pick an anchor to pin notes, files and links to it.</Text>}
+              <Button key="draft" variant="primary" label={anchor ? '💬 draft a prompt with this context' : '💬 draft a prompt with my context'} hotkey="n" onPress={() => draft($, null)} />
+            </Box>
 
             {ownFiles.length > 0 && (
               <Box key="card-files" {...CARD} borderColor="subtle">
@@ -3635,7 +3326,7 @@ export const register: Register = (on, options) => {
                   return line(
                     `touched-${one.path}`,
                     [
-                      <Text key={`touched-path-${one.path}`} wrap="truncate-start">{shortPath(one.path, P.notes, P.home, root)}</Text>,
+                      <Text key={`touched-path-${one.path}`} wrap="truncate-end">{nameFirst(one.path, P.notes, P.home, root)}</Text>,
                       one.made && <Text key={`touched-new-${one.path}`} dimColor>new</Text>,
                     ],
                     [
@@ -3649,7 +3340,7 @@ export const register: Register = (on, options) => {
                 {shown.touchedOpen && ownFiles.length > 5 && (
                   <Button key="files-all" plain dimColor label={`${arrow(shown.filesOpen)} ${shown.filesOpen ? 'show fewer' : `show all (${ownFiles.length})`}`} onPress={flip('filesOpen')} />
                 )}
-                {shown.touchedOpen && !anchor && <Text dimColor>Pick an anchor to pin these to it, as links.</Text>}
+                {shown.touchedOpen && !anchor && <Text dimColor>Pick an anchor to pin these to it.</Text>}
               </Box>
             )}
 
@@ -3686,7 +3377,7 @@ export const register: Register = (on, options) => {
           </Box>
         )}
 
-        <Box key="section-anywhere" flexDirection="column">{section('anywhereOpen', 'Always · you, your context, saved prompts and setup')}</Box>
+        <Box key="section-anywhere" flexDirection="column">{section('anywhereOpen', 'Always · you, saved prompts and setup')}</Box>
         {shown.anywhereOpen && (
           <Box key="anywhere-body" flexDirection="column">
             <Box key="card-you" {...CARD} borderColor="claude">
@@ -3710,41 +3401,10 @@ export const register: Register = (on, options) => {
                       ))}
                       {today.todo.length === 0 && <Text key="today-clear" dimColor>Nothing open in today's note.</Text>}
                       <Input key={`today-log-${shown.logged ?? 0}`} label="+ log" placeholder="what you just did or decided: Enter adds it to today's note" submitLabel="log" onSubmit={value => logToday($, value)} />
-                      <Button key="pick-today" plain label={`${mark(choice.today)} today's note goes into every draft`} onPress={() => update($, picks, old => ({ ...old, today: !old.today }))} />
                     </Box>
                   )}
                 </Box>
               )}
-            </Box>
-
-            <Box key="card-context" {...CARD} borderColor="remember">
-              {head('contextOpen', `📎 Context · ${contextCount} going in`, 'remember')}
-              {shown.contextOpen && (
-                <Box key="context-body" flexDirection="column" marginBottom={1}>
-                  <Text dimColor>Pins here go into every chat's draft, whatever its anchor (☑ on, ☐ kept but left out; press the box to switch, the name to open). An anchor's own pins are under This chat.</Text>
-                  {standing.length > 0 && <Text key="standing" dimColor>{`+ ${standing.join(', ')} (switch these under Setup)`}</Text>}
-                  {!anchor && ownArtifacts.map(one => (
-                    <Text key={`made-${one.url}`} dimColor>{`◇ ${one.title}`}</Text>
-                  ))}
-                  {!anchor && ownArtifacts.length > 0 && <Text dimColor>Artifacts this chat published: picking an anchor keeps them with it.</Text>}
-                  {everywhere.map(pin => line(
-                    `all-${pinKey(pin)}`,
-                    [
-                      <Button key={`all-tick-${pinKey(pin)}`} plain label={mark(pin.on)} onPress={() => setEverywhere($, list => list.map(one => (samePin(one, pin) ? { ...one, on: !one.on } : one)))} />,
-                      <Button key={`all-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => openPin($, pin)} />,
-                    ],
-                    <Button key={`all-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => setEverywhere($, list => list.filter(one => !samePin(one, pin)))} />,
-                  ))}
-                  <Input key="pin-search" label="🔎" placeholder="search notes to pin (OpenAugi): Enter searches" submitLabel="search" onSubmit={value => searchNotes($, value)} />
-                  {(hits ?? []).map(hit => offer(hit, hit.label))}
-                  {(hits ?? []).length > 0 && <Button key="hits-clear" plain dimColor label="clear results" onPress={() => update($, swatch, old => ({ ...old, hits: [] }))} />}
-                  <Input key={`all-paste-${everywhere.length}`} label="⧉" placeholder="paste an artifact link, [[note]] or file path: Enter pins it for every chat" submitLabel="pin" onSubmit={value => pinTyped($, value, 'everywhere')} />
-                  <Button key="sessions-menu" plain dimColor label={`${arrow(shown.sessionsOpen)} pin a recent coding session`} onPress={flip('sessionsOpen')} />
-                  {shown.sessionsOpen && sessions.length === 0 && <Text dimColor>No recent coding sessions found.</Text>}
-                  {shown.sessionsOpen && sessions.map(one => offer(sessionPin(one), `${one.repo} · ${ago(loadedAt, one.mtimeMs)} · ${one.title}`))}
-                </Box>
-              )}
-              <Button key="draft" variant="primary" label="💬 draft a prompt with this context" hotkey="n" onPress={() => draft($, null)} />
             </Box>
 
             <Box key="card-lenses" {...CARD} borderColor="suggestion">
@@ -3767,6 +3427,7 @@ export const register: Register = (on, options) => {
                   <Text bold>What goes into every draft</Text>
                   <Button key="about-me" plain label={`${mark(choice.aboutMe)} my context note and board`} hotkey="m" onPress={() => update($, picks, old => ({ ...old, aboutMe: !old.aboutMe }))} />
                   <Button key="pick-project" plain label={`${mark(choice.project)} the anchor's 🧠 human and 🤖 agent notes`} onPress={() => update($, picks, old => ({ ...old, project: !old.project }))} />
+                  <Button key="pick-today" plain label={`${mark(choice.today)} today's note, when there is one`} onPress={() => update($, picks, old => ({ ...old, today: !old.today }))} />
                   <Button key="openaugi" plain label={`${mark(choice.openAugi)} a search of my notes (with OpenAugi)`} onPress={() => update($, picks, old => ({ ...old, openAugi: !old.openAugi }))} />
                   <Box key="setup-files" flexDirection="column" marginTop={1}>
                     <Text bold>Files and folders</Text>

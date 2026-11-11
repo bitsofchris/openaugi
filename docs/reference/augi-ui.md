@@ -66,12 +66,11 @@ anchor see each other's pins and tasks without a refresh.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
 chat is attached to: the anchor card, its
-pins, the files this chat touched, and the scratchpad. **Always** holds what
-is not tied to one chat: the You card (the season line from the context note,
-`✏️ my context`, `📋 the board` and today's note: see **Today** below), the
-context picker (search, and the pins
-that go into every chat), the lenses, and setup. Setup holds paths and
-switches only.
+pins with the draft button under them, the files this chat touched, and the
+scratchpad. **Always** holds what is not tied to one chat: the You card (the
+season line from the context note, `✏️ my context`, `📋 the board` and today's
+note: see **Today** below), the saved prompts, and setup. Setup holds paths
+and switches only.
 
 Both sections and every card fold: each title row ends in a `▾ hide` /
 `▸ show` button, and a folded card keeps its count in the title. Lenses and
@@ -155,7 +154,7 @@ are `dimColor`, and the one primary button is the draft.
   the anchor card's indented lines (`insertSubItem`; an anchor that is itself a
   sub-item gets it beside it under the same card; an anchor not on the board
   gets a top-level card at the end of the `taskColumn` setting's column, else the first, and the toast says
-  which), and the anchor pinned, ticked, in the child's Agent Log so the two
+  which), and the anchor pinned in the child's Agent Log so the two
   share context. Either way this chat's transcript is pinned there too and the
   board is read back into the pane. **A new task moves the chat onto it**: it
   is this chat starting something of its own, so the task becomes the chat's
@@ -199,8 +198,8 @@ are `dimColor`, and the one primary button is the draft.
   day's priorities stay in view, and follows the file: ticking one in the
   editor, or midnight passing, shows within seconds. `+ log` adds
   `- HH:MM text` to the note, under `dailyHeading` when one is set, else at
-  its end; a scratchpad entry has `→ today` for the same. A tick decides
-  whether the note goes into every draft (on by default: one line naming it).
+  its end; a scratchpad entry has `→ today` for the same. Whether the note
+  goes into every draft is a box under Setup (see **Context**).
   **The note is made only on a press, never by itself**: with none for today
   the card says where it would be and has `＋ make today's note`, which writes
   it and opens it. It is made from the template Obsidian's daily notes name,
@@ -211,27 +210,33 @@ are `dimColor`, and the one primary button is the draft.
   their press. With no daily note found and none set, the card says where to
   set one. A standup or a plan for the day is a lens the user writes that
   reads this note, not code.
-- **Context**: what the next chat is told to read. Three things go in without
-  being listed, each a checkbox under Setup → *What goes into every draft*, all
-  on by default: the anchor's human and agent notes, the context note and board
-  (`m`), and a search of the notes with OpenAugi. Today's note is a fourth,
-  ticked in the You card. The Context card names the
-  ones that are on in one dim line.
-- **Pins** come in two scopes. *Pinned to `<anchor>`* (a card in This chat) is
-  the anchor's own list, kept under `## Context` in its Agent Log: artifacts
-  (listed first), notes, files, links and coding sessions. An artifact the chat
-  publishes is pinned ticked; one published before an anchor was chosen is
-  pinned when it is. Paste a link, `[[note]]` or path in that card to pin it to
-  the anchor. *Everywhere* pins (in the Context card, under Always) go into
-  every chat's draft whatever its anchor, and are kept in the plugin's store,
-  not in a note (the newest 50). Paste one in the Context card, or choose
-  `pin everywhere` on a search hit or a recent session (`pin to anchor` is
-  offered beside it when the chat has an anchor). A pin in both lists goes into
-  the draft once. A pin row is its box, its name and `✕ unpin`: pressing the
-  name opens the pin (a session copies its resume command), pressing the box
-  switches its tick, and the card says what the tick means (☑ goes into
-  drafts, ☐ is a link only).
-- **Draft** (`n`): fills the prompt with that context. Nothing is sent until
+- **Context**: what the next chat is told to read is the anchor's pins plus
+  four things that go in without being listed, each a checkbox under Setup →
+  *What goes into every draft*, all on by default: the context note and board
+  (`m`), the anchor's human and agent notes, today's note when there is one,
+  and a search of the notes with OpenAugi.
+- **Pins** (`📌 Pinned to <anchor> · N`, in This chat): the one place to pin.
+  The list is the anchor's own, kept under `## Context` in its Agent Log:
+  artifacts (listed first), notes, files, links and coding sessions. Paste a
+  `[[note]]`, a file path or a link in the card to pin it. An artifact the
+  chat publishes is pinned by itself (one published before an anchor was
+  chosen, when it is), and so is a new note the chat writes in the notes
+  folder. A pin row is its name and `✕ unpin`: pressing the name opens the pin
+  (a session copies its resume command). Every pin goes into the anchor's
+  drafts; there is no second state. **On the log a pin is a plain bullet**:
+  `- [[note]] · why it matters`, or `- file: \`path\` · label` (also
+  `session:`, `artifact:`, `url:`), so a line a chat adds there in that shape is
+  a pin too, and any other bullet is a kept fact the pane leaves alone.
+  **Unpinning ticks the line off** (`- [x] …`) instead of deleting it: it
+  leaves the card and the drafts and stays on the log as a record, and pinning
+  the same thing again turns the line back into a bullet where it was. A log
+  written before pins were bullets ticked what it pinned (`- [x]` in drafts,
+  `- [ ]` a link only): every such line reads as a pin, and the pane rewrites
+  them as bullets, with the intro line that says so, the next time it writes
+  that log (`tidyTrail`; the intro line is how a log's form is told). With no
+  anchor the card is `📌 Context`, with nothing to pin to and the draft button.
+- **Draft** (`n`, the button under the pins): fills the prompt with that
+  context. Nothing is sent until
   the user presses enter. It is the one way to draft: the context is that of
   the chat's anchor: a new task just made already is the anchor, a sub-task is one `anchor on it` away. The draft's
   `- Project [[<note>]]:` line names the anchor, so when it is sent in a chat
@@ -254,17 +259,16 @@ are `dimColor`, and the one primary button is the draft.
   calls that ran; a denied or failed one is not listed), newest first, one row
   per path, the newest five until `▸ show all (N)`, at most 30, kept in session
   state (a `/clear` starts a new list). Agent Logs and dot-folders of the notes
-  folder are left out. A row shows the path made short (relative to the notes
-  folder or the session's working folder, else `~/…`, and never more than the
-  file's name and the two folders it sits in: `…/hooks/register.tsx`), a dim
+  folder are left out. A row shows the file's name first and then the folder
+  it sits in (`register.tsx · augi-ui/hooks`; the folder relative to the notes
+  folder or the session's working folder, else `~/…`, its last two parts
+  kept), so a row cut short at its end still names the file, a dim
   `new` when the
   chat created the file, and `open`: a markdown note in the notes folder opens
   with `editor`, anything else with `fileEditor`; a file that is gone says so.
-  With an anchor, `pin` adds it to the Agent Log's `## Context` unticked (a
-  markdown file in the notes folder as `[[note]]`, the rest as `file:`; a
-  link, not prompt context, until ticked there) and the row then reads
-  `pinned`. A new note the chat writes in the notes folder is still
-  pinned unticked by itself.
+  With an anchor, `pin` adds it to the Agent Log's `## Context` (a
+  markdown file in the notes folder as `[[note]]`, the rest as `file:`) and
+  the row then reads `pinned`.
 - **Usage log** (on by default; ⚙️ Setup → *count which controls I use* turns it
   off, as does `trackUsage: no`): one hook on `ui.press` and one on `ui.input`
   append a JSON line to `~/.openaugi/usage/augi-ui.jsonl` for every Button
@@ -300,7 +304,7 @@ are `dimColor`, and the one primary button is the draft.
   open questions and every
   chat anchored on it (titled by its first prompt). Its first line links the user's own note (so
   the note shows it as a backlink); agents never write that note (the pane does only for a
-  saved scratchpad entry). An older log is tidied (title and seen box dropped) when the pane next writes it.
+  saved scratchpad entry). An older log is tidied (title and seen box dropped, ticked pins turned into bullets) when the pane next writes it.
 
 ## Developing
 

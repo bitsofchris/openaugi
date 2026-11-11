@@ -6,9 +6,9 @@ import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
 import { folderKey, promptTitle } from './register'
 import { anchorBrief, anchorNews, unanchoredBrief } from './register'
-import { extraPins, isListedTouch, storedPins, openArgv, shortPath, touchedPin, withTouched } from './register'
+import { isListedTouch, nameFirst, openArgv, shortPath, touchedPin, withTouched } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
-import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, contextItems, parsePin, pathsFromSearch, pinFrom, pinLine, removePin, sessionPin, setPinOn, resumeCommand, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, ago, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, onePerCodexRun, outcomeFrom, parseTrail, tidyTrail, trailPath, trailTemplate, parseClaudeHead, parseCodexHead, toggled, typedFrom } from './register'
+import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, parsePin, pinFrom, pinLine, removePin, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, outcomeFrom, parseTrail, tidyTrail, trailPath, trailTemplate, toggled, typedFrom } from './register'
 
 const PANE = {
   plugin: 'augi-ui',
@@ -28,7 +28,6 @@ const row = (fields: object): string => JSON.stringify(fields)
 // An Agent Log with one more open question on top, as an agent would write it there.
 const withQuestion = (log: string, when: string, text: string): string => log.replace('## Questions\n', `## Questions\n\n- [ ] ${when} · ${text}`)
 const human = row({ type: 'user', entrypoint: 'cli', cwd: '/r/garden', message: { content: 'fix the sprinkler' } })
-const SESSION = { path: '/p/a.jsonl', tool: 'claude', repo: 'garden', title: 'fix the sprinkler', mtimeMs: 0 } as const
 const OPTIONS = {
   notesFolder: '/v',
   contextNote: 'AGENT/Slowly Changing Context.md',
@@ -57,58 +56,7 @@ test('a description reads as folded or plain', async () => {
   expect(descriptionFrom('description: Gather everything\n')).toBe('Gather everything')
 })
 
-test('a person session is kept, titled, and named by its repo', async () => {
-  expect(parseClaudeHead(human)).toEqual({ repo: 'garden', title: 'fix the sprinkler' })
-  const titled = `${human}\n${row({ type: 'custom-title', customTitle: 'Sprinkler fix' })}`
-  expect(parseClaudeHead(titled)?.title).toBe('Sprinkler fix')
-})
-
-test('headless runs and dispatched tasks are not coding sessions', async () => {
-  expect(parseClaudeHead(row({ type: 'user', entrypoint: 'sdk-cli', cwd: '/r', message: { content: 'x' } }))).toBe(null)
-  expect(parseClaudeHead(row({ type: 'user', cwd: '/r', message: { content: 'Read your skill file first: y' } }))).toBe(null)
-  expect(parseClaudeHead('{"type":"queue-operation"}\nnot json')).toBe(null)
-  expect(parseClaudeHead(row({ type: 'user', cwd: '/r', message: { content: 'Context for this chat:\n- x' } }))).toBe(null)
-})
-
-test('pasted-content tags stay out of the title', async () => {
-  const pasted = row({ type: 'user', cwd: '/r/x', message: { content: 'see <pasted_content id="1">the log</pasted_content>' } })
-  expect(parseClaudeHead(pasted)?.title).toBe('see the log')
-})
-
-test('a meta row is not the opening prompt', async () => {
-  const meta = row({ type: 'user', isMeta: true, cwd: '/r/x', message: { content: 'caveat' } })
-  expect(parseClaudeHead(`${meta}\n${human}`)?.title).toBe('fix the sprinkler')
-})
-
-test('a slash command row is not the opening prompt', async () => {
-  const command = row({ type: 'user', cwd: '/r/x', message: { content: '<command-name>/augi</command-name>' } })
-  expect(parseClaudeHead(`${command}\n${human}`)?.title).toBe('fix the sprinkler')
-  expect(parseClaudeHead(command)).toBe(null)
-})
-
-test('one codex multi-agent run shows once', async () => {
-  const codex = (id: string, stamp: string) => ({ ...SESSION, tool: 'codex' as const, path: `/d/rollout-${stamp}-${id}-f011-7942.jsonl` })
-  const kept = onePerCodexRun([
-    codex('01a174fe', '2026-10-25T17-37-07'),
-    codex('01a174ff', '2026-10-25T17-37-07'),
-    codex('01a17500', '2026-10-25T18-00-00'),
-    SESSION,
-  ])
-  expect(kept.length).toBe(3)
-})
-
-test('codex keeps only threads a person started, even when the line is cut', async () => {
-  expect(parseCodexHead('{"payload":{"cwd":"/r/craft","thread_source":"user","base_instr')?.repo).toBe('craft')
-  expect(parseCodexHead('{"payload":{"cwd":"/r/craft","thread_source":"subagent"')).toBe(null)
-})
-
-test('ago reads minutes, hours, days', async () => {
-  expect(ago(600000, 0)).toBe('10m')
-  expect(ago(3 * 3600000, 0)).toBe('3h')
-  expect(ago(72 * 3600000, 0)).toBe('3d')
-})
-
-test('the draft carries what is ticked and leaves out what is not', async () => {
+test('the draft carries what is pinned and switched on, and leaves out the rest', async () => {
   const full = buildDraft([SESSION_PIN], ALL_ON, null, '', ANCHOR)
   expect(full.includes('/p/a.jsonl')).toBe(true)
   expect(full.includes('Slowly Changing Context')).toBe(true)
@@ -355,23 +303,7 @@ test('questions an agent left under ## Questions are read newest first, a ticked
   expect(parseTrail(done).questions.map(q => q.done)).toEqual([false, true])
 })
 
-test('what goes in lists exactly the paths the draft names, and toggles take them out', async () => {
-  const anchor = { note: 'PMOC - Garden', notePath: '/v/PMOC - Garden.md', trail: trailPath('PMOC - Garden') }
-  const note = { on: true, kind: 'note', target: 'Sprinkler Benchmarks', label: 'Sprinkler Benchmarks', path: '/v/Notes/Sprinkler Benchmarks.md' } as const
-  const off = { on: false, kind: 'file', target: '/r/docs/ARCH.md', label: 'ARCH.md' } as const
-  const pins = [SESSION_PIN, note, off]
-  const items = contextItems(pins, ALL_ON, anchor)
-  const text = buildDraft(pins, ALL_ON, null, 'go', anchor)
-  expect(items.map(item => item.key)).toEqual(['in-note', 'in-trail', 'in-pin-session-/p/a.jsonl', 'in-pin-note-Sprinkler Benchmarks', 'in-context', 'in-board', 'in-search'])
-  for (const item of items.filter(one => one.path)) {
-    expect(text.includes(item.path)).toBe(true)
-  }
-  expect(text.includes('/r/docs/ARCH.md')).toBe(false)
-  expect(contextItems(pins, { project: false, aboutMe: false, openAugi: false, today: false }, anchor).map(item => item.kind)).toEqual(['pin', 'pin'])
-  expect(contextItems(pins, ALL_ON, null).some(item => item.kind === 'pin' || item.key === 'in-note')).toBe(false)
-})
-
-test('a pin line round-trips for each kind, ticked or not', async () => {
+test('a pin is a plain bullet and one that was unpinned is ticked off; each kind round-trips', async () => {
   const pins = [
     { on: true, kind: 'note', target: 'Sprinkler Benchmarks', label: 'Sprinkler Benchmarks' },
     { on: false, kind: 'session', target: '/p/a b.jsonl', label: 'garden · fix the sprinkler' },
@@ -382,30 +314,55 @@ test('a pin line round-trips for each kind, ticked or not', async () => {
   for (const pin of pins) {
     expect(parsePin(pinLine(pin))).toEqual(pin)
   }
-  expect(pinLine(pins[0])).toBe('- [x] [[Sprinkler Benchmarks]]')
-  expect(pinLine(pins[1])).toBe('- [ ] session: `/p/a b.jsonl` · garden · fix the sprinkler')
-  expect(parsePin('- [x] [[Note|alias]]')?.target).toBe('Note')
+  expect(pinLine(pins[0])).toBe('- [[Sprinkler Benchmarks]]')
+  expect(pinLine(pins[1])).toBe('- [x] session: `/p/a b.jsonl` · garden · fix the sprinkler')
+  expect(parsePin('- [[Note|alias]] · why it matters')).toEqual({ on: true, kind: 'note', target: 'Note', label: 'why it matters' })
+  // An open box an agent wrote is a pin too; a question, or a sentence that only starts with a link, is not.
+  expect(parsePin('- [ ] [[Note]]')?.on).toBe(true)
   expect(parsePin('- [ ] 2026-11-08 10:00 · a question')).toBe(null)
+  expect(parsePin('- [[Note]] and [[Other]] disagree on the valve')).toBe(null)
+  expect(parsePin('- the valve sticks below 4 degrees')).toBe(null)
 })
 
-test('pins go under ## Context once each, tick off and unpin in place', async () => {
+test('pins go under ## Context once each; unpinning ticks the line off and pinning it again brings it back', async () => {
   const empty = trailTemplate('PMOC - Garden', '2026-11-08')
   const note = { on: true, kind: 'note', target: 'A', label: 'A' } as const
   const one = addPin(empty, note)
   const two = addPin(one, SESSION_PIN)
-  expect(addPin(two, { ...note, on: false })).toBe(two)
-  expect(two.includes('## Context\n\n- [x] [[A]]\n- [x] session: `/p/a.jsonl` · garden · fix the sprinkler\n\n## Questions')).toBe(true)
+  expect(addPin(two, note)).toBe(two)
+  expect(two.includes('## Context\n\n- [[A]]\n- session: `/p/a.jsonl` · garden · fix the sprinkler\n\n## Questions')).toBe(true)
   expect(parseTrail(two).pins.map(pin => pin.target)).toEqual(['A', '/p/a.jsonl'])
 
-  const off = setPinOn(two, note, false)
+  const off = removePin(two, note)
+  expect(off.includes('## Context\n\n- [x] [[A]]\n- session: `/p/a.jsonl`')).toBe(true)
   expect(parseTrail(off).pins.map(pin => pin.on)).toEqual([false, true])
-  expect(parseTrail(removePin(off, SESSION_PIN)).pins.map(pin => pin.target)).toEqual(['A'])
+  expect(addPin(off, note)).toBe(two)
 
   // A trail from before ## Context gets the section above ## Questions.
   const old = '# Trail\n\n## Questions\n\n## Chats\n'
   const added = addPin(old, note)
   expect(added.indexOf('## Context') < added.indexOf('## Questions')).toBe(true)
   expect(parseTrail(added).pins.length).toBe(1)
+})
+
+test('a log from before bullets: every ticked or open line is a pin, the pane rewrites them as bullets, and until then unpinning drops the line', async () => {
+  const before = trailTemplate('X', '2026-11-08')
+    .replace(/^Human note: .*$/m, 'Human note: [[X]]. Context lines are `- [x] [[note]] · why it matters` (ticked goes into the next draft). Each chat is one line: when it started, its goal, its id; one that is finished stays listed, marked `(done)`.')
+    .replace('## Context\n', '## Context\n\n- [x] [[A]] · the plan\n- [ ] file: `/r/docs/ARCH.md` · ARCH.md\n- the valve sticks below 4 degrees\n')
+  expect(parseTrail(before).pins.map(pin => [pin.target, pin.on])).toEqual([['A', true], ['/r/docs/ARCH.md', true]])
+  const gone = removePin(before, { on: true, kind: 'note', target: 'A', label: 'the plan' })
+  expect(gone.includes('[[A]]')).toBe(false)
+  expect(parseTrail(gone).pins.map(pin => pin.target)).toEqual(['/r/docs/ARCH.md'])
+
+  const tidy = tidyTrail(before, 'X')
+  expect(tidy.includes('## Context\n\n- [[A]] · the plan\n- file: `/r/docs/ARCH.md` · ARCH.md\n- the valve sticks below 4 degrees\n')).toBe(true)
+  expect(tidy.includes('ticked goes into the next draft')).toBe(false)
+  expect(parseTrail(tidy).pins.map(pin => pin.on)).toEqual([true, true])
+  // Tidied, a tick means unpinned, and tidying again changes nothing.
+  const off = removePin(tidy, { on: true, kind: 'note', target: 'A', label: 'the plan' })
+  expect(off.includes('- [x] [[A]] · the plan')).toBe(true)
+  expect(tidyTrail(off, 'X')).toBe(off)
+  expect(parseTrail(off).pins.map(pin => pin.on)).toEqual([false, true])
 })
 
 test('what you paste becomes the right kind of pin', async () => {
@@ -417,18 +374,6 @@ test('what you paste becomes the right kind of pin', async () => {
   expect(pinFrom('~/.claude/projects/-r/abc.jsonl', '/v', '/Users/t')?.kind).toBe('session')
   expect(pinFrom('~/repos/x/README.md', '/v', '/Users/t')).toEqual({ on: true, kind: 'file', target: '/Users/t/repos/x/README.md', label: 'README.md' })
   expect(pinFrom('   ', '/v', '/Users/t')).toBe(null)
-})
-
-test('an OpenAugi search answer gives its note paths once each, wrapped or not', async () => {
-  const inner = JSON.stringify({ results: [{ source_path: 'N/A.md' }, { source_path: 'N/A.md' }, { source_path: 'N/B.md' }, { source_path: 'x.pdf' }] })
-  expect(pathsFromSearch(inner)).toEqual(['N/A.md', 'N/B.md'])
-  expect(pathsFromSearch(JSON.stringify({ result: inner }))).toEqual(['N/A.md', 'N/B.md'])
-  expect(pathsFromSearch('not json')).toEqual([])
-})
-
-test('a claude session copies its resume command; codex its path', async () => {
-  expect(resumeCommand({ path: '/p/-r/abc-123.jsonl', tool: 'claude', repo: 'r', title: 't', mtimeMs: 0 })).toBe('claude --resume abc-123')
-  expect(resumeCommand({ path: '/c/rollout.jsonl', tool: 'codex', repo: 'r', title: 't', mtimeMs: 0 })).toBe('/c/rollout.jsonl')
 })
 
 test('a chat marked (done) in the log reads as done, and so does an older (hidden) mark', async () => {
@@ -454,7 +399,7 @@ test('with an anchor, the draft carries its note and trail', async () => {
   expect(buildDraft([], { ...ALL_ON, project: false }, null, 'go', anchor).includes('/v/PMOC - Garden.md')).toBe(false)
 })
 
-test('pick an anchor, start a chat, send it: the chat lands on the trail and sessions stay unticked', { options: OPTIONS }, async ($, on) => {
+test('pick an anchor, start a chat, send it: the chat lands on the trail', { options: OPTIONS }, async ($, on) => {
   on('env.get', () => ({ value: '/Users/t' }))
   const filled: string[] = []
   const written = new Map<string, string>()
@@ -538,17 +483,17 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
   expect(await ui.find({ key: 'edit-context' })).toBeFalsy()
   await ui.press({ key: 'head-youOpen' })
   expect(await ui.find({ key: 'about-me' })).toBeFalsy()
-  // What every draft carries is switched under Setup, not listed in the Context card.
+  // What every draft carries is switched under Setup, and listed nowhere else.
   expect(await ui.find({ key: 'pick-project' })).toBeFalsy()
   expect(await ui.find({ key: 'openaugi' })).toBeFalsy()
-  expect(await ui.find({ text: 'notes for PMOC - Garden, your overall context, a search of your notes' })).toBeTruthy()
+  expect(await ui.find({ key: 'pick-today' })).toBeFalsy()
+  expect(await ui.find({ text: /Context · \d+ going in/ })).toBeFalsy()
   await ui.press({ key: 'setup-menu' })
   // They are real checkboxes, on by default: pressing one flips it in place.
   expect((await ui.find({ key: 'openaugi' }))?.text).toMatch(/^\s*☑/)
   expect((await ui.find({ key: 'pick-project' }))?.text).toMatch(/^\s*☑/)
   await ui.press({ key: 'pick-project' })
   expect((await ui.find({ key: 'pick-project' }))?.text).toMatch(/^\s*☐/)
-  expect(await ui.find({ text: 'notes for PMOC - Garden' })).toBeFalsy()
   await ui.press({ key: 'pick-project' })
   await ui.press({ key: 'setup-menu' })
   await ui.press({ key: 'lens-menu' })
@@ -556,7 +501,6 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
 
   expect(filled.length).toBe(1)
   expect(filled[0]?.includes('/v/PMOC - Garden.md')).toBe(true)
-  expect(filled[0]?.includes('new.jsonl')).toBe(false)
 
   await $.prompt.submit({ text: filled[0] ?? '' })
   const trail = written.get(trailPath('PMOC - Garden')) ?? ''
@@ -566,8 +510,6 @@ test('pick an anchor, start a chat, send it: the chat lands on the trail and ses
   // The chat is filed in the log; the pane keeps no list of chats.
   expect(await ui.find({ key: 'chat-own-session' })).toBeFalsy()
   expect(await ui.find({ text: /Chats on PMOC - Garden/ })).toBeFalsy()
-
-  expect(await ui.find({ key: `in-session-${'/Users/t/.claude/projects/-r-garden/new.jsonl'}` })).toBeFalsy()
 
   // The pane has one place to type, the scratchpad: no question field in the Anchor card.
   expect((await ui.findAll({ type: 'Input' })).some(one => /^capture/.test(String(one.key ?? '')))).toBe(false)
@@ -744,18 +686,14 @@ test('after the folder, setup walks the steps: found notes, a starter, or skip',
   await ui.unmount()
 })
 
-test('pin context on an anchor: paste, search, tick, copy a link, unpin, and what a pane chat publishes', { options: OPTIONS }, async ($, on) => {
+test('pins on an anchor: paste to pin, press the name to open, unpin ticks the line off, and what a pane chat makes is pinned', { options: OPTIONS }, async ($, on) => {
   const written = new Map<string, string>()
-  const store = new Map<string, unknown>([['anchors', [['own-session', 'PMOC - Garden']]]])
-  const copied: string[] = []
+  const store = new Map<string, unknown>([['anchors', [['own-session', 'PMOC - Garden']]], ['pins', [{ on: true, kind: 'file', target: '/r/old/EVERYWHERE.md', label: 'EVERYWHERE.md' }]]])
+  const opened: string[][] = []
   on('env.get', () => ({ value: '/Users/t' }))
   on('command.register', () => ({ value: { command: 'augi' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.toast', () => ({ value: undefined }))
-  on('ui.copy', (_, e) => {
-    copied.push(e.text)
-    return { value: { isCopied: true } }
-  })
   on('session.id', () => ({ value: 'own-session' }))
   on('clock.now', () => ({ value: new Date(2026, 10, 8, 9, 30).getTime() }))
   on('store.get', (_, e) => ({ value: store.get(e.key) }))
@@ -763,19 +701,21 @@ test('pin context on an anchor: paste, search, tick, copy a link, unpin, and wha
     store.set(e.key, e.value)
     return { value: undefined }
   })
-  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/r/docs/ARCH.md'].includes(e.path) || e.path.endsWith('Kanban.md') || written.has(e.path) }))
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/r/docs/ARCH.md', '/v/Notes/Sprinkler Benchmarks.md'].includes(e.path) || e.path.endsWith('Kanban.md') || written.has(e.path) }))
   on('fs.read', (_, e) => ({ value: written.get(e.path) ?? (e.path.endsWith('Kanban.md') ? BOARD_TEXT : '') }))
   on('fs.write', (_, e) => {
     written.set(e.path, e.text)
     return { value: undefined }
   })
   on('fs.list', () => ({ value: [] }))
-  on('process.run', (_, e) => ({
-    value: { exitCode: 0, stdout: e.argv[0] === 'find' && e.argv.includes('PMOC - Garden.md') ? '/v/PMOC - Garden.md\n' : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
-  }))
-  on('mcp.call', () => ({
-    value: { isError: false, content: [{ type: 'text', text: JSON.stringify({ result: JSON.stringify({ results: [{ source_path: 'Notes/Sprinkler Benchmarks.md' }] }) }) }] },
-  }))
+  on('process.run', (_, e) => {
+    if (e.argv[0] !== 'find' && e.argv[0] !== 'mkdir') {
+      opened.push(e.argv)
+    }
+    const found = e.argv[0] !== 'find' ? '' : e.argv.includes('PMOC - Garden.md') ? '/v/PMOC - Garden.md\n' : e.argv.includes('Sprinkler Benchmarks.md') ? '/v/Notes/Sprinkler Benchmarks.md\n' : ''
+
+    return { value: { exitCode: 0, stdout: found, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
   on('tool.call', () => ({ result: { url: 'https://claude.ai/artifact/abc-1' } as never, text: 'published https://claude.ai/artifact/abc-1' }))
   const filled: string[] = []
   on('prompt.read', () => ({ value: { text: 'explain the cache', cursor: 0 } }))
@@ -784,97 +724,81 @@ test('pin context on an anchor: paste, search, tick, copy a link, unpin, and wha
     return { isFilled: true }
   })
   on('prompt.submit', (_, e) => ({ text: e.text }))
-  const pinsNow = () => parseTrail(written.get(trailPath('PMOC - Garden')) ?? '').pins
+  const logNow = () => written.get(trailPath('PMOC - Garden')) ?? ''
+  const pinned = () => parseTrail(logNow()).pins.filter(pin => pin.on)
 
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: '📌 Pinned to PMOC - Garden · 0' })).toBeTruthy()
 
   await ui.input({ key: 'pin-paste-0', text: '/r/docs/ARCH.md' })
-  expect(pinsNow()).toEqual([{ on: true, kind: 'file', target: '/r/docs/ARCH.md', label: 'ARCH.md' }])
+  expect(pinned()).toEqual([{ on: true, kind: 'file', target: '/r/docs/ARCH.md', label: 'ARCH.md' }])
+  await ui.input({ key: 'pin-paste-1', text: '[[Sprinkler Benchmarks]]' })
+  expect(pinned().map(pin => pin.target)).toEqual(['/r/docs/ARCH.md', 'Sprinkler Benchmarks'])
+  // On the log a pin is a plain bullet, not a ticked box.
+  expect(logNow().includes('## Context\n\n- file: `/r/docs/ARCH.md` · ARCH.md\n- [[Sprinkler Benchmarks]]\n')).toBe(true)
+  expect(await ui.find({ text: '📌 Pinned to PMOC - Garden · 2' })).toBeTruthy()
 
-  await ui.input({ key: 'pin-search', text: 'sprinkler' })
-  await ui.press({ key: 'offer-anchor-note-Sprinkler Benchmarks' })
-  expect(pinsNow().map(pin => pin.target)).toEqual(['/r/docs/ARCH.md', 'Sprinkler Benchmarks'])
-  expect(await ui.find({ key: 'offer-anchor-note-Sprinkler Benchmarks' })).toBeFalsy()
-  // A pin row has two actions, open and unpin, and the card says what the tick means.
-  expect(await ui.find({ key: 'pin-link-note-Sprinkler Benchmarks' })).toBeFalsy()
-  expect(await ui.find({ key: 'pin-all-note-Sprinkler Benchmarks' })).toBeFalsy()
-  expect((await ui.find({ key: 'pin-drop-note-Sprinkler Benchmarks' }))?.text).toMatch(/unpin/)
-  // The name is what opens it (no open button beside it); the box alone is the tick.
+  // A pin row is its name, which opens it, and unpin: no tick box, and no line explaining one.
   expect((await ui.find({ key: 'pin-open-note-Sprinkler Benchmarks' }))?.text).toMatch(/Sprinkler Benchmarks/)
-  expect((await ui.find({ key: 'pin-tick-note-Sprinkler Benchmarks' }))?.text?.trim()).toBe('☑')
+  expect((await ui.find({ key: 'pin-drop-note-Sprinkler Benchmarks' }))?.text).toMatch(/unpin/)
+  expect(await ui.find({ key: 'pin-tick-note-Sprinkler Benchmarks' })).toBeFalsy()
+  expect(await ui.find({ text: /goes into this anchor's drafts/ })).toBeFalsy()
   await ui.press({ key: 'pin-open-note-Sprinkler Benchmarks' })
-  expect(pinsNow().map(pin => pin.on)).toEqual([true, true])
-  expect(await ui.find({ text: /☑ goes into this anchor's drafts · ☐ is a link only/ })).toBeTruthy()
+  expect(opened.pop()).toEqual(['open', 'obsidian://open?path=%2Fv%2FNotes%2FSprinkler%20Benchmarks.md'])
+  expect(pinned().length).toBe(2)
 
-  await ui.press({ key: 'pin-tick-file-/r/docs/ARCH.md' })
-  expect(pinsNow()[0]?.on).toBe(false)
-  expect((await ui.find({ key: 'pin-tick-file-/r/docs/ARCH.md' }))?.text).toMatch(/^\s*☐/)
+  // Unpinned, it leaves the card and the draft; its line stays on the log, ticked off.
   await ui.press({ key: 'pin-drop-file-/r/docs/ARCH.md' })
-  expect(pinsNow().map(pin => pin.target)).toEqual(['Sprinkler Benchmarks'])
-
-  // An anchored chat's published artifact pins ticked; a read of another does not pin.
+  expect(pinned().map(pin => pin.target)).toEqual(['Sprinkler Benchmarks'])
+  expect(logNow().includes('- [x] file: `/r/docs/ARCH.md` · ARCH.md\n- [[Sprinkler Benchmarks]]\n')).toBe(true)
+  expect(await ui.find({ key: 'pin-open-file-/r/docs/ARCH.md' })).toBeFalsy()
+  expect(await ui.find({ text: '📌 Pinned to PMOC - Garden · 1' })).toBeTruthy()
   await ui.press({ key: 'draft' })
   expect(filled[0]?.includes('- Note: "/v/Notes/Sprinkler Benchmarks.md"')).toBe(true)
+  expect(filled[0]?.includes('ARCH.md')).toBe(false)
+  // A pin an older pane kept for every chat is in no draft: there is one place to pin.
+  expect(filled[0]?.includes('EVERYWHERE.md')).toBe(false)
+  // Pinned again, the same line is a bullet again, where it was.
+  await ui.input({ key: 'pin-paste-1', text: '/r/docs/ARCH.md' })
+  expect(logNow().includes('## Context\n\n- file: `/r/docs/ARCH.md` · ARCH.md\n- [[Sprinkler Benchmarks]]\n')).toBe(true)
+  await ui.press({ key: 'pin-drop-file-/r/docs/ARCH.md' })
+
+  // An anchored chat's published artifact is pinned; a read of another is not.
   await $.prompt.submit({ text: filled[0] ?? '' })
   await $.tool.call({ tool: 'Artifact', file_path: '/s/page.html', title: 'Cache explainer' })
   await $.tool.call({ tool: 'Artifact', action: 'read', url: 'https://claude.ai/artifact/zzz-9' })
-  expect(pinsNow().slice(1)).toEqual([{ on: true, kind: 'artifact', target: 'https://claude.ai/artifact/abc-1', label: 'Cache explainer' }])
-  // Artifacts sort first in the context card.
-  expect((await ui.find({ key: 'pin-tick-artifact-https://claude.ai/artifact/abc-1' }))).toBeTruthy()
-  // A new note it writes in the vault pins too; a file outside the vault or an edit of one there does not.
+  expect(pinned().slice(1)).toEqual([{ on: true, kind: 'artifact', target: 'https://claude.ai/artifact/abc-1', label: 'Cache explainer' }])
+  expect(await ui.find({ key: 'pin-open-artifact-https://claude.ai/artifact/abc-1' })).toBeTruthy()
+  // A new note it writes in the vault is pinned too; a file outside the vault or an edit of one there is not.
   await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/New Idea.md', content: 'x' })
   await $.tool.call({ tool: 'Write', file_path: '/tmp/scratch.md', content: 'x' })
   await $.tool.call({ tool: 'Write', file_path: '/v/AGENT/Slowly Changing Context.md', content: 'x' })
-  expect(pinsNow().slice(2)).toEqual([{ on: false, kind: 'note', target: 'New Idea', label: 'New Idea' }])
+  expect(pinned().slice(2)).toEqual([{ on: true, kind: 'note', target: 'New Idea', label: 'New Idea' }])
 
-  // Pins for every chat live in the store, not on the anchor: pasted in the Context card.
-  // One pinned in both lists goes into the draft once; they untick and unpin in place.
-  await ui.input({ key: 'all-paste-0', text: '/r/docs/ARCH.md' })
-  expect(store.get('pins')).toEqual([{ on: true, kind: 'file', target: '/r/docs/ARCH.md', label: 'ARCH.md' }])
-  expect(pinsNow().some(pin => pin.target === '/r/docs/ARCH.md')).toBe(false)
-  await ui.input({ key: 'all-paste-1', text: '[[Sprinkler Benchmarks]]' })
-  expect(pinsNow().some(pin => pin.target === 'Sprinkler Benchmarks')).toBe(true)
-  expect(storedPins(store.get('pins')).map(pin => pin.target)).toEqual(['/r/docs/ARCH.md', 'Sprinkler Benchmarks'])
-  await ui.press({ key: 'draft' })
-  const last = filled[filled.length - 1] ?? ''
-  expect(last.split('ARCH.md').length).toBe(2)
-  expect(last.split('Sprinkler Benchmarks').length).toBe(2)
-  await ui.press({ key: 'all-tick-file-/r/docs/ARCH.md' })
-  expect(storedPins(store.get('pins'))[0]?.on).toBe(false)
-  await ui.press({ key: 'all-drop-file-/r/docs/ARCH.md' })
-  expect(storedPins(store.get('pins')).map(pin => pin.target)).toEqual(['Sprinkler Benchmarks'])
+  // The pane has no second place to pin, no note search and no session list.
+  for (const key of ['pin-search', 'all-paste-0', 'all-paste-1', 'sessions-menu', 'head-contextOpen']) {
+    expect(await ui.find({ key })).toBeFalsy()
+  }
 
-  // Every card and both sections fold from their title, and open again.
-  for (const [head, inside] of [['head-pinsOpen', 'pin-paste-3'], ['head-contextOpen', 'pin-search'], ['head-anchorOpen', 'anchor-menu'], ['head-padOpen', 'pad-input-0']] as const) {
+  // Every card and both sections fold from their title, and open again. The draft button
+  // stays under a folded Pins card.
+  for (const [head, inside] of [['head-pinsOpen', 'pin-paste-3'], ['head-anchorOpen', 'anchor-menu'], ['head-padOpen', 'pad-input-0']] as const) {
     expect(await ui.find({ key: inside })).toBeTruthy()
     await ui.press({ key: head })
     expect(await ui.find({ key: inside })).toBeFalsy()
+    expect(await ui.find({ key: 'draft' })).toBeTruthy()
     await ui.press({ key: head })
     expect(await ui.find({ key: inside })).toBeTruthy()
   }
   await ui.press({ key: 'head-chatOpen' })
   expect(await ui.find({ key: 'head-anchorOpen' })).toBeFalsy()
-  expect(await ui.find({ key: 'pin-search' })).toBeTruthy()
-  await ui.press({ key: 'head-anywhereOpen' })
-  expect(await ui.find({ key: 'pin-search' })).toBeFalsy()
   expect(await ui.find({ key: 'draft' })).toBeFalsy()
+  expect(await ui.find({ key: 'edit-context' })).toBeTruthy()
+  await ui.press({ key: 'head-anywhereOpen' })
+  expect(await ui.find({ key: 'edit-context' })).toBeFalsy()
   expect(await ui.find({ key: 'refresh' })).toBeTruthy()
   await ui.unmount()
-})
-
-test('pins for every chat: the store is read defensively, and a draft adds the ticked ones once, with or without an anchor', () => {
-  const arch: Pin = { on: true, kind: 'file', target: '/r/docs/ARCH.md', label: 'ARCH.md' }
-  const off: Pin = { on: false, kind: 'url', target: 'https://example.com', label: 'example' }
-  expect(storedPins([arch, off, { on: 'yes', kind: 'file', target: 'x', label: 'x' }, { on: true, kind: 'mood', target: 'x', label: 'x' }, null, 'x'])).toEqual([arch, off])
-  expect(storedPins(undefined)).toEqual([])
-  expect(extraPins([], [arch, off], false)).toEqual([arch])
-  expect(extraPins([arch], [arch], true)).toEqual([])
-  expect(extraPins([{ ...arch, on: false }], [arch], true)).toEqual([arch])
-  const none = { aboutMe: false, openAugi: false, project: false, today: false }
-  expect(buildDraft([], none, null, '', null, [arch, off]).split('ARCH.md').length).toBe(2)
-  expect(buildDraft([], none, null, '', null, [arch, off]).includes('example.com')).toBe(false)
-  expect(contextItems([], none, null, [arch, off]).map(item => item.key)).toEqual(['in-all-file-/r/docs/ARCH.md'])
 })
 
 test('Next lists the open checkboxes under the Next heading only', async () => {
@@ -904,11 +828,13 @@ const OLD_INTRO = 'Project: [[PMOC - Garden]], embedded there under # Agent Log.
 // The intro the log had while a finished chat was called hidden.
 const HIDDEN_INTRO = 'Human note: [[PMOC - Garden]]. Context lines are `- [x] [[note]] · why it matters` (ticked goes into the next draft). Hidden chats stay listed, marked `(hidden)`.'
 
-test('an older Agent Log loses its title and seen box, gains the note link, and keeps its sections', async () => {
+test('an older Agent Log loses its title and seen box, gains the note link, turns its pins into bullets, and keeps its sections', async () => {
   const sections = ['## Context', '', '- [x] [[A note]] · why', '', '## Questions', '', '- [x] 2022-01-04 10:00 · q', '', '## Chats', '', '## Saved', '']
   const old = ['---', 'type: document', 'description: d', 'created: 2022-01-04', '---', '', '# Agent Log - PMOC - Garden', '', '- [x] seen', '', OLD_INTRO, '', ...sections].join('\n')
   const tidy = tidyTrail(old, 'PMOC - Garden')
-  expect(tidy).toBe(trailTemplate('PMOC - Garden', '2022-01-04').replace(/description: .*/, 'description: d').split('## Context')[0] + sections.join('\n'))
+  // Its ticked pin is a bullet now; the ticked question under ## Questions is as it was.
+  const tidied = sections.map(line => (line === '- [x] [[A note]] · why' ? '- [[A note]] · why' : line))
+  expect(tidy).toBe(trailTemplate('PMOC - Garden', '2022-01-04').replace(/description: .*/, 'description: d').split('## Context')[0] + tidied.join('\n'))
   expect(tidyTrail(tidy, 'PMOC - Garden')).toBe(tidy)
   expect(parseTrail(tidy)).toEqual(parseTrail(old))
   expect(tidyTrail(trailTemplate('PMOC - Garden', '2022-01-04'), 'PMOC - Garden')).toBe(trailTemplate('PMOC - Garden', '2022-01-04'))
@@ -1002,7 +928,7 @@ test('artifacts: a republished url takes its new title; the pin list puts them f
   expect(artifactsFirst([note, art(1), SESSION_PIN, art(2)]).map(pin => pin.label)).toEqual(['1', '2', 'N', SESSION_PIN.label])
 })
 
-test('a new session opens with no anchor; anchoring logs the chat, pins its artifacts ticked, and a sent draft names the chat', { options: OPTIONS }, async ($, on) => {
+test('a new session opens with no anchor; anchoring logs the chat, pins its artifacts, and a sent draft names the chat', { options: OPTIONS }, async ($, on) => {
   const written = new Map<string, string>()
   // An old global anchor and another session's anchor are not this session's.
   const store = new Map<string, unknown>([['anchor', 'PMOC - Garden'], ['anchors', [['other-session', 'PMOC - Garden']]]])
@@ -1049,10 +975,15 @@ test('a new session opens with no anchor; anchoring logs the chat, pins its arti
   expect(await ui.find({ key: 'open-trail' })).toBeFalsy()
   expect(await ui.find({ key: 'add-this-chat' })).toBeFalsy()
 
-  // Published before anchoring: remembered and shown dimly, written nowhere.
+  // With no anchor there is nothing to pin to: the card says so and still drafts a prompt.
+  expect(await ui.find({ text: '📌 Context' })).toBeTruthy()
+  expect(await ui.find({ text: 'Pick an anchor to pin notes, files and links to it.' })).toBeTruthy()
+  expect((await ui.findAll({ type: 'Input' })).some(one => String(one.key ?? '').startsWith('pin-paste'))).toBe(false)
+  expect((await ui.find({ key: 'draft' }))?.text).toMatch(/draft a prompt with my context/)
+
+  // Published before anchoring: remembered, written nowhere.
   await $.tool.call({ tool: 'Artifact', file_path: '/s/early.html', title: 'Early plan' })
   expect(written.size).toBe(0)
-  expect(await ui.find({ text: '◇ Early plan' })).toBeTruthy()
 
   await ui.press({ key: 'anchor-menu' })
   await ui.press({ key: 'card-PMOC - Garden' })
@@ -1064,13 +995,13 @@ test('a new session opens with no anchor; anchoring logs the chat, pins its arti
   await ui.press({ key: 'pin-open-artifact-https://claude.ai/artifact/early-1' })
   expect(opened).toEqual([['open', 'https://claude.ai/artifact/early-1']])
 
-  // Published after anchoring: pinned ticked.
+  // Published after anchoring: pinned.
   url = 'https://claude.ai/artifact/late-2'
   await $.tool.call({ tool: 'Artifact', file_path: '/s/late.html', title: 'Late plan' })
   expect(logNow().pins.map(pin => [pin.target, pin.on])).toEqual([['https://claude.ai/artifact/early-1', true], ['https://claude.ai/artifact/late-2', true]])
   expect((await ui.find({ key: 'pin-open-artifact-https://claude.ai/artifact/late-2' }))?.text).toMatch(/◇ Late plan/)
 
-  // A draft sent later names the chat; the ticked artifacts go in it.
+  // A draft sent later names the chat; the pinned artifacts go in it.
   await ui.press({ key: 'draft' })
   expect(filled[0]?.includes('https://claude.ai/artifact/late-2')).toBe(true)
   await $.prompt.submit({ text: filled[0] ?? '' })
@@ -1080,7 +1011,6 @@ test('a new session opens with no anchor; anchoring logs the chat, pins its arti
   session = 'third-session'
   await ui.press({ key: 'refresh' })
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
-  expect(await ui.find({ text: '◇ Early plan' })).toBeFalsy()
   session = 'new-session'
   await ui.press({ key: 'refresh' })
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
@@ -1847,12 +1777,12 @@ test('a logged line goes last under the named heading, made when missing, or at 
 })
 
 test('the draft names today\'s note when there is one and it is ticked', async () => {
-  const withToday = buildDraft([], ALL_ON, null, 'go', ANCHOR, [], '/v/2022-01-05.md')
+  const withToday = buildDraft([], ALL_ON, null, 'go', ANCHOR, '/v/2022-01-05.md')
   expect(withToday.includes('- Today: read "/v/2022-01-05.md"')).toBe(true)
-  expect(buildDraft([], { ...ALL_ON, today: false }, null, 'go', ANCHOR, [], '/v/2022-01-05.md').includes('Today:')).toBe(false)
-  expect(buildDraft([], ALL_ON, null, 'go', ANCHOR, [], '').includes('Today:')).toBe(false)
-  expect(contextItems([], ALL_ON, null, [], '/v/2022-01-05.md').map(item => item.key)).toContain('in-today')
-  expect(contextItems([], { ...ALL_ON, today: false }, null, [], '/v/2022-01-05.md').map(item => item.key)).not.toContain('in-today')
+  expect(buildDraft([], { ...ALL_ON, today: false }, null, 'go', ANCHOR, '/v/2022-01-05.md').includes('Today:')).toBe(false)
+  expect(buildDraft([], ALL_ON, null, 'go', ANCHOR, '').includes('Today:')).toBe(false)
+  // What a draft asks the chat to keep is written as a bullet, which pins it.
+  expect(withToday.includes('add "- [[<note>]] · <why it matters>" under ## Context')).toBe(true)
 })
 
 // padHooks, with today's note found from Obsidian's daily-note settings; `clock` can be moved.
@@ -1887,7 +1817,7 @@ test('with no daily note setting and no Obsidian daily notes, the You card says 
   await ui.unmount()
 })
 
-test('today\'s note in the You card: found where Obsidian puts new notes, it lists what is open, logs a line under the heading, takes scratchpad entries, and goes into drafts until unticked', { options: { ...OPTIONS, dailyHeading: '## Log' } }, async ($, on) => {
+test('today\'s note in the You card: found where Obsidian puts new notes, it lists what is open, logs a line under the heading, takes scratchpad entries, and goes into drafts until switched off under Setup', { options: { ...OPTIONS, dailyHeading: '## Log' } }, async ($, on) => {
   const note = '# Priorities\n- [ ] ship the gate\n- [x] water\n- [ ] call the plumber\n\n## Log\n- 08:00 coffee\n'
   // Daily notes name a template but no folder; new notes go to Inbox.
   const written = new Map<string, string>([
@@ -1931,13 +1861,16 @@ test('today\'s note in the You card: found where Obsidian puts new notes, it lis
   expect(await ui.find({ key: 'pad-row-0' })).toBeFalsy()
   expect(toasts[1]).toBe("Saved to today's note")
 
-  // It goes into every draft, named in the Context card's line, until unticked.
-  expect(await ui.find({ text: /your overall context, today's note, a search of your notes/ })).toBeTruthy()
+  // It goes into every draft until switched off: the box is under Setup with the others,
+  // not in the You card.
   await ui.press({ key: 'draft' })
   expect(got.filled[0]?.includes(`- Today: read "${today}"`)).toBe(true)
-  expect((await ui.find({ key: 'pick-today' }))?.text).toMatch(/☑ today's note goes into every draft/)
+  expect(await ui.find({ key: 'pick-today' })).toBeFalsy()
+  await ui.press({ key: 'setup-menu' })
+  expect((await ui.find({ key: 'pick-today' }))?.text).toMatch(/☑ today's note, when there is one/)
   await ui.press({ key: 'pick-today' })
   expect((await ui.find({ key: 'pick-today' }))?.text).toMatch(/☐/)
+  await ui.press({ key: 'setup-menu' })
   await ui.press({ key: 'draft' })
   expect(got.filled[1]?.includes('Today:')).toBe(false)
 
@@ -2516,6 +2449,18 @@ test('a touched path is short: notes-relative, then root-relative, then ~, and n
   expect(shortPath('/Users/t/r/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts')
 })
 
+test('a file row names the file first, then the folder it sits in, so a row cut short still says which file', async () => {
+  expect(nameFirst('/Users/t/r/src/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts · src')
+  expect(nameFirst('/v/Ideas/A.md', '/v', '/Users/t', '/Users/t/r')).toBe('A.md · Ideas')
+  expect(nameFirst('/Users/t/other/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts · ~/other')
+  expect(nameFirst('/tmp/a.ts', '/v', '/Users/t', '')).toBe('a.ts · /tmp')
+  // A deep folder keeps its last two parts.
+  expect(nameFirst('/Users/t/r/packages/web/src/hooks/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts · …/src/hooks')
+  // A file at the root of the notes or the session's folder has no folder to show.
+  expect(nameFirst('/Users/t/r/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts')
+  expect(nameFirst('/v/A.md', '/v', '/Users/t', '')).toBe('A.md')
+})
+
 test('a vault note opens in the note editor, any other file in the file editor', async () => {
   const paths = resolvePaths({ notesFolder: '/v', editor: 'obsidian' }, '/Users/t')
   expect(paths.fileEditor).toBe('vscode')
@@ -2526,16 +2471,16 @@ test('a vault note opens in the note editor, any other file in the file editor',
   expect(openArgv({ ...paths, fileEditor: 'system' }, '/r/a.ts')).toEqual(['open', '/r/a.ts'])
 })
 
-test('Agent Logs and dot-folders in the notes are not listed; the pin is a note by name or the file, unticked', async () => {
+test('Agent Logs and dot-folders in the notes are not listed; the pin is a note by name or the file', async () => {
   expect(isListedTouch('/r/src/a.ts', '/v', '/v/Notes')).toBe(true)
   expect(isListedTouch('/r/.github/ci.yml', '/v', '/v/Notes')).toBe(true)
   expect(isListedTouch('/v/Notes/Agent Log - X.md', '/v', '/v/Notes')).toBe(false)
   expect(isListedTouch('/v/.obsidian/app.json', '/v', '/v/Notes')).toBe(false)
-  expect(touchedPin('/v/Ideas/A.md', '/v')).toEqual({ on: false, kind: 'note', target: 'A', label: 'A', path: '/v/Ideas/A.md' })
-  expect(touchedPin('/r/README.md', '/v')).toEqual({ on: false, kind: 'file', target: '/r/README.md', label: 'README.md' })
+  expect(touchedPin('/v/Ideas/A.md', '/v')).toEqual({ on: true, kind: 'note', target: 'A', label: 'A', path: '/v/Ideas/A.md' })
+  expect(touchedPin('/r/README.md', '/v')).toEqual({ on: true, kind: 'file', target: '/r/README.md', label: 'README.md' })
 })
 
-test('files this chat touched: listed newest first, opened in the right editor, pinned as unticked links that show in the Pins card', { options: OPTIONS }, async ($, on) => {
+test('files this chat touched: listed newest first, named file first, opened in the right editor, pinned with a press', { options: OPTIONS }, async ($, on) => {
   const written = new Map<string, string>()
   const store = new Map<string, unknown>()
   const onDisk = new Set(['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/r/README.md', '/r/src/b.ts'])
@@ -2594,12 +2539,12 @@ test('files this chat touched: listed newest first, opened in the right editor, 
   await $.tool.call({ tool: 'Write', file_path: '/r/src/failed.ts', content: 'x' })
   answer = { result: {}, text: 'ok' }
 
-  // A row's text with its spacing dropped: the path, `new`, then its buttons.
+  // A row's text with its spacing dropped: the file's name, its folder, `new`, then its buttons.
   const rowOf = async (path: string) => ((await ui.find({ key: `touched-${path}` }))?.text ?? '').replace(/\s+/g, '')
   expect(await ui.find({ text: '📄 Files this chat touched · 2' })).toBeTruthy()
   expect((await ui.findAll({ type: 'Box', text: /open/ })).map(one => one.key).filter(key => key?.startsWith('touched-'))).toEqual(['touched-/r/README.md', 'touched-/r/src/new.ts'])
   expect(await rowOf('/r/README.md')).toBe('README.mdopen')
-  expect(await rowOf('/r/src/new.ts')).toBe('src/new.tsnewopen')
+  expect(await rowOf('/r/src/new.ts')).toBe('new.ts·srcnewopen')
   expect(await rowOf('/v/Notes/Agent Log - X.md')).toBe('')
   expect(await rowOf('/r/src/denied.ts')).toBe('')
   expect(await rowOf('/r/src/failed.ts')).toBe('')
@@ -2609,7 +2554,7 @@ test('files this chat touched: listed newest first, opened in the right editor, 
   await ui.press({ key: 'touched-open-/r/README.md' })
   expect(ran.pop()).toEqual(['code', '/r/README.md'])
   await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/Fresh.md', content: 'x' })
-  expect(await rowOf('/v/Ideas/Fresh.md')).toBe('Ideas/Fresh.mdnewopen')
+  expect(await rowOf('/v/Ideas/Fresh.md')).toBe('Fresh.md·Ideasnewopen')
   await ui.press({ key: 'touched-open-/v/Ideas/Fresh.md' })
   expect(ran.pop()).toEqual(['open', 'obsidian://open?path=%2Fv%2FIdeas%2FFresh.md'])
   onDisk.delete('/r/src/new.ts')
@@ -2617,26 +2562,25 @@ test('files this chat touched: listed newest first, opened in the right editor, 
   expect(toasts.pop()).toBe('Not found: /r/src/new.ts')
   expect(ran.length).toBe(0)
 
-  // Anchored: pin writes an unticked pin, the row says pinned, the Anchor card links it.
+  // Anchored: pin writes a pin, the row says pinned, the Pins card lists it.
   await ui.press({ key: 'anchor-menu' })
   await ui.press({ key: 'card-PMOC - Garden' })
   await ui.press({ key: 'touched-pin-/r/README.md' })
-  expect(pinsNow()).toEqual([{ on: false, kind: 'file', target: '/r/README.md', label: 'README.md' }])
+  expect(pinsNow()).toEqual([{ on: true, kind: 'file', target: '/r/README.md', label: 'README.md' }])
   expect(await ui.find({ key: 'touched-pin-/r/README.md' })).toBeFalsy()
   expect(await rowOf('/r/README.md')).toMatch(/openpinned$/)
-  expect((await ui.find({ key: 'pin-tick-file-/r/README.md' }))?.text?.trim()).toBe('☐')
   expect((await ui.find({ key: 'pin-open-file-/r/README.md' }))?.text).toMatch(/📄 README.md/)
   await ui.press({ key: 'pin-open-file-/r/README.md' })
   expect(ran.pop()).toEqual(['code', '/r/README.md'])
   await ui.press({ key: 'touched-pin-/v/Ideas/Fresh.md' })
-  expect(pinsNow()[1]).toEqual({ on: false, kind: 'note', target: 'Fresh', label: 'Fresh' })
+  expect(pinsNow()[1]).toEqual({ on: true, kind: 'note', target: 'Fresh', label: 'Fresh' })
   await ui.press({ key: 'pin-open-note-Fresh' })
   expect(ran.pop()).toEqual(['open', 'obsidian://open?path=%2Fv%2FIdeas%2FFresh.md'])
 
-  // A new vault note written now is still pinned unticked by itself, and listed as pinned.
+  // A new vault note written now is still pinned by itself, and listed as pinned.
   await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/Later.md', content: 'x' })
-  expect(pinsNow()[2]).toEqual({ on: false, kind: 'note', target: 'Later', label: 'Later' })
-  expect(await rowOf('/v/Ideas/Later.md')).toBe('Ideas/Later.mdnewopenpinned')
+  expect(pinsNow()[2]).toEqual({ on: true, kind: 'note', target: 'Later', label: 'Later' })
+  expect(await rowOf('/v/Ideas/Later.md')).toBe('Later.md·Ideasnewopenpinned')
 
   // Past five, the rest wait behind show all.
   await $.tool.call({ tool: 'NotebookEdit', notebook_path: '/r/nb.ipynb', new_source: 'x' })
@@ -2645,7 +2589,7 @@ test('files this chat touched: listed newest first, opened in the right editor, 
   expect(await rowOf('/r/src/new.ts')).toBe('')
   expect(await rowOf('/r/nb.ipynb')).toMatch(/^nb\.ipynbnewopen/)
   await ui.press({ key: 'files-all' })
-  expect(await rowOf('/r/src/new.ts')).toMatch(/^src\/new\.tsnewopen/)
+  expect(await rowOf('/r/src/new.ts')).toMatch(/^new\.ts·srcnewopen/)
   await ui.unmount()
 })
 
