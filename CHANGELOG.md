@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+**augi-ui: a fork keeps its anchor, and less in the pane.** A forked
+chat used to come up with no anchor (it is not a new session, so the folder's
+last anchor was not offered), and each fork had to be anchored by hand. A fork
+now starts on the anchor of the chat it was forked from: the pane reads the
+brief it sent the parent's model out of the conversation the fork opens with.
+It needs `tell each chat its anchor` on, which is the default.
+
+Out of the pane: the `📄 Files this chat touched` card (a file is pinned by
+pasting its path, or by asking the chat), and the scratchpad's `→ ask` and
+`→ today`; an entry now has `→ save to notes` and `✕ drop`, small, under its
+text. An artifact the chat publishes is no longer pinned by itself; paste its
+link to pin it. The draft button moved from under the pins into the Anchor
+card, beside the note buttons. And a pinned `.html` file opens in the browser
+instead of the file editor.
+
 **Two lenses that keep the board honest: `board-sync` and `jira-pull`.** Both
 are on-demand, answer in chat, and write nothing until the user picks rows by
 number. `board-sync` reads every open card, its note, its Agent Log and the

@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderChildren, ToolCallResult } from 'claude-code'
+import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { Card, Chat, Inherited, JustMade, Lens, Made, MadeArtifact, Opened, PadEntry, Picks, Pin, PinKind, Question, SetupItem, SubItem, Swatch, Today, Told, Touched, TouchedFile, Trail, View } from '../types'
+import type { Card, Chat, Inherited, JustMade, Lens, Opened, PadEntry, Picks, Pin, PinKind, Question, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -124,8 +124,8 @@ export type UsageEvent = { at: string; kind: 'press' | 'input' | 'sent'; what: s
 // Keys that end in something of the user's: `card-<note>`, `pin-open-<kind>-<target>`.
 const USAGE_PREFIXES = [
   'card-sub', 'card', 'task',
-  'pin-open', 'pin-drop', 'pin-paste', 'touched-open', 'touched-pin',
-  'pad-input', 'pad-save', 'pad-ask', 'pad-today', 'pad-drop', 'today-log',
+  'pin-open', 'pin-drop', 'pin-paste',
+  'pad-input', 'pad-save', 'pad-drop', 'today-log',
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
 // Whole keys that only look like one of those.
@@ -152,12 +152,12 @@ export const USAGE_FEATURES = [
   'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
   'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss', 'template-update',
   'pin-open', 'pin-drop', 'pin-paste',
-  'touched-open', 'touched-pin', 'files-all', 'pad-input', 'pad-save', 'pad-ask', 'pad-today', 'pad-drop', 'pad-save-all',
+  'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
   'today-log', 'today-open', 'today-make', 'pick-today',
   'draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
-  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-pinsOpen', 'head-touchedOpen', 'head-padOpen', 'head-youOpen',
+  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-pinsOpen', 'head-padOpen', 'head-youOpen',
 ]
 
 // The log's lines as events; a line that is not one is skipped.
@@ -237,29 +237,14 @@ export const FILE_EDITORS = ['vscode', 'cursor', 'system'] as const
 // A markdown note inside the notes folder; anything else is a file.
 export const isVaultNote = (path: string, notes: string): boolean => Boolean(notes) && path.startsWith(`${notes}/`) && path.endsWith('.md')
 
-// The command that opens a path: a note with the note editor, any other file with the file editor.
-export const openArgv = (paths: Paths, path: string): string[] =>
-  isVaultNote(path, paths.notes) ? editorArgv(paths.editor, paths.editorCommand, path) : editorArgv(paths.fileEditor, '', path)
+// The command that opens a path: a note with the note editor, a web page with whatever
+// the system opens pages with (the browser), any other file with the file editor.
+export const openArgv = (paths: Paths, path: string): string[] => {
+  if (isVaultNote(path, paths.notes)) {
+    return editorArgv(paths.editor, paths.editorCommand, path)
+  }
 
-// A path made short to read: relative to the notes folder or the session's root, else
-// ~/… under home; then only the file's name and the two folders it sits in, `…/` standing
-// for what was cut.
-export const shortPath = (path: string, notes: string, home: string, root = '', kept = 3): string => {
-  const base = [notes, root].find(one => one && path.startsWith(`${one}/`))
-  const relative = base ? path.slice(base.length + 1) : home && path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path
-  const parts = relative.split('/')
-
-  return parts.length > kept ? `…/${parts.slice(-kept).join('/')}` : relative
-}
-
-// The same path with the file's name first, so a row cut short at its end still names
-// the file: `name · folder`, the folder as `shortPath` writes it (the last two kept).
-export const nameFirst = (path: string, notes: string, home: string, root = ''): string => {
-  const at = path.lastIndexOf('/')
-  const folder = at > 0 ? shortPath(path.slice(0, at), notes, home, root, 2) : ''
-  const isBase = [notes, root].some(one => one && path.slice(0, Math.max(at, 0)) === one)
-
-  return folder && !isBase ? `${path.slice(at + 1)} · ${folder}` : path.slice(at + 1)
+  return /\.html?$/i.test(path) ? editorArgv('system', '', path) : editorArgv(paths.fileEditor, '', path)
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -568,7 +553,7 @@ const swatch = atom(
   { shape: 'swatch-18' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
-const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, pinsOpen: true, touchedOpen: true, padOpen: true, youOpen: true }
+const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, pinsOpen: true, padOpen: true, youOpen: true }
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
   { aboutMe: true, openAugi: true, project: true, today: true } as Picks,
@@ -576,21 +561,9 @@ const picks = atom(
 )
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
-  { ...CARDS_OPEN, anchorsOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, filesOpen: false, taskMode: '', logged: 0 } as View,
+  { ...CARDS_OPEN, anchorsOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0 } as View,
   { shape: 'view-12' },
 )
-const made = atom(
-  { plugin: 'augi-ui', key: 'made' } as const,
-  { session: '', artifacts: [] } as Made,
-  { shape: 'made-1' },
-)
-// The files this chat wrote or edited, tagged with its session like `made`.
-const touched = atom(
-  { plugin: 'augi-ui', key: 'touched' } as const,
-  { session: '', files: [] } as Touched,
-  { shape: 'touched-1' },
-)
-
 // This chat's scratchpad, newest first: session state, so each chat has its own and it
 // outlives a redraw or a reload of this module, but not the session.
 const pad = atom({ plugin: 'augi-ui', key: 'pad' } as const, [] as PadEntry[], { shape: 'pad-1' })
@@ -1507,35 +1480,7 @@ export const anchorPairs = (value: unknown): [string, string][] =>
     ? value.filter((one): one is [string, string] => Array.isArray(one) && typeof one[0] === 'string' && typeof one[1] === 'string')
     : []
 
-// This session's published artifacts with one more: a URL already listed takes the new title.
-export const withArtifact = (list: MadeArtifact[], one: MadeArtifact): MadeArtifact[] =>
-  list.some(old => old.url === one.url) ? list.map(old => (old.url === one.url ? one : old)) : [...list, one]
-
-export const TOUCHED_KEPT = 30
-
-// This chat's touched files with one more on top: a path already listed moves up and stays made if it was.
-export const withTouched = (list: TouchedFile[], one: TouchedFile, kept = TOUCHED_KEPT): TouchedFile[] => {
-  const was = list.find(old => old.path === one.path)
-
-  return [{ path: one.path, made: one.made || Boolean(was?.made) }, ...list.filter(old => old.path !== one.path)].slice(0, kept)
-}
-
-// Whether a touched path is listed: not the Agent Logs, nothing in a dot-folder of the notes folder.
-export const isListedTouch = (path: string, notes: string, trails: string): boolean =>
-  Boolean(path) && !(trails && path.startsWith(`${trails}/`)) && !(notes && path.startsWith(`${notes}/`) && path.slice(notes.length).includes('/.'))
-
-// A touched file as a pin: a vault note by name, else the file.
-export const touchedPin = (path: string, notes: string): Pin => {
-  if (isVaultNote(path, notes)) {
-    const name = baseName(path).replace(/\.md$/, '')
-
-    return { on: true, kind: 'note', target: name, label: name, path }
-  }
-
-  return { on: true, kind: 'file', target: path, label: baseName(path) }
-}
-
-// Pins as the context card lists them: artifacts first, each group in its order.
+// Pins as the pins card lists them: artifacts first, each group in its order.
 export const artifactsFirst = (pins: Pin[]): Pin[] => [...pins.filter(pin => pin.kind === 'artifact'), ...pins.filter(pin => pin.kind !== 'artifact')]
 
 // What a submitted draft was about: the lens and the instruction. Null if it isn't ours.
@@ -1620,6 +1565,37 @@ export const anchorBrief = (anchor: Anchor, today = '', was = ''): string => {
   lines.push('This says where things go. It is not a request: write nothing there until I ask.')
 
   return lines.join('\n')
+}
+
+// How a brief reads in the conversation the model is sent: a hook's context is a text
+// block of the user's message, wrapped as a reminder. A brief quoted anywhere else (a
+// tool result, a pasted file) is not such a block.
+const BRIEF_SAID = 'prompt.submit hook additional context: Augi: this chat is '
+
+// What a conversation's briefs say its chat is anchored to, the last one deciding: a
+// note's name, '' when the last word was that it has none, null when it holds no brief.
+// A forked chat starts with its parent's conversation, so this is how a fork keeps its
+// parent's anchor.
+export const anchorFromMessages = (messages: readonly { role?: unknown; content?: unknown }[]): string | null => {
+  let said: string | null = null
+  for (const message of messages) {
+    for (const block of message.role === 'user' && Array.isArray(message.content) ? message.content : []) {
+      const text: string = block?.type === 'text' && typeof block.text === 'string' ? block.text : ''
+      const at = text.startsWith('<system-reminder>') ? text.indexOf(BRIEF_SAID) : -1
+      if (at < 0) {
+        continue
+      }
+      const rest = text.slice(at + BRIEF_SAID.length)
+      const note = rest.match(/^(?:now )?anchored to \[\[([^\]]+)\]\]/)?.[1]
+      if (note) {
+        said = note
+      } else if (rest.startsWith('no longer anchored to ')) {
+        said = ''
+      }
+    }
+  }
+
+  return said
 }
 
 // The same, for a chat whose anchor was taken away after it was told one.
@@ -1824,14 +1800,6 @@ async function logToday($: EngineInterface, text: string): Promise<void> {
   if (await writeToday($, [{ when: stamp(await $.clock.now()), text: text.trim() }])) {
     await update($, view, old => ({ ...old, logged: (old.logged ?? 0) + 1 }))
     await $.ui.toast("Logged to today's note")
-  }
-}
-
-// Scratchpad entries go into today's note, oldest first, and come off the pad.
-async function padToToday($: EngineInterface, entries: PadEntry[]): Promise<void> {
-  if (await writeToday($, entries)) {
-    await unjot($, entries)
-    await $.ui.toast("Saved to today's note")
   }
 }
 
@@ -2064,11 +2032,34 @@ async function rememberFolder($: EngineInterface, note: string): Promise<void> {
   }
 }
 
-// A new chat that has not chosen starts on the anchor last chosen in its working folder,
-// so starting a chat does not begin with picking one. Only a session that just began: an
-// older one that never had an anchor keeps none. Nothing is written to the anchor's log
-// until the chat says something (nameChat), so an abandoned chat leaves no trace there.
-// True when it anchored the session.
+// The session whose conversation was already read for a brief: once is enough, since what
+// a fork starts with is there from the start, and a long conversation is not read again
+// on every sync.
+let askedOf = ''
+
+// What this chat's conversation says it is anchored to (`anchorFromMessages`), asked once
+// a session; null after that, with no brief in it, or where the conversation can't be read.
+async function toldInConversation($: EngineInterface, id: string): Promise<string | null> {
+  if (askedOf === id) {
+    return null
+  }
+  askedOf = id
+  try {
+    const messages = await $.session.messages({ as: 'api' })
+
+    return Array.isArray(messages) ? anchorFromMessages(messages) : null
+  } catch {
+    return null
+  }
+}
+
+// A chat that has not chosen starts on an anchor by itself, so starting one does not
+// begin with picking. A fork starts on its parent's: it opens with the parent's
+// conversation, and the brief in it names the anchor (a parent that had none leaves the
+// fork with none). Any other new chat starts on the anchor last chosen in its
+// working folder, and only if it just began: an older one that never had an anchor keeps
+// none. Nothing is written to the anchor's log until the chat says something (nameChat),
+// so an abandoned chat leaves no trace there. True when it anchored the session.
 async function inheritAnchor($: EngineInterface): Promise<boolean> {
   try {
     const id = await $.session.id()
@@ -2076,9 +2067,10 @@ async function inheritAnchor($: EngineInterface): Promise<boolean> {
     if (!id || pairs.some(([one]) => one === id)) {
       return false
     }
-    const folder = await folderNow($)
-    const note = folder ? anchorPairs(await $.store.get(FOLDERS_KEY)).find(([one]) => one === folder)?.[1] : ''
-    if (!note || (await $.clock.now()) - (await $.session.usage()).startedAt > NEW_SESSION_MS) {
+    const told = await toldInConversation($, id)
+    const folder = told === null ? await folderNow($) : ''
+    const note = told ?? (folder ? anchorPairs(await $.store.get(FOLDERS_KEY)).find(([one]) => one === folder)?.[1] : '')
+    if (!note || (told === null && (await $.clock.now()) - (await $.session.usage()).startedAt > NEW_SESSION_MS)) {
       return false
     }
     // Never a headless run: nobody is there to see, keep or change it.
@@ -2219,12 +2211,9 @@ async function anchorSession($: EngineInterface, note: string): Promise<void> {
     const found = await loadAnchor($, cards)
     await update($, swatch, old => ({ ...old, ...found }))
   }
-  for (const one of await sessionArtifacts($)) {
-    await writeTrail($, note, text => addPin(text, artifactPin(one)))
-  }
 }
 
-// Anchoring puts this chat in the anchor's ## Chats and pins what it already published, ticked.
+// Anchoring puts this chat in the anchor's ## Chats.
 async function chooseAnchor($: EngineInterface, card: Card): Promise<void> {
   await anchorSession($, card.note)
   await recordChat($, CHAT_PLACEHOLDER)
@@ -2256,7 +2245,7 @@ async function anchorNow($: EngineInterface): Promise<Anchor | null> {
   return anchor ? { note: anchor.note, notePath, trail: trailPath(anchor.note) } : null
 }
 
-// `about` replaces what's typed in the prompt box: a captured question, for one.
+// `about` replaces what's typed in the prompt box: what a Jira update is for, for one.
 async function draftText($: EngineInterface, lens: Lens | null, about?: string): Promise<string> {
   const { trail, pinPaths, today } = await read($, swatch)
   const choice = await read($, picks)
@@ -2350,54 +2339,10 @@ async function existsBefore($: EngineInterface, path: string): Promise<boolean> 
   }
 }
 
-// After a write or edit that ran (not denied, no error), the file goes on this chat's list.
-async function afterTouch($: EngineInterface, path: string, existed: boolean, ran: ToolCallResult): Promise<void> {
-  try {
-    if (ran.deny === undefined && !ran.isError) {
-      await rememberTouch($, path, !existed)
-    }
-  } catch {
-    // the list is a convenience; the call's result stands
-  }
-}
-
-// The files this chat touched; a list from an earlier session reads as none.
-async function sessionTouched($: EngineInterface): Promise<TouchedFile[]> {
-  const { session, files } = await read($, touched)
-
-  return session && session === (await $.session.id()) ? files : []
-}
-
-// A file a write or edit of this chat's changed: listed unless it is the pane's own or hidden.
-async function rememberTouch($: EngineInterface, path: string, isMade: boolean): Promise<void> {
-  if (!isListedTouch(path, P.notes, P.trails)) {
-    return
-  }
-  const id = await $.session.id()
-  await update($, touched, old => ({ session: id, files: withTouched(old.session === id ? old.files : [], { path, made: isMade }) }))
-}
-
 // The anchor whose Agent Log holds this session's chat: anchoring records it, so any anchor.
 async function paneChatAnchor($: EngineInterface): Promise<string | null> {
   return sessionAnchor($)
 }
-
-// The artifacts this chat session published; a list from an earlier session reads as none.
-async function sessionArtifacts($: EngineInterface): Promise<MadeArtifact[]> {
-  const { session, artifacts } = await read($, made)
-
-  return session && session === (await $.session.id()) ? artifacts : []
-}
-
-async function rememberArtifact($: EngineInterface, one: MadeArtifact): Promise<void> {
-  const id = await $.session.id()
-  await update($, made, old => ({ session: id, artifacts: withArtifact(old.session === id ? old.artifacts : [], one) }))
-}
-
-// An artifact the chat published, pinned: it sticks to the anchor as context.
-const artifactPin = (one: MadeArtifact): Pin => ({ on: true, kind: 'artifact', target: one.url, label: one.title })
-
-export const ARTIFACT_URL = /https:\/\/claude\.ai\/(?:code\/)?artifact\/[\w-]+/
 
 // Writes the lens file (never over one that's there), opens it to paste the prompt, lists it.
 async function newLens($: EngineInterface, typed: string): Promise<void> {
@@ -2886,7 +2831,6 @@ export const register: Register = (on, options) => {
       // The scratchpad was that chat's; it doesn't follow into the next.
       await update($, pad, () => [])
       await typePad($, '')
-      await update($, touched, () => ({ session: '', files: [] }))
       await update($, justMade, () => NO_TASK)
       await update($, view, old => ({ ...old, taskMode: '' as const }))
     }
@@ -2983,55 +2927,13 @@ export const register: Register = (on, options) => {
     return ran
   })
 
-  // What an anchored chat makes goes on its anchor's context: an artifact it publishes,
-  // ticked, and a new note it writes in the notes folder, unticked. The session keeps
-  // its artifacts either way, so anchoring later pins them.
-  on('tool.call', { tool: 'Artifact' }, async ($, e, next) => {
-    const ran = await next(e)
-    try {
-      await ready($)
-      // Only a page published; reads, lists and asset uploads name artifacts too.
-      const isPublish = (e.action === undefined || e.action === 'publish') && !e.asset
-      const url = isPublish ? JSON.stringify(ran).match(ARTIFACT_URL)?.[0] : undefined
-      if (url && ran.deny === undefined && !ran.isError) {
-        const one = { url, title: typeof e.title === 'string' && e.title ? e.title : 'artifact' }
-        await rememberArtifact($, one)
-        const note = await paneChatAnchor($)
-        if (note) {
-          await writeTrail($, note, text => addPin(text, artifactPin(one)))
-        }
-      }
-    } catch (error) {
-      await $.ui.toast(`Augi couldn't pin this artifact: ${String(error)}`)
-    }
-
-    return ran
-  })
-
-  // Every file the chat writes or edits is listed under Files this chat touched; made
-  // is whether it was there before. Neither step throws into the tool call.
-  on('tool.call', { tool: 'Edit' }, async ($, e, next) => {
-    const existed = await existsBefore($, e.file_path)
-    const ran = await next(e)
-    await afterTouch($, e.file_path, existed, ran)
-
-    return ran
-  })
-
-  on('tool.call', { tool: 'NotebookEdit' }, async ($, e, next) => {
-    const existed = await existsBefore($, e.notebook_path)
-    const ran = await next(e)
-    await afterTouch($, e.notebook_path, existed, ran)
-
-    return ran
-  })
-
+  // A new note an anchored chat writes in the notes folder is pinned to its anchor.
+  // Nothing else it makes is: a file or an artifact is pinned by pasting it in the card.
   on('tool.call', { tool: 'Write' }, async ($, e, next) => {
     await ready($)
     const path = e.file_path
     const existed = await existsBefore($, path)
     const ran = await next(e)
-    await afterTouch($, path, existed, ran)
     try {
       const isNewNote = !existed && isVaultNote(path, P.notes) && !path.startsWith(`${P.trails}/`) && !path.includes('/.')
       const note = isNewNote ? await paneChatAnchor($) : null
@@ -3056,16 +2958,6 @@ export const register: Register = (on, options) => {
     const isJiraOn = Boolean(jiraServer || P.jiraServer || P.jiraProject || P.jiraSite || jira)
     const choice = await read($, picks)
     const shown = await read($, view)
-    const ownFiles = await sessionTouched($)
-    let root = ''
-    if (ownFiles.length > 0) {
-      try {
-        root = await $.session.cwd()
-      } catch {
-        root = ''
-      }
-    }
-    const shownFiles = shown.filesOpen ? ownFiles : ownFiles.slice(0, 5)
     const jotted = await read($, pad)
     const madeTask = await read($, justMade)
     // Drawing never depends on it: with no id, no row is marked as this chat.
@@ -3221,7 +3113,7 @@ export const register: Register = (on, options) => {
                   )}
                   {isCarried && (
                     <Box key="anchor-carried" flexDirection="column">
-                      <Text dimColor wrap="wrap">↩ From your last chat in this folder. It is filed here with its first prompt.</Text>
+                      <Text dimColor wrap="wrap">↩ Carried over: from the chat this one was forked from, else your last chat in this folder. It is filed here with its first prompt.</Text>
                       <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                         <Button key="inherit-keep" label="keep" onPress={() => keepInherited($)} />
                         <Button key="inherit-change" label="change" onPress={() => update($, view, old => ({ ...old, anchorsOpen: true }))} />
@@ -3235,6 +3127,7 @@ export const register: Register = (on, options) => {
                       <Button key="open-trail" label="🤖 Agent Log" hotkey="k" onPress={() => writeTrail($, anchor.note, text => text).then(() => openNote($, trailPath(anchor.note)))} />
                     </Box>
                   )}
+                  <Button key="draft" variant="primary" label={anchor ? '💬 draft a prompt with this context' : '💬 draft a prompt with my context'} hotkey="n" onPress={() => draft($, null)} />
                   {anchor && jira && (
                     <Box key="jira-linked" flexDirection="row" alignItems="center" gap={1}>
                       {P.jiraSite
@@ -3302,45 +3195,17 @@ export const register: Register = (on, options) => {
               )}
             </Box>
 
-            <Box key="card-pins" {...CARD} borderColor="remember">
-              {head('pinsOpen', anchor ? `📌 Pinned to ${anchor.note} · ${pins.length}` : '📌 Context', 'remember')}
-              {shown.pinsOpen && anchor && artifactsFirst(pins).map(pin => line(
-                `pin-${pinKey(pin)}`,
-                <Button key={`pin-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => openPin($, pin)} />,
-                <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => onPins(text => removePin(text, pin))} />,
-              ))}
-              {shown.pinsOpen && anchor && (
-                <Input key={`pin-paste-${pins.length}`} label="⧉" placeholder="paste a [[note]], file path or link: Enter pins it" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
-              )}
-              {shown.pinsOpen && !anchor && <Text key="pins-none" dimColor wrap="wrap">Pick an anchor to pin notes, files and links to it.</Text>}
-              <Button key="draft" variant="primary" label={anchor ? '💬 draft a prompt with this context' : '💬 draft a prompt with my context'} hotkey="n" onPress={() => draft($, null)} />
-            </Box>
-
-            {ownFiles.length > 0 && (
-              <Box key="card-files" {...CARD} borderColor="subtle">
-                {head('touchedOpen', `📄 Files this chat touched · ${ownFiles.length}`)}
-                {shown.touchedOpen && shownFiles.map(one => {
-                  const pin = touchedPin(one.path, P.notes)
-                  const isPinned = pins.some(other => other.kind === pin.kind && other.target === pin.target)
-
-                  return line(
-                    `touched-${one.path}`,
-                    [
-                      <Text key={`touched-path-${one.path}`} wrap="truncate-end">{nameFirst(one.path, P.notes, P.home, root)}</Text>,
-                      one.made && <Text key={`touched-new-${one.path}`} dimColor>new</Text>,
-                    ],
-                    [
-                      <Button key={`touched-open-${one.path}`} label="open" onPress={() => openPath($, one.path)} />,
-                      anchor && (isPinned
-                        ? <Text key={`touched-pinned-${one.path}`} dimColor>pinned</Text>
-                        : <Button key={`touched-pin-${one.path}`} label="pin" onPress={() => pinIt($, anchor.note, pin)} />),
-                    ],
-                  )
-                })}
-                {shown.touchedOpen && ownFiles.length > 5 && (
-                  <Button key="files-all" plain dimColor label={`${arrow(shown.filesOpen)} ${shown.filesOpen ? 'show fewer' : `show all (${ownFiles.length})`}`} onPress={flip('filesOpen')} />
+            {anchor && (
+              <Box key="card-pins" {...CARD} borderColor="remember">
+                {head('pinsOpen', `📌 Pinned to ${anchor.note} · ${pins.length}`, 'remember')}
+                {shown.pinsOpen && artifactsFirst(pins).map(pin => line(
+                  `pin-${pinKey(pin)}`,
+                  <Button key={`pin-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => openPin($, pin)} />,
+                  <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => onPins(text => removePin(text, pin))} />,
+                ))}
+                {shown.pinsOpen && (
+                  <Input key={`pin-paste-${pins.length}`} label="⧉" placeholder="paste a [[note]], file path or link: Enter pins it" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
                 )}
-                {shown.touchedOpen && !anchor && <Text dimColor>Pick an anchor to pin these to it.</Text>}
               </Box>
             )}
 
@@ -3357,15 +3222,14 @@ export const register: Register = (on, options) => {
                     onInput={value => typePad($, value)}
                     onSubmit={value => jot($, value)}
                   />
-                  {jotted.map((one, at) => line(
-                    `pad-row-${at}`,
-                    <Text key={`pad-text-${at}`} wrap="wrap">{`${one.when.slice(11, 16)} ${one.text}`}</Text>,
-                    [
-                      <Button key={`pad-ask-${at}`} label="→ ask" onPress={() => draft($, null, one.text)} />,
-                      anchor && notePath && <Button key={`pad-save-${at}`} label="→ notes" onPress={() => saveToNotes($, [one])} />,
-                      today.exists && <Button key={`pad-today-${at}`} label="→ today" onPress={() => padToToday($, [one])} />,
-                      <Button key={`pad-drop-${at}`} dimColor label="drop" onPress={() => unjot($, [one])} />,
-                    ],
+                  {jotted.map((one, at) => (
+                    <Box key={`pad-row-${at}`} flexDirection="column" marginTop={1}>
+                      <Text key={`pad-text-${at}`} wrap="wrap">{`${one.when.slice(11, 16)} ${one.text}`}</Text>
+                      <Box flexDirection="row" alignItems="center" gap={2}>
+                        {anchor && notePath && <Button key={`pad-save-${at}`} plain label="→ save to notes" onPress={() => saveToNotes($, [one])} />}
+                        <Button key={`pad-drop-${at}`} plain dimColor label="✕ drop" onPress={() => unjot($, [one])} />
+                      </Box>
+                    </Box>
                   ))}
                   {anchor && notePath && jotted.length >= 2 && (
                     <Button key="pad-save-all" plain label="→ save all to Human Notes" onPress={() => saveToNotes($, jotted)} />

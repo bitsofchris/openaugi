@@ -5,10 +5,10 @@ import { expect, test } from 'claude-code/testing'
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
 import { folderKey, promptTitle } from './register'
-import { anchorBrief, anchorNews, unanchoredBrief } from './register'
-import { isListedTouch, nameFirst, openArgv, shortPath, touchedPin, withTouched } from './register'
+import { anchorBrief, anchorFromMessages, anchorNews, unanchoredBrief } from './register'
+import { openArgv } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
-import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, withArtifact, logName, nextFrom, addPin, parsePin, pinFrom, pinLine, removePin, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, outcomeFrom, parseTrail, tidyTrail, trailPath, trailTemplate, toggled, typedFrom } from './register'
+import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, logName, nextFrom, addPin, parsePin, pinFrom, pinLine, removePin, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, outcomeFrom, parseTrail, tidyTrail, trailPath, trailTemplate, toggled, typedFrom } from './register'
 
 const PANE = {
   plugin: 'augi-ui',
@@ -686,7 +686,7 @@ test('after the folder, setup walks the steps: found notes, a starter, or skip',
   await ui.unmount()
 })
 
-test('pins on an anchor: paste to pin, press the name to open, unpin ticks the line off, and what a pane chat makes is pinned', { options: OPTIONS }, async ($, on) => {
+test('pins on an anchor: paste to pin, press the name to open, unpin ticks the line off; a note the chat writes is pinned, an artifact it publishes is not', { options: OPTIONS }, async ($, on) => {
   const written = new Map<string, string>()
   const store = new Map<string, unknown>([['anchors', [['own-session', 'PMOC - Garden']]], ['pins', [{ on: true, kind: 'file', target: '/r/old/EVERYWHERE.md', label: 'EVERYWHERE.md' }]]])
   const opened: string[][] = []
@@ -764,17 +764,22 @@ test('pins on an anchor: paste to pin, press the name to open, unpin ticks the l
   expect(logNow().includes('## Context\n\n- file: `/r/docs/ARCH.md` · ARCH.md\n- [[Sprinkler Benchmarks]]\n')).toBe(true)
   await ui.press({ key: 'pin-drop-file-/r/docs/ARCH.md' })
 
-  // An anchored chat's published artifact is pinned; a read of another is not.
+  // An artifact the chat publishes is not pinned by itself; its link pasted in the card is,
+  // and is listed first.
   await $.prompt.submit({ text: filled[0] ?? '' })
   await $.tool.call({ tool: 'Artifact', file_path: '/s/page.html', title: 'Cache explainer' })
-  await $.tool.call({ tool: 'Artifact', action: 'read', url: 'https://claude.ai/artifact/zzz-9' })
-  expect(pinned().slice(1)).toEqual([{ on: true, kind: 'artifact', target: 'https://claude.ai/artifact/abc-1', label: 'Cache explainer' }])
+  expect(pinned().map(pin => pin.target)).toEqual(['Sprinkler Benchmarks'])
+  await ui.input({ key: 'pin-paste-1', text: 'https://claude.ai/artifact/abc-1' })
+  expect(pinned().slice(1)).toEqual([{ on: true, kind: 'artifact', target: 'https://claude.ai/artifact/abc-1', label: 'artifact' }])
   expect(await ui.find({ key: 'pin-open-artifact-https://claude.ai/artifact/abc-1' })).toBeTruthy()
-  // A new note it writes in the vault is pinned too; a file outside the vault or an edit of one there is not.
+  // A new note it writes in the vault is pinned; a file outside the vault or an edit of one there is not.
   await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/New Idea.md', content: 'x' })
   await $.tool.call({ tool: 'Write', file_path: '/tmp/scratch.md', content: 'x' })
   await $.tool.call({ tool: 'Write', file_path: '/v/AGENT/Slowly Changing Context.md', content: 'x' })
+  await $.tool.call({ tool: 'Edit', file_path: '/r/src/a.ts', old_string: 'a', new_string: 'b' })
   expect(pinned().slice(2)).toEqual([{ on: true, kind: 'note', target: 'New Idea', label: 'New Idea' }])
+  // The pane keeps no list of the files a chat wrote or edited.
+  expect(await ui.find({ text: /Files this chat touched/ })).toBeFalsy()
 
   // The pane has no second place to pin, no note search and no session list.
   for (const key of ['pin-search', 'all-paste-0', 'all-paste-1', 'sessions-menu', 'head-contextOpen']) {
@@ -782,12 +787,11 @@ test('pins on an anchor: paste to pin, press the name to open, unpin ticks the l
   }
 
   // Every card and both sections fold from their title, and open again. The draft button
-  // stays under a folded Pins card.
-  for (const [head, inside] of [['head-pinsOpen', 'pin-paste-3'], ['head-anchorOpen', 'anchor-menu'], ['head-padOpen', 'pad-input-0']] as const) {
+  // is in the Anchor card, with the anchor's note buttons, and folds with it.
+  for (const [head, inside] of [['head-pinsOpen', 'pin-paste-3'], ['head-anchorOpen', 'draft'], ['head-padOpen', 'pad-input-0']] as const) {
     expect(await ui.find({ key: inside })).toBeTruthy()
     await ui.press({ key: head })
     expect(await ui.find({ key: inside })).toBeFalsy()
-    expect(await ui.find({ key: 'draft' })).toBeTruthy()
     await ui.press({ key: head })
     expect(await ui.find({ key: inside })).toBeTruthy()
   }
@@ -920,15 +924,13 @@ test('session anchors keep the latest per session, the most recent last, capped'
   expect(anchorPairs([['a', 'N'], ['b'], 3])).toEqual([['a', 'N']])
 })
 
-test('artifacts: a republished url takes its new title; the pin list puts them first', async () => {
-  const a = { url: 'https://claude.ai/artifact/a', title: 'A' }
-  expect(withArtifact(withArtifact([a], { url: 'https://claude.ai/artifact/b', title: 'B' }), { ...a, title: 'A2' }).map(one => one.title)).toEqual(['A2', 'B'])
+test('the pin list puts artifacts first', async () => {
   const art = (n: number) => ({ on: true, kind: 'artifact', target: `https://claude.ai/artifact/${n}`, label: String(n) }) as const
   const note = { on: true, kind: 'note', target: 'N', label: 'N' } as const
   expect(artifactsFirst([note, art(1), SESSION_PIN, art(2)]).map(pin => pin.label)).toEqual(['1', '2', 'N', SESSION_PIN.label])
 })
 
-test('a new session opens with no anchor; anchoring logs the chat, pins its artifacts, and a sent draft names the chat', { options: OPTIONS }, async ($, on) => {
+test('a new session opens with no anchor; anchoring logs the chat and pins nothing it published, and a sent draft names the chat', { options: OPTIONS }, async ($, on) => {
   const written = new Map<string, string>()
   // An old global anchor and another session's anchor are not this session's.
   const store = new Map<string, unknown>([['anchor', 'PMOC - Garden'], ['anchors', [['other-session', 'PMOC - Garden']]]])
@@ -975,13 +977,12 @@ test('a new session opens with no anchor; anchoring logs the chat, pins its arti
   expect(await ui.find({ key: 'open-trail' })).toBeFalsy()
   expect(await ui.find({ key: 'add-this-chat' })).toBeFalsy()
 
-  // With no anchor there is nothing to pin to: the card says so and still drafts a prompt.
-  expect(await ui.find({ text: '📌 Context' })).toBeTruthy()
-  expect(await ui.find({ text: 'Pick an anchor to pin notes, files and links to it.' })).toBeTruthy()
+  // With no anchor there is nothing to pin to, so no Pins card; the Anchor card still drafts a prompt.
+  expect(await ui.find({ key: 'head-pinsOpen' })).toBeFalsy()
   expect((await ui.findAll({ type: 'Input' })).some(one => String(one.key ?? '').startsWith('pin-paste'))).toBe(false)
   expect((await ui.find({ key: 'draft' }))?.text).toMatch(/draft a prompt with my context/)
 
-  // Published before anchoring: remembered, written nowhere.
+  // An artifact published before anchoring is written nowhere, then or on anchoring.
   await $.tool.call({ tool: 'Artifact', file_path: '/s/early.html', title: 'Early plan' })
   expect(written.size).toBe(0)
 
@@ -989,19 +990,20 @@ test('a new session opens with no anchor; anchoring logs the chat, pins its arti
   await ui.press({ key: 'card-PMOC - Garden' })
   expect(store.get('anchors')).toEqual([['other-session', 'PMOC - Garden'], ['new-session', 'PMOC - Garden']])
   expect(logNow().chats).toEqual([{ id: 'new-session', when: '2026-11-08 09:30', title: 'chat', done: false }])
-  expect(logNow().pins).toEqual([{ on: true, kind: 'artifact', target: 'https://claude.ai/artifact/early-1', label: 'Early plan' }])
-  // The Anchor card does not repeat the pins: they are opened from the Pins card below it.
-  expect(await ui.find({ key: 'anchor-artifact-https://claude.ai/artifact/early-1' })).toBeFalsy()
-  await ui.press({ key: 'pin-open-artifact-https://claude.ai/artifact/early-1' })
-  expect(opened).toEqual([['open', 'https://claude.ai/artifact/early-1']])
+  expect(logNow().pins).toEqual([])
+  expect((await ui.find({ key: 'draft' }))?.text).toMatch(/draft a prompt with this context/)
 
-  // Published after anchoring: pinned.
+  // Published after anchoring: not pinned either. Its link pasted in the Pins card pins it,
+  // and pressing its name opens it.
   url = 'https://claude.ai/artifact/late-2'
   await $.tool.call({ tool: 'Artifact', file_path: '/s/late.html', title: 'Late plan' })
-  expect(logNow().pins.map(pin => [pin.target, pin.on])).toEqual([['https://claude.ai/artifact/early-1', true], ['https://claude.ai/artifact/late-2', true]])
-  expect((await ui.find({ key: 'pin-open-artifact-https://claude.ai/artifact/late-2' }))?.text).toMatch(/◇ Late plan/)
+  expect(logNow().pins).toEqual([])
+  await ui.input({ key: 'pin-paste-0', text: 'https://claude.ai/artifact/late-2' })
+  expect(logNow().pins.map(pin => [pin.target, pin.on])).toEqual([['https://claude.ai/artifact/late-2', true]])
+  await ui.press({ key: 'pin-open-artifact-https://claude.ai/artifact/late-2' })
+  expect(opened).toEqual([['open', 'https://claude.ai/artifact/late-2']])
 
-  // A draft sent later names the chat; the pinned artifacts go in it.
+  // A draft sent later names the chat; the pinned artifact goes in it.
   await ui.press({ key: 'draft' })
   expect(filled[0]?.includes('https://claude.ai/artifact/late-2')).toBe(true)
   await $.prompt.submit({ text: filled[0] ?? '' })
@@ -1100,11 +1102,11 @@ test('the scratchpad keeps notes for this chat, newest first; with no anchor not
   expect(await ui.find({ key: 'pad-save-0' })).toBeFalsy()
   expect(await ui.find({ key: 'pad-save-all' })).toBeFalsy()
   expect(await ui.find({ text: 'Pick an anchor to save these to its Human Notes.' })).toBeTruthy()
-  // → ask drafts an entry as the instruction, unsent; the entry stays on the pad.
-  await ui.press({ key: 'pad-ask-1' })
-  expect(filled.length).toBe(1)
-  expect(filled[0]?.endsWith('Instruction: check the hose')).toBe(true)
-  expect((await ui.find({ key: 'pad-row-1' }))?.text).toMatch(/check the hose/)
+  // An entry has two things to press at most, under its text: save (with an anchor) and drop.
+  expect(await ui.find({ key: 'pad-ask-1' })).toBeFalsy()
+  expect(await ui.find({ key: 'pad-today-1' })).toBeFalsy()
+  expect((await ui.find({ key: 'pad-row-1' }))?.text).toMatch(/check the hose\s*✕ drop$/)
+  expect(filled.length).toBe(0)
   await ui.press({ key: 'pad-drop-0' })
   expect((await ui.find({ key: 'pad-row-0' }))?.text).toMatch(/check the hose/)
   expect(await ui.find({ key: 'pad-row-1' })).toBeFalsy()
@@ -1112,7 +1114,7 @@ test('the scratchpad keeps notes for this chat, newest first; with no anchor not
   await ui.unmount()
 })
 
-test('with an anchor, → notes puts the entry in the note\'s Journal and takes it off the pad', { options: OPTIONS }, async ($, on) => {
+test('with an anchor, save to notes puts the entry in the note\'s Journal and takes it off the pad', { options: OPTIONS }, async ($, on) => {
   const note = '---\noutcome: x\n---\n# Next\n- [ ] a\n\n# Journal\n\n### 2022-01-04\n- 08:00 older\n\n# Agent Log\n'
   const written = new Map<string, string>([['/v/PMOC - Garden.md', note]])
   const toasts: string[] = []
@@ -1127,6 +1129,7 @@ test('with an anchor, → notes puts the entry in the note\'s Journal and takes 
   const edited = note.replace('- 08:00 older', '- 08:00 older\n- 08:05 typed in the editor')
   written.set('/v/PMOC - Garden.md', edited)
   const time = (await ui.find({ key: 'pad-row-1' }))?.text.match(/\d\d:\d\d/)?.[0]
+  expect((await ui.find({ key: 'pad-row-1' }))?.text).toMatch(/keep this one\s*→ save to notes\s*✕ drop$/)
   await ui.press({ key: 'pad-save-1' })
   expect(written.get('/v/PMOC - Garden.md')).toBe(
     edited.replace('- 08:05 typed in the editor\n', `- 08:05 typed in the editor\n\n### 2022-01-05\n- ${time} keep this one\n`),
@@ -1144,7 +1147,8 @@ const taskHooks = (on: On, anchors: [string, string][], notes: Record<string, st
   const transcript = '/Users/t/.claude/projects/-r-garden/own-session.jsonl'
   const written = new Map<string, string>()
   const store = new Map<string, unknown>([['anchors', anchors]])
-  const got = { written, store, transcript, filled: [] as string[], copied: [] as string[], ran: [] as string[][], toasts: [] as string[], beside: [] as string[][] }
+  // `said` is the conversation the chat starts with: a fork's holds its parent's messages.
+  const got = { written, store, transcript, said: [] as { role: string; content: unknown }[], filled: [] as string[], copied: [] as string[], ran: [] as string[][], toasts: [] as string[], beside: [] as string[][] }
   on('env.get', () => ({ value: '/Users/t' }))
   on('command.register', () => ({ value: { command: 'augi' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
@@ -1177,6 +1181,7 @@ const taskHooks = (on: On, anchors: [string, string][], notes: Record<string, st
 
     return { value: { exitCode: 0, stdout: found ? `${found}\n` : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
+  on('session.messages', () => ({ value: got.said as never }))
   on('prompt.read', () => ({ value: { text: 'half a thought', cursor: 0 } }))
   on('prompt.fill', (_, e) => {
     got.filled.push(e.text)
@@ -1810,14 +1815,12 @@ test('with no daily note setting and no Obsidian daily notes, the You card says 
   expect(await ui.find({ text: /No daily note set: name one under Setup/ })).toBeTruthy()
   // There is no separate Today card: today's note lives in the You card.
   expect(await ui.find({ key: 'head-todayOpen' })).toBeFalsy()
-  await ui.input({ key: 'pad-input-0', text: 'a thought' })
-  expect(await ui.find({ key: 'pad-today-0' })).toBeFalsy()
   await ui.press({ key: 'setup-menu' })
   expect(await ui.find({ text: 'No daily note: nothing about today is shown.' })).toBeTruthy()
   await ui.unmount()
 })
 
-test('today\'s note in the You card: found where Obsidian puts new notes, it lists what is open, logs a line under the heading, takes scratchpad entries, and goes into drafts until switched off under Setup', { options: { ...OPTIONS, dailyHeading: '## Log' } }, async ($, on) => {
+test('today\'s note in the You card: found where Obsidian puts new notes, it lists what is open, logs a line under the heading, and goes into drafts until switched off under Setup', { options: { ...OPTIONS, dailyHeading: '## Log' } }, async ($, on) => {
   const note = '# Priorities\n- [ ] ship the gate\n- [x] water\n- [ ] call the plumber\n\n## Log\n- 08:00 coffee\n'
   // Daily notes name a template but no folder; new notes go to Inbox.
   const written = new Map<string, string>([
@@ -1854,12 +1857,10 @@ test('today\'s note in the You card: found where Obsidian puts new notes, it lis
   await ui.input({ key: 'today-log-1', text: '   ' })
   expect(toasts.length).toBe(1)
 
-  // A scratchpad entry goes there too, and comes off the pad.
+  // A scratchpad entry is saved to the anchor's note, not to today's: + log is how a line gets here.
   await ui.input({ key: 'pad-input-0', text: 'ordered the hinges' })
-  await ui.press({ key: 'pad-today-0' })
-  expect(written.get(today)?.endsWith('- 09:30 gate is fixed\n- 09:30 ordered the hinges\n')).toBe(true)
-  expect(await ui.find({ key: 'pad-row-0' })).toBeFalsy()
-  expect(toasts[1]).toBe("Saved to today's note")
+  expect(await ui.find({ key: 'pad-today-0' })).toBeFalsy()
+  await ui.press({ key: 'pad-drop-0' })
 
   // It goes into every draft until switched off: the box is under Setup with the others,
   // not in the You card.
@@ -1896,8 +1897,6 @@ test('a note for today that is not there is made only on a press: empty, never o
   expect(await ui.find({ key: 'today-make' })).toBeTruthy()
   expect(await ui.find({ key: 'today-open' })).toBeFalsy()
   expect((await ui.findAll({ type: 'Input' })).some(one => /^today-log/.test(String(one.key ?? '')))).toBe(false)
-  await ui.input({ key: 'pad-input-0', text: 'a thought' })
-  expect(await ui.find({ key: 'pad-today-0' })).toBeFalsy()
   await ui.press({ key: 'draft' })
   expect(got.filled[0]?.includes('Today:')).toBe(false)
   await $.prompt.submit({ text: 'hello' })
@@ -1911,7 +1910,6 @@ test('a note for today that is not there is made only on a press: empty, never o
   expect(await ui.find({ key: 'today-open' })).toBeTruthy()
   expect(await ui.find({ key: 'today-log-0' })).toBeTruthy()
   expect(await ui.find({ text: "Nothing open in today's note." })).toBeTruthy()
-  expect(await ui.find({ key: 'pad-today-0' })).toBeTruthy()
 
   // The user writes in it in their editor: the next sync shows it.
   written.set('/v/Daily/2022-01-05.md', '- [ ] one thing\n')
@@ -2013,7 +2011,7 @@ test('a new chat starts on the anchor last chosen in its folder, is filed there 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   // No picking: the pane is on the folder's anchor, and says where it came from.
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
-  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeTruthy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeTruthy()
   expect(anchorOf(got.store, 'fresh')).toBe('PMOC - Garden')
   // Nothing is written to the anchor's log for a chat that has not said anything.
   expect(got.written.size).toBe(0)
@@ -2024,7 +2022,7 @@ test('a new chat starts on the anchor last chosen in its folder, is filed there 
   // Its first prompt files it under that prompt's first line, and the note about where it came from goes.
   await $.prompt.submit({ text: 'fix the sprinkler valve\nit leaks at the joint' })
   expect(parseTrail(got.written.get(trailPath('PMOC - Garden')) ?? '').chats).toEqual([{ id: 'fresh', when: '2026-11-08 09:30', title: 'fix the sprinkler valve', done: false }])
-  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeFalsy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeFalsy()
   // Later prompts do not rename it, and do not read the log again to find that out.
   const log = got.written.get(trailPath('PMOC - Garden'))
   got.written.set(trailPath('PMOC - Garden'), `${log}\n<!-- an edit made elsewhere -->\n`)
@@ -2147,7 +2145,7 @@ test('keep confirms a carried-over anchor; change opens the menu; no anchor stic
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'inherit-keep' })
-  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeFalsy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeFalsy()
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
   await ui.unmount()
 
@@ -2155,12 +2153,12 @@ test('keep confirms a carried-over anchor; change opens the menu; no anchor stic
   got.state.id = 'second'
   await $.command.run({ command: 'augi', args: '' })
   const two = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await two.find({ text: /From your last chat in this folder/ })).toBeTruthy()
+  expect(await two.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeTruthy()
   expect(await two.find({ key: 'card-sub-PMOC - Garden-PMOC - Birdhouse' })).toBeFalsy()
   await two.press({ key: 'inherit-change' })
   await two.press({ key: 'card-sub-PMOC - Garden-PMOC - Birdhouse' })
   expect(anchorOf(got.store, 'second')).toBe('PMOC - Birdhouse')
-  expect(await two.find({ text: /From your last chat in this folder/ })).toBeFalsy()
+  expect(await two.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeFalsy()
   // The choice is what the next new chat here starts on.
   expect(got.store.get('folders')).toEqual([['/r/garden', 'PMOC - Birdhouse']])
   await two.unmount()
@@ -2181,6 +2179,56 @@ test('keep confirms a carried-over anchor; change opens the menu; no anchor stic
   // Nothing was filed anywhere for the chats that only looked.
   expect([...got.written.keys()].filter(path => path.includes('Agent Log - PMOC - Garden'))).toEqual([])
   await three.unmount()
+})
+
+// A user message as the model is sent it, with what the pane told the model beside the prompt.
+const toldBeside = (brief: string, prompt = 'go on'): { role: string; content: unknown } => ({
+  role: 'user',
+  content: [{ type: 'text', text: `<system-reminder>\nprompt.submit hook additional context: ${brief}\n</system-reminder>` }, { type: 'text', text: prompt }],
+})
+
+test('a conversation says what its chat is anchored to: the last brief decides, and a brief quoted in a prompt or a tool result is not one', () => {
+  const garden = toldBeside(anchorBrief(GARDEN_ANCHOR, '/v/2022-01-05.md'))
+  const moved = toldBeside(anchorBrief({ ...GARDEN_ANCHOR, note: 'PMOC - Birdhouse' }, '', 'PMOC - Garden'))
+  const reply = { role: 'assistant', content: [{ type: 'text', text: 'done' }] }
+  expect(anchorFromMessages([garden, reply])).toBe('PMOC - Garden')
+  expect(anchorFromMessages([garden, reply, moved])).toBe('PMOC - Birdhouse')
+  expect(anchorFromMessages([garden, toldBeside(unanchoredBrief('PMOC - Garden'))])).toBe('')
+  // Today's note changing is not a word about the anchor.
+  expect(anchorFromMessages([garden, toldBeside('Augi: today\'s note is "/v/2022-01-06.md".')])).toBe('PMOC - Garden')
+  expect(anchorFromMessages([])).toBe(null)
+  expect(anchorFromMessages([{ role: 'user', content: 'a plain prompt' }, reply])).toBe(null)
+  const quoted = `prompt.submit hook additional context: ${anchorBrief(GARDEN_ANCHOR)}`
+  expect(anchorFromMessages([{ role: 'user', content: [{ type: 'text', text: quoted }, { type: 'tool_result', content: `<system-reminder>\n${quoted}` }] }])).toBe(null)
+  expect(anchorFromMessages([{ role: 'assistant', content: garden.content }])).toBe(null)
+})
+
+test('a forked chat starts on the anchor its parent was told, not the folder\'s last one, however old the parent is; a parent with none leaves it with none', { options: OPTIONS }, async ($, on) => {
+  // The folder last worked on the garden; the chat this one was forked from was on the birdhouse.
+  const got = inheritHooks(on)
+  got.state.id = 'fork-one'
+  got.state.age = 5 * 3_600_000
+  got.said.push(toldBeside(anchorBrief({ ...GARDEN_ANCHOR, note: 'PMOC - Birdhouse', notePath: '/v/PMOC - Birdhouse.md' })))
+  await $.command.run({ command: 'augi', args: '' })
+  let ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
+  expect(anchorOf(got.store, 'fork-one')).toBe('PMOC - Birdhouse')
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from/ })).toBeTruthy()
+  expect(await ui.find({ key: 'inherit-change' })).toBeTruthy()
+  // The folder's anchor is still the garden: a fork does not move it until the user chooses.
+  expect(got.store.get('folders')).toEqual([['/r/garden', 'PMOC - Garden']])
+  expect(got.written.size).toBe(0)
+  await ui.unmount()
+
+  // Another fork, of a parent last told it has no anchor: it starts with none, new as it is.
+  got.state.id = 'fork-two'
+  got.state.age = 5_000
+  got.said.push(toldBeside(unanchoredBrief('PMOC - Birdhouse')))
+  await $.command.run({ command: 'augi', args: '' })
+  ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  expect(anchorOf(got.store, 'fork-two')).toBe(undefined)
+  await ui.unmount()
 })
 
 test('no anchor is carried over to an older chat, a chat in another folder, or one that already chose; a worktree counts as its repository', { options: OPTIONS }, async ($, on) => {
@@ -2209,7 +2257,7 @@ test('no anchor is carried over to an older chat, a chat in another folder, or o
   await $.command.run({ command: 'augi', args: '' })
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
-  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeFalsy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeFalsy()
   await ui.unmount()
 
   // A new chat in a worktree of the repository starts on the repository's anchor.
@@ -2246,7 +2294,7 @@ test('no anchor is carried over to a headless run, or onto a note that is gone; 
   await $.prompt.submit({ text: '/augi' })
   await new Promise(resolve => setTimeout(resolve, 20))
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
-  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeFalsy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeFalsy()
   await ui.unmount()
 })
 
@@ -2278,7 +2326,7 @@ test('after /clear the pane is the new session\'s: no anchor at first, then the 
   await $.prompt.submit({ text: '/augi' })
   await new Promise(resolve => setTimeout(resolve, 20))
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
-  expect(await ui.find({ text: /From your last chat in this folder/ })).toBeTruthy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeTruthy()
   expect(anchorOf(got.store, 'cleared')).toBe('PMOC - Garden')
   await ui.unmount()
 })
@@ -2421,47 +2469,7 @@ test('a pane draft sent in a chat with no anchor anchors that chat; one with an 
   await ui.unmount()
 })
 
-test('touched files: newest first, one row per path, made sticks, capped', async () => {
-  const one = (path: string, made = false) => ({ path, made })
-  const list = withTouched(withTouched(withTouched([], one('/r/a.ts', true)), one('/r/b.ts')), one('/r/a.ts'))
-  expect(list).toEqual([one('/r/a.ts', true), one('/r/b.ts')])
-  let many: { path: string; made: boolean }[] = []
-  for (let at = 0; at < 40; at += 1) {
-    many = withTouched(many, one(`/r/${at}.ts`))
-  }
-  expect(many.length).toBe(30)
-  expect(many[0]?.path).toBe('/r/39.ts')
-  expect(withTouched([one('/r/a.ts')], one('/r/b.ts'), 1)).toEqual([one('/r/b.ts')])
-})
-
-test('a touched path is short: notes-relative, then root-relative, then ~, and never more than the name and two folders', async () => {
-  expect(shortPath('/v/Ideas/A.md', '/v', '/Users/t', '/Users/t/r')).toBe('Ideas/A.md')
-  expect(shortPath('/Users/t/r/src/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('src/a.ts')
-  expect(shortPath('/Users/t/other/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('~/other/a.ts')
-  expect(shortPath('/tmp/a.ts', '/v', '/Users/t', '')).toBe('/tmp/a.ts')
-  // A deep path keeps its last three parts, wherever it is.
-  expect(shortPath('/Users/t/r/packages/web/src/hooks/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('…/src/hooks/a.ts')
-  expect(shortPath('/v/Areas/Garden/Beds/North/A.md', '/v', '/Users/t', '')).toBe('…/Beds/North/A.md')
-  expect(shortPath('/Users/t/other/deep/down/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('…/deep/down/a.ts')
-  expect(shortPath('/opt/tools/share/lib/a.ts', '/v', '/Users/t', '')).toBe('…/share/lib/a.ts')
-  // Exactly three parts is not cut; a file at the root has no folder to show.
-  expect(shortPath('/Users/t/r/src/hooks/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('src/hooks/a.ts')
-  expect(shortPath('/Users/t/r/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts')
-})
-
-test('a file row names the file first, then the folder it sits in, so a row cut short still says which file', async () => {
-  expect(nameFirst('/Users/t/r/src/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts · src')
-  expect(nameFirst('/v/Ideas/A.md', '/v', '/Users/t', '/Users/t/r')).toBe('A.md · Ideas')
-  expect(nameFirst('/Users/t/other/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts · ~/other')
-  expect(nameFirst('/tmp/a.ts', '/v', '/Users/t', '')).toBe('a.ts · /tmp')
-  // A deep folder keeps its last two parts.
-  expect(nameFirst('/Users/t/r/packages/web/src/hooks/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts · …/src/hooks')
-  // A file at the root of the notes or the session's folder has no folder to show.
-  expect(nameFirst('/Users/t/r/a.ts', '/v', '/Users/t', '/Users/t/r')).toBe('a.ts')
-  expect(nameFirst('/v/A.md', '/v', '/Users/t', '')).toBe('A.md')
-})
-
-test('a vault note opens in the note editor, any other file in the file editor', async () => {
+test('a vault note opens in the note editor, a web page in the browser, any other file in the file editor', async () => {
   const paths = resolvePaths({ notesFolder: '/v', editor: 'obsidian' }, '/Users/t')
   expect(paths.fileEditor).toBe('vscode')
   expect(openArgv(paths, '/v/A.md')).toEqual(['open', 'obsidian://open?path=%2Fv%2FA.md'])
@@ -2469,128 +2477,10 @@ test('a vault note opens in the note editor, any other file in the file editor',
   expect(openArgv(paths, '/r/notes.md')).toEqual(['code', '/r/notes.md'])
   expect(openArgv({ ...paths, fileEditor: 'cursor' }, '/r/a.ts')).toEqual(['cursor', '/r/a.ts'])
   expect(openArgv({ ...paths, fileEditor: 'system' }, '/r/a.ts')).toEqual(['open', '/r/a.ts'])
-})
-
-test('Agent Logs and dot-folders in the notes are not listed; the pin is a note by name or the file', async () => {
-  expect(isListedTouch('/r/src/a.ts', '/v', '/v/Notes')).toBe(true)
-  expect(isListedTouch('/r/.github/ci.yml', '/v', '/v/Notes')).toBe(true)
-  expect(isListedTouch('/v/Notes/Agent Log - X.md', '/v', '/v/Notes')).toBe(false)
-  expect(isListedTouch('/v/.obsidian/app.json', '/v', '/v/Notes')).toBe(false)
-  expect(touchedPin('/v/Ideas/A.md', '/v')).toEqual({ on: true, kind: 'note', target: 'A', label: 'A', path: '/v/Ideas/A.md' })
-  expect(touchedPin('/r/README.md', '/v')).toEqual({ on: true, kind: 'file', target: '/r/README.md', label: 'README.md' })
-})
-
-test('files this chat touched: listed newest first, named file first, opened in the right editor, pinned with a press', { options: OPTIONS }, async ($, on) => {
-  const written = new Map<string, string>()
-  const store = new Map<string, unknown>()
-  const onDisk = new Set(['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/r/README.md', '/r/src/b.ts'])
-  const ran: string[][] = []
-  const toasts: string[] = []
-  let answer: object = { result: {}, text: 'ok' }
-  on('env.get', () => ({ value: '/Users/t' }))
-  on('command.register', () => ({ value: { command: 'augi' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('ui.toast', (_, e) => {
-    toasts.push(e.text)
-    return { value: undefined }
-  })
-  on('session.id', () => ({ value: 'own-session' }))
-  on('session.cwd', () => ({ value: '/r' }))
-  on('clock.now', () => ({ value: new Date(2026, 10, 8, 9, 30).getTime() }))
-  on('store.get', (_, e) => ({ value: store.get(e.key) }))
-  on('store.set', (_, e) => {
-    store.set(e.key, e.value)
-    return { value: undefined }
-  })
-  on('fs.exists', (_, e) => ({ value: onDisk.has(e.path) || e.path.endsWith('Kanban.md') || written.has(e.path) }))
-  on('fs.read', (_, e) => ({ value: written.get(e.path) ?? (e.path.endsWith('Kanban.md') ? BOARD_TEXT : '') }))
-  on('fs.write', (_, e) => {
-    written.set(e.path, e.text)
-    return { value: undefined }
-  })
-  on('fs.list', () => ({ value: [] }))
-  on('process.run', (_, e) => {
-    if (e.argv[0] !== 'find' && e.argv[0] !== 'mkdir') {
-      ran.push(e.argv)
-    }
-    return { value: { exitCode: 0, stdout: e.argv[0] === 'find' && e.argv.includes('PMOC - Garden.md') ? '/v/PMOC - Garden.md\n' : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
-  })
-  // The tool runs as told: the file is on disk after, unless the call is denied or fails.
-  on('tool.call', (_, e) => {
-    const input = e as { file_path?: string; notebook_path?: string }
-    if (!('deny' in answer) && !('isError' in answer)) {
-      onDisk.add(input.file_path ?? input.notebook_path ?? '')
-    }
-    return answer as never
-  })
-  const pinsNow = () => parseTrail(written.get(trailPath('PMOC - Garden')) ?? '').pins
-
-  await $.command.run({ command: 'augi', args: '' })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ key: 'card-files' })).toBeFalsy()
-
-  await $.tool.call({ tool: 'Write', file_path: '/r/src/new.ts', content: 'x' })
-  await $.tool.call({ tool: 'Edit', file_path: '/r/README.md', old_string: 'a', new_string: 'b' })
-  // The Agent Log folder is the pane's own; a denied or failed call changed nothing.
-  await $.tool.call({ tool: 'Write', file_path: '/v/Notes/Agent Log - X.md', content: 'x' })
-  answer = { deny: 'no' }
-  await $.tool.call({ tool: 'Edit', file_path: '/r/src/denied.ts', old_string: 'a', new_string: 'b' })
-  answer = { result: 'boom', text: 'boom', isError: true }
-  await $.tool.call({ tool: 'Write', file_path: '/r/src/failed.ts', content: 'x' })
-  answer = { result: {}, text: 'ok' }
-
-  // A row's text with its spacing dropped: the file's name, its folder, `new`, then its buttons.
-  const rowOf = async (path: string) => ((await ui.find({ key: `touched-${path}` }))?.text ?? '').replace(/\s+/g, '')
-  expect(await ui.find({ text: '📄 Files this chat touched · 2' })).toBeTruthy()
-  expect((await ui.findAll({ type: 'Box', text: /open/ })).map(one => one.key).filter(key => key?.startsWith('touched-'))).toEqual(['touched-/r/README.md', 'touched-/r/src/new.ts'])
-  expect(await rowOf('/r/README.md')).toBe('README.mdopen')
-  expect(await rowOf('/r/src/new.ts')).toBe('new.ts·srcnewopen')
-  expect(await rowOf('/v/Notes/Agent Log - X.md')).toBe('')
-  expect(await rowOf('/r/src/denied.ts')).toBe('')
-  expect(await rowOf('/r/src/failed.ts')).toBe('')
-  expect(await ui.find({ key: 'touched-pin-/r/README.md' })).toBeFalsy()
-  expect(await ui.find({ text: /Pick an anchor to pin these/ })).toBeTruthy()
-
-  await ui.press({ key: 'touched-open-/r/README.md' })
-  expect(ran.pop()).toEqual(['code', '/r/README.md'])
-  await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/Fresh.md', content: 'x' })
-  expect(await rowOf('/v/Ideas/Fresh.md')).toBe('Fresh.md·Ideasnewopen')
-  await ui.press({ key: 'touched-open-/v/Ideas/Fresh.md' })
-  expect(ran.pop()).toEqual(['open', 'obsidian://open?path=%2Fv%2FIdeas%2FFresh.md'])
-  onDisk.delete('/r/src/new.ts')
-  await ui.press({ key: 'touched-open-/r/src/new.ts' })
-  expect(toasts.pop()).toBe('Not found: /r/src/new.ts')
-  expect(ran.length).toBe(0)
-
-  // Anchored: pin writes a pin, the row says pinned, the Pins card lists it.
-  await ui.press({ key: 'anchor-menu' })
-  await ui.press({ key: 'card-PMOC - Garden' })
-  await ui.press({ key: 'touched-pin-/r/README.md' })
-  expect(pinsNow()).toEqual([{ on: true, kind: 'file', target: '/r/README.md', label: 'README.md' }])
-  expect(await ui.find({ key: 'touched-pin-/r/README.md' })).toBeFalsy()
-  expect(await rowOf('/r/README.md')).toMatch(/openpinned$/)
-  expect((await ui.find({ key: 'pin-open-file-/r/README.md' }))?.text).toMatch(/📄 README.md/)
-  await ui.press({ key: 'pin-open-file-/r/README.md' })
-  expect(ran.pop()).toEqual(['code', '/r/README.md'])
-  await ui.press({ key: 'touched-pin-/v/Ideas/Fresh.md' })
-  expect(pinsNow()[1]).toEqual({ on: true, kind: 'note', target: 'Fresh', label: 'Fresh' })
-  await ui.press({ key: 'pin-open-note-Fresh' })
-  expect(ran.pop()).toEqual(['open', 'obsidian://open?path=%2Fv%2FIdeas%2FFresh.md'])
-
-  // A new vault note written now is still pinned by itself, and listed as pinned.
-  await $.tool.call({ tool: 'Write', file_path: '/v/Ideas/Later.md', content: 'x' })
-  expect(pinsNow()[2]).toEqual({ on: true, kind: 'note', target: 'Later', label: 'Later' })
-  expect(await rowOf('/v/Ideas/Later.md')).toBe('Later.md·Ideasnewopenpinned')
-
-  // Past five, the rest wait behind show all.
-  await $.tool.call({ tool: 'NotebookEdit', notebook_path: '/r/nb.ipynb', new_source: 'x' })
-  await $.tool.call({ tool: 'Edit', file_path: '/r/src/b.ts', old_string: 'a', new_string: 'b' })
-  expect(await ui.find({ text: '📄 Files this chat touched · 6' })).toBeTruthy()
-  expect(await rowOf('/r/src/new.ts')).toBe('')
-  expect(await rowOf('/r/nb.ipynb')).toMatch(/^nb\.ipynbnewopen/)
-  await ui.press({ key: 'files-all' })
-  expect(await rowOf('/r/src/new.ts')).toMatch(/^new\.ts·srcnewopen/)
-  await ui.unmount()
+  // A web page is for looking at: the system opens it, which is the browser, whatever the file editor is.
+  expect(openArgv(paths, '/r/report.html')).toEqual(['open', '/r/report.html'])
+  expect(openArgv({ ...paths, fileEditor: 'cursor' }, '/v/exports/Page.HTM')).toEqual(['open', '/v/exports/Page.HTM'])
+  expect(openArgv(paths, '/r/html.ts')).toEqual(['code', '/r/html.ts'])
 })
 
 // padHooks without the events a test wants to answer itself.

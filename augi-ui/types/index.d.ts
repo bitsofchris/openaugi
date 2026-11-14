@@ -51,14 +51,6 @@ export type Swatch = {
   lenses: Lens[]
   loadedAt: number
 }
-// An artifact this chat published: its URL and the title it was published under.
-export type MadeArtifact = { url: string; title: string }
-// What this chat has published, for the session `session` (a /clear starts a new list).
-export type Made = { session: string; artifacts: MadeArtifact[] }
-// A file this chat wrote or edited; `made` when it did not exist before the chat's first write.
-export type TouchedFile = { path: string; made: boolean }
-// What this chat has touched, newest first, for the session `session` (a /clear starts a new list).
-export type Touched = { session: string; files: TouchedFile[] }
 // A note to self on this chat's scratchpad; `when` as `stamp()` writes it.
 export type PadEntry = { when: string; text: string }
 // What goes into every draft: `today` is today's note, when there is one.
@@ -69,7 +61,6 @@ export type View = {
   anywhereOpen: boolean
   anchorOpen: boolean
   pinsOpen: boolean
-  touchedOpen: boolean
   padOpen: boolean
   // The You card under Always: the season line, the context note, the board and today's note.
   youOpen: boolean
@@ -79,8 +70,6 @@ export type View = {
   inOpen: boolean
   // The Anchor card's detail, outcome and open tasks, folded away by default.
   detailsOpen: boolean
-  // The Files card lists every touched file, not just the newest five.
-  filesOpen: boolean
   // Which field is open in the Anchor card: none, a standalone task, or a sub-task of the anchor.
   taskMode: '' | 'new' | 'sub'
   // How many lines the You card has logged to today's note this session: it empties the log field after each.
@@ -101,6 +90,6 @@ export type Told = { session: string; note: string; today: string; again: boolea
 export type Opened = { session: string }
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; made: Shaped<Made>; touched: Shaped<Touched>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string>; inherited: Shaped<Inherited>; told: Shaped<Told> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string>; inherited: Shaped<Inherited>; told: Shaped<Told> }
   }
 }

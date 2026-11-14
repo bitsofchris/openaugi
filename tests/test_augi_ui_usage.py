@@ -44,7 +44,7 @@ def test_every_pane_control_is_a_usage_feature() -> None:
 
     found = re.findall(r'<(?:Button|Input)\s+key=(?:"([^"]+)"|\{`([^`]+)`\})', source)
     keys = [plain or re.sub(r"\$\{.*$", "x", templated) for plain, templated in found]
-    assert len(keys) > 80, "the key pattern no longer matches the source"
+    assert len(keys) > 50, "the key pattern no longer matches the source"
 
     names = {_usage_name(key, whole, prefixes) for key in keys}
     names = {
