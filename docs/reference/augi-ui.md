@@ -119,8 +119,7 @@ are `dimColor`, and the one primary button is the draft.
   model can read, so the plugin says it: the first prompt sent on an anchor
   carries a short block beside it for the model, not shown in the chat, naming
   the note and its path, where in it agents write (under `# Agent Log`),
-  today's note when there is one, where the work last stood when the note
-  records it (dated, as something to check), and the rule for writing: the
+  today's note when there is one, and the rule for writing: the
   section is the pane's and not a log to keep, so the chat adds a line under
   that heading only when the user asks to save something, and above it only a
   dated Journal entry, again only when asked. After that
@@ -227,15 +226,16 @@ are `dimColor`, and the one primary button is the draft.
   *What goes into every draft*, all on by default: the context note and board
   (`m`), the anchor's note, today's note when there is one,
   and a search of the notes with OpenAugi.
-- **State** (`📍 State · <when>`, in This chat): where the chat's work stands,
-  in the chat's own model's words. `↻ update` asks that model a side question
-  over the conversation as it is (`$.model.fork`: no tools, the cached
-  conversation re-read, nothing added to the chat or its transcript), and the
-  answer, at most eight lines, shows in the card. With an anchor it also
-  replaces the State block at the top of the note's Agent Log section, so the
-  note says where the work stands, any chat on the anchor sees it, and the next
-  chat to be told its anchor is told it too. With no anchor it stays in the
-  pane. Nothing is asked unpressed unless `☐ auto after a turn` is ticked
+- **State** (`📍 State · <when>`, in This chat): where this chat stands, in
+  its own model's words, one state per chat. `↻ update` asks that model a
+  side question over the conversation as it is (`$.model.fork`: no tools, the
+  cached conversation re-read, nothing added to the chat or its transcript),
+  and the answer, at most eight lines, shows in the card. With an anchor it is
+  also kept in the note, under this chat's own entry in the folded Chats list,
+  replacing what was there for this chat (`setChatState`): two chats on one
+  task each have their own and never write over each other, and a chat
+  resumed later shows what the note holds for it. With no anchor it stays in
+  the pane. Nothing is asked unpressed unless `☐ auto after a turn` is ticked
   (`stateAuto`): then the end of a main-thread turn that answered asks, when
   this chat was never asked or not for ten minutes. Each ask is one more model
   call; one that gets no answer says why and is paced the same. **The question
@@ -243,7 +243,8 @@ are `dimColor`, and the one primary button is the draft.
   another (`stateLens`), and `edit prompt` opens the current one, writing
   `chat-state.md` into the lens folder from the built-in question first when it
   is not there. What is asked is the lens file's text under its frontmatter and
-  title; the built-in asks for four lines: Goal, Verified, Next, Waiting on me.
+  title; the built-in goes by the last few turns and asks for four lines:
+  Doing, Last, Next, Waiting on me.
 - **Task offer** (in the Anchor card, for a chat with no anchor):
   `💡 suggest a task for this chat` works out which task the chat belongs to
   and shows it as an offer; nothing is linked, made or written until a press.
@@ -335,12 +336,6 @@ are `dimColor`, and the one primary button is the draft.
   ```
   # Agent Log
 
-  > [!info] State · 2022-01-05 10:40
-  > Goal: what the chat is trying to get done
-  > Verified: the last checked result
-  > Next: the one next step
-  > Waiting on me: no
-
   - [[A note]] · why it matters
   - file: `path/to/file` · label
   - a line the user asked a chat to save
@@ -348,11 +343,16 @@ are `dimColor`, and the one primary button is the draft.
 
   > [!abstract]- Chats
   > - 2022-01-05 09:30 · the chat's first prompt · `session-id`
+  >   - as of 2022-01-05 10:40
+  >   - Doing: what the chat is working on
+  >   - Last: what the last few turns did
+  >   - Next: the one next step
+  >   - Waiting on me: no
   ```
 
-  The State callout is always the section's first block and is the one part
-  that is overwritten, never added to (`setState`). The Chats callout is
-  folded until opened (the `-` after the callout type) and is always the last
+  The Chats callout is folded until opened (the `-` after the callout type):
+  one line per chat and, indented under it, where that chat last stood, which
+  is the one part that is replaced and never added to. It is always the last
   block: a line appended after it is moved up beside the others on the pane's
   next write, unchanged. The section
   ends at the next level-1 heading or the end of the note, and the pane makes

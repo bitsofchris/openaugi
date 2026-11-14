@@ -12,50 +12,19 @@ press. With `auto after a turn` ticked the offer comes by itself, once per
 chat.
 
 **augi-ui: a State card, and the Agent Log is no longer a log.** `📍 State` in
-the pane says where a chat's work stands in four lines (goal, last verified
-result, next step, waiting on you). `↻ update` puts that question to the
+the pane says where this chat stands in four lines (doing, what the last few
+turns did, next step, waiting on you). `↻ update` puts that question to the
 chat's own model over the conversation as it is, without adding anything to
-the chat; the answer shows in the card and, with an anchor, replaces one State
-block at the top of the note's Agent Log section. It is overwritten every
-time, so it cannot grow. `☐ auto after a turn` (off by default) asks by
-itself at the end of a turn, at most every ten minutes; each ask is one more
-model call. The question is a saved prompt, `chat-state`: pick another from
-the card or press `edit prompt`.
+the chat. The state is per chat: it shows in the card and, with an anchor, is
+kept under that chat's own entry in the note's folded chat list, replaced each
+time, so two chats on one task never write over each other and nothing grows.
+`☐ auto after a turn` (off by default) asks by itself at the end of a turn,
+at most every ten minutes; each ask is one more model call. The question is a
+saved prompt, `chat-state`: pick another from the card or press `edit prompt`.
 
-The Agent Log section is now only what the pane keeps: the State block, the
-pins, and the folded chat list. A chat's model is told it is not a log to
-fill, and adds a line there only when asked to save something. A chat that is
-told its anchor is also told where the work last stood, dated.
-
-**augi-ui: the Agent Log is a section of the note.** Each anchor had two
-files, the user's note and an `Agent Log - <note>.md` beside it, and two
-buttons to open them. Now it has one note: everything above its `# Agent Log`
-heading is the user's, and under the heading agents append and the pane keeps
-its pins, as plain bullets (`- [[note]] · why it matters`; a ticked one was
-unpinned). The chats filed on the anchor stay, as a record of session ids, in
-a callout at the end of the section that is folded until opened
-(`> [!abstract]- Chats`). The `🤖 Agent Log` button and the `agent log folder`
-setting's field are gone; `🧠 Human Notes` opens the one file.
-
-A chat's model is told the new place: write under the note's `# Agent Log`
-heading, and above it only when asked. Pane drafts, `define here`, the Jira
-update draft, the `pmoc` rule and the `overview` and `board-sync` lenses say
-the same. The shipped PMOC and task templates end with an empty `# Agent Log`
-heading in place of an embed of the old file.
-
-**Old Agent Log files are moved, not lost.** The first time the pane reads or
-writes an anchor that still has a file, what it holds goes into the note's
-section: pins and kept lines, questions as the checkbox lines they were, each
-saved note as a `- saved: [[note]]` record, and the chats. An embed of the
-file under the note's heading is dropped. The file is marked
-`Moved into [[note]] on <date>`, never deleted, and not read again. The check
-that flagged a task template for still having an Agent Log section, and its
-`use the current template` button, are gone: such a template is fine again.
-
-Also: a sync that was reading the note while a pin or a chat was being written
-could put the older list back in the pane until the next sync; it now reads
-again when a write landed meanwhile. And a pinned note's row shows its name
-before the reason given for pinning it.
+The Agent Log section is now only what the pane keeps: the pins, and the
+folded chat list with each chat's state. A chat's model is told it is not a
+log to fill, and adds a line there only when asked to save something.
 
 **augi-ui: a fork keeps its anchor, and less in the pane.** A forked
 chat used to come up with no anchor (it is not a new session, so the folder's

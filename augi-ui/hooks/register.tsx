@@ -528,7 +528,7 @@ export const CHAT_PLACEHOLDER = 'chat'
 // The setup steps someone chose to skip; /augi setup clears it.
 const SKIPPED_KEY = 'skipped'
 // Pins that go into every chat's draft, whatever its anchor: kept in the store, newest last.
-export const EMPTY_TRAIL: Trail = { chats: [], pins: [], state: { when: '', text: '' } }
+export const EMPTY_TRAIL: Trail = { chats: [], pins: [], states: {} }
 // No daily note: the Today card is not drawn.
 const NO_TODAY: Today = { pattern: '', path: '', day: '', exists: false, todo: [], mtime: 0 }
 
@@ -555,7 +555,7 @@ const swatch = atom(
     lenses: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-19' },
+  { shape: 'swatch-20' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
 const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, stateOpen: true, pinsOpen: true, padOpen: true, youOpen: true }
@@ -1260,8 +1260,9 @@ const samePin = (a: Pin, b: Pin): boolean => a.kind === b.kind && a.target === b
 const LOG_HEAD = '# Agent Log'
 const CHATS_HEAD = '> [!abstract]- Chats'
 const isLogHead = (line: string): boolean => /^# Agent Log\s*$/i.test(line)
-// The State callout's title line: `> [!info] State · <when>`.
-const STATE_HEAD = /^> \[!\w+\][-+]? State(?: · (.*?))?\s*$/i
+// For a day the section opened with one State callout for the whole task. A chat's state
+// is kept under its own entry in the chat list now; a callout still there is dropped.
+const OLD_STATE_HEAD = /^> \[!\w+\][-+]? State(?: · .*)?\s*$/i
 export const STATE_LINES = 8
 const isChatsHead = (line: string): boolean => /^> \[!\w+\][-+]? Chats\s*$/i.test(line)
 // What the section held while the log was a file of its own: a callout embedding that file.
@@ -1280,12 +1281,12 @@ const trimBlank = (lines: string[]): string[] => {
   return lines.slice(from, to)
 }
 
-// A note in parts: the lines above the section's heading; the lines of its State callout
-// without their `> `, and when that state was said; the section's own lines (`body`: pins
-// and whatever was saved there, blank edges trimmed); the lines of its Chats callout; and
-// what follows the section (a later level-1 heading and on). `has` is whether the note has
-// the section; the last `# Agent Log` is the one.
-export type LogParts = { before: string[]; state: string[]; stateWhen: string; body: string[]; chats: string[]; after: string[]; has: boolean }
+// A note in four parts: the lines above the section's heading; the section's own lines
+// (`body`: pins and whatever was saved there, blank edges trimmed); the lines of its Chats
+// callout without their `> ` (a chat's line, then indented under it where that chat last
+// stood); and what follows the section (a later level-1 heading and on). `has` is whether
+// the note has the section; the last `# Agent Log` is the one.
+export type LogParts = { before: string[]; body: string[]; chats: string[]; after: string[]; has: boolean }
 
 export const splitLog = (text: string): LogParts => {
   const lines = text.split('\n')
@@ -1296,7 +1297,7 @@ export const splitLog = (text: string): LogParts => {
     }
   })
   if (at < 0) {
-    return { before: lines, state: [], stateWhen: '', body: [], chats: [], after: [], has: false }
+    return { before: lines, body: [], chats: [], after: [], has: false }
   }
   let end = at + 1
   while (end < lines.length && !/^# \S/.test(lines[end] ?? '')) {
@@ -1304,25 +1305,21 @@ export const splitLog = (text: string): LogParts => {
   }
   const body: string[] = []
   const chats: string[] = []
-  let state: string[] = []
-  let stateWhen = ''
-  // Which of the pane's two callouts the line is in. The blank lines around a callout only
-  // set it apart: they are not the body's.
-  let inside: '' | 'chats' | 'state' = ''
+  // Which callout the line is in: the Chats list, or an old State block (dropped). The
+  // blank lines around a callout only set it apart: they are not the body's.
+  let inside: '' | 'chats' | 'old' = ''
   let isJustPast = false
   for (const line of lines.slice(at + 1, end)) {
-    const stateHead = line.match(STATE_HEAD)
-    if (stateHead || isChatsHead(line)) {
-      inside = stateHead ? 'state' : 'chats'
-      if (stateHead) {
-        state = []
-        stateWhen = (stateHead[1] ?? '').trim()
-      }
+    const isOld = OLD_STATE_HEAD.test(line)
+    if (isOld || isChatsHead(line)) {
+      inside = isOld ? 'old' : 'chats'
       while (body.length > 0 && (body[body.length - 1] ?? '').trim() === '') {
         body.pop()
       }
     } else if (inside && line.startsWith('>')) {
-      ;(inside === 'state' ? state : chats).push(line.replace(/^> ?/, ''))
+      if (inside === 'chats') {
+        chats.push(line.replace(/^> ?/, ''))
+      }
     } else {
       isJustPast = (inside !== '' || isJustPast) && line.trim() === ''
       inside = ''
@@ -1332,36 +1329,45 @@ export const splitLog = (text: string): LogParts => {
     }
   }
 
-  return { before: lines.slice(0, at), state: state.filter(line => line.trim()), stateWhen, body: trimBlank(body), chats: chats.filter(line => line.trim()), after: lines.slice(end), has: true }
+  return { before: lines.slice(0, at), body: trimBlank(body), chats: chats.filter(line => line.trim()), after: lines.slice(end), has: true }
 }
 
 // The note again from its parts. A note that had no section gets it at its end, one blank
 // line down; what is above an existing section, and after it, stays byte for byte. The
-// State callout is always the section's first block and the Chats callout its last, so a
-// line appended after the chats moves up beside the others.
-const joinLog = ({ before, state, stateWhen, body, chats, after, has }: LogParts): string => {
+// Chats callout is always the section's last block, so a line appended after it moves up
+// beside the others.
+const joinLog = ({ before, body, chats, after, has }: LogParts): string => {
   let last = before.length
   while (!has && last > 0 && (before[last - 1] ?? '').trim() === '') {
     last -= 1
   }
   const top = has ? before : last > 0 ? [...before.slice(0, last), ''] : []
-  const blocks = [
-    state.length > 0 ? [`> [!info] State · ${stateWhen}`, ...state.map(line => `> ${line}`)] : [],
-    body,
-    chats.length > 0 ? [CHATS_HEAD, ...chats.map(line => `> ${line}`)] : [],
-  ].filter(one => one.length > 0)
+  const blocks = [body, chats.length > 0 ? [CHATS_HEAD, ...chats.map(line => `> ${line}`)] : []].filter(one => one.length > 0)
   const section = [LOG_HEAD, ...blocks.flatMap(one => ['', ...one])]
 
   return [...top, ...section, '', ...after].join('\n')
 }
 
-// What a note's Agent Log section says: where the work stands, the chats on the anchor,
-// and its pins.
+// What a note's Agent Log section says: the chats on the anchor, where each last stood
+// (by chat id), and its pins.
 export const parseTrail = (text: string): Trail => {
-  const { state, stateWhen, body, chats } = splitLog(text)
+  const { body, chats } = splitLog(text)
+  const states: Trail['states'] = {}
+  let id = ''
+  for (const line of chats) {
+    const chat = line.match(CHAT_LINE)
+    const under = chat ? null : line.match(/^\s+- (.*)$/)
+    if (chat) {
+      id = chat[3] ?? ''
+    } else if (under && id) {
+      const when = under[1]?.match(/^as of (.+)$/)?.[1]
+      const was = states[id] ?? { when: '', text: '' }
+      states[id] = when ? { ...was, when: when.trim() } : { ...was, text: was.text ? `${was.text}\n${under[1] ?? ''}` : (under[1] ?? '') }
+    }
+  }
 
   return {
-    state: { when: stateWhen, text: state.join('\n') },
+    states,
     chats: chats.flatMap(line => {
       const found = line.match(CHAT_LINE)
 
@@ -1375,23 +1381,38 @@ export const parseTrail = (text: string): Trail => {
   }
 }
 
-// A model's answer as the lines the State callout holds: no quote marks of its own, no
-// blank lines, at most STATE_LINES.
+// A model's answer as plain lines: no quote or list marks of its own, no blank lines, at
+// most STATE_LINES.
 export const stateLines = (reply: string): string[] =>
-  reply.split('\n').map(line => line.replace(/^\s*>+\s?/, '').trimEnd()).filter(line => line.trim()).slice(0, STATE_LINES)
+  reply.split('\n').map(line => line.replace(/^\s*(?:>+\s?|[-*]\s+)/, '').trim()).filter(Boolean).slice(0, STATE_LINES)
 
-// Replaces the note's State callout: the one block in the section that is overwritten,
-// never added to. An empty answer takes the block away.
-export const setState = (text: string, when: string, reply: string): string =>
-  joinLog({ ...splitLog(text), state: stateLines(reply), stateWhen: when })
+// Where one chat last stood, kept under that chat's own entry in the Chats list: when it
+// was said, then the lines, replacing what was under the entry before. Each chat has its
+// own, so two chats on one task do not write over each other; an empty answer takes it
+// away. A chat that is not in the list changes nothing.
+export const setChatState = (text: string, id: string, when: string, reply: string): string => {
+  const parts = splitLog(text)
+  const at = parts.chats.findIndex(line => line.match(CHAT_LINE)?.[3] === id)
+  if (at < 0) {
+    return text
+  }
+  let end = at + 1
+  while (end < parts.chats.length && /^\s/.test(parts.chats[end] ?? '')) {
+    end += 1
+  }
+  const lines = stateLines(reply)
+  const under = lines.length > 0 ? [`  - as of ${when}`, ...lines.map(line => `  - ${line}`)] : []
+
+  return joinLog({ ...parts, chats: [...parts.chats.slice(0, at + 1), ...under, ...parts.chats.slice(end)] })
+}
 
 // The saved prompt asked for a chat's state when the lens folder has none of that name.
 export const STATE_LENS = 'chat-state'
 export const STATE_PROMPT = [
-  'Say where the work in this conversation stands right now, for someone coming back to it cold. Answer with exactly these four lines, each one short, and nothing before or after them:',
+  'Say where this chat stands, for me coming back to it after working in other chats. Go by the last few turns, not the whole history. Answer with exactly these four lines, each one short, and nothing before or after them:',
   '',
-  'Goal: what this chat is trying to get done',
-  'Verified: the last result that was actually checked (a test run, a command and its output), or "nothing yet"',
+  'Doing: what this chat is working on right now',
+  'Last: what the last few turns did or found, with the result if one was checked',
   'Next: the one next step',
   'Waiting on me: yes and what for, or no',
   '',
@@ -1405,12 +1426,12 @@ export const stateLensFile = (name: string): string =>
     'kind: engine',
     `name: ${name}`,
     'description: >-',
-    '  "Where does the work in this chat stand?" — goal, last verified result, next step and whether it is waiting on the user, in four lines.',
+    '  "Where does this chat stand?" — what it is doing, what the last few turns did, the next step and whether it is waiting on the user, in four lines.',
     'scope: >-',
     '  This conversation and nothing else: no files are read and no search is run.',
     'trigger: on-demand',
     'target: >-',
-    '  note — the State block at the top of the anchor note\'s Agent Log section, overwritten each time; with no anchor the answer stays in the pane.',
+    '  note — under this chat\'s own entry in the folded Chats list of the anchor note\'s Agent Log section, replaced each time; with no anchor the answer stays in the pane.',
     '---',
     `# ${name}`,
     '',
@@ -1681,8 +1702,7 @@ export const stamp = (ms: number): string => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-// `state` is where the note says the work stands, when it says.
-export type Anchor = { note: string; notePath: string; state?: { when: string; text: string } }
+export type Anchor = { note: string; notePath: string }
 
 // `pins` are the anchor's pinned context, a note's `path` filled where it was found;
 // `today` the path of today's note when there is one.
@@ -1699,7 +1719,7 @@ export const buildDraft = (
   if (anchor && choice.project) {
     // The note's name in [[ ]] lets a pasted draft anchor a new chat (anchorFromDraft).
     const where = anchor.notePath ? `"${anchor.notePath}"` : '(find it in the vault)'
-    lines.push(`- Project [[${anchor.note}]]: ${where}, my note. Its outcome, Next and Journal are mine; the "# Agent Log" section at its end holds what is pinned to this work and where it last stood. Read it.`)
+    lines.push(`- Project [[${anchor.note}]]: ${where}, my note. Its outcome, Next and Journal are mine; the "# Agent Log" section at its end holds what is pinned to this work and, folded, the chats on it with where each last stood. Read it.`)
   }
   for (const pin of anchor ? pins.filter(one => one.on) : []) {
     lines.push(pinDraftLine(pin))
@@ -1736,13 +1756,10 @@ export const anchorBrief = (anchor: Anchor, today = '', was = ''): string => {
       ? `Augi: this chat is now anchored to [[${anchor.note}]], no longer to [[${was}]].`
       : `Augi: this chat is anchored to [[${anchor.note}]], the task or project it is working on.`,
     `- My note: ${where}. Everything above its "# Agent Log" heading is mine: its outcome, what is next and its Journal.`,
-    '- Its "# Agent Log" section, at the end of that note, is the pane\'s: what is pinned to this work, where the work stands, and a folded list of the chats on it. It is not a log for you to keep. Add a line there only when I ask you to save something, above the Chats list, one line with why; "- [[<note>]] · <why>" pins a note.',
+    '- Its "# Agent Log" section, at the end of that note, is the pane\'s: what is pinned to this work, and a folded list of the chats on it with where each last stood. It is not a log for you to keep. Add a line there only when I ask you to save something, above the Chats list, one line with why; "- [[<note>]] · <why>" pins a note.',
   ]
   if (today) {
     lines.push(`- Today's note: "${today}".`)
-  }
-  if (anchor.state?.text) {
-    lines.push(`- Where the work stood at ${anchor.state.when}, as last recorded (check before relying on it):`, ...anchor.state.text.split('\n').map(line => `    ${line}`))
   }
   lines.push('When I say "the task note", "the project note", "log this" or "save this to the task" without naming a file, I mean this note. What I ask you to save goes under "# Agent Log" (add the heading at the note\'s end if it is missing). Write above that heading only when I ask for that ("update the task note"), as a dated entry at the top of its Journal: "### YYYY-MM-DD — <what happened>".')
   lines.push('This says where things go. It is not a request: write nothing there until I ask.')
@@ -2665,10 +2682,9 @@ async function tellNow($: EngineInterface): Promise<{ text: string; next: Told }
     return null
   }
   const shown = await read($, swatch)
-  const isShown = shown.anchor?.note === note
-  const notePath = isShown && shown.notePath ? shown.notePath : await notePathOf($, note)
+  const notePath = shown.anchor?.note === note && shown.notePath ? shown.notePath : await notePathOf($, note)
 
-  return anchorNews(before, id, { note, notePath, state: isShown ? shown.trail.state : undefined }, today)
+  return anchorNews(before, id, { note, notePath }, today)
 }
 
 // One suggestion at a time.
@@ -2766,10 +2782,11 @@ let isAskingState = false
 // The least time between two automatic asks in one chat.
 export const STATE_EVERY_MS = 10 * 60_000
 
-// Asks this chat's own model where the work stands: a side question over the conversation
+// Asks this chat's own model where the chat stands: a side question over the conversation
 // as it is (`$.model.fork`: no tools, nothing added to the chat), worded by the state
-// lens. The answer shows in the pane and, with an anchor, replaces the State block in its
-// note. No answer changes nothing but the reason shown.
+// lens. The answer is this chat's alone: it shows in the pane and, with an anchor, goes
+// under this chat's entry in the note's chat list, replacing what was there. No answer
+// changes nothing but the reason shown.
 async function updateState($: EngineInterface, by: 'press' | 'auto'): Promise<void> {
   const id = await $.session.id()
   if (!id || isAskingState) {
@@ -2788,7 +2805,8 @@ async function updateState($: EngineInterface, by: 'press' | 'auto'): Promise<vo
       await update($, chatState, () => ({ session: id, text, when, at: now, busy: false, error: '' }))
       const note = await sessionAnchor($)
       if (note) {
-        await writeTrail($, note, was => setState(was, when, text))
+        // A chat that is not in the list yet (it has an anchor it never spoke on) goes in first.
+        await writeTrail($, note, was => setChatState(addChat(was, { id, when, title: CHAT_PLACEHOLDER, done: false }), id, when, text))
       }
 
       return
@@ -3346,10 +3364,10 @@ export const register: Register = (on, options) => {
     // Drawing never depends on it: with no id, no row is marked as this chat.
     const ownId = await $.session.id().catch(() => '')
     const carried = await read($, inherited)
-    // The state shown: the anchor note's, which any chat on it may have written; with no
-    // anchor, what this chat's model last said.
+    // The state shown is this chat's own: what its model last said, or, when the pane has
+    // not asked in this process (a resumed chat), what the anchor's note holds for it.
     const isMine = asked.session === ownId
-    const standing = anchor ? trail.state ?? EMPTY_TRAIL.state : isMine ? { when: asked.when, text: asked.text } : EMPTY_TRAIL.state
+    const standing = isMine && asked.text ? { when: asked.when, text: asked.text } : (anchor && trail.states?.[ownId]) || { when: '', text: '' }
     // An offer is this chat's, and live until taken or turned down.
     const isOffered = offered.session === ownId && !offered.done && !offered.busy && Boolean(offered.note || offered.title)
     const isCarried = Boolean(anchor) && carried.note === anchor?.note && carried.session === ownId
@@ -3604,7 +3622,7 @@ export const register: Register = (on, options) => {
                 <Box key="state-body" flexDirection="column">
                   {standing.text
                     ? standing.text.split('\n').map((one, at) => <Text key={`state-line-${at}`} wrap="wrap">{one}</Text>)
-                    : <Text key="state-none" dimColor wrap="wrap">{`Not asked yet. Update asks this chat's model where the work stands and keeps the answer ${anchor ? "in the anchor's note" : 'here'}.`}</Text>}
+                    : <Text key="state-none" dimColor wrap="wrap">{`Not asked yet. Update asks this chat's model what the last few turns did and what is next, and keeps the answer ${anchor ? "with this chat's entry in the anchor's note" : 'here'}.`}</Text>}
                   {isMine && asked.error && <Text key="state-error" dimColor wrap="wrap">{asked.error}</Text>}
                   <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                     <Button key="state-update" label={isMine && asked.busy ? '… asking' : '↻ update'} onPress={() => updateState($, 'press')} />

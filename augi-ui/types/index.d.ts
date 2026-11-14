@@ -14,9 +14,9 @@ export type Chat = { id: string; when: string; title: string; done: boolean }
 export type PinKind = 'note' | 'file' | 'session' | 'artifact' | 'url'
 export type Pin = { on: boolean; kind: PinKind; target: string; label: string; path?: string }
 // The anchor's Agent Log (once called its trail): the section at the end of its note that
-// holds what the pane keeps for it. What the pane reads of it: where the work stands (the
-// State block, `when` it was said), the chats filed there and the pins.
-export type Trail = { chats: Chat[]; pins: Pin[]; state: { when: string; text: string } }
+// holds what the pane keeps for it. What the pane reads of it: the chats filed there,
+// where each last stood (`states`, by chat id, with `when` it was said), and the pins.
+export type Trail = { chats: Chat[]; pins: Pin[]; states: Record<string, { when: string; text: string }> }
 // The task offered to a chat with no anchor: a board note to link, or a title (and the
 // Jira key its branch names) for a new one, with why; `done` once taken or turned down.
 export type Offer = { session: string; note: string; title: string; jira: string; why: string; busy: boolean; error: string; done: boolean }
