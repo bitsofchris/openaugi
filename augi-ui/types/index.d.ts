@@ -17,6 +17,9 @@ export type Pin = { on: boolean; kind: PinKind; target: string; label: string; p
 // holds what the pane keeps for it. What the pane reads of it: where the work stands (the
 // State block, `when` it was said), the chats filed there and the pins.
 export type Trail = { chats: Chat[]; pins: Pin[]; state: { when: string; text: string } }
+// The task offered to a chat with no anchor: a board note to link, or a title (and the
+// Jira key its branch names) for a new one, with why; `done` once taken or turned down.
+export type Offer = { session: string; note: string; title: string; jira: string; why: string; busy: boolean; error: string; done: boolean }
 // Where a chat's work stands, as its own model last said when asked: see `chatState`.
 export type ChatState = { session: string; text: string; when: string; at: number; busy: boolean; error: string }
 // One thing setup checks: a setting, the path it resolves to, and whether it's there.
@@ -94,6 +97,6 @@ export type Told = { session: string; note: string; today: string; again: boolea
 export type Opened = { session: string }
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string>; inherited: Shaped<Inherited>; told: Shaped<Told>; chatState: Shaped<ChatState> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string>; inherited: Shaped<Inherited>; told: Shaped<Told>; chatState: Shaped<ChatState>; offer: Shaped<Offer> }
   }
 }

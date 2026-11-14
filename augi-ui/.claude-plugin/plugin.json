@@ -131,7 +131,7 @@
     "stateAuto": {
       "type": "string",
       "title": "Update the state by itself",
-      "description": "yes asks for a chat's state after a turn, at most every ten minutes (one extra model call each time); no asks only when you press update.",
+      "description": "yes asks for a chat's state after a turn, at most every ten minutes, and offers a chat with no anchor a task once (one extra model call each time); no asks only when you press.",
       "default": "no",
       "options": [
         "yes",

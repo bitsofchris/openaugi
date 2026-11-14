@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**augi-ui: the pane offers a chat its task.** A chat with no anchor has
+`💡 suggest a task for this chat` in the Anchor card. A Jira key in the git
+branch that a board note carries settles it at once; otherwise the chat's own
+model picks from the notes on the board, or titles a new task when none fits.
+The pane shows the offer with the reason and waits: `link this chat to it`,
+`make the task`, or `not a task`. Nothing is linked, made or written before a
+press. With `auto after a turn` ticked the offer comes by itself, once per
+chat.
+
 **augi-ui: a State card, and the Agent Log is no longer a log.** `📍 State` in
 the pane says where a chat's work stands in four lines (goal, last verified
 result, next step, waiting on you). `↻ update` puts that question to the

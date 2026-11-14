@@ -48,7 +48,7 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `lensPicks` | Lenses listed first, comma separated; empty lists all | — |
 | `openOnStart` | `yes` opens the pane when a new interactive chat starts; `no` keeps it closed until `/augi` | `yes` |
 | `stateLens` | The saved prompt (a lens name) a chat's own model is asked for the State card | `chat-state` |
-| `stateAuto` | `yes` asks for a chat's state by itself after a turn, at most every ten minutes; `no` waits for `↻ update` | `no` |
+| `stateAuto` | `yes` asks for a chat's state by itself after a turn, at most every ten minutes, and offers a chat with no anchor a task once; `no` waits for a press | `no` |
 | `tellChat` | `yes` tells each chat's own model its anchor (the note, its Agent Log section, today's note) beside your next prompt, so "update the task note" needs no path; `no` keeps the anchor in the pane only | `yes` |
 
 Each missing file can be created as a starter, pointed at an existing note, or
@@ -244,6 +244,19 @@ are `dimColor`, and the one primary button is the draft.
   `chat-state.md` into the lens folder from the built-in question first when it
   is not there. What is asked is the lens file's text under its frontmatter and
   title; the built-in asks for four lines: Goal, Verified, Next, Waiting on me.
+- **Task offer** (in the Anchor card, for a chat with no anchor):
+  `💡 suggest a task for this chat` works out which task the chat belongs to
+  and shows it as an offer; nothing is linked, made or written until a press.
+  A Jira key in the git branch (`feature/proj-123-…`) that a note on the
+  board carries settles it with no model call. Otherwise the chat's own model
+  is asked the same way the State card asks, with the board's notes to pick
+  from: it names one, or says none fits and titles a new task. A name that is
+  not on the board is never offered. `link this chat to it` anchors the chat
+  there; `make the task` makes a standalone task from the title (see **Tasks**:
+  the chat moves onto it), with the branch's key when that key is in the
+  `jiraProject` set; `not a task` turns the offer down. With `auto after a
+  turn` ticked the offer is made by itself, once, after the first turn of a
+  chat that has no anchor and has not said it wants none.
 - **Pins** (`📌 Pinned to <anchor> · N`, in This chat): the one place to pin.
   The list is the anchor's own, kept in its note's Agent Log section:
   artifacts (listed first), notes, files, links and coding sessions. Paste a

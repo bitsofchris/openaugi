@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { Card, Chat, Inherited, ChatState, JustMade, Lens, Opened, PadEntry, Picks, Pin, PinKind, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
+import type { Card, Chat, Inherited, ChatState, JustMade, Lens, Offer, Opened, PadEntry, Picks, Pin, PinKind, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -156,7 +156,7 @@ export const USAGE_FEATURES = [
   'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
   'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss',
   'pin-open', 'pin-drop', 'pin-paste',
-  'state-update', 'state-auto', 'state-prompt', 'state-edit', 'state-pick',
+  'state-update', 'state-auto', 'state-prompt', 'state-edit', 'state-pick', 'offer-ask', 'offer-link', 'offer-make', 'offer-dismiss',
   'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
   'today-log', 'today-open', 'today-make', 'pick-today',
   'draft', 'draft-sent',
@@ -574,6 +574,13 @@ const view = atom(
 // asks), `busy` while it is being asked, and why the last ask got no answer.
 const NO_STATE: ChatState = { session: '', text: '', when: '', at: 0, busy: false, error: '' }
 const chatState = atom({ plugin: 'augi-ui', key: 'chatState' } as const, NO_STATE, { shape: 'chatState-1' })
+
+// The task the pane offers a chat that has no anchor (suggestTask): for the session
+// `session`, a note on the board to link (`note`) or, with none that fits, a title for a
+// new one (`title`, with the Jira key its branch names), and why. `done` once the user
+// took it or turned it down.
+const NO_OFFER: Offer = { session: '', note: '', title: '', jira: '', why: '', busy: false, error: '', done: false }
+const offer = atom({ plugin: 'augi-ui', key: 'offer' } as const, NO_OFFER, { shape: 'offer-1' })
 
 // This chat's scratchpad, newest first: session state, so each chat has its own and it
 // outlives a redraw or a reload of this module, but not the session.
@@ -1426,6 +1433,52 @@ export const lensBody = (text: string): string => {
 // The side question a chat's model is asked: the lens's words, held to this conversation.
 export const stateAsk = (body: string): string =>
   ['Augi side question. Answer it from this conversation alone, in plain text, with no preamble.', '', body.trim() || STATE_PROMPT].join('\n')
+
+// Every note a chat could be anchored on: the board's cards and their linked sub-items, once each.
+export const offerCandidates = (cards: Card[]): string[] => {
+  const names: string[] = []
+  for (const card of cards) {
+    for (const name of [card.note, ...card.tasks.map(task => task.note ?? '')]) {
+      if (name && !names.includes(name)) {
+        names.push(name)
+      }
+    }
+  }
+
+  return names
+}
+
+// The first Jira key in a branch name or a line of text (`feature/proj-123-fix` names PROJ-123), or empty.
+export const jiraKeyIn = (text: string): string => text.toUpperCase().match(/(?:^|[^A-Z0-9])([A-Z][A-Z0-9]+-\d+)(?![A-Z0-9])/)?.[1] ?? ''
+
+// The side question that matches a chat to a task: the model picks one name from the
+// list or says none fits and titles a new one. `hint` is what the pane knows already.
+export const offerAsk = (candidates: string[], hint = ''): string =>
+  [
+    'Augi side question. Answer it from this conversation alone, in plain text, with no preamble.',
+    '',
+    'Which of my tasks is this conversation working on? Pick one only if the work here is plainly part of it. Answer with exactly these three lines:',
+    '',
+    'Task: one name from the list below, copied exactly, or NONE',
+    'New: if NONE, a title for a new task in at most eight words; otherwise leave this empty',
+    'Why: one short line',
+    ...(hint ? ['', hint] : []),
+    '',
+    'My tasks:',
+    ...(candidates.length > 0 ? candidates.map(name => `- ${name}`) : ['(none yet)']),
+  ].join('\n')
+
+// The model's answer to that question: a note only when it names one on the list, else
+// the title it gave for a new task (never a path, never more than a line).
+export const parseOffer = (reply: string, candidates: string[]): { note: string; title: string; why: string } => {
+  const said = (label: string): string =>
+    (reply.match(new RegExp(`^\\s*${label}:[ \\t]*(.*)$`, 'im'))?.[1] ?? '').replace(/^\[\[|\]\]$/g, '').replace(/^["'“`]+|["'”`.]+$/g, '').trim()
+  const named = said('Task').toLowerCase()
+  const note = candidates.find(name => name.toLowerCase() === named) ?? ''
+  const title = note || /^none$/i.test(said('New')) ? '' : said('New').replace(/[\\/:]/g, ' ').replace(/\s+/g, ' ').slice(0, 80).trim()
+
+  return { note, title, why: said('Why').slice(0, 160) }
+}
 
 // Pins something: a line at the end of the section, which is made when the note has none.
 // One already there stays where it is, pinned again if it had been unpinned.
@@ -2618,6 +2671,94 @@ async function tellNow($: EngineInterface): Promise<{ text: string; next: Told }
   return anchorNews(before, id, { note, notePath, state: isShown ? shown.trail.state : undefined }, today)
 }
 
+// One suggestion at a time.
+let isAskingOffer = false
+
+// The note among `candidates` that carries this Jira key (`Jira: KEY` or `jira: KEY`), or empty.
+async function noteWithJira($: EngineInterface, key: string, candidates: string[]): Promise<string> {
+  const { stdout } = await $.process.run(['grep', '-rlE', '--include=*.md', `^(jira|Jira): *${key}([^0-9]|$)`, P.notes])
+  const found = stdout.split('\n').filter(Boolean).map(path => baseName(path).replace(/\.md$/, ''))
+
+  return candidates.find(name => found.includes(name)) ?? ''
+}
+
+// For a chat with no anchor: works out which task it belongs to and offers it in the
+// Anchor card, where one press links the chat or makes the task. Nothing is linked, made
+// or written here. A Jira key in the git branch that a board note carries settles it with
+// no model call; otherwise the chat's own model is asked, with the board's notes to pick from.
+async function suggestTask($: EngineInterface, by: 'press' | 'auto'): Promise<void> {
+  const id = await $.session.id()
+  if (!id || isAskingOffer || (await sessionAnchor($))) {
+    return
+  }
+  isAskingOffer = true
+  let error = ''
+  try {
+    await update($, offer, () => ({ ...NO_OFFER, session: id, busy: true }))
+    const shown = await read($, swatch)
+    const candidates = offerCandidates(shown.loadedAt > 1 ? shown.cards : kanbanCards(await readOr($, P.board)))
+    let branch = ''
+    try {
+      branch = (await $.process.run(['git', '-C', await $.session.cwd(), 'branch', '--show-current'])).stdout.trim()
+    } catch {
+      branch = ''
+    }
+    const named = jiraKeyIn(branch)
+    const linked = named ? await noteWithJira($, named, candidates) : ''
+    if (linked) {
+      await update($, offer, () => ({ ...NO_OFFER, session: id, note: linked, jira: named, why: `The branch ${branch} names ${named}, and this note carries it.` }))
+
+      return
+    }
+    // A branch can look like a key and not be one (`release-2026-11`): with no note carrying
+    // it, it counts as one only in the Jira project the settings name.
+    const jira = P.jiraProject && named.startsWith(`${P.jiraProject.toUpperCase()}-`) ? named : ''
+    const reply = await $.model.fork({ prompt: offerAsk(candidates, jira ? `The git branch is "${branch}", which names the Jira issue ${jira}; no task of mine carries that key yet.` : ''), effort: 'low' })
+    const found = reply.isAnswered ? parseOffer(reply.text, candidates) : { note: '', title: '', why: '' }
+    if (found.note || found.title) {
+      await update($, offer, () => ({ ...NO_OFFER, session: id, ...found, jira }))
+
+      return
+    }
+    error = reply.isAnswered ? 'No task suggested for this chat.' : reply.reason === 'nothing-to-fork' ? 'Nothing to go on yet: send a prompt first.' : `No answer (${reply.reason}).`
+  } catch (failure) {
+    error = `No answer: ${String(failure)}`
+  } finally {
+    isAskingOffer = false
+  }
+  // Asked and unanswered counts as asked: auto does not try again in this chat.
+  await update($, offer, () => ({ ...NO_OFFER, session: id, error, done: true }))
+  if (by === 'press') {
+    await $.ui.toast(error)
+  }
+}
+
+// Takes the offer: links this chat to the note, or makes the new task (a standalone one,
+// which moves the chat onto it; the branch's Jira key goes with its title).
+async function takeOffer($: EngineInterface): Promise<void> {
+  const one = await read($, offer)
+  await update($, offer, old => ({ ...old, done: true }))
+  if (one.note) {
+    const { cards } = await read($, swatch)
+    await chooseAnchor($, anchorCard(cards, one.note) ?? { column: '', note: one.note, detail: '', tasks: [] })
+  } else if (one.title) {
+    await newTask($, one.jira ? `${one.title} ${one.jira}` : one.title, 'new')
+  }
+}
+
+// After a turn, with auto on: a chat that has no anchor, has not said it wants none, and
+// has not been offered a task yet is offered one, once.
+async function autoOffer($: EngineInterface): Promise<void> {
+  const id = await $.session.id()
+  if (settings.stateAuto !== 'yes' || !id || (await read($, offer)).session === id) {
+    return
+  }
+  if (anchorPairs(await $.store.get(ANCHORS_KEY)).some(([one]) => one === id)) {
+    return
+  }
+  await suggestTask($, 'auto')
+}
+
 const stateLensName = (): string => (settings.stateLens ?? '').trim() || STATE_LENS
 
 // One ask at a time: a press while one is out does nothing.
@@ -2672,6 +2813,7 @@ async function autoState($: EngineInterface): Promise<void> {
     return
   }
   await ready($)
+  await autoOffer($)
   const id = await $.session.id()
   const last = await read($, chatState)
   if (last.session === id && (await $.clock.now()) - last.at < STATE_EVERY_MS) {
@@ -3199,6 +3341,7 @@ export const register: Register = (on, options) => {
     const shown = await read($, view)
     const jotted = await read($, pad)
     const asked = await read($, chatState)
+    const offered = await read($, offer)
     const madeTask = await read($, justMade)
     // Drawing never depends on it: with no id, no row is marked as this chat.
     const ownId = await $.session.id().catch(() => '')
@@ -3207,6 +3350,8 @@ export const register: Register = (on, options) => {
     // anchor, what this chat's model last said.
     const isMine = asked.session === ownId
     const standing = anchor ? trail.state ?? EMPTY_TRAIL.state : isMine ? { when: asked.when, text: asked.text } : EMPTY_TRAIL.state
+    // An offer is this chat's, and live until taken or turned down.
+    const isOffered = offered.session === ownId && !offered.done && !offered.busy && Boolean(offered.note || offered.title)
     const isCarried = Boolean(anchor) && carried.note === anchor?.note && carried.session === ownId
     // Every field but a standalone task's needs an anchor; with none it reads as closed.
     // A mode this pane no longer has (an older one's child-chat or chat-to-task form) is no form.
@@ -3369,6 +3514,21 @@ export const register: Register = (on, options) => {
                     <Box key="anchor-links" flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                       <Button key="open-note" label="🧠 Human Notes" hotkey="p" onPress={() => (notePath ? openNote($, notePath) : openByName($, anchor.note))} />
                     </Box>
+                  )}
+                  {!anchor && isOffered && (
+                    <Box key="offer" flexDirection="column" marginBottom={1}>
+                      <Text key="offer-what" wrap="wrap">{offered.note ? `💡 This chat looks like ${offered.note}.` : `💡 No task on the board fits. New task: “${offered.title}”${offered.jira ? ` (${offered.jira})` : ''}`}</Text>
+                      {offered.why && <Text key="offer-why" dimColor wrap="wrap">{offered.why}</Text>}
+                      <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                        {offered.note
+                          ? <Button key="offer-link" label="link this chat to it" onPress={() => takeOffer($)} />
+                          : <Button key="offer-make" label="make the task" onPress={() => takeOffer($)} />}
+                        <Button key="offer-dismiss" plain dimColor label="not a task" onPress={() => update($, offer, old => ({ ...old, done: true }))} />
+                      </Box>
+                    </Box>
+                  )}
+                  {!anchor && !isOffered && (
+                    <Button key="offer-ask" plain dimColor label={offered.session === ownId && offered.busy ? '… asking' : '💡 suggest a task for this chat'} onPress={() => suggestTask($, 'press')} />
                   )}
                   <Button key="draft" variant="primary" label={anchor ? '💬 draft a prompt with this context' : '💬 draft a prompt with my context'} hotkey="n" onPress={() => draft($, null)} />
                   {anchor && jira && (

@@ -10,6 +10,7 @@ import { openArgv } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
 import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, logName, nextFrom, addPin, parsePin, pinFrom, pinLine, removePin, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, outcomeFrom, parseTrail, tidyTrail, trailPath, toggled, typedFrom } from './register'
 import { isMovedLog, markMoved, splitLog, withOldLog } from './register'
+import { jiraKeyIn, offerAsk, offerCandidates, parseOffer } from './register'
 import { lensBody, setState, STATE_EVERY_MS, STATE_PROMPT, stateAsk, stateLensFile, stateLines } from './register'
 
 const PANE = {
@@ -2857,9 +2858,9 @@ test('with the usage log on, a press, a submit and a sent draft each append one 
 
 // taskHooks with a clock a test can move, the settings rows the State card writes, and a
 // model that answers the side question; `asked` is every question it was put.
-const stateHooks = (on: On, anchors: [string, string][]) => {
+const stateHooks = (on: On, anchors: [string, string][], skip: string[] = []) => {
   const clock = { now: new Date(2026, 10, 8, 9, 30).getTime() }
-  const got = taskHooks(except(on, ['clock.now', 'fs.list']), anchors, { '/v/PMOC - Garden.md': GARDEN_PLAIN, '/v/lenses/echoes.md': '---\nname: echoes\n---\n# echoes\n\nSay what this echoes, in one line.\n' })
+  const got = taskHooks(except(on, ['clock.now', 'fs.list', ...skip]), anchors, { '/v/PMOC - Garden.md': GARDEN_PLAIN, '/v/lenses/echoes.md': '---\nname: echoes\n---\n# echoes\n\nSay what this echoes, in one line.\n' })
   const asked: string[] = []
   const set: [string, unknown][] = []
   const model = { reply: { isAnswered: true, text: 'Goal: fix the valve\nVerified: nothing yet\nNext: find the leak\nWaiting on me: no' } as unknown }
@@ -2995,5 +2996,135 @@ test('auto asks after a main-thread turn that answered, at most every ten minute
   await $.turn.complete(turnEnds)
   await settle()
   expect(got.asked.length).toBe(3)
+  await ui.unmount()
+})
+
+const BOARD_NOTES = ['2022-01-04 - Sketch', 'PMOC - Garden', 'PMOC - Birdhouse']
+
+test('a task offer is a name from the board or a title for a new task, never anything else', () => {
+  expect(offerCandidates(kanbanCards(BOARD_TEXT))).toEqual(BOARD_NOTES)
+  expect(parseOffer('Task: pmoc - garden\nNew:\nWhy: it is about the beds', BOARD_NOTES)).toEqual({ note: 'PMOC - Garden', title: '', why: 'it is about the beds' })
+  expect(parseOffer('Task: [[PMOC - Birdhouse]]\nNew: ignored when a task is named\nWhy: x', BOARD_NOTES)).toEqual({ note: 'PMOC - Birdhouse', title: '', why: 'x' })
+  // A name that is not on the board is not a match: the title, if any, is what is offered.
+  expect(parseOffer('Task: PMOC - Pond\nNew: "Dig the pond."\nWhy: nothing fits', BOARD_NOTES)).toEqual({ note: '', title: 'Dig the pond', why: 'nothing fits' })
+  expect(parseOffer('Task: NONE\nNew: Fix: the gate/latch\nWhy: y', BOARD_NOTES).title).toBe('Fix the gate latch')
+  expect(parseOffer('Task: NONE\nNew: NONE\nWhy: a quick question', BOARD_NOTES)).toEqual({ note: '', title: '', why: 'a quick question' })
+  expect(parseOffer('I could not tell.', BOARD_NOTES)).toEqual({ note: '', title: '', why: '' })
+
+  const ask = offerAsk(BOARD_NOTES, 'The git branch is "x".')
+  expect(ask).toContain('Task: one name from the list below, copied exactly, or NONE')
+  expect(ask.endsWith('The git branch is "x".\n\nMy tasks:\n- 2022-01-04 - Sketch\n- PMOC - Garden\n- PMOC - Birdhouse')).toBe(true)
+  expect(offerAsk([]).endsWith('My tasks:\n(none yet)')).toBe(true)
+
+  expect(jiraKeyIn('feature/proj-123-fix-the-gate')).toBe('PROJ-123')
+  expect(jiraKeyIn('PROJ-9')).toBe('PROJ-9')
+  expect(jiraKeyIn('main')).toBe('')
+  expect(jiraKeyIn('v2-fixes')).toBe('')
+})
+
+test('a chat with no anchor can be offered its task: the model picks from the board, one press links it, and nothing is written before that', { options: OPTIONS }, async ($, on) => {
+  const got = stateHooks(on, [])
+  got.model.reply = { isAnswered: true, text: 'Task: PMOC - Garden\nNew:\nWhy: the chat is fixing the sprinkler valve' }
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'offer-link' })).toBeFalsy()
+  await ui.press({ key: 'offer-ask' })
+  expect(got.asked).toEqual([offerAsk(BOARD_NOTES)])
+  expect(await ui.find({ text: '💡 This chat looks like PMOC - Garden.' })).toBeTruthy()
+  expect(await ui.find({ text: 'the chat is fixing the sprinkler valve' })).toBeTruthy()
+  expect(await ui.find({ key: 'offer-ask' })).toBeFalsy()
+  // An offer is only an offer.
+  expect(got.written.size).toBe(0)
+  expect(anchorOf(got.store, 'own-session')).toBe(undefined)
+
+  await ui.press({ key: 'offer-link' })
+  expect(anchorOf(got.store, 'own-session')).toBe('PMOC - Garden')
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  expect(parseTrail(got.written.get('/v/PMOC - Garden.md') ?? '').chats.map(chat => chat.id)).toEqual(['own-session'])
+  expect(await ui.find({ key: 'offer-link' })).toBeFalsy()
+  expect(await ui.find({ key: 'offer-ask' })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('when nothing on the board fits, the offer is a new task: one press makes it and moves the chat onto it; not a task turns it down', { options: OPTIONS }, async ($, on) => {
+  const got = stateHooks(on, [])
+  got.model.reply = { isAnswered: true, text: 'Task: NONE\nNew: Dig the pond\nWhy: nothing on the list is about a pond' }
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'offer-ask' })
+  expect(await ui.find({ text: '💡 No task on the board fits. New task: “Dig the pond”' })).toBeTruthy()
+  // Turned down: the offer goes, nothing was made, and it can be asked for again.
+  await ui.press({ key: 'offer-dismiss' })
+  expect(await ui.find({ key: 'offer-make' })).toBeFalsy()
+  expect(got.written.size).toBe(0)
+  await ui.press({ key: 'offer-ask' })
+  await ui.press({ key: 'offer-make' })
+  expect(got.written.has('/v/Dig the pond.md')).toBe(true)
+  expect(got.written.get('/v/Kanban.md')?.includes('- [ ] [[Dig the pond]]')).toBe(true)
+  expect(anchorOf(got.store, 'own-session')).toBe('Dig the pond')
+
+  // No suggestion says so and offers nothing.
+  got.store.set('anchors', [])
+  got.model.reply = { isAnswered: true, text: 'Task: NONE\nNew: NONE\nWhy: just a question' }
+  await ui.press({ key: 'refresh' })
+  await ui.press({ key: 'offer-ask' })
+  expect(got.toasts.at(-1)).toBe('No task suggested for this chat.')
+  expect(await ui.find({ key: 'offer-make' })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('a Jira key in the git branch that a board note carries settles the offer with no model call; one no note carries goes with the new task when it is in the Jira project set', { options: { ...OPTIONS, jiraProject: 'proj' } }, async ($, on) => {
+  const got = stateHooks(on, [], ['process.run'])
+  const repo = { branch: 'feature/proj-7-sprinkler', carries: '/v/PMOC - Garden.md\n' }
+  on('session.cwd', () => ({ value: '/r/garden' }))
+  on('process.run', (_, e) => {
+    got.ran.push(e.argv)
+    const name = e.argv[0] === 'find' ? e.argv[e.argv.indexOf('-name') + 1] ?? '' : ''
+    const found = name ? ['/v/PMOC - Garden.md', ...got.written.keys()].find(path => path.endsWith(`/${name}`)) ?? '' : ''
+    const stdout = e.argv[0] === 'git' ? `${repo.branch}\n` : e.argv[0] === 'grep' ? repo.carries : found ? `${found}\n` : ''
+
+    return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'offer-ask' })
+  expect(got.asked).toEqual([])
+  expect(await ui.find({ text: '💡 This chat looks like PMOC - Garden.' })).toBeTruthy()
+  expect(await ui.find({ text: 'The branch feature/proj-7-sprinkler names PROJ-7, and this note carries it.' })).toBeTruthy()
+  expect(got.ran.some(argv => argv[0] === 'grep' && argv.includes('^(jira|Jira): *PROJ-7([^0-9]|$)'))).toBe(true)
+  await ui.press({ key: 'offer-dismiss' })
+
+  // No note carries the key: the model is told the branch, and a new task takes the key.
+  repo.carries = ''
+  got.model.reply = { isAnswered: true, text: 'Task: NONE\nNew: Replace the sprinkler valve\nWhy: new work' }
+  await ui.press({ key: 'offer-ask' })
+  expect(got.asked.at(-1)).toContain('The git branch is "feature/proj-7-sprinkler", which names the Jira issue PROJ-7; no task of mine carries that key yet.')
+  expect(await ui.find({ text: '💡 No task on the board fits. New task: “Replace the sprinkler valve” (PROJ-7)' })).toBeTruthy()
+  await ui.press({ key: 'offer-make' })
+  expect(jiraFrom(got.written.get('/v/Replace the sprinkler valve.md') ?? '')).toBe('PROJ-7')
+  await ui.unmount()
+})
+
+test('with auto on, a chat with no anchor is offered a task once after a turn; one that chose no anchor is not', { options: { ...OPTIONS, stateAuto: 'yes' } }, async ($, on) => {
+  const got = stateHooks(on, [['own-session', '']])
+  got.model.reply = { isAnswered: true, text: 'Task: PMOC - Garden\nNew:\nWhy: valve work' }
+  const offers = () => got.asked.filter(one => one.includes('Which of my tasks'))
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // This chat said it wants no anchor: a turn ending offers nothing.
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(offers()).toEqual([])
+
+  // A chat that never chose is offered one after its turn, and only once.
+  got.store.set('anchors', [])
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(offers()).toEqual([offerAsk(BOARD_NOTES)])
+  expect(await ui.find({ key: 'offer-link' })).toBeTruthy()
+  got.clock.now += 2 * STATE_EVERY_MS
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(offers().length).toBe(1)
   await ui.unmount()
 })
