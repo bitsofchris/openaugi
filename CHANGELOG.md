@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+**augi-ui: a State card, and the Agent Log is no longer a log.** `📍 State` in
+the pane says where a chat's work stands in four lines (goal, last verified
+result, next step, waiting on you). `↻ update` puts that question to the
+chat's own model over the conversation as it is, without adding anything to
+the chat; the answer shows in the card and, with an anchor, replaces one State
+block at the top of the note's Agent Log section. It is overwritten every
+time, so it cannot grow. `☐ auto after a turn` (off by default) asks by
+itself at the end of a turn, at most every ten minutes; each ask is one more
+model call. The question is a saved prompt, `chat-state`: pick another from
+the card or press `edit prompt`.
+
+The Agent Log section is now only what the pane keeps: the State block, the
+pins, and the folded chat list. A chat's model is told it is not a log to
+fill, and adds a line there only when asked to save something. A chat that is
+told its anchor is also told where the work last stood, dated.
+
 **augi-ui: the Agent Log is a section of the note.** Each anchor had two
 files, the user's note and an `Agent Log - <note>.md` beside it, and two
 buttons to open them. Now it has one note: everything above its `# Agent Log`

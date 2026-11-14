@@ -122,6 +122,22 @@
         "no"
       ]
     },
+    "stateLens": {
+      "type": "string",
+      "title": "State prompt",
+      "description": "The saved prompt (a lens name) the pane asks a chat's own model to say where its work stands. Empty uses chat-state.",
+      "default": "chat-state"
+    },
+    "stateAuto": {
+      "type": "string",
+      "title": "Update the state by itself",
+      "description": "yes asks for a chat's state after a turn, at most every ten minutes (one extra model call each time); no asks only when you press update.",
+      "default": "no",
+      "options": [
+        "yes",
+        "no"
+      ]
+    },
     "tellChat": {
       "type": "string",
       "title": "Tell each chat its anchor",

@@ -14,8 +14,11 @@ export type Chat = { id: string; when: string; title: string; done: boolean }
 export type PinKind = 'note' | 'file' | 'session' | 'artifact' | 'url'
 export type Pin = { on: boolean; kind: PinKind; target: string; label: string; path?: string }
 // The anchor's Agent Log (once called its trail): the section at the end of its note that
-// agents write. What the pane reads of it: the chats filed there and the pins.
-export type Trail = { chats: Chat[]; pins: Pin[] }
+// holds what the pane keeps for it. What the pane reads of it: where the work stands (the
+// State block, `when` it was said), the chats filed there and the pins.
+export type Trail = { chats: Chat[]; pins: Pin[]; state: { when: string; text: string } }
+// Where a chat's work stands, as its own model last said when asked: see `chatState`.
+export type ChatState = { session: string; text: string; when: string; at: number; busy: boolean; error: string }
 // One thing setup checks: a setting, the path it resolves to, and whether it's there.
 export type SetupItem = { field: string; label: string; path: string; ok: boolean; starter: boolean }
 // Today's note: the pattern its path comes from (empty for none), the path for `day`
@@ -58,6 +61,9 @@ export type View = {
   chatOpen: boolean
   anywhereOpen: boolean
   anchorOpen: boolean
+  stateOpen: boolean
+  // The State card's list of saved prompts to ask with.
+  statePickOpen: boolean
   pinsOpen: boolean
   padOpen: boolean
   // The You card under Always: the season line, the context note, the board and today's note.
@@ -88,6 +94,6 @@ export type Told = { session: string; note: string; today: string; again: boolea
 export type Opened = { session: string }
 declare module 'claude-code' {
   interface PluginState {
-    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string>; inherited: Shaped<Inherited>; told: Shaped<Told> }
+    'augi-ui': { swatch: Shaped<Swatch>; picks: Shaped<Picks>; view: Shaped<View>; pad: Shaped<PadEntry[]>; justMade: Shaped<JustMade>; opened: Shaped<Opened>; padDraft: Shaped<string>; inherited: Shaped<Inherited>; told: Shaped<Told>; chatState: Shaped<ChatState> }
   }
 }

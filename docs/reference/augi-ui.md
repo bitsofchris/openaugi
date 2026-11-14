@@ -47,6 +47,8 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `jiraServer` | Optional. The Jira MCP server's name as `/mcp` lists it; empty looks for a likely one | — |
 | `lensPicks` | Lenses listed first, comma separated; empty lists all | — |
 | `openOnStart` | `yes` opens the pane when a new interactive chat starts; `no` keeps it closed until `/augi` | `yes` |
+| `stateLens` | The saved prompt (a lens name) a chat's own model is asked for the State card | `chat-state` |
+| `stateAuto` | `yes` asks for a chat's state by itself after a turn, at most every ten minutes; `no` waits for `↻ update` | `no` |
 | `tellChat` | `yes` tells each chat's own model its anchor (the note, its Agent Log section, today's note) beside your next prompt, so "update the task note" needs no path; `no` keeps the anchor in the pane only | `yes` |
 
 Each missing file can be created as a starter, pointed at an existing note, or
@@ -66,7 +68,7 @@ anchor see each other's pins and tasks without a refresh.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
 chat is attached to: the anchor card, its
-pins, and the scratchpad. **Always** holds what is not tied to one chat: the You card (the
+state, its pins, and the scratchpad. **Always** holds what is not tied to one chat: the You card (the
 season line from the context note, `✏️ my context`, `📋 the board` and today's
 note: see **Today** below), the saved prompts, and setup. Setup holds paths
 and switches only.
@@ -117,9 +119,11 @@ are `dimColor`, and the one primary button is the draft.
   model can read, so the plugin says it: the first prompt sent on an anchor
   carries a short block beside it for the model, not shown in the chat, naming
   the note and its path, where in it agents write (under `# Agent Log`),
-  today's note when there is one, and the rule for writing (what the agent
-  saves goes under that heading; above it the note gets a dated Journal entry
-  only when the user asks). After that
+  today's note when there is one, where the work last stood when the note
+  records it (dated, as something to check), and the rule for writing: the
+  section is the pane's and not a log to keep, so the chat adds a line under
+  that heading only when the user asks to save something, and above it only a
+  dated Journal entry, again only when asked. After that
   "update the task note", "log this" or "save this to the task" need no path.
   It is sent once, and again only when something changed: the whole block for
   another anchor or after a compaction (which may have summarized it away), one
@@ -223,6 +227,23 @@ are `dimColor`, and the one primary button is the draft.
   *What goes into every draft*, all on by default: the context note and board
   (`m`), the anchor's note, today's note when there is one,
   and a search of the notes with OpenAugi.
+- **State** (`📍 State · <when>`, in This chat): where the chat's work stands,
+  in the chat's own model's words. `↻ update` asks that model a side question
+  over the conversation as it is (`$.model.fork`: no tools, the cached
+  conversation re-read, nothing added to the chat or its transcript), and the
+  answer, at most eight lines, shows in the card. With an anchor it also
+  replaces the State block at the top of the note's Agent Log section, so the
+  note says where the work stands, any chat on the anchor sees it, and the next
+  chat to be told its anchor is told it too. With no anchor it stays in the
+  pane. Nothing is asked unpressed unless `☐ auto after a turn` is ticked
+  (`stateAuto`): then the end of a main-thread turn that answered asks, when
+  this chat was never asked or not for ten minutes. Each ask is one more model
+  call; one that gets no answer says why and is paced the same. **The question
+  is a saved prompt.** `▸ prompt: <name>` lists the saved prompts to pick
+  another (`stateLens`), and `edit prompt` opens the current one, writing
+  `chat-state.md` into the lens folder from the built-in question first when it
+  is not there. What is asked is the lens file's text under its frontmatter and
+  title; the built-in asks for four lines: Goal, Verified, Next, Waiting on me.
 - **Pins** (`📌 Pinned to <anchor> · N`, in This chat): the one place to pin.
   The list is the anchor's own, kept in its note's Agent Log section:
   artifacts (listed first), notes, files, links and coding sessions. Paste a
@@ -294,24 +315,33 @@ are `dimColor`, and the one primary button is the draft.
   link are the only writes the pane makes above a note's `# Agent Log`
   heading: only on the user's press, only their own words.
 - **Agent Log**: the last section of the anchor's own note, under
-  `# Agent Log`. Everything above the heading is the user's; under it agents
-  append and the pane keeps its pins. Its shape:
+  `# Agent Log`. Everything above the heading is the user's; the section is
+  what the pane keeps for the anchor, and it is not a log: a chat adds a line
+  there only when the user asks to save something. Its shape:
 
   ```
   # Agent Log
 
+  > [!info] State · 2022-01-05 10:40
+  > Goal: what the chat is trying to get done
+  > Verified: the last checked result
+  > Next: the one next step
+  > Waiting on me: no
+
   - [[A note]] · why it matters
   - file: `path/to/file` · label
-  - a fact or a decision worth keeping
+  - a line the user asked a chat to save
   - [x] [[A note that was unpinned]]
 
   > [!abstract]- Chats
   > - 2022-01-05 09:30 · the chat's first prompt · `session-id`
   ```
 
-  The Chats callout is folded until opened (the `-` after the callout type)
-  and is always the section's last block: a line an agent appends after it is
-  moved up beside the others on the pane's next write, unchanged. The section
+  The State callout is always the section's first block and is the one part
+  that is overwritten, never added to (`setState`). The Chats callout is
+  folded until opened (the `-` after the callout type) and is always the last
+  block: a line appended after it is moved up beside the others on the pane's
+  next write, unchanged. The section
   ends at the next level-1 heading or the end of the note, and the pane makes
   it, at the note's end, on its first write. The pane changes nothing above
   the heading when it writes the log (`splitLog` / `joinLog`); its other

@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { Card, Chat, Inherited, JustMade, Lens, Opened, PadEntry, Picks, Pin, PinKind, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
+import type { Card, Chat, Inherited, ChatState, JustMade, Lens, Opened, PadEntry, Picks, Pin, PinKind, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -38,6 +38,10 @@ export type Options = {
   trackUsage: string
   // `no` keeps the anchor out of the chat's own context; anything else tells the chat.
   tellChat: string
+  // The saved prompt that asks a chat's model where its work stands; empty is `chat-state`.
+  stateLens: string
+  // `yes` asks it by itself after a turn, at most every STATE_EVERY_MS; anything else waits for a press.
+  stateAuto: string
 }
 export type Paths = {
   home: string
@@ -125,7 +129,7 @@ export type UsageEvent = { at: string; kind: 'press' | 'input' | 'sent'; what: s
 const USAGE_PREFIXES = [
   'card-sub', 'card', 'task',
   'pin-open', 'pin-drop', 'pin-paste',
-  'pad-input', 'pad-save', 'pad-drop', 'today-log',
+  'pad-input', 'pad-save', 'pad-drop', 'today-log', 'state-pick',
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
 // Whole keys that only look like one of those.
@@ -152,12 +156,13 @@ export const USAGE_FEATURES = [
   'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
   'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss',
   'pin-open', 'pin-drop', 'pin-paste',
+  'state-update', 'state-auto', 'state-prompt', 'state-edit', 'state-pick',
   'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
   'today-log', 'today-open', 'today-make', 'pick-today',
   'draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
-  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-pinsOpen', 'head-padOpen', 'head-youOpen',
+  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-stateOpen', 'head-pinsOpen', 'head-padOpen', 'head-youOpen',
 ]
 
 // The log's lines as events; a line that is not one is skipped.
@@ -523,7 +528,7 @@ export const CHAT_PLACEHOLDER = 'chat'
 // The setup steps someone chose to skip; /augi setup clears it.
 const SKIPPED_KEY = 'skipped'
 // Pins that go into every chat's draft, whatever its anchor: kept in the store, newest last.
-export const EMPTY_TRAIL: Trail = { chats: [], pins: [] }
+export const EMPTY_TRAIL: Trail = { chats: [], pins: [], state: { when: '', text: '' } }
 // No daily note: the Today card is not drawn.
 const NO_TODAY: Today = { pattern: '', path: '', day: '', exists: false, todo: [], mtime: 0 }
 
@@ -550,10 +555,10 @@ const swatch = atom(
     lenses: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-18' },
+  { shape: 'swatch-19' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
-const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, pinsOpen: true, padOpen: true, youOpen: true }
+const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, stateOpen: true, pinsOpen: true, padOpen: true, youOpen: true }
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
   { aboutMe: true, openAugi: true, project: true, today: true } as Picks,
@@ -561,9 +566,15 @@ const picks = atom(
 )
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
-  { ...CARDS_OPEN, anchorsOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0 } as View,
-  { shape: 'view-12' },
+  { ...CARDS_OPEN, anchorsOpen: false, statePickOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0 } as View,
+  { shape: 'view-13' },
 )
+// Where this chat's work stands, as its own model last said when asked (updateState): for
+// the session `session`, the answer and when it came (`at`, in ms, paces the automatic
+// asks), `busy` while it is being asked, and why the last ask got no answer.
+const NO_STATE: ChatState = { session: '', text: '', when: '', at: 0, busy: false, error: '' }
+const chatState = atom({ plugin: 'augi-ui', key: 'chatState' } as const, NO_STATE, { shape: 'chatState-1' })
+
 // This chat's scratchpad, newest first: session state, so each chat has its own and it
 // outlives a redraw or a reload of this module, but not the session.
 const pad = atom({ plugin: 'augi-ui', key: 'pad' } as const, [] as PadEntry[], { shape: 'pad-1' })
@@ -1242,6 +1253,9 @@ const samePin = (a: Pin, b: Pin): boolean => a.kind === b.kind && a.target === b
 const LOG_HEAD = '# Agent Log'
 const CHATS_HEAD = '> [!abstract]- Chats'
 const isLogHead = (line: string): boolean => /^# Agent Log\s*$/i.test(line)
+// The State callout's title line: `> [!info] State · <when>`.
+const STATE_HEAD = /^> \[!\w+\][-+]? State(?: · (.*?))?\s*$/i
+export const STATE_LINES = 8
 const isChatsHead = (line: string): boolean => /^> \[!\w+\][-+]? Chats\s*$/i.test(line)
 // What the section held while the log was a file of its own: a callout embedding that file.
 const isLogEmbed = (line: string): boolean => /^> \[!\w+\][-+]? Agent Log\s*$/i.test(line) || /^> !\[\[Agent Log - [^\]]*\]\]\s*$/.test(line)
@@ -1259,11 +1273,12 @@ const trimBlank = (lines: string[]): string[] => {
   return lines.slice(from, to)
 }
 
-// A note in four parts: the lines above the section's heading, the section's own lines
-// (`body`: pins and what agents wrote, blank edges trimmed), the lines of its Chats
-// callout without their `> `, and what follows the section (a later level-1 heading and
-// on). `has` is whether the note has the section; the last `# Agent Log` is the one.
-export type LogParts = { before: string[]; body: string[]; chats: string[]; after: string[]; has: boolean }
+// A note in parts: the lines above the section's heading; the lines of its State callout
+// without their `> `, and when that state was said; the section's own lines (`body`: pins
+// and whatever was saved there, blank edges trimmed); the lines of its Chats callout; and
+// what follows the section (a later level-1 heading and on). `has` is whether the note has
+// the section; the last `# Agent Log` is the one.
+export type LogParts = { before: string[]; state: string[]; stateWhen: string; body: string[]; chats: string[]; after: string[]; has: boolean }
 
 export const splitLog = (text: string): LogParts => {
   const lines = text.split('\n')
@@ -1274,7 +1289,7 @@ export const splitLog = (text: string): LogParts => {
     }
   })
   if (at < 0) {
-    return { before: lines, body: [], chats: [], after: [], has: false }
+    return { before: lines, state: [], stateWhen: '', body: [], chats: [], after: [], has: false }
   }
   let end = at + 1
   while (end < lines.length && !/^# \S/.test(lines[end] ?? '')) {
@@ -1282,50 +1297,64 @@ export const splitLog = (text: string): LogParts => {
   }
   const body: string[] = []
   const chats: string[] = []
-  let isInChats = false
-  // The blank lines around the callout only set it apart: they are not the body's.
+  let state: string[] = []
+  let stateWhen = ''
+  // Which of the pane's two callouts the line is in. The blank lines around a callout only
+  // set it apart: they are not the body's.
+  let inside: '' | 'chats' | 'state' = ''
   let isJustPast = false
   for (const line of lines.slice(at + 1, end)) {
-    if (isChatsHead(line)) {
-      isInChats = true
+    const stateHead = line.match(STATE_HEAD)
+    if (stateHead || isChatsHead(line)) {
+      inside = stateHead ? 'state' : 'chats'
+      if (stateHead) {
+        state = []
+        stateWhen = (stateHead[1] ?? '').trim()
+      }
       while (body.length > 0 && (body[body.length - 1] ?? '').trim() === '') {
         body.pop()
       }
-    } else if (isInChats && line.startsWith('>')) {
-      chats.push(line.replace(/^> ?/, ''))
+    } else if (inside && line.startsWith('>')) {
+      ;(inside === 'state' ? state : chats).push(line.replace(/^> ?/, ''))
     } else {
-      isJustPast = (isInChats || isJustPast) && line.trim() === ''
-      isInChats = false
+      isJustPast = (inside !== '' || isJustPast) && line.trim() === ''
+      inside = ''
       if (!isJustPast && !isLogEmbed(line)) {
         body.push(line)
       }
     }
   }
 
-  return { before: lines.slice(0, at), body: trimBlank(body), chats: chats.filter(line => line.trim()), after: lines.slice(end), has: true }
+  return { before: lines.slice(0, at), state: state.filter(line => line.trim()), stateWhen, body: trimBlank(body), chats: chats.filter(line => line.trim()), after: lines.slice(end), has: true }
 }
 
 // The note again from its parts. A note that had no section gets it at its end, one blank
 // line down; what is above an existing section, and after it, stays byte for byte. The
-// Chats callout is always the section's last block, so a line an agent appended after it
-// moves up beside the others.
-const joinLog = ({ before, body, chats, after, has }: LogParts): string => {
+// State callout is always the section's first block and the Chats callout its last, so a
+// line appended after the chats moves up beside the others.
+const joinLog = ({ before, state, stateWhen, body, chats, after, has }: LogParts): string => {
   let last = before.length
   while (!has && last > 0 && (before[last - 1] ?? '').trim() === '') {
     last -= 1
   }
   const top = has ? before : last > 0 ? [...before.slice(0, last), ''] : []
-  const callout = chats.length > 0 ? [...(body.length > 0 ? [''] : []), CHATS_HEAD, ...chats.map(line => `> ${line}`)] : []
-  const section = body.length > 0 || callout.length > 0 ? [LOG_HEAD, '', ...body, ...callout] : [LOG_HEAD]
+  const blocks = [
+    state.length > 0 ? [`> [!info] State · ${stateWhen}`, ...state.map(line => `> ${line}`)] : [],
+    body,
+    chats.length > 0 ? [CHATS_HEAD, ...chats.map(line => `> ${line}`)] : [],
+  ].filter(one => one.length > 0)
+  const section = [LOG_HEAD, ...blocks.flatMap(one => ['', ...one])]
 
   return [...top, ...section, '', ...after].join('\n')
 }
 
-// What a note's Agent Log section says: the chats on the anchor, and its pins.
+// What a note's Agent Log section says: where the work stands, the chats on the anchor,
+// and its pins.
 export const parseTrail = (text: string): Trail => {
-  const { body, chats } = splitLog(text)
+  const { state, stateWhen, body, chats } = splitLog(text)
 
   return {
+    state: { when: stateWhen, text: state.join('\n') },
     chats: chats.flatMap(line => {
       const found = line.match(CHAT_LINE)
 
@@ -1338,6 +1367,65 @@ export const parseTrail = (text: string): Trail => {
     }),
   }
 }
+
+// A model's answer as the lines the State callout holds: no quote marks of its own, no
+// blank lines, at most STATE_LINES.
+export const stateLines = (reply: string): string[] =>
+  reply.split('\n').map(line => line.replace(/^\s*>+\s?/, '').trimEnd()).filter(line => line.trim()).slice(0, STATE_LINES)
+
+// Replaces the note's State callout: the one block in the section that is overwritten,
+// never added to. An empty answer takes the block away.
+export const setState = (text: string, when: string, reply: string): string =>
+  joinLog({ ...splitLog(text), state: stateLines(reply), stateWhen: when })
+
+// The saved prompt asked for a chat's state when the lens folder has none of that name.
+export const STATE_LENS = 'chat-state'
+export const STATE_PROMPT = [
+  'Say where the work in this conversation stands right now, for someone coming back to it cold. Answer with exactly these four lines, each one short, and nothing before or after them:',
+  '',
+  'Goal: what this chat is trying to get done',
+  'Verified: the last result that was actually checked (a test run, a command and its output), or "nothing yet"',
+  'Next: the one next step',
+  'Waiting on me: yes and what for, or no',
+  '',
+  'Say only what the conversation shows. Mark anything that is a guess "(unverified)".',
+].join('\n')
+
+// The lens file the pane writes for that prompt, so it can be edited like any saved prompt.
+export const stateLensFile = (name: string): string =>
+  [
+    '---',
+    'kind: engine',
+    `name: ${name}`,
+    'description: >-',
+    '  "Where does the work in this chat stand?" — goal, last verified result, next step and whether it is waiting on the user, in four lines.',
+    'scope: >-',
+    '  This conversation and nothing else: no files are read and no search is run.',
+    'trigger: on-demand',
+    'target: >-',
+    '  note — the State block at the top of the anchor note\'s Agent Log section, overwritten each time; with no anchor the answer stays in the pane.',
+    '---',
+    `# ${name}`,
+    '',
+    STATE_PROMPT,
+    '',
+  ].join('\n')
+
+// What a lens file asks: everything under its frontmatter and its title line.
+export const lensBody = (text: string): string => {
+  const lines = text.split('\n')
+  const close = lines[0] === '---' ? lines.indexOf('---', 1) : -1
+  const body = lines.slice(close + 1)
+  while (body.length > 0 && ((body[0] ?? '').trim() === '' || /^# \S/.test(body[0] ?? ''))) {
+    body.shift()
+  }
+
+  return body.join('\n').trim()
+}
+
+// The side question a chat's model is asked: the lens's words, held to this conversation.
+export const stateAsk = (body: string): string =>
+  ['Augi side question. Answer it from this conversation alone, in plain text, with no preamble.', '', body.trim() || STATE_PROMPT].join('\n')
 
 // Pins something: a line at the end of the section, which is made when the note has none.
 // One already there stays where it is, pinned again if it had been unpinned.
@@ -1540,7 +1628,8 @@ export const stamp = (ms: number): string => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-export type Anchor = { note: string; notePath: string }
+// `state` is where the note says the work stands, when it says.
+export type Anchor = { note: string; notePath: string; state?: { when: string; text: string } }
 
 // `pins` are the anchor's pinned context, a note's `path` filled where it was found;
 // `today` the path of today's note when there is one.
@@ -1557,7 +1646,7 @@ export const buildDraft = (
   if (anchor && choice.project) {
     // The note's name in [[ ]] lets a pasted draft anchor a new chat (anchorFromDraft).
     const where = anchor.notePath ? `"${anchor.notePath}"` : '(find it in the vault)'
-    lines.push(`- Project [[${anchor.note}]]: ${where}, my note. Its outcome, Next and Journal are mine; the "# Agent Log" section at its end holds what is pinned to this work and what agents kept on it so far. Read it.`)
+    lines.push(`- Project [[${anchor.note}]]: ${where}, my note. Its outcome, Next and Journal are mine; the "# Agent Log" section at its end holds what is pinned to this work and where it last stood. Read it.`)
   }
   for (const pin of anchor ? pins.filter(one => one.on) : []) {
     lines.push(pinDraftLine(pin))
@@ -1577,7 +1666,7 @@ export const buildDraft = (
   lines.push('Reply in at most 10 lines: what you found or did, then anything you need from me. No walls of text.')
   lines.push("Don't change any files unless my instruction asks you to.")
   if (anchor) {
-    lines.push(`In my note, write only under its "# Agent Log" heading, never above it. If you find something worth keeping for this project, add a line there with why; "- [[<note>]] · <why it matters>" pins a note, and a note you write for this is pinned the same way.`)
+    lines.push(`Write in my note only when I ask. What I ask you to save goes under its "# Agent Log" heading, never above it, one line with why; "- [[<note>]] · <why it matters>" pins a note.`)
   }
   lines.push(`Instruction: ${typed}`)
 
@@ -1594,12 +1683,15 @@ export const anchorBrief = (anchor: Anchor, today = '', was = ''): string => {
       ? `Augi: this chat is now anchored to [[${anchor.note}]], no longer to [[${was}]].`
       : `Augi: this chat is anchored to [[${anchor.note}]], the task or project it is working on.`,
     `- My note: ${where}. Everything above its "# Agent Log" heading is mine: its outcome, what is next and its Journal.`,
-    '- Its Agent Log: the "# Agent Log" section at the end of that note (add the heading there if it is missing). Yours to append to, one line each with why: what is worth keeping, an open question, a note you wrote for this work. "- [[<note>]] · <why>" pins a note to this work. Leave the folded Chats list in it to the pane.',
+    '- Its "# Agent Log" section, at the end of that note, is the pane\'s: what is pinned to this work, where the work stands, and a folded list of the chats on it. It is not a log for you to keep. Add a line there only when I ask you to save something, above the Chats list, one line with why; "- [[<note>]] · <why>" pins a note.',
   ]
   if (today) {
     lines.push(`- Today's note: "${today}".`)
   }
-  lines.push('When I say "the task note", "the project note", "log this" or "save this to the task" without naming a file, I mean this note. What you save goes under "# Agent Log". Write above that heading only when I ask for that ("update the task note"), as a dated entry at the top of its Journal: "### YYYY-MM-DD — <what happened>".')
+  if (anchor.state?.text) {
+    lines.push(`- Where the work stood at ${anchor.state.when}, as last recorded (check before relying on it):`, ...anchor.state.text.split('\n').map(line => `    ${line}`))
+  }
+  lines.push('When I say "the task note", "the project note", "log this" or "save this to the task" without naming a file, I mean this note. What I ask you to save goes under "# Agent Log" (add the heading at the note\'s end if it is missing). Write above that heading only when I ask for that ("update the task note"), as a dated entry at the top of its Journal: "### YYYY-MM-DD — <what happened>".')
   lines.push('This says where things go. It is not a request: write nothing there until I ask.')
 
   return lines.join('\n')
@@ -2520,9 +2612,81 @@ async function tellNow($: EngineInterface): Promise<{ text: string; next: Told }
     return null
   }
   const shown = await read($, swatch)
-  const notePath = shown.anchor?.note === note && shown.notePath ? shown.notePath : await notePathOf($, note)
+  const isShown = shown.anchor?.note === note
+  const notePath = isShown && shown.notePath ? shown.notePath : await notePathOf($, note)
 
-  return anchorNews(before, id, { note, notePath }, today)
+  return anchorNews(before, id, { note, notePath, state: isShown ? shown.trail.state : undefined }, today)
+}
+
+const stateLensName = (): string => (settings.stateLens ?? '').trim() || STATE_LENS
+
+// One ask at a time: a press while one is out does nothing.
+let isAskingState = false
+// The least time between two automatic asks in one chat.
+export const STATE_EVERY_MS = 10 * 60_000
+
+// Asks this chat's own model where the work stands: a side question over the conversation
+// as it is (`$.model.fork`: no tools, nothing added to the chat), worded by the state
+// lens. The answer shows in the pane and, with an anchor, replaces the State block in its
+// note. No answer changes nothing but the reason shown.
+async function updateState($: EngineInterface, by: 'press' | 'auto'): Promise<void> {
+  const id = await $.session.id()
+  if (!id || isAskingState) {
+    return
+  }
+  isAskingState = true
+  let error = ''
+  try {
+    await update($, chatState, old => ({ ...(old.session === id ? old : NO_STATE), session: id, busy: true, error: '' }))
+    const ask = stateAsk(lensBody(await readOr($, `${P.lenses}/${stateLensName()}.md`)))
+    const reply = await $.model.fork({ prompt: ask, effort: 'low' })
+    const text = reply.isAnswered ? stateLines(reply.text).join('\n') : ''
+    if (text) {
+      const now = await $.clock.now()
+      const when = stamp(now)
+      await update($, chatState, () => ({ session: id, text, when, at: now, busy: false, error: '' }))
+      const note = await sessionAnchor($)
+      if (note) {
+        await writeTrail($, note, was => setState(was, when, text))
+      }
+
+      return
+    }
+    error = reply.isAnswered ? 'The answer was empty.' : reply.reason === 'nothing-to-fork' ? 'Nothing to go on yet: send a prompt first.' : `No answer (${reply.reason}).`
+  } catch (failure) {
+    error = `No answer: ${String(failure)}`
+  } finally {
+    isAskingState = false
+  }
+  // A failed ask is paced like an answered one, so an error is not asked again every turn.
+  const at = await $.clock.now()
+  await update($, chatState, old => ({ ...old, session: id, at, busy: false, error }))
+  if (by === 'press') {
+    await $.ui.toast(error)
+  }
+}
+
+// After a turn, with auto on: asks again when this chat was never asked or not for STATE_EVERY_MS.
+async function autoState($: EngineInterface): Promise<void> {
+  if (settings.stateAuto !== 'yes') {
+    return
+  }
+  await ready($)
+  const id = await $.session.id()
+  const last = await read($, chatState)
+  if (last.session === id && (await $.clock.now()) - last.at < STATE_EVERY_MS) {
+    return
+  }
+  await updateState($, 'auto')
+}
+
+// Opens the state lens to edit; one that is not in the lens folder yet is written first,
+// from the built-in prompt.
+async function editStatePrompt($: EngineInterface): Promise<void> {
+  const path = `${P.lenses}/${stateLensName()}.md`
+  await writeNew($, path, stateLensFile(stateLensName()))
+  await openNote($, path)
+  await load($)
 }
 
 // Remembers what is typed in the scratchpad's field, unsent.
@@ -2961,6 +3125,17 @@ export const register: Register = (on, options) => {
   })
 
   // A compaction may summarize the anchor away: the next prompt says it again.
+  // With auto on, the end of a main-thread turn that answered may ask for the chat's state.
+  // Not awaited: the ask is a model call, and the turn does not wait on it.
+  on('turn.complete', async ($, e, next) => {
+    const done = await next(e)
+    if (e.agentId === undefined && !e.isAborted && e.reason === 'answer') {
+      void autoState($).catch(() => undefined)
+    }
+
+    return done
+  })
+
   on('session.compact', async ($, e, next) => {
     const compacted = await next(e)
     if (!e.agentId && !compacted.skip) {
@@ -3023,10 +3198,15 @@ export const register: Register = (on, options) => {
     const choice = await read($, picks)
     const shown = await read($, view)
     const jotted = await read($, pad)
+    const asked = await read($, chatState)
     const madeTask = await read($, justMade)
     // Drawing never depends on it: with no id, no row is marked as this chat.
     const ownId = await $.session.id().catch(() => '')
     const carried = await read($, inherited)
+    // The state shown: the anchor note's, which any chat on it may have written; with no
+    // anchor, what this chat's model last said.
+    const isMine = asked.session === ownId
+    const standing = anchor ? trail.state ?? EMPTY_TRAIL.state : isMine ? { when: asked.when, text: asked.text } : EMPTY_TRAIL.state
     const isCarried = Boolean(anchor) && carried.note === anchor?.note && carried.session === ownId
     // Every field but a standalone task's needs an anchor; with none it reads as closed.
     // A mode this pane no longer has (an older one's child-chat or chat-to-task form) is no form.
@@ -3252,6 +3432,34 @@ export const register: Register = (on, options) => {
                         {anchor?.note !== madeTask.note && <Button key="made-anchor" label="anchor on it" onPress={() => anchorOnMade($)} />}
                         <Button key="made-dismiss" plain dimColor label="dismiss" onPress={() => update($, justMade, () => NO_TASK)} />
                       </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </Box>
+
+            <Box key="card-state" {...CARD} borderColor="subtle">
+              {head('stateOpen', `📍 State${standing.when ? ` · ${standing.when.slice(5)}` : ''}`)}
+              {shown.stateOpen && (
+                <Box key="state-body" flexDirection="column">
+                  {standing.text
+                    ? standing.text.split('\n').map((one, at) => <Text key={`state-line-${at}`} wrap="wrap">{one}</Text>)
+                    : <Text key="state-none" dimColor wrap="wrap">{`Not asked yet. Update asks this chat's model where the work stands and keeps the answer ${anchor ? "in the anchor's note" : 'here'}.`}</Text>}
+                  {isMine && asked.error && <Text key="state-error" dimColor wrap="wrap">{asked.error}</Text>}
+                  <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                    <Button key="state-update" label={isMine && asked.busy ? '… asking' : '↻ update'} onPress={() => updateState($, 'press')} />
+                    <Button key="state-auto" plain label={`${mark(settings.stateAuto === 'yes')} auto after a turn`} onPress={() => setOption($, 'stateAuto', settings.stateAuto === 'yes' ? 'no' : 'yes')} />
+                  </Box>
+                  <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                    <Button key="state-prompt" plain dimColor label={`${arrow(shown.statePickOpen)} prompt: ${stateLensName()}`} onPress={flip('statePickOpen')} />
+                    <Button key="state-edit" dimColor label="edit prompt" onPress={() => editStatePrompt($)} />
+                  </Box>
+                  {shown.statePickOpen && (
+                    <Box key="state-picks" flexDirection="column" paddingLeft={2}>
+                      {lenses.map(lens => (
+                        <Button key={`state-pick-${lens.name}`} plain label={`${stateLensName() === lens.name ? '●' : '○'} ${lens.name}`} onPress={() => setOption($, 'stateLens', lens.name)} />
+                      ))}
+                      {lenses.length === 0 && <Text dimColor>No saved prompts yet: edit prompt makes this one.</Text>}
                     </Box>
                   )}
                 </Box>

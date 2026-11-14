@@ -10,6 +10,7 @@ import { openArgv } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
 import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, logName, nextFrom, addPin, parsePin, pinFrom, pinLine, removePin, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, outcomeFrom, parseTrail, tidyTrail, trailPath, toggled, typedFrom } from './register'
 import { isMovedLog, markMoved, splitLog, withOldLog } from './register'
+import { lensBody, setState, STATE_EVERY_MS, STATE_PROMPT, stateAsk, stateLensFile, stateLines } from './register'
 
 const PANE = {
   plugin: 'augi-ui',
@@ -252,7 +253,7 @@ test('a task note fills the template: date, title, Up to the anchor or no Up lin
   expect(linked.includes('### 2022-01-04')).toBe(true)
   // The note ends with the heading agents write under, empty.
   expect(linked.endsWith('### 2022-01-04\n\n\n# Agent Log\n')).toBe(true)
-  expect(parseTrail(linked)).toEqual({ chats: [], pins: [] })
+  expect(parseTrail(linked)).toEqual({ chats: [], pins: [], state: { when: '', text: '' } })
   expect(nextFrom(linked)).toEqual([])
   expect(outcomeFrom(linked)).toBe('')
   expect(jiraFrom(linked)).toBe('PROJ-123')
@@ -294,7 +295,7 @@ test('the outcome comes from the note frontmatter', async () => {
 const TASK_NOTE = 'Up: [[PMOC - Garden]]\n\n### Outcome\n\nThe gate closes.\n\n# Journal\n\n### 2022-01-04\n- hung it\n'
 
 test('the Agent Log is a section at the end of the note: made on the first write, everything above it left byte for byte', async () => {
-  expect(parseTrail(TASK_NOTE)).toEqual({ chats: [], pins: [] })
+  expect(parseTrail(TASK_NOTE)).toEqual({ chats: [], pins: [], state: { when: '', text: '' } })
   expect(splitLog(TASK_NOTE).has).toBe(false)
 
   const pinned = addPin(TASK_NOTE, { on: true, kind: 'note', target: 'A', label: 'A' })
@@ -349,6 +350,40 @@ test('a pin is a plain bullet and one that was unpinned is ticked off; each kind
   expect(parsePin('- [ ] 2026-11-08 10:00 · a question')).toBe(null)
   expect(parsePin('- [[Note]] and [[Other]] disagree on the valve')).toBe(null)
   expect(parsePin('- the valve sticks below 4 degrees')).toBe(null)
+})
+
+test('the State block is the one part of the section that is overwritten: first in it, replaced whole, untouched by pins and chats', async () => {
+  const pinned = addChat(addPin(TASK_NOTE, { on: true, kind: 'note', target: 'A', label: 'A' }), { id: 's1', when: '2026-11-08 10:00', title: 'chat', done: false })
+  const one = setState(pinned, '2026-11-08 10:05', 'Goal: hang the gate\nVerified: nothing yet\nNext: buy hinges\nWaiting on me: no')
+  expect(one).toBe(`${TASK_NOTE}\n# Agent Log\n\n> [!info] State · 2026-11-08 10:05\n> Goal: hang the gate\n> Verified: nothing yet\n> Next: buy hinges\n> Waiting on me: no\n\n- [[A]]\n\n> [!abstract]- Chats\n> - 2026-11-08 10:00 · chat · \`s1\`\n`)
+  expect(parseTrail(one).state).toEqual({ when: '2026-11-08 10:05', text: 'Goal: hang the gate\nVerified: nothing yet\nNext: buy hinges\nWaiting on me: no' })
+  // Its lines are not pins, and the pins and chats are as they were.
+  expect(parseTrail(one).pins.map(pin => pin.target)).toEqual(['A'])
+  expect(parseTrail(one).chats.map(chat => chat.id)).toEqual(['s1'])
+  // A later state replaces it: one block, never two.
+  const two = setState(one, '2026-11-08 11:30', 'Goal: hang the gate\nNext: paint it')
+  expect(two.split('> [!info] State').length).toBe(2)
+  expect(two.includes('buy hinges')).toBe(false)
+  expect(parseTrail(two).state).toEqual({ when: '2026-11-08 11:30', text: 'Goal: hang the gate\nNext: paint it' })
+  // Pinning and filing a chat leave it first and unchanged; an empty answer takes it away.
+  const more = addChat(addPin(two, { on: true, kind: 'file', target: '/r/a.ts', label: 'a.ts' }), { id: 's2', when: '2026-11-08 12:00', title: 'next', done: false })
+  expect(more.includes('# Agent Log\n\n> [!info] State · 2026-11-08 11:30\n> Goal: hang the gate\n> Next: paint it\n\n- [[A]]\n- file: `/r/a.ts` · a.ts\n\n> [!abstract]- Chats\n> - 2026-11-08 12:00')).toBe(true)
+  expect(setState(more, '2026-11-08 13:00', '  \n')).toBe(more.replace('> [!info] State · 2026-11-08 11:30\n> Goal: hang the gate\n> Next: paint it\n\n', ''))
+  // On a note with no section yet, the block makes it.
+  expect(setState(TASK_NOTE, '2026-11-08 10:05', 'Goal: x')).toBe(`${TASK_NOTE}\n# Agent Log\n\n> [!info] State · 2026-11-08 10:05\n> Goal: x\n`)
+})
+
+test('a state answer is kept as plain lines, and the question asked is the lens\'s own words', async () => {
+  expect(stateLines('> Goal: a\n\n>   Next: b  \n\nWaiting on me: no\n')).toEqual(['Goal: a', '  Next: b', 'Waiting on me: no'])
+  expect(stateLines(Array.from({ length: 20 }, (_, at) => `line ${at}`).join('\n')).length).toBe(8)
+  // A lens file's frontmatter and title are not part of what is asked.
+  expect(lensBody(stateLensFile('chat-state'))).toBe(STATE_PROMPT)
+  expect(lensBody('---\nname: x\n---\n\n# X\n\nJust say hello.\n')).toBe('Just say hello.')
+  expect(lensBody('No frontmatter here.')).toBe('No frontmatter here.')
+  expect(stateAsk('Just say hello.')).toBe('Augi side question. Answer it from this conversation alone, in plain text, with no preamble.\n\nJust say hello.')
+  // An empty or missing lens asks the built-in question.
+  expect(stateAsk('').endsWith(STATE_PROMPT)).toBe(true)
+  expect(STATE_PROMPT).toContain('Waiting on me: yes and what for, or no')
 })
 
 test('pins go in the section once each; unpinning ticks the line off where it is and pinning it again brings it back', async () => {
@@ -443,8 +478,9 @@ test('with an anchor, the draft carries its note and says where in it agents wri
   const anchor = { note: 'PMOC - Garden', notePath: '/v/PMOC - Garden.md' }
   const text = buildDraft([], ALL_ON, null, 'go', anchor)
   expect(text.includes('/v/PMOC - Garden.md')).toBe(true)
-  expect(text.includes('the "# Agent Log" section at its end holds what is pinned to this work')).toBe(true)
-  expect(text.includes('write only under its "# Agent Log" heading, never above it')).toBe(true)
+  expect(text.includes('the "# Agent Log" section at its end holds what is pinned to this work and where it last stood')).toBe(true)
+  // Nothing is logged unasked: a chat writes in the note only on request, and then under the heading.
+  expect(text.includes('Write in my note only when I ask. What I ask you to save goes under its "# Agent Log" heading, never above it')).toBe(true)
   // No second file: the log is in the note.
   expect(text.includes('Agent Log - PMOC - Garden')).toBe(false)
   expect(buildDraft([], { ...ALL_ON, project: false }, null, 'go', anchor).includes('/v/PMOC - Garden.md')).toBe(false)
@@ -2106,11 +2142,16 @@ test('anchorBrief names the note, its Agent Log section and today, says where wr
   const text = anchorBrief(GARDEN_ANCHOR, '/v/Daily/2022-03-04.md')
   expect(text.split('\n')[0]).toBe('Augi: this chat is anchored to [[PMOC - Garden]], the task or project it is working on.')
   expect(text).toContain('- My note: "/v/PMOC - Garden.md".')
-  expect(text).toContain('- Its Agent Log: the "# Agent Log" section at the end of that note')
+  expect(text).toContain('- Its "# Agent Log" section, at the end of that note, is the pane\'s')
+  expect(text).toContain('It is not a log for you to keep. Add a line there only when I ask you to save something')
   expect(text).not.toContain('Agent Log - PMOC - Garden')
+  // With no state recorded, none is told; with one, it is told dated, as something to check.
+  expect(text).not.toMatch(/Where the work stood/)
+  const stood = anchorBrief({ ...GARDEN_ANCHOR, state: { when: '2022-03-03 17:10', text: 'Goal: plant the beds\nNext: buy seeds' } })
+  expect(stood).toContain('- Where the work stood at 2022-03-03 17:10, as last recorded (check before relying on it):\n    Goal: plant the beds\n    Next: buy seeds\n')
   expect(text).toContain('- Today\'s note: "/v/Daily/2022-03-04.md".')
   expect(text).toMatch(/"the task note"/)
-  expect(text).toMatch(/What you save goes under "# Agent Log"\. Write above that heading only when I ask/)
+  expect(text).toMatch(/What I ask you to save goes under "# Agent Log" \(add the heading at the note's end if it is missing\)\. Write above that heading only when I ask/)
   expect(text.split('\n').at(-1)).toMatch(/not a request: write nothing there until I ask/)
 
   // No daily note: no line for one. A note not found is looked for by name.
@@ -2811,5 +2852,148 @@ test('with the usage log on, a press, a submit and a sent draft each append one 
   written.set('/Users/t/.openaugi/usage/augi-ui.jsonl', lines.join('\n'))
   const said = await $.command.run({ command: 'augi', args: 'usage' })
   expect(JSON.stringify(said)).toContain('5 events')
+  await ui.unmount()
+})
+
+// taskHooks with a clock a test can move, the settings rows the State card writes, and a
+// model that answers the side question; `asked` is every question it was put.
+const stateHooks = (on: On, anchors: [string, string][]) => {
+  const clock = { now: new Date(2026, 10, 8, 9, 30).getTime() }
+  const got = taskHooks(except(on, ['clock.now', 'fs.list']), anchors, { '/v/PMOC - Garden.md': GARDEN_PLAIN, '/v/lenses/echoes.md': '---\nname: echoes\n---\n# echoes\n\nSay what this echoes, in one line.\n' })
+  const asked: string[] = []
+  const set: [string, unknown][] = []
+  const model = { reply: { isAnswered: true, text: 'Goal: fix the valve\nVerified: nothing yet\nNext: find the leak\nWaiting on me: no' } as unknown }
+  on('clock.now', () => ({ value: clock.now }))
+  on('fs.list', (_, e) => ({ value: e.path === '/v/lenses' ? [{ name: 'echoes.md', kind: 'file', size: 1, mtimeMs: 0, isLink: false }] : [] }))
+  on('config.list', () => ({ value: ['stateAuto', 'stateLens'].map(field => ({ key: `augi-ui.${field}`, label: field, kind: 'text', value: '', provider: { plugin: 'augi-ui', tier: 'user' }, isLocked: false })) as never }))
+  on('config.set', (_, e) => {
+    set.push([e.key, e.value])
+    return { value: e.value }
+  })
+  on('model.fork', (_, e) => {
+    asked.push(e.prompt)
+    return { value: model.reply as never }
+  })
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+
+  return { ...got, clock, asked, set, model }
+}
+const turnEnds = { answer: 'done', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' } as const
+const settle = () => new Promise(resolve => setTimeout(resolve, 20))
+
+test('update asks this chat\'s model where the work stands: shown in the pane, kept in the anchor\'s note as one overwritten block, and nothing is asked unpressed', { options: OPTIONS }, async ($, on) => {
+  const got = stateHooks(on, [['own-session', 'PMOC - Garden']])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /Not asked yet\. Update asks this chat's model where the work stands and keeps the answer in the anchor's note\./ })).toBeTruthy()
+  expect((await ui.find({ key: 'state-auto' }))?.text).toMatch(/☐ auto after a turn/)
+  // Auto is off: a turn ending asks nothing.
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(got.asked).toEqual([])
+
+  await ui.press({ key: 'state-update' })
+  // The built-in question, since the lens folder has no chat-state lens.
+  expect(got.asked).toEqual([stateAsk(STATE_PROMPT)])
+  expect(await ui.find({ text: 'Goal: fix the valve' })).toBeTruthy()
+  expect(await ui.find({ text: 'Waiting on me: no' })).toBeTruthy()
+  expect(await ui.find({ text: '📍 State · 11-08 09:30' })).toBeTruthy()
+  expect(got.written.get('/v/PMOC - Garden.md')).toBe(`${GARDEN_PLAIN}\n# Agent Log\n\n> [!info] State · 2026-11-08 09:30\n> Goal: fix the valve\n> Verified: nothing yet\n> Next: find the leak\n> Waiting on me: no\n`)
+
+  // Asked again later, the block is replaced, not added to.
+  got.clock.now += 60 * 60_000
+  got.model.reply = { isAnswered: true, text: 'Goal: fix the valve\nNext: test under pressure' }
+  await ui.press({ key: 'state-update' })
+  const note = got.written.get('/v/PMOC - Garden.md') ?? ''
+  expect(note.split('> [!info] State').length).toBe(2)
+  expect(note.includes('> [!info] State · 2026-11-08 10:30\n> Goal: fix the valve\n> Next: test under pressure\n')).toBe(true)
+  expect(await ui.find({ text: 'Next: find the leak' })).toBeFalsy()
+
+  // No answer changes nothing in the note and says why.
+  got.model.reply = { isAnswered: false, reason: 'nothing-to-fork' }
+  await ui.press({ key: 'state-update' })
+  expect(got.written.get('/v/PMOC - Garden.md')).toBe(note)
+  expect(await ui.find({ text: 'Nothing to go on yet: send a prompt first.' })).toBeTruthy()
+  expect(got.toasts.at(-1)).toBe('Nothing to go on yet: send a prompt first.')
+  expect(await ui.find({ text: 'Next: test under pressure' })).toBeTruthy()
+
+  // The next chat anchored here is told where the work stood, dated.
+  const told = await sentWith(got, () => $.prompt.submit({ text: 'carry on' }))
+  expect(told[0]).toContain('- Where the work stood at 2026-11-08 10:30, as last recorded (check before relying on it):\n    Goal: fix the valve\n    Next: test under pressure')
+  await ui.unmount()
+})
+
+test('with no anchor the state stays in the pane; the prompt is a saved prompt that can be picked or edited', { options: OPTIONS }, async ($, on) => {
+  const got = stateHooks(on, [])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'state-update' })
+  expect(await ui.find({ text: 'Goal: fix the valve' })).toBeTruthy()
+  expect(got.written.size).toBe(0)
+
+  // The saved prompts are listed to pick from; picking one writes the setting.
+  expect(await ui.find({ key: 'state-pick-echoes' })).toBeFalsy()
+  await ui.press({ key: 'state-prompt' })
+  expect((await ui.find({ key: 'state-pick-echoes' }))?.text).toMatch(/○ echoes/)
+  await ui.press({ key: 'state-pick-echoes' })
+  expect(got.set).toEqual([['augi-ui.stateLens', 'echoes']])
+  // The auto box writes its setting too.
+  await ui.press({ key: 'state-auto' })
+  expect(got.set.at(-1)).toEqual(['augi-ui.stateAuto', 'yes'])
+
+  // Edit prompt writes the chat-state lens from the built-in question, once, and opens it.
+  await ui.press({ key: 'state-edit' })
+  expect(got.written.get('/v/lenses/chat-state.md')).toBe(stateLensFile('chat-state'))
+  expect(got.ran.some(argv => argv.join(' ').includes('chat-state.md'))).toBe(true)
+  // From then on the file's words are what is asked.
+  got.written.set('/v/lenses/chat-state.md', '---\nname: chat-state\n---\n# chat-state\n\nOne line: what is this chat for?\n')
+  await ui.press({ key: 'state-update' })
+  expect(got.asked.at(-1)).toBe(stateAsk('One line: what is this chat for?'))
+  await ui.unmount()
+})
+
+test('with stateLens set, that saved prompt is the question', { options: { ...OPTIONS, stateLens: 'echoes' } }, async ($, on) => {
+  const got = stateHooks(on, [])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'state-prompt' }))?.text).toMatch(/prompt: echoes/)
+  await ui.press({ key: 'state-update' })
+  expect(got.asked).toEqual([stateAsk('Say what this echoes, in one line.')])
+  await ui.press({ key: 'state-prompt' })
+  expect((await ui.find({ key: 'state-pick-echoes' }))?.text).toMatch(/● echoes/)
+  await ui.unmount()
+})
+
+test('auto asks after a main-thread turn that answered, at most every ten minutes, and never for a subagent or an interrupted turn', { options: { ...OPTIONS, stateAuto: 'yes' } }, async ($, on) => {
+  const got = stateHooks(on, [['own-session', 'PMOC - Garden']])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'state-auto' }))?.text).toMatch(/☑ auto after a turn/)
+  await $.turn.complete({ ...turnEnds, agentId: 'sub-1' })
+  await $.turn.complete({ ...turnEnds, isAborted: true, reason: 'aborted' })
+  await settle()
+  expect(got.asked.length).toBe(0)
+
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(got.asked.length).toBe(1)
+  expect(got.written.get('/v/PMOC - Garden.md')?.includes('> [!info] State · 2026-11-08 09:30\n> Goal: fix the valve')).toBe(true)
+  // Another turn five minutes on asks nothing; one past ten minutes does.
+  got.clock.now += 5 * 60_000
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(got.asked.length).toBe(1)
+  got.clock.now += STATE_EVERY_MS
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(got.asked.length).toBe(2)
+  // An ask that got no answer is paced the same, not repeated every turn.
+  got.model.reply = { isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded' }
+  got.clock.now += STATE_EVERY_MS
+  await $.turn.complete(turnEnds)
+  await settle()
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(got.asked.length).toBe(3)
   await ui.unmount()
 })

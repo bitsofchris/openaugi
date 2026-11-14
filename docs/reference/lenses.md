@@ -70,7 +70,9 @@ payload), and the rest of the engine set — `currency-board`,
 (every active anchor on the board: its open chats, open tasks and next
 step), `board-sync` (each open card against what its note and its pull
 requests say happened: numbered edits proposed in chat, made only for
-the rows the user picks) and `jira-pull` (the user's open Jira issues
+the rows the user picks) `chat-state` (the question the pane puts to a chat's own model for its State
+card: goal, last verified result, next step, waiting on the user) and
+`jira-pull` (the user's open Jira issues
 against the task notes on the board: in step, to link, or a new task and
 where its card would go; Jira is only read) — every lens
 whose vault copy declares `kind: engine`, kept in sync by
