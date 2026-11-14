@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+**augi-ui: the Agent Log is a section of the note.** Each anchor had two
+files, the user's note and an `Agent Log - <note>.md` beside it, and two
+buttons to open them. Now it has one note: everything above its `# Agent Log`
+heading is the user's, and under the heading agents append and the pane keeps
+its pins, as plain bullets (`- [[note]] · why it matters`; a ticked one was
+unpinned). The chats filed on the anchor stay, as a record of session ids, in
+a callout at the end of the section that is folded until opened
+(`> [!abstract]- Chats`). The `🤖 Agent Log` button and the `agent log folder`
+setting's field are gone; `🧠 Human Notes` opens the one file.
+
+A chat's model is told the new place: write under the note's `# Agent Log`
+heading, and above it only when asked. Pane drafts, `define here`, the Jira
+update draft, the `pmoc` rule and the `overview` and `board-sync` lenses say
+the same. The shipped PMOC and task templates end with an empty `# Agent Log`
+heading in place of an embed of the old file.
+
+**Old Agent Log files are moved, not lost.** The first time the pane reads or
+writes an anchor that still has a file, what it holds goes into the note's
+section: pins and kept lines, questions as the checkbox lines they were, each
+saved note as a `- saved: [[note]]` record, and the chats. An embed of the
+file under the note's heading is dropped. The file is marked
+`Moved into [[note]] on <date>`, never deleted, and not read again. The check
+that flagged a task template for still having an Agent Log section, and its
+`use the current template` button, are gone: such a template is fine again.
+
+Also: a sync that was reading the note while a pin or a chat was being written
+could put the older list back in the pane until the next sync; it now reads
+again when a write landed meanwhile. And a pinned note's row shows its name
+before the reason given for pinning it.
+
 **augi-ui: a fork keeps its anchor, and less in the pane.** A forked
 chat used to come up with no anchor (it is not a new session, so the folder's
 last anchor was not offered), and each fork had to be anchored by hand. A fork

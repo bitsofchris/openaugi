@@ -1,7 +1,7 @@
 {
   "name": "augi-ui",
   "version": "0.16.0",
-  "description": "augi-ui, the OpenAugi pane beside your agent chat: anchor on a Kanban project or task, tell the chat which note it is on, pin its context (notes, sessions, artifacts, links), keep today's note in view, run lenses, and keep an Agent Log per anchor. Drafts only; you press enter.",
+  "description": "augi-ui, the OpenAugi pane beside your agent chat: anchor on a Kanban project or task, tell the chat which note it is on, pin its context (notes, sessions, artifacts, links), keep today's note in view, run lenses, and keep an Agent Log section in each anchor's note. Drafts only; you press enter.",
   "types": "./types/index.d.ts",
   "userConfig": {
     "notesFolder": {
@@ -61,7 +61,7 @@
     "logFolder": {
       "type": "string",
       "title": "Agent log folder",
-      "description": "Where Augi keeps one Agent Log per anchor: the companion note agents write (context, questions, chats, saved notes). Your own note is never written.",
+      "description": "Where Agent Log files used to be kept. Each anchor's log is now the last section of its own note; a file found here is moved into its note once, then left alone.",
       "default": "OpenAugi/Agent-Logs"
     },
     "dailyNote": {
@@ -125,7 +125,7 @@
     "tellChat": {
       "type": "string",
       "title": "Tell each chat its anchor",
-      "description": "yes tells a chat's own model which note it is anchored to and where its Agent Log is, beside your next prompt and out of your sight, so \"update the task note\" needs no path; no keeps the anchor in the pane only.",
+      "description": "yes tells a chat's own model which note it is anchored to and where in it agents write, beside your next prompt and out of your sight, so \"update the task note\" needs no path; no keeps the anchor in the pane only.",
       "default": "yes",
       "options": [
         "yes",

@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { Card, Chat, Inherited, JustMade, Lens, Opened, PadEntry, Picks, Pin, PinKind, Question, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
+import type { Card, Chat, Inherited, JustMade, Lens, Opened, PadEntry, Picks, Pin, PinKind, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -148,9 +148,9 @@ export const usageName = (element: string): string => {
 // Every control the pane draws, by its log name: what a report checks for never used.
 // tests/test_augi_ui_usage.py reads this file's Button and Input keys and fails when one is missing here.
 export const USAGE_FEATURES = [
-  'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'open-trail', 'anchor-details', 'task',
+  'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'anchor-details', 'task',
   'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
-  'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss', 'template-update',
+  'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss',
   'pin-open', 'pin-drop', 'pin-paste',
   'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
   'today-log', 'today-open', 'today-make', 'pick-today',
@@ -523,7 +523,7 @@ export const CHAT_PLACEHOLDER = 'chat'
 // The setup steps someone chose to skip; /augi setup clears it.
 const SKIPPED_KEY = 'skipped'
 // Pins that go into every chat's draft, whatever its anchor: kept in the store, newest last.
-export const EMPTY_TRAIL: Trail = { questions: [], chats: [], saved: [], pins: [] }
+export const EMPTY_TRAIL: Trail = { chats: [], pins: [] }
 // No daily note: the Today card is not drawn.
 const NO_TODAY: Today = { pattern: '', path: '', day: '', exists: false, todo: [], mtime: 0 }
 
@@ -891,18 +891,13 @@ export const TASK_TEMPLATE = [
   '### {{date:YYYY-MM-DD}}',
   '',
   '',
+  '# Agent Log',
+  '',
 ].join('\n')
 
 // Which task template a new task is made from: the built-in one (the notes folder has
-// none), the notes folder's own, or its own from before the Agent Log left the note: one
-// that still has an Agent Log heading or embeds the log.
-export const taskTemplateState = (text: string): 'built-in' | 'yours' | 'old' => {
-  if (!text.trim()) {
-    return 'built-in'
-  }
-
-  return /^#{1,6}\s+Agent Log\s*$/im.test(text) || /!\[\[Agent Log - /.test(text) ? 'old' : 'yours'
-}
+// none) or the notes folder's own.
+export const taskTemplateState = (text: string): 'built-in' | 'yours' => (text.trim() ? 'yours' : 'built-in')
 
 // A new task note from a template: date and title filled, `Up:` pointing at the anchor
 // (the line gone without one), and the Jira key when there is one (see withJira).
@@ -1007,10 +1002,10 @@ export const findInJiraDraft = (notePath: string, note: string, ask: JiraAsk): s
 
 // The prompt "↑ update Jira" leaves in the box, unsent, when the lens folder has no
 // jira-update lens: a short status update, shown first, posted only on a yes.
-export const jiraUpdateDraft = (notePath: string, note: string, logPath: string, key: string, ask: JiraAsk): string =>
+export const jiraUpdateDraft = (notePath: string, note: string, key: string, ask: JiraAsk): string =>
   [
     DRAFT_HEAD,
-    `- Anchor note: ${notePath ? `"${notePath}"` : `[[${note}]] (find it in "${P.notes}")`} (${note}): read its Outcome, Verify and Journal sections, and its Agent Log "${logPath}".`,
+    `- Anchor note: ${notePath ? `"${notePath}"` : `[[${note}]] (find it in "${P.notes}")`} (${note}): read its Outcome, Verify, Journal and Agent Log sections.`,
     `- Read Jira issue ${key} and its recent comments${jiraTools('', ask.server)}, so the update covers only what is new since the last one.`,
     '- Write a status update of at most six lines: what moved, what is next, what is blocked. Show it to me first.',
     `- Post it as a comment on ${key} only after I say yes. Change the issue's status only if I ask. Don't change any files.`,
@@ -1129,43 +1124,24 @@ export const subCard = (parent: Card, note: string): Card => ({ column: parent.c
 // The prompt a new task leaves in the box, unsent: the chat fills in the note's
 // Outcome and Verify from what it has done, and keeps the context in the Agent Log.
 // With `jira` (Jira is on and no key was typed) it also looks for the task's issue.
-export const newTaskDraft = (notePath: string, logPath: string, name: string, jira: JiraAsk | null = null): string =>
+export const newTaskDraft = (notePath: string, name: string, jira: JiraAsk | null = null): string =>
   [
     DRAFT_HEAD,
     `- A task note was just made from this chat: "${notePath}".`,
     "- From what this chat has done, fill in what goes under the note's Outcome and Verify headings (the outcome as a state of the world, and how we will know it is reached). Add no headings and no frontmatter. This once you may write that note: I'm asking.",
-    `- Put the context worth keeping (decisions, files, links) under ## Context in its Agent Log "${logPath}", one line each on why it matters.`,
+    '- Put the context worth keeping (decisions, files, links) under the note\'s "# Agent Log" heading, at its end, one line each on why it matters.',
     ...(jira ? jiraFindSteps('this task', jira.project, jira.server) : []),
     'Reply in a few lines with what you wrote.',
     `Instruction: fill in the new task ${name}`,
   ].join('\n')
 
-// One Agent Log per anchor, 1:1 by name. (Functions keep the old word, trail.)
+// An anchor's Agent Log used to be a file of its own, 1:1 by name. These say where it
+// was, for moving what it holds into the note (`withOldLog`).
 const safe = (note: string): string => note.replace(/[\\/:]/g, '-')
 export const logName = (note: string): string => `Agent Log - ${safe(note)}`
 export const trailPath = (note: string): string => `${P.trails}/${logName(note)}.md`
 // Where v0.6 and earlier kept it, for moving it over.
 export const oldTrailPath = (note: string): string => `${P.trails}/Trail - ${safe(note)}.md`
-
-export const trailTemplate = (note: string, today: string): string =>
-  [
-    '---',
-    'type: document',
-    `description: The Agent Log for ${note}: context worth keeping, questions, chats started on it and notes saved from them. Agents write here; ${note} is the person's own.`,
-    `created: ${today}`,
-    '---',
-    '',
-    logIntro(note),
-    '',
-    '## Context',
-    '',
-    '## Questions',
-    '',
-    '## Chats',
-    '',
-    '## Saved',
-    '',
-  ].join('\n')
 
 // What the intro says of ## Context since pins became bullets. A log that carries it is in
 // today's form; one that doesn't still ticks what it pins (see `tidyTrail`).
@@ -1173,7 +1149,7 @@ const PINS_ARE_BULLETS = 'Context lines are `- [[note]] · why it matters`'
 // Whether a log is from before that: every pin line in it is a pin, whatever its box.
 const isOldLog = (text: string): boolean => !text.includes(PINS_ARE_BULLETS)
 
-// The log's first body line links the human note, so the note shows it as a backlink.
+// The first body line of a log file linked the human note.
 const logIntro = (note: string): string =>
   `Human note: [[${note}]]. ${PINS_ARE_BULLETS}: each is pinned and goes into the next draft; one ticked off (\`- [x]\`) was unpinned. Each chat is one line: when it started, its goal, its id; one that is finished stays listed, marked \`(done)\`.`
 // The intros earlier versions wrote, replaced with the current one when the pane writes the log.
@@ -1183,9 +1159,9 @@ const oldLogIntros = (note: string): string[] => [
   `Human note: [[${note}]]. Context lines are \`- [x] [[note]] · why it matters\` (ticked goes into the next draft). Hidden chats stay listed, marked \`(hidden)\`.`,
 ]
 
-// An older log in the current shape: no title H1 (Agent Log or Trail), no seen box,
-// the human-note link first, its pins as bullets (ticked or not, each was a pin). Removes
-// only those exact lines and the blank each leaves.
+// A log file in its last shape, as the step before moving it into the note: no title H1
+// (Agent Log or Trail), no seen box, the human-note link first, its pins as bullets (in a
+// log from before bullets, ticked or not, each was a pin).
 export const tidyTrail = (text: string, note: string): string => {
   const dropped = new Set([`# ${logName(note)}`, `# Trail - ${safe(note)}`, '- [ ] seen', '- [x] seen'])
   const isOld = isOldLog(text)
@@ -1222,60 +1198,15 @@ export const tidyTrail = (text: string, note: string): string => {
   return lines.join('\n')
 }
 
-// A chat's line under ## Chats. `(hidden)` is what a finished chat was marked before `(done)`.
+// A chat's line in the Chats callout. `(hidden)` is what a finished chat was marked before `(done)`.
 const CHAT_LINE = /^- (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) · (.*) · `([^`]+)`( \((?:done|hidden)\))?$/
 
-const QUESTION_LINE = /^- \[([ x])\] (\d{4}-\d{2}-\d{2} \d{2}:\d{2}) · (.*)$/
-
-export const parseTrail = (text: string): Trail => {
-  const questions: Question[] = []
-  const chats: Chat[] = []
-  const saved: string[] = []
-  const pins: Pin[] = []
-  const isOld = isOldLog(text)
-  let section = ''
-
-  for (const line of text.split('\n')) {
-    const heading = line.match(/^## (.+)$/)
-    if (heading) {
-      section = heading[1].trim()
-      continue
-    }
-    if (section === 'Questions') {
-      const found = line.match(QUESTION_LINE)
-      if (found) {
-        questions.push({ done: found[1] === 'x', when: found[2], text: found[3] })
-      }
-    }
-    if (section === 'Chats') {
-      const found = line.match(CHAT_LINE)
-      if (found) {
-        chats.push({ when: found[1], title: found[2], id: found[3], done: Boolean(found[4]) })
-      }
-    }
-    if (section === 'Context') {
-      const pin = parsePin(line, isOld)
-      if (pin) {
-        pins.push(pin)
-      }
-    }
-    if (section === 'Saved' && line.startsWith('- ')) {
-      const name = linkName(line)
-      if (name) {
-        saved.push(name)
-      }
-    }
-  }
-
-  return { questions, chats, saved, pins }
-}
-
-// ## Context lines: `- [[Note]] · label` for a note, `- kind: \`target\` · label` for the
+// A pin's line: `- [[Note]] · label` for a note, `- kind: \`target\` · label` for the
 // rest. A pin is a plain bullet (an open box reads the same); `- [x]` is one that was
 // unpinned: kept on the log, out of the pane and the drafts.
 const PIN_LINE = /^- (?:\[([ x])\] )?(?:\[\[([^\]|]+)(?:\|[^\]]*)?\]\]|(file|session|artifact|url): `([^`]+)`)(?: · (.*))?\s*$/
 
-// `isOld` reads a line from a log of before bullets, where a tick meant pinned.
+// `isOld` reads a line from a log file of before bullets, where a tick meant pinned.
 export const parsePin = (line: string, isOld = false): Pin | null => {
   const found = line.match(PIN_LINE)
   if (!found) {
@@ -1303,70 +1234,205 @@ export const pinLine = (pin: Pin): string => {
 
 const samePin = (a: Pin, b: Pin): boolean => a.kind === b.kind && a.target === b.target
 
-// Adds a pin at the end of ## Context; one already there stays where it is, pinned
-// again if it had been unpinned. A trail without the section gets it above
-// ## Questions, or at the end.
-export const addPin = (text: string, pin: Pin): string => {
-  const had = parseTrail(text).pins.find(one => samePin(one, pin))
-  if (had) {
-    return had.on ? text : changePin(text, pin, one => ({ ...one, on: true }))
+// ── The Agent Log ──
+// One section at the bottom of the anchor's own note, under `# Agent Log`: what is pinned
+// to the work and whatever agents append, then the chats on it in a callout that is folded
+// until opened. Everything above the heading is the user's. (Functions and state keep the
+// log's first name, trail.)
+const LOG_HEAD = '# Agent Log'
+const CHATS_HEAD = '> [!abstract]- Chats'
+const isLogHead = (line: string): boolean => /^# Agent Log\s*$/i.test(line)
+const isChatsHead = (line: string): boolean => /^> \[!\w+\][-+]? Chats\s*$/i.test(line)
+// What the section held while the log was a file of its own: a callout embedding that file.
+const isLogEmbed = (line: string): boolean => /^> \[!\w+\][-+]? Agent Log\s*$/i.test(line) || /^> !\[\[Agent Log - [^\]]*\]\]\s*$/.test(line)
+
+const trimBlank = (lines: string[]): string[] => {
+  let from = 0
+  let to = lines.length
+  while (from < to && (lines[from] ?? '').trim() === '') {
+    from += 1
   }
+  while (to > from && (lines[to - 1] ?? '').trim() === '') {
+    to -= 1
+  }
+
+  return lines.slice(from, to)
+}
+
+// A note in four parts: the lines above the section's heading, the section's own lines
+// (`body`: pins and what agents wrote, blank edges trimmed), the lines of its Chats
+// callout without their `> `, and what follows the section (a later level-1 heading and
+// on). `has` is whether the note has the section; the last `# Agent Log` is the one.
+export type LogParts = { before: string[]; body: string[]; chats: string[]; after: string[]; has: boolean }
+
+export const splitLog = (text: string): LogParts => {
   const lines = text.split('\n')
-  const at = lines.findIndex(line => line.trim() === '## Context')
-  if (at >= 0) {
-    let end = at + 1
-    while (end < lines.length && !lines[end].startsWith('## ')) {
-      end += 1
+  let at = -1
+  lines.forEach((line, index) => {
+    if (isLogHead(line)) {
+      at = index
     }
-    let last = end - 1
-    while (last > at && lines[last].trim() === '') {
-      last -= 1
-    }
-    const added = last === at ? ['', pinLine(pin)] : [pinLine(pin)]
-    const after = last + 1 + added.length
-    lines.splice(last + 1, 0, ...added)
-    if (lines[after]?.startsWith('## ')) {
-      lines.splice(after, 0, '')
-    }
-
-    return lines.join('\n')
+  })
+  if (at < 0) {
+    return { before: lines, body: [], chats: [], after: [], has: false }
   }
-  const questions = lines.findIndex(line => line.trim() === '## Questions')
-  if (questions >= 0) {
-    lines.splice(questions, 0, '## Context', '', pinLine(pin), '')
-
-    return lines.join('\n')
+  let end = at + 1
+  while (end < lines.length && !/^# \S/.test(lines[end] ?? '')) {
+    end += 1
   }
-
-  return `${text.trimEnd()}\n\n## Context\n\n${pinLine(pin)}\n`
-}
-
-function changePin(text: string, pin: Pin, change: (one: Pin) => Pin | null): string {
-  const isOld = isOldLog(text)
-  let section = ''
-  const out: string[] = []
-  for (const line of text.split('\n')) {
-    const heading = line.match(/^## (.+)$/)
-    if (heading) {
-      section = heading[1].trim()
-    }
-    const found = section === 'Context' ? parsePin(line, isOld) : null
-    if (found && samePin(found, pin)) {
-      const next = change(found)
-      if (next) {
-        out.push(pinLine(next))
+  const body: string[] = []
+  const chats: string[] = []
+  let isInChats = false
+  // The blank lines around the callout only set it apart: they are not the body's.
+  let isJustPast = false
+  for (const line of lines.slice(at + 1, end)) {
+    if (isChatsHead(line)) {
+      isInChats = true
+      while (body.length > 0 && (body[body.length - 1] ?? '').trim() === '') {
+        body.pop()
       }
-      continue
+    } else if (isInChats && line.startsWith('>')) {
+      chats.push(line.replace(/^> ?/, ''))
+    } else {
+      isJustPast = (isInChats || isJustPast) && line.trim() === ''
+      isInChats = false
+      if (!isJustPast && !isLogEmbed(line)) {
+        body.push(line)
+      }
     }
-    out.push(line)
   }
 
-  return out.join('\n')
+  return { before: lines.slice(0, at), body: trimBlank(body), chats: chats.filter(line => line.trim()), after: lines.slice(end), has: true }
 }
 
-// Unpins: the line stays on the log, ticked off. A log from before bullets has no way to
-// say that (its ticks were pins), so there the line goes.
-export const removePin = (text: string, pin: Pin): string => changePin(text, pin, one => (isOldLog(text) ? null : { ...one, on: false }))
+// The note again from its parts. A note that had no section gets it at its end, one blank
+// line down; what is above an existing section, and after it, stays byte for byte. The
+// Chats callout is always the section's last block, so a line an agent appended after it
+// moves up beside the others.
+const joinLog = ({ before, body, chats, after, has }: LogParts): string => {
+  let last = before.length
+  while (!has && last > 0 && (before[last - 1] ?? '').trim() === '') {
+    last -= 1
+  }
+  const top = has ? before : last > 0 ? [...before.slice(0, last), ''] : []
+  const callout = chats.length > 0 ? [...(body.length > 0 ? [''] : []), CHATS_HEAD, ...chats.map(line => `> ${line}`)] : []
+  const section = body.length > 0 || callout.length > 0 ? [LOG_HEAD, '', ...body, ...callout] : [LOG_HEAD]
+
+  return [...top, ...section, '', ...after].join('\n')
+}
+
+// What a note's Agent Log section says: the chats on the anchor, and its pins.
+export const parseTrail = (text: string): Trail => {
+  const { body, chats } = splitLog(text)
+
+  return {
+    chats: chats.flatMap(line => {
+      const found = line.match(CHAT_LINE)
+
+      return found ? [{ when: found[1] ?? '', title: found[2] ?? '', id: found[3] ?? '', done: Boolean(found[4]) }] : []
+    }),
+    pins: body.flatMap(line => {
+      const pin = parsePin(line)
+
+      return pin ? [pin] : []
+    }),
+  }
+}
+
+// Pins something: a line at the end of the section, which is made when the note has none.
+// One already there stays where it is, pinned again if it had been unpinned.
+export const addPin = (text: string, pin: Pin): string => {
+  const parts = splitLog(text)
+  const at = parts.body.findIndex(line => {
+    const one = parsePin(line)
+
+    return one !== null && samePin(one, pin)
+  })
+  const had = at >= 0 ? parsePin(parts.body[at] ?? '') : null
+  if (had?.on) {
+    return text
+  }
+  const body = had ? parts.body.map((line, index) => (index === at ? pinLine({ ...had, on: true }) : line)) : [...parts.body, pinLine(pin)]
+
+  return joinLog({ ...parts, body })
+}
+
+// Unpins: the line stays where it is, ticked off, as a record of what was once context.
+export const removePin = (text: string, pin: Pin): string => {
+  const parts = splitLog(text)
+  const body = parts.body.map(line => {
+    const one = parsePin(line)
+
+    return one?.on && samePin(one, pin) ? pinLine({ ...one, on: false }) : line
+  })
+
+  return body.some((line, index) => line !== parts.body[index]) ? joinLog({ ...parts, body }) : text
+}
+
+// Files a chat at the top of the Chats callout, newest first; one already listed stays as it is.
+export const addChat = (text: string, chat: Chat): string => {
+  const parts = splitLog(text)
+  if (parts.chats.some(line => line.match(CHAT_LINE)?.[3] === chat.id)) {
+    return text
+  }
+
+  return joinLog({ ...parts, chats: [chatLine(chat), ...parts.chats] })
+}
+
+// Names a chat recorded with the placeholder title; a real title stays as it is.
+export const retitleChat = (text: string, id: string, title: string): string => {
+  const parts = splitLog(text)
+  const chats = parts.chats.map(line => {
+    const found = line.match(CHAT_LINE)
+
+    return found && found[3] === id && (found[2] ?? '').trim() === CHAT_PLACEHOLDER
+      ? chatLine({ when: found[1] ?? '', title, id, done: Boolean(found[4]) })
+      : line
+  })
+
+  return chats.some((line, index) => line !== parts.chats[index]) ? joinLog({ ...parts, chats }) : text
+}
+
+// The note with what its old log file held: pins and kept lines from ## Context, the
+// questions as they were (a dated checkbox is no pin), each saved note marked `saved:` so
+// it is a record and not a pin, and the chats, after any the note already lists. A line
+// the section already has is not added twice, so moving the same file again changes nothing.
+export const withOldLog = (text: string, old: string, note: string): string => {
+  const parts = splitLog(text)
+  const body = [...parts.body]
+  const chats = [...parts.chats]
+  let section = ''
+  for (const line of tidyTrail(old, note).split('\n')) {
+    const heading = line.match(/^## (.+)$/)?.[1]
+    if (heading) {
+      section = heading.trim()
+    } else if (section === 'Chats') {
+      if (CHAT_LINE.test(line) && !chats.includes(line)) {
+        chats.push(line)
+      }
+    } else if (line.trim() && ['Context', 'Questions', 'Saved'].includes(section)) {
+      const kept = section === 'Saved' && line.startsWith('- ') ? `- saved: ${line.slice(2)}` : line
+      if (!body.includes(kept)) {
+        body.push(kept)
+      }
+    }
+  }
+
+  return joinLog({ ...parts, body, chats })
+}
+
+// A log file whose content went into its note says so near its top and is left alone after.
+const MOVED = 'Moved into [['
+export const isMovedLog = (text: string): boolean => text.split('\n').some(line => line.startsWith(MOVED))
+
+export const markMoved = (text: string, note: string, day: string): string => {
+  const lines = text.split('\n')
+  const said = `${MOVED}${note}]] on ${day}: that note's # Agent Log section is the log now. Nothing reads or writes this file any more.`
+  const close = lines[0] === '---' ? lines.indexOf('---', 1) : -1
+  lines.splice(close + 1, 0, ...(close < 0 ? [said, ''] : ['', said]))
+
+  return lines.join('\n')
+}
 
 const baseName = (path: string): string => path.split('/').pop() ?? path
 
@@ -1425,34 +1491,6 @@ const noteName = (path: string): string => (path.split('/').pop() ?? path).repla
 const chatLine = (chat: Chat): string =>
   `- ${chat.when} · ${chat.title.replace(/·|`/g, ' ').trim()} · \`${chat.id}\`${chat.done ? ' (done)' : ''}`
 
-// Adds a chat at the top of ## Chats, newest first; a chat already listed stays as it is.
-export const addChat = (text: string, chat: Chat): string => {
-  if (parseTrail(text).chats.some(one => one.id === chat.id)) {
-    return text
-  }
-  const lines = text.split('\n')
-  const at = lines.findIndex(line => line.trim() === '## Chats')
-  if (at < 0) {
-    return `${text.trimEnd()}\n\n## Chats\n\n${chatLine(chat)}\n`
-  }
-  lines.splice(at + 2, 0, chatLine(chat))
-
-  return lines.join('\n')
-}
-
-// Names a chat recorded with the placeholder title; a real title stays as it is.
-export const retitleChat = (text: string, id: string, title: string): string =>
-  text
-    .split('\n')
-    .map(line => {
-      const found = line.match(CHAT_LINE)
-
-      return found && found[3] === id && (found[2] ?? '').trim() === CHAT_PLACEHOLDER
-        ? chatLine({ when: found[1] ?? '', title, id, done: Boolean(found[4]) })
-        : line
-    })
-    .join('\n')
-
 // The session → anchor pairs with this session's set (or dropped, for null), most
 // recent last, the oldest let go past `kept`. An empty note is kept: it says the session
 // chose to have no anchor, so none is carried over to it.
@@ -1502,7 +1540,7 @@ export const stamp = (ms: number): string => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-export type Anchor = { note: string; notePath: string; trail: string }
+export type Anchor = { note: string; notePath: string }
 
 // `pins` are the anchor's pinned context, a note's `path` filled where it was found;
 // `today` the path of today's note when there is one.
@@ -1519,7 +1557,7 @@ export const buildDraft = (
   if (anchor && choice.project) {
     // The note's name in [[ ]] lets a pasted draft anchor a new chat (anchorFromDraft).
     const where = anchor.notePath ? `"${anchor.notePath}"` : '(find it in the vault)'
-    lines.push(`- Project [[${anchor.note}]]: ${where}, my note (outcome, Next, Journal), and its Agent Log "${anchor.trail}": the context, questions, chats and notes saved on it so far. Read both.`)
+    lines.push(`- Project [[${anchor.note}]]: ${where}, my note. Its outcome, Next and Journal are mine; the "# Agent Log" section at its end holds what is pinned to this work and what agents kept on it so far. Read it.`)
   }
   for (const pin of anchor ? pins.filter(one => one.on) : []) {
     lines.push(pinDraftLine(pin))
@@ -1539,7 +1577,7 @@ export const buildDraft = (
   lines.push('Reply in at most 10 lines: what you found or did, then anything you need from me. No walls of text.')
   lines.push("Don't change any files unless my instruction asks you to.")
   if (anchor) {
-    lines.push(`Write only to the Agent Log, never to my note. If you write a note for this, add "- [[<its name>]]" under ## Saved there; if you find something worth keeping for this project, add "- [[<note>]] · <why it matters>" under ## Context, which pins it.`)
+    lines.push(`In my note, write only under its "# Agent Log" heading, never above it. If you find something worth keeping for this project, add a line there with why; "- [[<note>]] · <why it matters>" pins a note, and a note you write for this is pinned the same way.`)
   }
   lines.push(`Instruction: ${typed}`)
 
@@ -1555,13 +1593,13 @@ export const anchorBrief = (anchor: Anchor, today = '', was = ''): string => {
     was && was !== anchor.note
       ? `Augi: this chat is now anchored to [[${anchor.note}]], no longer to [[${was}]].`
       : `Augi: this chat is anchored to [[${anchor.note}]], the task or project it is working on.`,
-    `- My note: ${where}. It is mine: its outcome, what is next and its Journal.`,
-    `- Its Agent Log: "${anchor.trail}". Yours to write: what is worth keeping under ## Context (one line each, with why; "- [[<note>]] · <why>" pins a note to this work), open questions under ## Questions, and "- [[<its name>]]" under ## Saved for a note you write for this work.`,
+    `- My note: ${where}. Everything above its "# Agent Log" heading is mine: its outcome, what is next and its Journal.`,
+    '- Its Agent Log: the "# Agent Log" section at the end of that note (add the heading there if it is missing). Yours to append to, one line each with why: what is worth keeping, an open question, a note you wrote for this work. "- [[<note>]] · <why>" pins a note to this work. Leave the folded Chats list in it to the pane.',
   ]
   if (today) {
     lines.push(`- Today's note: "${today}".`)
   }
-  lines.push('When I say "the task note", "the project note", "log this" or "save this to the task" without naming a file, I mean these. What you save goes in the Agent Log. Add to my note only when I ask for that ("update the task note"), as a dated entry at the top of its Journal: "### YYYY-MM-DD — <what happened>".')
+  lines.push('When I say "the task note", "the project note", "log this" or "save this to the task" without naming a file, I mean this note. What you save goes under "# Agent Log". Write above that heading only when I ask for that ("update the task note"), as a dated entry at the top of its Journal: "### YYYY-MM-DD — <what happened>".')
   lines.push('This says where things go. It is not a request: write nothing there until I ask.')
 
   return lines.join('\n')
@@ -1600,7 +1638,7 @@ export const anchorFromMessages = (messages: readonly { role?: unknown; content?
 
 // The same, for a chat whose anchor was taken away after it was told one.
 export const unanchoredBrief = (was: string): string =>
-  `Augi: this chat is no longer anchored to [[${was}]]. Leave its note and its Agent Log alone unless I name them.`
+  `Augi: this chat is no longer anchored to [[${was}]]. Leave its note alone unless I name it.`
 
 // And for a chat that already knows its anchor, when the day's note is another one.
 export const todayBrief = (today: string): string => `Augi: today's note is "${today}".`
@@ -1655,6 +1693,27 @@ async function readOr($: EngineInterface, path: string): Promise<string> {
 }
 
 // Renames a v0.6 trail note to its Agent Log name, once, tidied (its title line goes).
+// A log file whose content has not gone into its note yet goes in now: the first time the
+// pane reads or writes an anchor that still has one. The file is marked as moved, never
+// deleted, and not read again. `text` is the note as just read; the note as it is now
+// comes back.
+async function withMovedLog($: EngineInterface, note: string, path: string, text: string): Promise<string> {
+  await moveOldTrail($, note)
+  const from = trailPath(note)
+  if (!(await $.fs.exists(from))) {
+    return text
+  }
+  const old = await $.fs.read(from)
+  if (isMovedLog(old)) {
+    return text
+  }
+  const merged = withOldLog(text, old, note)
+  await $.fs.write(path, merged)
+  await $.fs.write(from, markMoved(old, note, stamp(await $.clock.now()).slice(0, 10)))
+
+  return merged
+}
+
 async function moveOldTrail($: EngineInterface, note: string): Promise<void> {
   const from = oldTrailPath(note)
   const to = trailPath(note)
@@ -1665,7 +1724,7 @@ async function moveOldTrail($: EngineInterface, note: string): Promise<void> {
   }
 }
 
-// Reads the anchored card's note and Agent Log; the rest of the pane stays as it was.
+// Reads the anchored card's note, its Agent Log section with it; the rest of the pane stays as it was.
 async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'jira' | 'trail' | 'pinPaths'>> {
   const chosen = await sessionAnchor($)
   let anchor = chosen ? anchorCard(cards, chosen) : null
@@ -1679,9 +1738,8 @@ async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatc
     return { anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {} }
   }
   const notePath = bare || (await notePathOf($, anchor.note))
-  const noteText = notePath ? await $.fs.read(notePath) : ''
-  await moveOldTrail($, anchor.note)
-  const trail = parseTrail(await readOr($, trailPath(anchor.note)))
+  const noteText = notePath ? await withMovedLog($, anchor.note, notePath, await $.fs.read(notePath)) : ''
+  const trail = parseTrail(noteText)
   const pinPaths: Record<string, string> = {}
   for (const pin of trail.pins.filter(one => one.on && one.kind === 'note')) {
     pinPaths[pin.target] = await notePathOf($, pin.target)
@@ -1998,7 +2056,7 @@ async function updateJira($: EngineInterface): Promise<void> {
     return
   }
   const ask = (await jiraAsk($)) ?? { project: P.jiraProject, server: P.jiraServer }
-  await fillOver($, jiraUpdateDraft(notePath, anchor.note, trailPath(anchor.note), jira, ask))
+  await fillOver($, jiraUpdateDraft(notePath, anchor.note, jira, ask))
 }
 
 // The note this chat session is anchored on, if any.
@@ -2109,10 +2167,10 @@ async function keepInherited($: EngineInterface): Promise<void> {
 
 // Anchors this session on `note`: the pane (when it has loaded) shows it, and what the
 // chat already published is pinned to it, ticked. The caller records the chat.
-// When the board, the anchor's note and its Agent Log were last changed, as one string.
+// When the board and the anchor's note were last changed, as one string.
 async function anchorStamp($: EngineInterface, note: string, notePath: string): Promise<string> {
   const stamps: string[] = []
-  for (const path of [P.board, trailPath(note), notePath]) {
+  for (const path of [P.board, notePath]) {
     let at = 0
     try {
       at = path && (await $.fs.exists(path)) ? (await $.fs.stat(path)).mtimeMs : 0
@@ -2125,8 +2183,10 @@ async function anchorStamp($: EngineInterface, note: string, notePath: string): 
   return stamps.join('|')
 }
 
+// How many times this pane has written an Agent Log: a sync under way checks it (resync).
+let logWrites = 0
 // What the pane last saw of those files. Another chat on the same anchor writes the same
-// Agent Log; this is how this chat's pane notices and reads it again.
+// note; this is how this chat's pane notices and reads it again.
 let seenStamp = ''
 // A stored anchor whose note was not found, so the sync does not search for it every time.
 let unfound = ''
@@ -2163,7 +2223,14 @@ export async function resync($: EngineInterface): Promise<void> {
   }
   seenStamp = stamp
   const cards = kanbanCards(await readOr($, P.board))
-  const found = await loadAnchor($, cards)
+  // A pin or a chat written while the note was being read would be lost from the pane until
+  // the next sync: read again until no write landed in between.
+  let wrote = logWrites
+  let found = await loadAnchor($, cards)
+  while (wrote !== logWrites) {
+    wrote = logWrites
+    found = await loadAnchor($, cards)
+  }
   await update($, swatch, old => (old.anchor?.note === anchor.note ? { ...old, cards, ...found } : old))
 }
 
@@ -2242,7 +2309,7 @@ async function clearAnchor($: EngineInterface): Promise<void> {
 async function anchorNow($: EngineInterface): Promise<Anchor | null> {
   const { anchor, notePath } = await read($, swatch)
 
-  return anchor ? { note: anchor.note, notePath, trail: trailPath(anchor.note) } : null
+  return anchor ? { note: anchor.note, notePath } : null
 }
 
 // `about` replaces what's typed in the prompt box: what a Jira update is for, for one.
@@ -2284,7 +2351,9 @@ async function pinIt($: EngineInterface, note: string, pin: Pin): Promise<void> 
     const found = path || (await notePathOf($, pin.target))
     await update($, swatch, old => ({ ...old, pinPaths: { ...old.pinPaths, [pin.target]: found } }))
   }
-  await writeTrail($, note, text => addPin(text, kept))
+  if (!(await writeTrail($, note, text => addPin(text, kept)))) {
+    await $.ui.toast(`No note found for ${note}: pins are kept in its Agent Log section.`)
+  }
 }
 
 // A pasted link, [[note]] or path, pinned to the anchor.
@@ -2357,21 +2426,31 @@ async function newLens($: EngineInterface, typed: string): Promise<void> {
   await load($)
 }
 
-// Tidies an older log as it's written: only logs the pane touches change.
-async function writeTrail($: EngineInterface, note: string, change: (text: string) => string): Promise<void> {
-  const path = trailPath(note)
-  const old = await readOr($, path)
-  const base = old ? tidyTrail(old, note) : trailTemplate(note, stamp(await $.clock.now()).slice(0, 10))
+// Changes the anchor's Agent Log: the section at the end of its own note (`at`, when the
+// caller knows the note's path). What an old log file held goes in first. False, with
+// nothing written, when the note is not found.
+async function writeTrail($: EngineInterface, note: string, change: (text: string) => string, at = ''): Promise<boolean> {
+  const shown = await read($, swatch)
+  const path = at || (shown.anchor?.note === note && shown.notePath ? shown.notePath : await notePathOf($, note))
+  if (!path) {
+    return false
+  }
+  let was = ''
+  try {
+    was = await $.fs.read(path)
+  } catch {
+    // The note went away since it was found: nothing to write the section in.
+    return false
+  }
+  const base = await withMovedLog($, note, path, was)
   const text = change(base)
-
-  if (text !== old) {
-    // Only a first write needs the folder: nothing sits between an existing log's read and its write.
-    if (!old) {
-      await $.process.run(['mkdir', '-p', P.trails])
-    }
+  if (text !== base) {
     await $.fs.write(path, text)
   }
+  logWrites += 1
   await update($, swatch, current => (current.anchor?.note === note ? { ...current, trail: parseTrail(text) } : current))
+
+  return true
 }
 
 // Puts this chat in its anchor's Agent Log, or names it there if it went in as the
@@ -2437,13 +2516,13 @@ async function tellNow($: EngineInterface): Promise<{ text: string; next: Told }
   }
   const today = await todayPathNow($)
   // Nothing new: the note is not looked up again.
-  if (!anchorNews(before, id, { note, notePath: '', trail: '' }, today)) {
+  if (!anchorNews(before, id, { note, notePath: '' }, today)) {
     return null
   }
   const shown = await read($, swatch)
   const notePath = shown.anchor?.note === note && shown.notePath ? shown.notePath : await notePathOf($, note)
 
-  return anchorNews(before, id, { note, notePath, trail: trailPath(note) }, today)
+  return anchorNews(before, id, { note, notePath }, today)
 }
 
 // Remembers what is typed in the scratchpad's field, unsent.
@@ -2600,26 +2679,13 @@ async function newTask($: EngineInterface, typed: string, mode: 'new' | 'sub'): 
     const withParent = parent ? addPin(text, { on: true, kind: 'note', target: parent, label: parent }) : text
 
     return transcript ? addPin(withParent, { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' }) : withParent
-  })
+  }, made.path)
   await madeTask($, made, mode === 'new' ? ' This chat is anchored on it now.' : '')
   if (mode === 'new') {
     await anchorOnMade($)
   }
 }
 
-// Replaces the notes folder's task template with the shipped one, on the user's press. The
-// one it replaces is kept beside it, named for the day, so nothing of theirs is lost.
-async function useCurrentTemplate($: EngineInterface): Promise<void> {
-  const old = await readOr($, P.taskTemplate)
-  if (old) {
-    await $.fs.write(`${P.taskTemplate}.${stamp(await $.clock.now()).slice(0, 10)}.bak`, old)
-  }
-  await $.fs.write(P.taskTemplate, TASK_TEMPLATE)
-  await update($, swatch, current => ({ ...current, taskTemplate: 'yours' as const }))
-  await $.ui.toast(`New tasks now use the current template (Outcome, Verify, Journal). Your old one is kept beside it as a .bak file.`)
-}
-
-// The just-made task's draft for this chat's prompt box (unsent): fill in the note.
 async function defineHere($: EngineInterface): Promise<void> {
   const one = await read($, justMade)
   if (!one.note) {
@@ -2627,7 +2693,7 @@ async function defineHere($: EngineInterface): Promise<void> {
   }
   // A typed key is already linked: the draft asks for no search then.
   const ask = one.jira ? null : await jiraAsk($)
-  await fillOver($, newTaskDraft(one.path, trailPath(one.note), one.note, ask))
+  await fillOver($, newTaskDraft(one.path, one.note, ask))
 }
 
 // Makes the just-made task this chat's anchor.
@@ -2690,8 +2756,6 @@ async function writeNew($: EngineInterface, path: string, text: string): Promise
 }
 
 async function writeStarter($: EngineInterface, field: string): Promise<void> {
-  // The Agent Log folder comes with the starters, so agents' notes have a home from the start.
-  await $.process.run(['mkdir', '-p', P.trails])
   if (field === 'contextNote') {
     await writeNew($, P.context, starterContext(stamp(await $.clock.now()).slice(0, 10)))
   }
@@ -3001,7 +3065,7 @@ export const register: Register = (on, options) => {
       </Box>
     )
     const CARD = { flexDirection: 'column', borderStyle: 'round', paddingX: 1, marginBottom: 1 } as const
-    const gaps = setup.filter(item => !item.ok).length + (taskTemplate === 'old' ? 1 : 0)
+    const gaps = setup.filter(item => !item.ok).length
     const short = (path: string): string => (path.startsWith(`${P.notes}/`) ? path.slice(P.notes.length + 1) : path.startsWith(P.home) ? `~${path.slice(P.home.length)}` : path)
     const step = setup[0]?.ok ? STEPS.find(one => !skipped.includes(one.field) && !setup.find(item => item.field === one.field)?.ok) : undefined
     const editorPicker = (
@@ -3124,7 +3188,6 @@ export const register: Register = (on, options) => {
                   {anchor && (
                     <Box key="anchor-links" flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                       <Button key="open-note" label="🧠 Human Notes" hotkey="p" onPress={() => (notePath ? openNote($, notePath) : openByName($, anchor.note))} />
-                      <Button key="open-trail" label="🤖 Agent Log" hotkey="k" onPress={() => writeTrail($, anchor.note, text => text).then(() => openNote($, trailPath(anchor.note)))} />
                     </Box>
                   )}
                   <Button key="draft" variant="primary" label={anchor ? '💬 draft a prompt with this context' : '💬 draft a prompt with my context'} hotkey="n" onPress={() => draft($, null)} />
@@ -3200,7 +3263,7 @@ export const register: Register = (on, options) => {
                 {head('pinsOpen', `📌 Pinned to ${anchor.note} · ${pins.length}`, 'remember')}
                 {shown.pinsOpen && artifactsFirst(pins).map(pin => line(
                   `pin-${pinKey(pin)}`,
-                  <Button key={`pin-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.label}`} onPress={() => openPin($, pin)} />,
+                  <Button key={`pin-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.kind === 'note' && pin.label !== pin.target ? `${pin.target} · ${pin.label}` : pin.label}`} onPress={() => openPin($, pin)} />,
                   <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => onPins(text => removePin(text, pin))} />,
                 ))}
                 {shown.pinsOpen && (
@@ -3290,7 +3353,7 @@ export const register: Register = (on, options) => {
                 <Box key="setup-body" flexDirection="column">
                   <Text bold>What goes into every draft</Text>
                   <Button key="about-me" plain label={`${mark(choice.aboutMe)} my context note and board`} hotkey="m" onPress={() => update($, picks, old => ({ ...old, aboutMe: !old.aboutMe }))} />
-                  <Button key="pick-project" plain label={`${mark(choice.project)} the anchor's 🧠 human and 🤖 agent notes`} onPress={() => update($, picks, old => ({ ...old, project: !old.project }))} />
+                  <Button key="pick-project" plain label={`${mark(choice.project)} the anchor's note`} onPress={() => update($, picks, old => ({ ...old, project: !old.project }))} />
                   <Button key="pick-today" plain label={`${mark(choice.today)} today's note, when there is one`} onPress={() => update($, picks, old => ({ ...old, today: !old.today }))} />
                   <Button key="openaugi" plain label={`${mark(choice.openAugi)} a search of my notes (with OpenAugi)`} onPress={() => update($, picks, old => ({ ...old, openAugi: !old.openAugi }))} />
                   <Box key="setup-files" flexDirection="column" marginTop={1}>
@@ -3307,15 +3370,13 @@ export const register: Register = (on, options) => {
                         />
                       </Box>
                     ))}
-                    <Input key="set-logFolder" label="agent log folder" value={settings.logFolder || settings.trailFolder || ''} placeholder="OpenAugi/Agent-Logs" onSubmit={value => setOption($, 'logFolder', value)} />
                     <Input key="set-dailyNote" label="daily note" value={settings.dailyNote ?? ''} placeholder="Daily/{{date:YYYY-MM-DD}}.md; empty reads Obsidian's setting, none turns it off" onSubmit={value => setOption($, 'dailyNote', value)} />
                     <Text key="daily-now" dimColor wrap="wrap">{today.path ? `Today's note: ${short(today.path)}${today.exists ? '' : ' (not made yet)'}` : 'No daily note: nothing about today is shown.'}</Text>
                     <Input key="set-dailyHeading" label="log heading in it" value={settings.dailyHeading ?? ''} placeholder="the end of the note" onSubmit={value => setOption($, 'dailyHeading', value)} />
                     <Input key="set-taskFolder" label="new task folder" value={settings.taskFolder ?? ''} placeholder="the notes folder's root" onSubmit={value => setOption($, 'taskFolder', value)} />
                     {!settings.taskFolder?.trim() && <Text key="task-folder-unset" dimColor wrap="wrap">⚠ No task folder set: new task notes go to the notes folder's root.</Text>}
                     <Input key="set-taskColumn" label="new task column" value={settings.taskColumn ?? ''} placeholder="the anchor's column, else the board's first" onSubmit={value => setOption($, 'taskColumn', value)} />
-                    <Text key="task-template" wrap="wrap">{taskTemplate === 'old' ? '✗ task template: yours still has an Agent Log section. The Agent Log links the note now, so new tasks get a section nothing fills.' : `✓ task template: ${taskTemplate === 'yours' ? short(P.taskTemplate) : 'built-in (Outcome, Verify, Journal)'}`}</Text>
-                    {taskTemplate === 'old' && <Button key="template-update" label="use the current template" onPress={() => useCurrentTemplate($)} />}
+                    <Text key="task-template" wrap="wrap">{`✓ task template: ${taskTemplate === 'yours' ? short(P.taskTemplate) : 'built-in (Outcome, Verify, Journal, Agent Log)'}`}</Text>
                   </Box>
                   <Box key="setup-jira" flexDirection="column" marginTop={1}>
                     <Text bold>Jira (optional)</Text>

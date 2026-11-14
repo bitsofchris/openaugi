@@ -70,8 +70,9 @@ Review); they dispatch fixes with `zzz: run the ticked janitor fixes`.
    `Docs/` system docs, [[MOC - My Operating System]], the deck · `Plans/` ·
    `Drafts/` · `Views/` regenerable caches (the only legal overwrite) ·
    `Board/` the daily boards · `Habit Log/` · `Sessions/` (old session
-   cards, no longer written) · `Tasks/` · `Agent-Logs/` one Agent Log
-   per PMOC or task note, the companion their note embeds ([[pmoc]]) ·
+   cards, no longer written) · `Tasks/` · `Agent-Logs/` Agent Log files from
+   before each log became its note's own `# Agent Log` section, kept and
+   no longer written ([[pmoc]]) ·
    `YYYY/MM/DD/` dated artifacts · `AGENT/` rules and lenses. Never ask
    permission to write here.
 2. **Everything outside `OpenAugi/` is the user's. Read-only, with exactly

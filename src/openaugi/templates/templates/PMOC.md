@@ -17,6 +17,3 @@ outcome:
 
 
 # Agent Log
-
-> [!abstract]- Agent Log
-> ![[Agent Log - {{title}}]]

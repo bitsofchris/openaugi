@@ -37,7 +37,7 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `boardNote` | The Kanban note whose linked cards are the anchors | `Kanban.md` |
 | `contextNote` | A note about the user and this season | `OpenAugi/AGENT/Slowly Changing Context.md` |
 | `lensFolder` | One markdown file per lens | `OpenAugi/AGENT/lenses` |
-| `logFolder` | One Agent Log per anchor | `OpenAugi/Agent-Logs` |
+| `logFolder` | Where Agent Log files used to be kept; read once per anchor to move each into its note (see **Agent Log**) | `OpenAugi/Agent-Logs` |
 | `dailyNote` | Today's note, shown in the You card: a path inside the notes folder with the date in it (`Daily/{{date:YYYY-MM-DD}}.md`). Empty reads Obsidian's own daily-note settings (`.obsidian/daily-notes.json` for the folder and name format; with no folder named there, the default new-note folder from `.obsidian/app.json`, as Obsidian does); `none` turns it off | — |
 | `dailyHeading` | The heading in today's note that lines logged from the pane go under (made when missing); empty adds them at the end of the note | — |
 | `taskFolder` | The one flat folder every new task note goes to; empty is the notes folder's root (Setup warns while it is). Tasks are organized by their `Up:` link, never by folder | — |
@@ -47,7 +47,7 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `jiraServer` | Optional. The Jira MCP server's name as `/mcp` lists it; empty looks for a likely one | — |
 | `lensPicks` | Lenses listed first, comma separated; empty lists all | — |
 | `openOnStart` | `yes` opens the pane when a new interactive chat starts; `no` keeps it closed until `/augi` | `yes` |
-| `tellChat` | `yes` tells each chat's own model its anchor (the note, its Agent Log, today's note) beside your next prompt, so "update the task note" needs no path; `no` keeps the anchor in the pane only | `yes` |
+| `tellChat` | `yes` tells each chat's own model its anchor (the note, its Agent Log section, today's note) beside your next prompt, so "update the task note" needs no path; `no` keeps the anchor in the pane only | `yes` |
 
 Each missing file can be created as a starter, pointed at an existing note, or
 skipped. Starters are never written over an existing file.
@@ -60,8 +60,8 @@ desktop app and the editor when their window attaches (`session.attach`),
 since those start a session with no surface to draw on yet. A window that
 reconnects does not reopen a pane you closed, and a headless run or a phone
 joining opens nothing. An open pane follows its anchor's files: every ten
-seconds, and when a prompt is sent, it checks whether the board, the anchor's
-note or its Agent Log changed and reads them again if so, so two chats on one
+seconds, and when a prompt is sent, it checks whether the board or the anchor's
+note changed and reads them again if so, so two chats on one
 anchor see each other's pins and tasks without a refresh.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
@@ -108,7 +108,7 @@ are `dimColor`, and the one primary button is the draft.
   the folder's anchor names a note that is no longer on the board or in the
   notes folder; `no anchor` sticks for the session; a draft pasted from another
   anchor wins over one the chat only started on. A chat that is given its
-  anchor this way is written to the Agent Log with its first prompt, not
+  anchor this way is filed in the note's Agent Log with its first prompt, not
   before, so a chat opened and abandoned leaves nothing there. Every anchored
   chat is titled in the log by its first prompt: a pane draft's lens and
   instruction, else the prompt's first line (a slash command titles nothing).
@@ -116,9 +116,10 @@ are `dimColor`, and the one primary button is the draft.
   **The chat itself knows its anchor.** The pane's state is not something the
   model can read, so the plugin says it: the first prompt sent on an anchor
   carries a short block beside it for the model, not shown in the chat, naming
-  the note and its path, the Agent Log's path, today's note when there is one,
-  and the rule for writing (what the agent saves goes in the Agent Log; the
-  user's note gets a dated Journal entry only when they ask). After that
+  the note and its path, where in it agents write (under `# Agent Log`),
+  today's note when there is one, and the rule for writing (what the agent
+  saves goes under that heading; above it the note gets a dated Journal entry
+  only when the user asks). After that
   "update the task note", "log this" or "save this to the task" need no path.
   It is sent once, and again only when something changed: the whole block for
   another anchor or after a compaction (which may have summarized it away), one
@@ -128,19 +129,20 @@ are `dimColor`, and the one primary button is the draft.
   would not follow a change of anchor. It reads the session's stored anchor, so
   it works with the pane closed. `tellChat: no` (⚙️ Setup, *tell each chat its
   anchor*) turns it off. The card shows
-  only the links (note, Agent Log, Jira; pins are in their own card below, not
+  only the links (note, Jira; pins are in their own card below, not
   repeated here) until `▸ outcome and next (N)`
   is opened: then the card's detail, the note's `🎯` outcome, and its open
   sub-items and the note's `# Next` checkboxes as tasks; one that links a
   note (`\t- [ ] [[Child task]]`) is a button that opens it, which is the whole
   parent/child story: the child's `Up:` line points back. A `jira:` key in the
-  note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note
-  you write, `k` the Agent Log.
+  note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note,
+  which holds the Agent Log too: there is one button and one file.
 - **Chats.** A piece of an anchor's work gets a chat, not a note. A new chat
   needs no button: open one in the same folder and it starts on the anchor, is
-  filed in the Agent Log under `## Chats` with its first prompt as its title,
-  and its model is told the anchor. The pane keeps no list of those chats: the
-  Agent Log is the record (`k` opens it), and the `overview` lens reads it.
+  filed in the note's Agent Log, in the folded Chats callout, with its first
+  prompt as its title, and its model is told the anchor. The pane keeps no
+  list of those chats: the callout is the record of session ids, and the
+  `overview` lens reads it.
   A line there is `- <when> · <title> · \`<id>\``; one ending in `(done)` (or
   the older `(hidden)`) reads as finished, which is the agent's or the user's
   to write.
@@ -160,7 +162,7 @@ are `dimColor`, and the one primary button is the draft.
   the anchor card's indented lines (`insertSubItem`; an anchor that is itself a
   sub-item gets it beside it under the same card; an anchor not on the board
   gets a top-level card at the end of the `taskColumn` setting's column, else the first, and the toast says
-  which), and the anchor pinned in the child's Agent Log so the two
+  which), and the anchor pinned in the child's Agent Log section so the two
   share context. Either way this chat's transcript is pinned there too and the
   board is read back into the pane. **A new task moves the chat onto it**: it
   is this chat starting something of its own, so the task becomes the chat's
@@ -169,17 +171,17 @@ are `dimColor`, and the one primary button is the draft.
   chat on its anchor**: it is a piece of that work. The prompt box is left
   alone either way. A `✓ just made` row says where on the board it went and
   offers: `open` (the note in the editor), `open the board`, `define here` (an unsent draft in this chat's box asking it to fill
-  in the note's Outcome and Verify and the Agent Log's `## Context`, and with
+  in the note's Outcome and Verify and keep the context under its `# Agent Log`
+  heading, and with
   Jira on and no key typed to find the task's issue; a half-typed prompt goes to
   the clipboard first), `anchor on it` (for a sub-task; a new task already is the anchor), and `dismiss`. The row is this chat's: `/clear` and a
   resume drop it. It never writes over a note that already exists.
   **The template.** The notes folder's own `OpenAugi/AGENT/templates/Task.md`
-  wins over the built-in one, so a folder set up before the template changed
-  keeps making tasks in the old shape. Setup names which is in use (*yours* or
-  *built-in*). One that still has an Agent Log heading or embeds the log is
-  flagged, counts as a setup item that needs you, and `use the current
-  template` replaces it with the shipped one; the old file is kept beside it as
-  `Task.md.<date>.bak`.
+  wins over the built-in one (Outcome, Verify, Journal, Agent Log); Setup
+  names which is in use (*yours* or *built-in*). A template from before the
+  log moved into the note may still embed a log file under its `# Agent Log`
+  heading: the embed is dropped from a note the first time the pane writes
+  that note's log.
 - **Jira** (optional): the pane never calls Jira itself, because Jira MCP servers
   differ in name and tools. It does the deterministic part and drafts the rest
   for the chat, which uses whatever Jira tools it has; nothing is created or
@@ -193,7 +195,7 @@ are `dimColor`, and the one primary button is the draft.
   frontmatter), or `find in Jira` to draft a search that lists likely issues
   and links the one the user picks. Linked, `🔗 KEY` opens the issue when
   `jiraSite` is set, `unlink` removes the line, and `↑ update Jira` drafts a
-  status update from the note and Agent Log, shown first and posted as a comment
+  status update from the note, its Agent Log section included, shown first and posted as a comment
   only on a yes. A `jira-update.md` lens in the lens folder replaces that
   built-in wording.
 - **Today** (in the You card, under Always): the note for today, found from
@@ -219,10 +221,10 @@ are `dimColor`, and the one primary button is the draft.
 - **Context**: what the next chat is told to read is the anchor's pins plus
   four things that go in without being listed, each a checkbox under Setup →
   *What goes into every draft*, all on by default: the context note and board
-  (`m`), the anchor's human and agent notes, today's note when there is one,
+  (`m`), the anchor's note, today's note when there is one,
   and a search of the notes with OpenAugi.
 - **Pins** (`📌 Pinned to <anchor> · N`, in This chat): the one place to pin.
-  The list is the anchor's own, kept under `## Context` in its Agent Log:
+  The list is the anchor's own, kept in its note's Agent Log section:
   artifacts (listed first), notes, files, links and coding sessions. Paste a
   `[[note]]`, a file path or a link in the card to pin it. A new note the
   chat writes in the notes folder is pinned by itself; nothing else is: an
@@ -235,11 +237,9 @@ are `dimColor`, and the one primary button is the draft.
   a pin too, and any other bullet is a kept fact the pane leaves alone.
   **Unpinning ticks the line off** (`- [x] …`) instead of deleting it: it
   leaves the card and the drafts and stays on the log as a record, and pinning
-  the same thing again turns the line back into a bullet where it was. A log
-  written before pins were bullets ticked what it pinned (`- [x]` in drafts,
-  `- [ ]` a link only): every such line reads as a pin, and the pane rewrites
-  them as bullets, with the intro line that says so, the next time it writes
-  that log (`tidyTrail`; the intro line is how a log's form is told). With no
+  the same thing again turns the line back into a bullet where it was. A pinned
+  note's row shows its name, then the reason after a `·` when the line gives
+  one. With no
   anchor there is nothing to pin to and the card is not drawn.
 - **Opening a file**: a markdown note in the notes folder opens with `editor`;
   a web page (`.html`, `.htm`) with the system's handler for it, which is the
@@ -253,9 +253,9 @@ are `dimColor`, and the one primary button is the draft.
   Log; a chat that already has an anchor keeps its own. A draft with the
   project context unticked names no anchor and attaches nothing.
 - **Questions**: the pane has one place to type a thought, the scratchpad
-  (below). Questions an
-  agent left under `## Questions` in the Agent Log stay in the log (`k` opens
-  it); the pane neither lists nor writes that section.
+  (below). A question an
+  agent leaves in the Agent Log section stays there, as the line it wrote;
+  the pane neither lists nor writes questions.
 - **Saved prompts** (`l`): the pane's name for lenses, since the card is a
   row of buttons that each run a saved prompt; the files, the folder and the
   settings still say lens. Run one with the same context; `+ new prompt`
@@ -291,13 +291,41 @@ are `dimColor`, and the one primary button is the draft.
   `- HH:MM text` under its `# Journal`, beneath that day's dated heading (made
   if missing), and takes it off the pad; `✕ drop` takes it off. With no anchor
   there is only `✕ drop` and the entries stay on the pad. That save, the You card's `+ log` and `＋ make today's note` and a Jira
-  link are the only writes the pane makes to the user's own notes: only on
-  their press, only their own words.
-- **Agent Log**: per anchor, a companion note that holds the pinned context,
-  open questions and every
-  chat anchored on it (titled by its first prompt). Its first line links the user's own note (so
-  the note shows it as a backlink); agents never write that note (the pane does only for a
-  saved scratchpad entry). An older log is tidied (title and seen box dropped, ticked pins turned into bullets) when the pane next writes it.
+  link are the only writes the pane makes above a note's `# Agent Log`
+  heading: only on the user's press, only their own words.
+- **Agent Log**: the last section of the anchor's own note, under
+  `# Agent Log`. Everything above the heading is the user's; under it agents
+  append and the pane keeps its pins. Its shape:
+
+  ```
+  # Agent Log
+
+  - [[A note]] · why it matters
+  - file: `path/to/file` · label
+  - a fact or a decision worth keeping
+  - [x] [[A note that was unpinned]]
+
+  > [!abstract]- Chats
+  > - 2022-01-05 09:30 · the chat's first prompt · `session-id`
+  ```
+
+  The Chats callout is folded until opened (the `-` after the callout type)
+  and is always the section's last block: a line an agent appends after it is
+  moved up beside the others on the pane's next write, unchanged. The section
+  ends at the next level-1 heading or the end of the note, and the pane makes
+  it, at the note's end, on its first write. The pane changes nothing above
+  the heading when it writes the log (`splitLog` / `joinLog`); its other
+  writes to the note are a saved scratchpad entry and a Jira link, each on a
+  press. **The log used to be a file of its own**
+  (`<logFolder>/Agent Log - <note>.md`). The first time the pane reads or
+  writes an anchor that still has one, what the file holds goes into the
+  note's section (`withOldLog`): pins and kept lines, questions as the
+  checkbox lines they were, each saved note as a `- saved: [[note]]` record,
+  and the chats; an embed of the file under the note's heading is dropped.
+  The file is then marked `Moved into [[note]] on <date>` under its
+  frontmatter, never deleted, and not read again. With no note found for an
+  anchor there is nowhere to keep its log: a pin says so and nothing is
+  written.
 
 ## Developing
 

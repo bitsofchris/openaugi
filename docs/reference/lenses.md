@@ -68,8 +68,8 @@ payload), and the rest of the engine set — `currency-board`,
 `weekly-reflection`, `open-loops`, `chat-harvest`, `echoes`, `emerging`,
 `decision-audit`, `create-note-from-block`, `morning-briefing`, `overview`
 (every active anchor on the board: its open chats, open tasks and next
-step), `board-sync` (each open card against what its note, Agent Log and
-pull requests say happened: numbered edits proposed in chat, made only for
+step), `board-sync` (each open card against what its note and its pull
+requests say happened: numbered edits proposed in chat, made only for
 the rows the user picks) and `jira-pull` (the user's open Jira issues
 against the task notes on the board: in step, to link, or a new task and
 where its card would go; Jira is only read) — every lens

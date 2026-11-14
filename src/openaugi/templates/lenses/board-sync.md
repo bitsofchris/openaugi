@@ -4,10 +4,10 @@ name: board-sync
 description: >-
   "Does my board still match the work?" — compares every open card with what its note, its Agent Log and its pull requests say happened, and proposes the edits that would make the board true again.
 scope: >-
-  The board note (every open card above the archive that links a note, and its linked sub-items), each of those notes (Outcome, Verify, Next, the latest Journal entries), and each one's Agent Log (## Context for links, ## Chats for what was worked on). Every pull-request link found in those is checked for its state. When the draft names an anchor and the instruction says "this one", only that card and its sub-items. No semantic search: this lens reads state, it does not go looking for ideas.
+  The board note (every open card above the archive that links a note, and its linked sub-items), and each of those notes: Outcome, Verify, Next, the latest Journal entries, and its Agent Log section (the links pinned there, and the folded Chats list for what was worked on). Every pull-request link found in those is checked for its state. When the draft names an anchor and the instruction says "this one", only that card and its sub-items. No semantic search: this lens reads state, it does not go looking for ideas.
 trigger: on-demand
 target: >-
-  note — the board note and the Agent Logs of the notes it links, edited in place, and only for the rows the user says yes to in chat: a sub-item or card ticked, a card's clause, a card moved on a board whose columns are stages, a pull-request link added to an Agent Log. Never a new card and never a reorder.
+  note — the board note, and the Agent Log section of the notes it links, edited in place, and only for the rows the user says yes to in chat: a sub-item or card ticked, a card's clause, a card moved on a board whose columns are stages, a pull-request link added under a note's `# Agent Log` heading. Never a new card and never a reorder.
 ---
 
 # Board Sync
@@ -28,9 +28,9 @@ does anything change.
 2. For each card and sub-item, gather what happened, newest first:
    - the note: the last few Journal entries (their dates and what they say
      moved), whether its Verify reads as met, its open `# Next` items;
-   - its Agent Log, `Agent Log - <note name>.md` in the Agent Log folder
-     (`OpenAugi/Agent-Logs` unless the draft names another): the links under
-     `## Context`, and under `## Chats` what was worked on and when;
+   - its Agent Log, the section under `# Agent Log` at the end of that
+     note: the links pinned there, and in its folded Chats callout what was
+     worked on and when;
    - every pull-request link in those or in the card's clause: its state
      (open, in review, merged, closed) and title. Use
      `gh pr view <url> --json state,title,mergedAt,reviewDecision` when `gh`
@@ -45,7 +45,8 @@ does anything change.
    - **clause**: the card's clause no longer says why it is there. Give the
      new one, short (`— in review, PR 12`);
    - **link**: a pull request named in a Journal entry or a chat that is not
-     under the Agent Log's `## Context`. Add it there as
+     under the note's `# Agent Log` heading. Add it there, above the Chats
+     callout, as
      ``- url: `<link>` · PR: <title>``, which pins it to the work;
    - **move**: only on a board whose columns are stages (their headings say
      so: To do, Doing, Review, Done). Name the column the evidence points
@@ -65,7 +66,7 @@ Which rows? (all, numbers, or none)
 
 5. On the answer, make exactly those edits. On the board change only the
    lines named, as plain text edits (never rewrite the file); add the links
-   to the Agent Logs. Then say what changed, one line each.
+   under the notes' `# Agent Log` headings. Then say what changed, one line each.
 
 ## Hard rules
 
@@ -77,7 +78,8 @@ Which rows? (all, numbers, or none)
   state or the Verify line it rests on. "Looks done" is not evidence, and a
   card that has only gone quiet gets no row.
 - Read only on GitHub: never comment, approve, merge or close.
-- The user's notes are theirs: this lens writes to the board and to Agent
-  Logs, never into a note's Outcome, Verify, Next or Journal.
+- The user's notes are theirs: this lens writes to the board and under a
+  note's `# Agent Log` heading, never into its Outcome, Verify, Next or
+  Journal.
 - One screen. Past twenty rows, show the twenty with the strongest evidence
   and count the rest.

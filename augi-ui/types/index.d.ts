@@ -4,19 +4,18 @@ export type Lens = { name: string; path: string; description: string }
 export type SubItem = { text: string; note: string | null }
 // A Kanban card that links a note: the project or task an anchor points at.
 export type Card = { column: string; note: string; detail: string; tasks: SubItem[] }
-// A chat anchored here: when it was filed, its goal (its first prompt, or what a child
-// chat was started for), its session id, and whether it is finished.
+// A chat anchored here: when it was filed, its goal (its first prompt), its session id,
+// and whether it is marked finished.
 export type Chat = { id: string; when: string; title: string; done: boolean }
-// A question an agent (or an older pane) left on the trail under ## Questions.
-export type Question = { when: string; text: string; done: boolean }
-// Something pinned to an anchor, a line under ## Context on its Agent Log. `on` is whether
+// Something pinned to an anchor, a line of its note's Agent Log section. `on` is whether
 // it is still pinned (listed in the pane, named in the next draft): unpinning ticks the line
 // off and keeps it. A note's target is its name, the rest a path or URL; `path` is where a
 // pinned note was found.
 export type PinKind = 'note' | 'file' | 'session' | 'artifact' | 'url'
 export type Pin = { on: boolean; kind: PinKind; target: string; label: string; path?: string }
-// The anchor's Agent Log (once called its trail): the companion note agents write.
-export type Trail = { questions: Question[]; chats: Chat[]; saved: string[]; pins: Pin[] }
+// The anchor's Agent Log (once called its trail): the section at the end of its note that
+// agents write. What the pane reads of it: the chats filed there and the pins.
+export type Trail = { chats: Chat[]; pins: Pin[] }
 // One thing setup checks: a setting, the path it resolves to, and whether it's there.
 export type SetupItem = { field: string; label: string; path: string; ok: boolean; starter: boolean }
 // Today's note: the pattern its path comes from (empty for none), the path for `day`
@@ -41,9 +40,8 @@ export type Swatch = {
   jira: string
   // The Jira MCP server found among this session's tools, or empty.
   jiraServer: string
-  // Which task template new tasks are made from; `old` is the notes folder's own from
-  // before the Agent Log left the note.
-  taskTemplate: 'built-in' | 'yours' | 'old'
+  // Which task template new tasks are made from: the built-in one or the notes folder's own.
+  taskTemplate: 'built-in' | 'yours'
   today: Today
   trail: Trail
   // Where each pinned note was found, by name.
