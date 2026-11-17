@@ -1,6 +1,6 @@
 ---
 name: augi-ui
-description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, tell the chat which note it is on, pick the context a chat gets, keep today's note in view, run lenses, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
+description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, tell the chat which note it is on, pick the context a chat gets, keep today's note in view, run lenses, quiz yourself on what the chat did, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
 ---
 
 # augi-ui — the pane beside your agent chat
@@ -49,6 +49,9 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `openOnStart` | `yes` opens the pane when a new interactive chat starts; `no` keeps it closed until `/augi` | `yes` |
 | `stateLens` | The saved prompt (a lens name) a chat's own model is asked for the State card | `chat-state` |
 | `stateAuto` | `yes` asks for a chat's state by itself after a turn, at most every ten minutes, and offers a chat with no anchor a task once; `no` waits for a press | `no` |
+| `recallLens` | The saved prompt a chat's own model is asked for the Recall card's question | `recall-question` |
+| `recallAuto` | `yes` asks for a recall question by itself when a turn ends, at most every two minutes; `no` waits for a press | `no` |
+| `learnFolder` | Where graded recall questions are kept, one learning record per anchor, in the explain-to-learn skill's format | `OpenAugi/Learning` |
 | `tellChat` | `yes` tells each chat's own model its anchor (the note, its Agent Log section, today's note) beside your next prompt, so "update the task note" needs no path; `no` keeps the anchor in the pane only | `yes` |
 
 Each missing file can be created as a starter, pointed at an existing note, or
@@ -68,7 +71,7 @@ anchor see each other's pins and tasks without a refresh.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
 chat is attached to: the anchor card, its
-state, its pins, and the scratchpad. **Always** holds what is not tied to one chat: the You card (the
+state, the Recall card, its pins, and the scratchpad. **Always** holds what is not tied to one chat: the You card (the
 season line from the context note, `✏️ my context`, `📋 the board` and today's
 note: see **Today** below), the saved prompts, and setup. Setup holds paths
 and switches only.
@@ -245,6 +248,49 @@ are `dimColor`, and the one primary button is the draft.
   is not there. What is asked is the lens file's text under its frontmatter and
   title; the built-in goes by the last few turns and asks for four lines:
   Doing, Last, Next, Waiting on me.
+- **Recall** (`🎯 Recall`, in This chat, under State): one question about what
+  this chat's agent just did, to answer in your own words while it works,
+  because watching an agent work teaches little unless you recall it.
+  `🎯 quiz me` asks the chat's own model the `recall-question` saved prompt the
+  way State does (`$.model.fork`: no tools, nothing added to the chat). A fork
+  re-reads the main thread's last request, so the question can be asked while a
+  turn is still running. The reply is a `Question:` line and two to four
+  `Claim:` lines (`parseRecall`); the claims stay hidden. Enter in the answer
+  field grades it: a fresh model (`$.model.complete`, `sonnet`) gets the
+  explain-to-learn skill's blind-grader instructions (`GRADER_SYSTEM`) and only
+  the question, the claims and the answer (`gradeAsk`), never the chat, so it
+  cannot root for the learner. It answers with a grade (`recalled`, `partial`,
+  `missed`), the missing claims, a misconception, one line of feedback and a
+  follow-up (`parseGrade`). The card then shows those and the claims.
+  `peek` shows the claims without grading and records `peeked`. An empty answer
+  grades nothing. The typed answer is kept on every change, as the scratchpad's
+  is. `☐ ask after each turn` (`recallAuto`) asks at the end of a main-thread
+  turn that answered, at most every `RECALL_EVERY_MS` (two minutes), and not
+  while an unanswered question has a typed answer. A `/clear` or resume
+  empties the card.
+  **The learning record.** Each grade is appended to
+  `<learnFolder>/<anchor>.md` (`Chats with no anchor.md` without one), made on
+  first use from `newRecord`. This is the record format of the explain-to-learn
+  skill (`references/grader.md`): a `## Questions` table (`id | question |
+  rubric`, a new question gets the next `qN`, the same question keeps its id),
+  `## Attempts` (`date | id | grade | confidence | rung | next due`), and
+  `## Misconceptions` (`- day · id · line · open`, for a grade below
+  `recalled`). The ladder is 1, 3, 7 and 21 days: `recalled` moves up a rung,
+  `partial` repeats it, `missed` and `peeked` go back to a day, and a new
+  question starts on the first (`nextRung`). **What is due**
+  (`dueRecalls`) is each question's latest attempt whose next-due day is today
+  or earlier, oldest first. A question recalled on two different days is known
+  and left out. The pane reads the folder on every load. With any due, the card
+  title counts them, and `↺ N due` (and `🎯 N recalls due` in the You card)
+  puts the oldest in the card; grading it adds an attempt on the same id from
+  its rung. The skill reads the same files for "what's due", so the pane and the
+  skill keep one list.
+  **`🎓 explain it back`** fills the prompt with a draft that asks the chat to
+  run the explain-to-learn skill in its agent-work mode, on what this chat
+  built, and to keep its say-it-back grades in the same record
+  (`explainBackDraft`). A half-typed prompt goes to the clipboard first.
+  `edit prompt` opens `recall-question.md` in the lens folder, writing it from
+  the built-in prompt first when it is not there.
 - **Task offer** (in the Anchor card, for a chat with no anchor):
   `💡 suggest a task for this chat` works out which task the chat belongs to
   and shows it as an offer; nothing is linked, made or written until a press.

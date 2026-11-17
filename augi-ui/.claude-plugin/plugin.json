@@ -1,6 +1,6 @@
 {
   "name": "augi-ui",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "augi-ui, the OpenAugi pane beside your agent chat: anchor on a Kanban project or task, tell the chat which note it is on, pin its context (notes, sessions, artifacts, links), keep today's note in view, run lenses, and keep an Agent Log section in each anchor's note. Drafts only; you press enter.",
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -157,6 +157,28 @@
         "yes",
         "no"
       ]
+    },
+    "recallLens": {
+      "type": "string",
+      "title": "Recall prompt",
+      "description": "The saved prompt (a lens name) the pane asks a chat's own model for a recall question about its last turns. Empty uses recall-question.",
+      "default": "recall-question"
+    },
+    "recallAuto": {
+      "type": "string",
+      "title": "Ask a recall question after each turn",
+      "description": "yes asks a chat's own model for one recall question after a turn, at most every two minutes, to answer while the next turn runs (one extra model call each time, and one more to grade your answer); no asks only when you press.",
+      "default": "no",
+      "options": [
+        "yes",
+        "no"
+      ]
+    },
+    "learnFolder": {
+      "type": "string",
+      "title": "Learning records folder",
+      "description": "Where graded recall questions are kept, one learning record per anchor, inside the notes folder. The explain-to-learn skill reads the same records for what is due.",
+      "default": "OpenAugi/Learning"
     }
   }
 }

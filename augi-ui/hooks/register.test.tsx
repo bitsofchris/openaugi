@@ -11,6 +11,7 @@ import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, 
 import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, logName, nextFrom, addPin, parsePin, pinFrom, pinLine, removePin, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, outcomeFrom, parseTrail, tidyTrail, trailPath, toggled, typedFrom } from './register'
 import { isMovedLog, markMoved, splitLog, withOldLog } from './register'
 import { jiraKeyIn, offerAsk, offerCandidates, parseOffer } from './register'
+import { addAttempt, addDays, addMisconception, addRecallQuestion, dueRecalls, explainBackDraft, GRADER_SYSTEM, gradeAsk, newRecord, NO_ANCHOR_TOPIC, nextRung, parseGrade, parseRecall, RECALL_EVERY_MS, RECALL_PROMPT, recallAsk, recallLensFile, recordFileName } from './register'
 import { lensBody, setChatState, STATE_EVERY_MS, STATE_PROMPT, stateAsk, stateLensFile, stateLines } from './register'
 
 const PANE = {
@@ -3162,5 +3163,238 @@ test('with auto on, a chat with no anchor is offered a task once after a turn; o
   await $.turn.complete(turnEnds)
   await settle()
   expect(offers().length).toBe(1)
+  await ui.unmount()
+})
+
+// ── Recall ──
+
+test('a recall question and its claims are read from the model\'s answer, list marks and bold allowed; no question or no claim is none', async () => {
+  expect(parseRecall('Question: Why does the pane re-read the note every ten seconds?\nClaim: another chat may have written it\nClaim: the file changed on disk')).toEqual({
+    question: 'Why does the pane re-read the note every ten seconds?',
+    rubric: ['another chat may have written it', 'the file changed on disk'],
+  })
+  expect(parseRecall('**Question:** Why?\n- Claim 1: one\n2. Claim: two · three')?.rubric).toEqual(['one', 'two', 'three'])
+  expect(parseRecall('Claim: one\nClaim: two\nClaim: three\nClaim: four\nClaim: five')).toBe(null)
+  expect(parseRecall('Question: only a question')).toBe(null)
+  expect(parseRecall('Question: q\nClaim: 1\nClaim: 2\nClaim: 3\nClaim: 4\nClaim: 5')?.rubric.length).toBe(4)
+  expect(recallAsk('')).toBe(recallAsk(RECALL_PROMPT))
+  expect(recallAsk('Ask me about the tests.')).toContain('Ask me about the tests.')
+  // The lens file the pane writes reads back as the built-in prompt, in the lens contract.
+  expect(lensBody(recallLensFile('recall-question'))).toBe(RECALL_PROMPT)
+  expect(recallLensFile('recall-question')).toMatch(/^---\nkind: engine\nname: recall-question\ndescription: >-\n/)
+})
+
+test('the grader is shown the question, the claims and the answer only, and its grade is read back; "none" reads as empty', async () => {
+  const ask = gradeAsk('Why a fork?', ['it has the conversation', 'it adds nothing to the chat'], ' because it can see the chat ')
+  expect(ask).toContain('Question: Why a fork?\nRubric (the claims a complete answer makes):\n- it has the conversation\n- it adds nothing to the chat\n\nAnswer, verbatim:\nbecause it can see the chat\n')
+  expect(GRADER_SYSTEM).toContain('No praise')
+  expect(parseGrade('Grade: **partial**\nMissing: "it adds nothing to the chat"\nMisconception: none\nFeedback: Say what the fork leaves alone.\nFollow-up: What does the chat see of it?')).toEqual({
+    grade: 'partial', missing: '"it adds nothing to the chat"', misconception: '', feedback: 'Say what the fork leaves alone.', followUp: 'What does the chat see of it?',
+  })
+  expect(parseGrade('Grade: Missed.\nMisconception: thinks the fork runs tools')?.misconception).toBe('thinks the fork runs tools')
+  expect(parseGrade('I think it was fine')).toBe(null)
+})
+
+test('the ladder: recalled moves up a rung, partial repeats it, missed and peeked go back to a day; a new question starts on the first', async () => {
+  expect(nextRung('recalled', null)).toBe(3)
+  expect(nextRung('partial', null)).toBe(1)
+  expect(nextRung('missed', null)).toBe(1)
+  expect(nextRung('recalled', 3)).toBe(7)
+  expect(nextRung('recalled', 21)).toBe(21)
+  expect(nextRung('partial', 7)).toBe(7)
+  expect(nextRung('peeked', 21)).toBe(1)
+  expect(addDays('2026-11-30', 1)).toBe('2026-12-01')
+  expect(addDays('2026-12-25', 21)).toBe('2027-01-15')
+  expect(addDays('2028-02-28', 1)).toBe('2028-02-29')
+})
+
+test('a learning record in the explain-to-learn format: questions get the next id once each, attempts and misconceptions go last in their sections', async () => {
+  const fresh = newRecord('PMOC - Garden', true)
+  expect(fresh.split('\n').slice(0, 5)).toEqual(['# Learning record - PMOC - Garden', '', '- [ ] seen', '', 'From: recall questions in the Augi pane, on chats anchored to [[PMOC - Garden]]'])
+  expect(newRecord(NO_ANCHOR_TOPIC, false)).toContain('on chats with no anchor')
+  const one = addRecallQuestion(fresh, 'Why | a fork?', ['it has the chat', 'it adds nothing'])
+  expect(one.id).toBe('q1')
+  expect(one.text).toContain('|---|---|---|\n| q1 | Why / a fork? | it has the chat · it adds nothing |\n\n## Attempts')
+  const again = addRecallQuestion(one.text, 'Why | a fork?', ['other'])
+  expect(again).toEqual({ text: one.text, id: 'q1' })
+  // A record the skill wrote, with its own ids, gets the next one after them.
+  const skills = addRecallQuestion(fresh.replace('|---|---|---|', '|---|---|---|\n| q7 | What does DDP copy? | full state |'), 'Next?', ['x'])
+  expect(skills.id).toBe('q8')
+  let text = addAttempt(one.text, { date: '2026-11-17', id: 'q1', grade: 'partial', rung: 1, next: '2026-11-18' })
+  text = addAttempt(text, { date: '2026-11-18', id: 'q1', grade: 'recalled', rung: 3, next: '2026-11-21' })
+  expect(text).toContain('|---|---|---|---|---|---|\n| 2026-11-17 | q1 | partial |  | 1d | 2026-11-18 |\n| 2026-11-18 | q1 | recalled |  | 3d | 2026-11-21 |\n\n## Misconceptions')
+  text = addMisconception(text, '2026-11-17', 'q1', 'thinks the fork | runs tools')
+  text = addMisconception(text, '2026-11-18', 'q1', 'second')
+  expect(text.endsWith('## Misconceptions\n- 2026-11-17 · q1 · thinks the fork / runs tools · open\n- 2026-11-18 · q1 · second · open\n')).toBe(true)
+  // A record missing a section gets it at its end.
+  expect(addAttempt('# Learning record - X\n', { date: 'd', id: 'q1', grade: 'missed', rung: 1, next: 'n' })).toBe('# Learning record - X\n\n## Attempts\n| date | id | grade | confidence | rung | next due |\n|---|---|---|---|---|---|\n| d | q1 | missed |  | 1d | n |\n')
+  expect(recordFileName('PMOC - A/B: c')).toBe('PMOC - A B c.md')
+  expect(recordFileName('')).toBe(`${NO_ANCHOR_TOPIC}.md`)
+})
+
+test('what is due: the latest attempt per question, today or earlier, oldest first; a question recalled on two days is known', async () => {
+  let a = addRecallQuestion(newRecord('A', true), 'qa1', ['x']).text
+  a = addRecallQuestion(a, 'qa2', ['y', 'z']).text
+  a = addRecallQuestion(a, 'qa3', ['w']).text
+  a = addAttempt(a, { date: '2026-11-10', id: 'q1', grade: 'missed', rung: 1, next: '2026-11-11' })
+  a = addAttempt(a, { date: '2026-11-11', id: 'q1', grade: 'recalled', rung: 3, next: '2026-11-14' })
+  a = addAttempt(a, { date: '2026-11-12', id: 'q2', grade: 'recalled', rung: 3, next: '2026-11-15' })
+  a = addAttempt(a, { date: '2026-11-15', id: 'q2', grade: 'recalled', rung: 7, next: '2026-11-22' })
+  a = addAttempt(a, { date: '2026-11-16', id: 'q3', grade: 'partial', rung: 1, next: '2026-11-18' })
+  let b = addRecallQuestion(newRecord('B', true), 'qb1', ['v']).text
+  b = addAttempt(b, { date: '2026-11-11', id: 'q1', grade: 'peeked', rung: 1, next: '2026-11-12' })
+  const due = dueRecalls([{ topic: 'A', path: '/l/A.md', text: a }, { topic: 'B', path: '/l/B.md', text: b }], '2026-11-17')
+  expect(due).toEqual([
+    { topic: 'B', path: '/l/B.md', id: 'q1', question: 'qb1', rubric: ['v'], rung: 1, due: '2026-11-12' },
+    { topic: 'A', path: '/l/A.md', id: 'q1', question: 'qa1', rubric: ['x'], rung: 3, due: '2026-11-14' },
+  ])
+  // Two recalled on different days: known, not due even when its day passes.
+  expect(dueRecalls([{ topic: 'A', path: '', text: a }], '2026-12-31').map(one => one.question)).toEqual(['qa1', 'qa3'])
+})
+
+test('explain it back drafts the skill over this chat\'s work and names the record to keep it in', async () => {
+  const text = explainBackDraft('PMOC - Garden', '/v/PMOC - Garden.md', '/v/OpenAugi/Learning/PMOC - Garden.md')
+  expect(text).toContain('Use the explain-to-learn skill on what this chat built, in its agent-work mode')
+  expect(text).toContain('- Project [[PMOC - Garden]] (/v/PMOC - Garden.md)')
+  expect(text).toContain('in /v/OpenAugi/Learning/PMOC - Garden.md, the learning record')
+  expect(explainBackDraft(NO_ANCHOR_TOPIC, '', '/l/x.md')).toContain('This chat has no anchor.')
+})
+
+// stateHooks with a learn folder the tests can fill, and a grader that answers.
+const recallHooks = (on: On, anchors: [string, string][], session = { id: 'own-session' }) => {
+  const got = stateHooks(except(on, ['fs.list', 'fs.exists', 'config.list']), anchors, [], session)
+  const graded: { model: string; system: string; prompt: string }[] = []
+  const grader = { reply: { isAnswered: true, text: 'Grade: partial\nMissing: "it adds nothing to the chat"\nMisconception: thinks the fork runs tools\nFeedback: Say what the fork leaves alone.\nFollow-up: What does the chat see of it?' } as unknown }
+  const LEARN = '/v/OpenAugi/Learning'
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/v/Kanban.md', '/Users/t/.claude/projects', got.transcript, '/v/PMOC - Garden.md'].includes(e.path) || got.written.has(e.path) || (e.path === LEARN && [...got.written.keys()].some(path => path.startsWith(`${LEARN}/`))) }))
+  on('fs.list', (_, e) => ({
+    value: e.path === LEARN
+      ? [...got.written.keys()].filter(path => path.startsWith(`${LEARN}/`)).map(path => ({ name: path.slice(LEARN.length + 1), kind: 'file', size: 1, mtimeMs: 0, isLink: false }))
+      : e.path === '/Users/t/.claude/projects' ? [{ name: '-r-garden', kind: 'dir', size: 0, mtimeMs: 0, isLink: false }] : [],
+  }) as never)
+  on('config.list', () => ({ value: ['stateAuto', 'stateLens', 'recallAuto', 'recallLens', 'learnFolder'].map(field => ({ key: `augi-ui.${field}`, label: field, kind: 'text', value: '', provider: { plugin: 'augi-ui', tier: 'user' }, isLocked: false })) as never }))
+  on('model.complete', (_, e) => {
+    graded.push({ model: e.model, system: String(e.system ?? ''), prompt: String(e.prompt) })
+    return { value: grader.reply as never }
+  })
+
+  return { ...got, graded, grader, LEARN }
+}
+
+test('quiz me asks this chat\'s model for a question; the answer is graded blind by a fresh model and kept in the anchor\'s learning record', { options: OPTIONS }, async ($, on) => {
+  const got = recallHooks(on, [['own-session', 'PMOC - Garden']])
+  got.model.reply = { isAnswered: true, text: 'Question: Why does the pane ask a fork, not the chat?\nClaim: the fork has the conversation\nClaim: it adds nothing to the chat' }
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: /^No question yet\. Quiz me asks this chat's model/ })).toBeTruthy()
+  expect((await ui.find({ key: 'recall-auto' }))?.text).toMatch(/☐ ask after each turn/)
+  // Off by default: a turn ending asks nothing.
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(got.asked).toEqual([])
+
+  await ui.press({ key: 'recall-ask' })
+  expect(got.asked).toEqual([recallAsk(RECALL_PROMPT)])
+  expect(await ui.find({ text: 'Why does the pane ask a fork, not the chat?' })).toBeTruthy()
+  // The claims stay hidden until it is answered.
+  expect(await ui.find({ text: '• the fork has the conversation' })).toBeFalsy()
+  expect(got.graded).toEqual([])
+
+  // An empty answer grades nothing.
+  await ui.input({ key: `recall-answer-${got.clock.now}`, text: '  ' })
+  expect(got.graded).toEqual([])
+  expect(got.toasts.at(-1)).toBe('Write an answer first, in your own words, or peek.')
+
+  await ui.input({ key: `recall-answer-${got.clock.now}`, text: 'it can see the whole chat' })
+  // The grader sees the question, the claims and the answer: nothing of the chat.
+  expect(got.graded).toEqual([{ model: 'sonnet', system: GRADER_SYSTEM, prompt: gradeAsk('Why does the pane ask a fork, not the chat?', ['the fork has the conversation', 'it adds nothing to the chat'], 'it can see the whole chat') }])
+  expect(await ui.find({ text: '◐ partial · again on 2026-11-09' })).toBeTruthy()
+  expect(await ui.find({ text: 'Say what the fork leaves alone.' })).toBeTruthy()
+  expect(await ui.find({ text: 'Mix-up: thinks the fork runs tools' })).toBeTruthy()
+  expect(await ui.find({ text: '• it adds nothing to the chat' })).toBeTruthy()
+  expect(await ui.find({ text: 'Try next: What does the chat see of it?' })).toBeTruthy()
+
+  const record = got.written.get(`${got.LEARN}/PMOC - Garden.md`) ?? ''
+  expect(record.startsWith('# Learning record - PMOC - Garden\n\n- [ ] seen\n')).toBe(true)
+  expect(record).toContain('| q1 | Why does the pane ask a fork, not the chat? | the fork has the conversation · it adds nothing to the chat |')
+  expect(record).toContain('| 2026-11-08 | q1 | partial |  | 1d | 2026-11-09 |')
+  expect(record).toContain('- 2026-11-08 · q1 · thinks the fork runs tools · open')
+  // Nothing about it went into the anchor's own note.
+  expect(got.written.has('/v/PMOC - Garden.md')).toBe(false)
+
+  // Peeking at the next one grades nothing and counts as a miss.
+  got.clock.now += 60_000
+  got.model.reply = { isAnswered: true, text: 'Question: What would break without the ten-second check?\nClaim: two chats would not see each other\'s pins' }
+  await ui.press({ key: 'recall-ask' })
+  await ui.press({ key: 'recall-peek' })
+  expect(got.graded.length).toBe(1)
+  expect(await ui.find({ text: '👁 peeked · again on 2026-11-09' })).toBeTruthy()
+  expect(got.written.get(`${got.LEARN}/PMOC - Garden.md`)).toContain('| 2026-11-08 | q2 | peeked |  | 1d | 2026-11-09 |')
+
+  // A fork with nothing to go on says why.
+  got.model.reply = { isAnswered: false, reason: 'nothing-to-fork' }
+  await ui.press({ key: 'recall-ask' })
+  expect(got.toasts.at(-1)).toBe('Nothing to go on yet: send a prompt first.')
+  await ui.unmount()
+})
+
+test('with recall on, a turn ending asks a question, at most every two minutes, and never over an answer being typed', { options: { ...OPTIONS, recallAuto: 'yes' } }, async ($, on) => {
+  const got = recallHooks(on, [['own-session', 'PMOC - Garden']])
+  got.model.reply = { isAnswered: true, text: 'Question: First?\nClaim: one' }
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'recall-auto' }))?.text).toMatch(/☑ ask after each turn/)
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(got.asked).toEqual([recallAsk(RECALL_PROMPT)])
+  expect(await ui.find({ text: 'First?' })).toBeTruthy()
+
+  // Too soon: nothing new.
+  got.model.reply = { isAnswered: true, text: 'Question: Second?\nClaim: two' }
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(got.asked.length).toBe(1)
+
+  // Later, an untouched question is replaced by a fresh one.
+  got.clock.now += RECALL_EVERY_MS
+  await $.turn.complete(turnEnds)
+  await settle()
+  expect(got.asked.length).toBe(2)
+  expect(await ui.find({ text: 'Second?' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('a due recall comes back: the You card counts it, pressing it puts it in the card, and the grade moves it up the ladder', { options: OPTIONS }, async ($, on) => {
+  const got = recallHooks(on, [['own-session', 'PMOC - Garden']])
+  let text = addRecallQuestion(newRecord('PMOC - Garden', true), 'Why a fork?', ['it has the chat']).text
+  text = addAttempt(text, { date: '2026-11-05', id: 'q1', grade: 'partial', rung: 3, next: '2026-11-08' })
+  got.written.set(`${got.LEARN}/PMOC - Garden.md`, text)
+  got.grader.reply = { isAnswered: true, text: 'Grade: recalled\nMissing: none\nMisconception: none\nFeedback: All claims met.\nFollow-up: none' }
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ text: '🎯 Recall · 1 due' })).toBeTruthy()
+  await ui.press({ key: 'you-due' })
+  expect(await ui.find({ text: 'Why a fork?' })).toBeTruthy()
+  expect(await ui.find({ text: 'due again · PMOC - Garden' })).toBeTruthy()
+  // No model was asked for a question: it came from the record.
+  expect(got.asked).toEqual([])
+  await ui.input({ key: `recall-answer-${got.clock.now}`, text: 'it reads the chat' })
+  expect(await ui.find({ text: '✓ recalled · again on 2026-11-15' })).toBeTruthy()
+  const after = got.written.get(`${got.LEARN}/PMOC - Garden.md`) ?? ''
+  expect(after).toContain('| 2026-11-08 | q1 | recalled |  | 7d | 2026-11-15 |')
+  // One question in the record still, and no misconception for a recall.
+  expect(after.split('Why a fork?').length).toBe(2)
+  expect(after.trimEnd().endsWith('## Misconceptions')).toBe(true)
+  expect(await ui.find({ key: 'you-due' })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('explain it back fills the prompt with the skill\'s draft for this anchor, keeping a half-typed prompt on the clipboard', { options: OPTIONS }, async ($, on) => {
+  const got = recallHooks(on, [['own-session', 'PMOC - Garden']])
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'recall-explain' })
+  expect(got.filled).toEqual([explainBackDraft('PMOC - Garden', '/v/PMOC - Garden.md', '/v/OpenAugi/Learning/PMOC - Garden.md')])
+  expect(got.copied).toEqual(['half a thought'])
   await ui.unmount()
 })

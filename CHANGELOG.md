@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+**augi-ui 0.17.0: a Recall card, to learn from the chat while it works.**
+`🎯 Recall` in the pane holds one question about what this chat's agent just
+did: why a change was made, what was ruled out, how a piece works. `🎯 quiz me`
+asks the chat's own model for it as a side question (a fork: no tools, nothing
+added to the chat), so it works mid-turn, and you answer it in your own words
+while the next turn runs. A fresh model grades the answer blind: it sees the
+question, the claims a full answer makes and your words, never the chat, so it
+cannot grade kindly. Then the card shows the grade, one line of feedback, the
+mix-up if there was one, the full answer's claims and a follow-up question.
+`peek` shows the claims and counts as a miss.
+
+Every graded question goes into a learning record, one per anchor, in
+`OpenAugi/Learning/` (`learnFolder`). It uses the explain-to-learn skill's
+format and its ladder (1, 3, 7, 21 days), so the pane and the skill keep one
+list of what is due. The You card shows `🎯 N recalls due` and puts the oldest
+one in the card. `🎓 explain it back` drafts the skill over what this chat
+built, keeping its questions in the same record. `☐ ask after each turn`
+(`recallAuto`, off by default) asks by itself when a turn ends, at most every
+two minutes and never over an answer you have started typing. Each question
+is one model call and each grade one more. The question is a saved prompt,
+`recall-question`, shipped as an engine lens; `edit prompt` opens it.
+
 **augi-ui: the pane offers a chat its task.** A chat with no anchor has
 `💡 suggest a task for this chat` in the Anchor card. A Jira key in the git
 branch that a board note carries settles it at once; otherwise the chat's own
