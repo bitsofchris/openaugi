@@ -46,8 +46,6 @@ export type Options = {
   recallLens: string
   // `yes` asks for a recall question by itself after a turn, at most every RECALL_EVERY_MS.
   recallAuto: string
-  // Where the learning records are kept, one per anchor; empty is `OpenAugi/Learning`.
-  learnFolder: string
 }
 export type Paths = {
   home: string
@@ -56,8 +54,6 @@ export type Paths = {
   board: string
   lenses: string
   trails: string
-  // The learning records the Recall card writes and explain-to-learn reads.
-  learn: string
   // Where every new task note goes: the task folder, else the notes folder's root.
   tasks: string
   // The board column for a new standalone task from a chat with no anchor, or empty.
@@ -102,7 +98,6 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
     board: within(notes, options.boardNote || 'Kanban.md', home),
     lenses: within(notes, options.lensFolder || 'OpenAugi/AGENT/lenses', home),
     trails: within(notes, options.logFolder || options.trailFolder || 'OpenAugi/Agent-Logs', home),
-    learn: within(notes, options.learnFolder || 'OpenAugi/Learning', home),
     tasks: options.taskFolder?.trim() ? within(notes, options.taskFolder, home) : notes,
     taskColumn: (options.taskColumn ?? '').trim(),
     taskTemplate: `${notes}/OpenAugi/AGENT/templates/Task.md`,
@@ -166,7 +161,7 @@ export const USAGE_FEATURES = [
   'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss',
   'pin-open', 'pin-drop', 'pin-paste',
   'state-update', 'state-auto', 'state-prompt', 'state-edit', 'state-pick',
-  'recall-ask', 'recall-answer', 'recall-peek', 'recall-due', 'recall-explain', 'recall-auto', 'recall-edit', 'you-due',
+  'recall-ask', 'recall-answer', 'recall-peek', 'recall-due', 'recall-explain', 'recall-auto', 'recall-edit', 'recall-open', 'you-due',
   'offer-ask', 'offer-link', 'offer-make', 'offer-dismiss',
   'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
   'today-log', 'today-open', 'today-make', 'pick-today',
@@ -588,8 +583,8 @@ const NO_STATE: ChatState = { session: '', text: '', when: '', at: 0, busy: fals
 const chatState = atom({ plugin: 'augi-ui', key: 'chatState' } as const, NO_STATE, { shape: 'chatState-1' })
 
 // This chat's recall question (askRecall, loadDue) and, once answered, its grade.
-const NO_RECALL: Recall = { session: '', topic: '', isAnchor: false, id: '', question: '', rubric: [], rung: 0, from: 'chat', at: 0, busy: '', error: '', result: null }
-const recall = atom({ plugin: 'augi-ui', key: 'recall' } as const, NO_RECALL, { shape: 'recall-1' })
+const NO_RECALL: Recall = { session: '', topic: '', path: '', id: '', question: '', rubric: [], from: 'chat', at: 0, busy: '', error: '', result: null }
+const recall = atom({ plugin: 'augi-ui', key: 'recall' } as const, NO_RECALL, { shape: 'recall-2' })
 // The answer being typed, kept on every change as the scratchpad's is; the pane draws `typedRecall`.
 const recallDraft = atom({ plugin: 'augi-ui', key: 'recallDraft' } as const, '' as string, { shape: 'recall-draft-1' })
 let typedRecall = ''
@@ -1300,12 +1295,15 @@ const trimBlank = (lines: string[]): string[] => {
   return lines.slice(from, to)
 }
 
-// A note in four parts: the lines above the section's heading; the section's own lines
+// A note in five parts: the lines above the section's heading; the section's own lines
 // (`body`: pins and whatever was saved there, blank edges trimmed); the lines of its Chats
 // callout without their `> ` (a chat's line, then indented under it where that chat last
-// stood); and what follows the section (a later level-1 heading and on). `has` is whether
-// the note has the section; the last `# Agent Log` is the one.
-export type LogParts = { before: string[]; body: string[]; chats: string[]; after: string[]; has: boolean }
+// stood); the rows of its `## Recall` table (`recall`: the Recall card's graded questions);
+// and what follows the section (a later level-1 heading and on). `has` is whether the note
+// has the section; the last `# Agent Log` is the one.
+export type LogParts = { before: string[]; body: string[]; chats: string[]; recall: string[]; after: string[]; has: boolean }
+export const RECALL_HEAD = '## Recall'
+const isRecallHead = (line: string): boolean => /^## Recall\s*$/i.test(line)
 
 export const splitLog = (text: string): LogParts => {
   const lines = text.split('\n')
@@ -1316,7 +1314,7 @@ export const splitLog = (text: string): LogParts => {
     }
   })
   if (at < 0) {
-    return { before: lines, body: [], chats: [], after: [], has: false }
+    return { before: lines, body: [], chats: [], recall: [], after: [], has: false }
   }
   let end = at + 1
   while (end < lines.length && !/^# \S/.test(lines[end] ?? '')) {
@@ -1324,9 +1322,11 @@ export const splitLog = (text: string): LogParts => {
   }
   const body: string[] = []
   const chats: string[] = []
-  // Which callout the line is in: the Chats list, or an old State block (dropped). The
-  // blank lines around a callout only set it apart: they are not the body's.
-  let inside: '' | 'chats' | 'old' = ''
+  const recall: string[] = []
+  // Which block the line is in: the Chats list, an old State block (dropped), or the Recall
+  // table. The blank lines around one only set it apart: they are not the body's. Under
+  // `## Recall` only the table's rows are the table's: any other line there is the body's.
+  let inside: '' | 'chats' | 'old' | 'recall' = ''
   let isJustPast = false
   for (const line of lines.slice(at + 1, end)) {
     const isOld = OLD_STATE_HEAD.test(line)
@@ -1335,7 +1335,16 @@ export const splitLog = (text: string): LogParts => {
       while (body.length > 0 && (body[body.length - 1] ?? '').trim() === '') {
         body.pop()
       }
-    } else if (inside && line.startsWith('>')) {
+    } else if (isRecallHead(line)) {
+      inside = 'recall'
+      while (body.length > 0 && (body[body.length - 1] ?? '').trim() === '') {
+        body.pop()
+      }
+    } else if (inside === 'recall' && (line.trim().startsWith('|') || line.trim() === '')) {
+      if (line.trim()) {
+        recall.push(line.trim())
+      }
+    } else if (inside && inside !== 'recall' && line.startsWith('>')) {
       if (inside === 'chats') {
         chats.push(line.replace(/^> ?/, ''))
       }
@@ -1348,20 +1357,20 @@ export const splitLog = (text: string): LogParts => {
     }
   }
 
-  return { before: lines.slice(0, at), body: trimBlank(body), chats: chats.filter(line => line.trim()), after: lines.slice(end), has: true }
+  return { before: lines.slice(0, at), body: trimBlank(body), chats: chats.filter(line => line.trim()), recall, after: lines.slice(end), has: true }
 }
 
 // The note again from its parts. A note that had no section gets it at its end, one blank
 // line down; what is above an existing section, and after it, stays byte for byte. The
-// Chats callout is always the section's last block, so a line appended after it moves up
-// beside the others.
-const joinLog = ({ before, body, chats, after, has }: LogParts): string => {
+// Chats callout comes after everything else but the Recall table, which is last, so a line
+// appended after either moves up beside the others.
+const joinLog = ({ before, body, chats, recall, after, has }: LogParts): string => {
   let last = before.length
   while (!has && last > 0 && (before[last - 1] ?? '').trim() === '') {
     last -= 1
   }
   const top = has ? before : last > 0 ? [...before.slice(0, last), ''] : []
-  const blocks = [body, chats.length > 0 ? [CHATS_HEAD, ...chats.map(line => `> ${line}`)] : []].filter(one => one.length > 0)
+  const blocks = [body, chats.length > 0 ? [CHATS_HEAD, ...chats.map(line => `> ${line}`)] : [], recall.length > 0 ? [RECALL_HEAD, ...recall] : []].filter(one => one.length > 0)
   const section = [LOG_HEAD, ...blocks.flatMap(one => ['', ...one])]
 
   return [...top, ...section, '', ...after].join('\n')
@@ -1479,8 +1488,8 @@ export const stateAsk = (body: string): string =>
 // the next turn runs. The question and the claims a full answer makes come from the chat's
 // own model (a fork, which has the work in front of it); the grade comes from a fresh model
 // that sees only the question, the claims and the answer, so it cannot root for the learner.
-// Every graded question is kept in a learning record, one file per anchor, in the format the
-// explain-to-learn skill reads: the same records, the same ladder, one list of what is due.
+// Every graded question is kept in the anchor's own note, as a row of the Recall table at the
+// end of its Agent Log section, and comes back on a 1, 3, 7, 21 day ladder.
 
 export type RecallGrade = 'recalled' | 'partial' | 'missed' | 'peeked'
 export const RECALL_LENS = 'recall-question'
@@ -1510,7 +1519,7 @@ export const recallLensFile = (name: string): string =>
     '  This conversation and nothing else: no files are read and no search is run.',
     'trigger: on-demand',
     'target: >-',
-    '  note — the Recall card in the Augi pane; once graded, a row in the anchor\'s learning record (the explain-to-learn format).',
+    '  note — the Recall card in the Augi pane; once graded, a row of the ## Recall table at the end of the anchor note\'s Agent Log section.',
     '---',
     `# ${name}`,
     '',
@@ -1540,7 +1549,7 @@ export const parseRecall = (reply: string): { question: string; rubric: string[]
   return question && rubric.length > 0 ? { question, rubric: rubric.slice(0, 4) } : null
 }
 
-// The grader's instructions: the explain-to-learn skill's blind grader, held to one answer.
+// The grader's instructions: strict, blind, one answer against its claims.
 export const GRADER_SYSTEM = [
   'You grade one short written answer against a rubric. Grade as if the exam is real: an inflated grade puts the review too far in the future.',
   '',
@@ -1605,159 +1614,99 @@ export const addDays = (day: string, days: number): string => {
   return next.toISOString().slice(0, 10)
 }
 
-// The learning record's topic for a chat: its anchor, else one record for every chat with none.
-export const NO_ANCHOR_TOPIC = 'Chats with no anchor'
-export const recordFileName = (topic: string): string => `${topic.replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').trim() || NO_ANCHOR_TOPIC}.md`
+// The rung a question is on after its grades, oldest first, each moving it as nextRung says.
+export const rungAfter = (grades: RecallGrade[]): number => grades.reduce<number | null>((was, grade) => nextRung(grade, was), null) ?? RUNGS[0] ?? 1
 
-const QUESTIONS_HEAD = ['| id | question | rubric |', '|---|---|---|']
-const ATTEMPTS_HEAD = ['| date | id | grade | confidence | rung | next due |', '|---|---|---|---|---|---|']
-
-// A new learning record, as explain-to-learn writes one (its references/grader.md).
-export const newRecord = (topic: string, isAnchor: boolean): string =>
-  [
-    `# Learning record - ${topic}`,
-    '',
-    '- [ ] seen',
-    '',
-    `From: recall questions in the Augi pane, on chats ${isAnchor ? `anchored to [[${topic}]]` : 'with no anchor'}`,
-    'Output to make: none named · made: no',
-    '',
-    '## Questions',
-    ...QUESTIONS_HEAD,
-    '',
-    '## Attempts',
-    ...ATTEMPTS_HEAD,
-    '',
-    '## Misconceptions',
-    '',
-  ].join('\n')
+// One graded question in the anchor note's Recall table: its id, the question, the claims a
+// full answer makes, each grade with its day (oldest first), the day it is due again, and the
+// last mix-up while it is still open.
+export type RecallRow = { id: string; question: string; rubric: string[]; grades: { date: string; grade: RecallGrade }[]; due: string; mixup: string }
+export const RECALL_TABLE_HEAD = ['| id | question | full answer | grades | due | mix-up |', '|---|---|---|---|---|---|']
 
 const cell = (text: string): string => text.replace(/\|/g, '/').replace(/\s*\n\s*/g, ' ').trim()
 const cellsOf = (line: string): string[] => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(one => one.trim())
-const isHead = (line: string, heading: string): boolean => new RegExp(`^##\\s+${heading}\\s*$`, 'i').test(line)
 
-// The data rows of the table under a `## heading`, as cells.
-const tableRows = (text: string, heading: string): string[][] => {
-  const lines = text.split('\n')
-  const at = lines.findIndex(line => isHead(line, heading))
-  if (at < 0) {
-    return []
-  }
-  const rows: string[][] = []
-  for (const line of lines.slice(at + 1)) {
-    if (/^#{1,2}\s/.test(line)) {
-      break
-    }
-    if (line.trim().startsWith('|')) {
-      rows.push(cellsOf(line))
-    }
-  }
+// The Recall table's rows, from the lines splitLog keeps for it; the header and anything
+// that is not a `qN` row are skipped.
+export const parseRecallRows = (lines: string[]): RecallRow[] =>
+  lines.map(cellsOf).filter(cells => /^q\d+$/i.test(cells[0] ?? '')).map(cells => ({
+    id: cells[0] ?? '',
+    question: cells[1] ?? '',
+    rubric: (cells[2] ?? '').split(' · ').map(one => one.trim()).filter(Boolean),
+    grades: (cells[3] ?? '').split(',').flatMap(one => {
+      const found = one.trim().match(/^(\d{4}-\d{2}-\d{2})\s+(recalled|partial|missed|peeked)$/i)
 
-  return rows.slice(2)
+      return found ? [{ date: found[1] ?? '', grade: (found[2] ?? '').toLowerCase() as RecallGrade }] : []
+    }),
+    due: cells[4] ?? '',
+    mixup: cells[5] ?? '',
+  }))
+
+const rowLine = (row: RecallRow): string =>
+  `| ${[row.id, row.question, row.rubric.join(' · '), row.grades.map(one => `${one.date} ${one.grade}`).join(', '), row.due, row.mixup].map(cell).join(' | ')} |`
+
+// The note with a grade kept in its Recall table, the last block of its Agent Log section:
+// on the row for `id`, else the row with the same question, else a new row with the next
+// `qN`. The day it is due again comes from the ladder over all its grades; a mix-up stays
+// until the question is recalled.
+export const recordRecall = (text: string, asked: { id: string; question: string; rubric: string[] }, date: string, graded: GradeReply): { text: string; id: string; due: string } => {
+  const parts = splitLog(text)
+  const rows = parseRecallRows(parts.recall)
+  const found = rows.find(one => (asked.id && one.id === asked.id) || one.question === cell(asked.question))
+  const top = rows.reduce((most, one) => Math.max(most, Number(one.id.slice(1)) || 0), 0)
+  const was = found ?? { id: `q${top + 1}`, question: asked.question, rubric: asked.rubric, grades: [], due: '', mixup: '' }
+  const grades = [...was.grades, { date, grade: graded.grade }]
+  const row: RecallRow = { ...was, grades, due: addDays(date, rungAfter(grades.map(one => one.grade))), mixup: graded.grade === 'recalled' ? '' : graded.misconception || was.mixup }
+  const next = found ? rows.map(one => (one === found ? row : one)) : [...rows, row]
+
+  return { text: joinLog({ ...parts, recall: [...RECALL_TABLE_HEAD, ...next.map(rowLine)] }), id: row.id, due: row.due }
 }
 
-// The record with a row added at the end of the table under `## heading`; a record with no
-// such section gets it at its end, with the table's header.
-const appendRow = (text: string, heading: string, header: string[], cells: string[]): string => {
-  const lines = text.split('\n')
-  const row = `| ${cells.map(cell).join(' | ')} |`
-  const at = lines.findIndex(line => isHead(line, heading))
-  if (at < 0) {
-    const body = text.replace(/\s+$/, '')
+// Recalled on two different days: known, and not asked again.
+export const isKnown = (row: RecallRow): boolean => new Set(row.grades.filter(one => one.grade === 'recalled').map(one => one.date)).size >= 2
 
-    return `${body}\n\n## ${heading}\n${header.join('\n')}\n${row}\n`
-  }
-  let end = at + 1
-  let last = -1
-  while (end < lines.length && !/^#{1,2}\s/.test(lines[end] ?? '')) {
-    if ((lines[end] ?? '').trim().startsWith('|')) {
-      last = end
-    }
-    end += 1
-  }
-  if (last < 0) {
-    lines.splice(at + 1, 0, ...header, row)
-  } else {
-    lines.splice(last + 1, 0, row)
-  }
+// What is due across notes, oldest first: each question in a note's Recall table whose due
+// day is today or earlier and that is not known yet.
+export const dueRecalls = (notes: { topic: string; path: string; text: string }[], today: string): Due[] =>
+  notes
+    .flatMap(({ topic, path, text }) =>
+      parseRecallRows(splitLog(text).recall)
+        .filter(row => /^\d{4}-\d{2}-\d{2}$/.test(row.due) && row.due <= today && !isKnown(row))
+        .map(row => ({ topic, path, id: row.id, question: row.question, rubric: row.rubric, due: row.due })),
+    )
+    .sort((one, other) => one.due.localeCompare(other.due))
 
-  return lines.join('\n')
-}
+// The saved prompt 🎓 explain it back runs, written into the lens folder when it is not there.
+export const EXPLAIN_LENS = 'explain-back'
+export const EXPLAIN_PROMPT = [
+  'Explain back to me what this chat built, so I understand it well enough to review it, make the next change without an agent, and say what would break. Then make me recall it.',
+  '',
+  '1. Ask me first, one question at a time and only what I have not said: which part I want to own (the whole change, one mechanism, one decision), and what I will make at the end (the next change, or a review of this one, done without an agent).',
+  '2. Sources, in this order of trust: the code as it is now and the diff (git log, git diff), the tests and whether they ran, the anchor note\'s Outcome, then this conversation. The chat\'s own summary of its work is a claim to check against the diff, not a source. Where the chat and the code disagree, follow the code and say so.',
+  '3. Write one self-contained HTML page of five to eight steps, one idea each, with the step number always in view: what was wrong or missing before; a map of the files and functions that changed, one line each, naming the one to read first; the mechanism, tracing one real input from this work through the new code with its actual values; each decision the chat made and what it ruled out, with a box that asks for my pick and why before it shows the answer; what would break, and which test would catch it; the limits and what was left undone. Define each term where it is first used. Every name and number must match the code as it is now; list on the page anything unverified.',
+  '4. Save the page in the notes folder under OpenAugi/YYYY/MM/DD/ and pin it in the anchor note\'s Agent Log as a line of the form - file: `<path>` · explainer: <what it explains>.',
+  '5. Then ask me five say-it-back questions about why and how, never about names, one per message, and wait for my answer before showing anything. Before asking each, write down the two to four claims a complete answer makes, and grade my answer strictly against them: recalled (every claim met), partial (the core is there, a claim is missing), missed. No praise: one line on what was missing.',
+  '6. Keep each graded question as a row of the `## Recall` table, the last block of the anchor note\'s `# Agent Log` section (the table the Augi pane\'s Recall card keeps; make the heading and table if they are missing): `| id | question | full answer | grades | due | mix-up |`, with the next free `qN`, the claims joined by ` · `, grades as `YYYY-MM-DD grade`, comma separated, oldest first, and the mix-up in one line or empty. Due is the grade\'s day plus the question\'s rung on the 1, 3, 7, 21 day ladder: a new question starts on 1 day, recalled moves up a rung, partial keeps it, missed goes back to 1. Compute dates with the shell.',
+].join('\n')
 
-// A record with this question in its Questions table: the id it already has when the same
-// question is there, else the next `qN`.
-export const addRecallQuestion = (text: string, question: string, rubric: string[]): { text: string; id: string } => {
-  const rows = tableRows(text, 'Questions')
-  const same = rows.find(one => one[1] === cell(question))
-  if (same?.[0]) {
-    return { text, id: same[0] }
-  }
-  const top = rows.reduce((most, one) => Math.max(most, Number((one[0] ?? '').match(/(\d+)$/)?.[1] ?? 0)), 0)
-  const id = `q${top + 1}`
-
-  return { text: appendRow(text, 'Questions', QUESTIONS_HEAD, [id, question, rubric.join(' · ')]), id }
-}
-
-export type Attempt = { date: string; id: string; grade: RecallGrade; rung: number; next: string }
-export const addAttempt = (text: string, one: Attempt): string =>
-  appendRow(text, 'Attempts', ATTEMPTS_HEAD, [one.date, one.id, one.grade, '', `${one.rung}d`, one.next])
-
-// A misconception goes last under `## Misconceptions`, open until a later answer gets it right.
-export const addMisconception = (text: string, day: string, id: string, said: string): string => {
-  const entry = `- ${day} · ${id} · ${cell(said)} · open`
-  const lines = text.replace(/\s+$/, '').split('\n')
-  const at = lines.findIndex(line => isHead(line, 'Misconceptions'))
-  if (at < 0) {
-    return `${lines.join('\n')}\n\n## Misconceptions\n${entry}\n`
-  }
-  let end = at + 1
-  while (end < lines.length && !/^#{1,2}\s/.test(lines[end] ?? '')) {
-    end += 1
-  }
-  while (end > at + 1 && (lines[end - 1] ?? '').trim() === '') {
-    end -= 1
-  }
-  lines.splice(end, 0, entry)
-
-  return `${lines.join('\n')}\n`
-}
-
-// What is due across the records, oldest first: each question's latest attempt whose next
-// due day is today or earlier. A question recalled on two different days is known and left out.
-export const dueRecalls = (records: { topic: string; path: string; text: string }[], today: string): Due[] => {
-  const due: Due[] = []
-  for (const { topic, path, text } of records) {
-    const questions = new Map(tableRows(text, 'Questions').map(one => [one[0] ?? '', one]))
-    const latest = new Map<string, string[]>()
-    const recalledOn = new Map<string, Set<string>>()
-    for (const one of tableRows(text, 'Attempts')) {
-      const id = one[1] ?? ''
-      latest.set(id, one)
-      if (one[2] === 'recalled') {
-        recalledOn.set(id, (recalledOn.get(id) ?? new Set()).add(one[0] ?? ''))
-      }
-    }
-    for (const [id, one] of latest) {
-      const next = one[5] ?? ''
-      const asked = questions.get(id)
-      if (!asked || (recalledOn.get(id)?.size ?? 0) >= 2 || !/^\d{4}-\d{2}-\d{2}$/.test(next) || next > today) {
-        continue
-      }
-      due.push({ topic, path, id, question: asked[1] ?? '', rubric: (asked[2] ?? '').split(' · ').filter(Boolean), rung: Number((one[4] ?? '').match(/\d+/)?.[0] ?? 1), due: next })
-    }
-  }
-
-  return due.sort((one, other) => one.due.localeCompare(other.due))
-}
-
-// The prompt that asks the chat to run explain-to-learn over what it built, keeping its
-// questions in the same record the Recall card writes.
-export const explainBackDraft = (topic: string, notePath: string, record: string): string =>
+// The lens file the pane writes for that prompt, so it can be edited like any saved prompt.
+export const explainLensFile = (name: string): string =>
   [
-    'Use the explain-to-learn skill on what this chat built, in its agent-work mode: the explainer is about this work (what changed, why, how it works, what would break), not a general topic, and its sources are this conversation and the changes it made.',
-    notePath ? `- Project [[${topic}]] (${notePath}): its Outcome says what the work is for.` : '- This chat has no anchor.',
-    `- Keep the say-it-back questions and grades in ${record}, the learning record the Augi pane's Recall card writes for this work. Add to it; do not start another.`,
-    '- Ask me the intake questions first, one at a time.',
+    '---',
+    'kind: engine',
+    `name: ${name}`,
+    'description: >-',
+    '  "Do I understand what this chat built?" — a short stepped HTML explainer of the chat\'s own work, traced through the real code, then five say-it-back questions graded and kept in the anchor note\'s Recall table.',
+    'scope: >-',
+    '  This conversation, the code it changed and its diff, the tests, and the anchor note\'s Outcome.',
+    'trigger: on-demand',
+    'target: >-',
+    '  note — an HTML page under OpenAugi/YYYY/MM/DD/, pinned in the anchor note\'s Agent Log; graded questions as rows of the ## Recall table there.',
+    '---',
+    `# ${name}`,
+    '',
+    EXPLAIN_PROMPT,
+    '',
   ].join('\n')
 
 // Every note a chat could be anchored on: the board's cards and their linked sub-items, once each.
@@ -2018,6 +1967,9 @@ export const buildDraft = (
   typed: string,
   anchor: Anchor | null = null,
   today = '',
+  // A lens whose job is to write (a page, rows in the note): run as written, files and all,
+  // without the short-answer and no-files rules a lens answered in chat gets.
+  writes = false,
 ): string => {
   const lines = [DRAFT_HEAD]
 
@@ -2038,11 +1990,15 @@ export const buildDraft = (
   if (choice.openAugi) {
     lines.push(`- Search my notes in "${P.notes}" for what is relevant to this (with the OpenAugi tools if you have them), and name the notes you used.`)
   }
-  if (lens) {
+  if (lens && writes) {
+    lines.push(`- Lens: read "${lens.path}" and run it as written, step by step, writing the files and the lines it asks for.`)
+  } else if (lens) {
     lines.push(`- Lens: read "${lens.path}" and apply it to the context above. Answer here in chat instead of writing its output file.`)
   }
-  lines.push('Reply in at most 10 lines: what you found or did, then anything you need from me. No walls of text.')
-  lines.push("Don't change any files unless my instruction asks you to.")
+  if (!writes) {
+    lines.push('Reply in at most 10 lines: what you found or did, then anything you need from me. No walls of text.')
+    lines.push("Don't change any files unless my instruction asks you to.")
+  }
   if (anchor) {
     lines.push(`Write in my note only when I ask. What I ask you to save goes under its "# Agent Log" heading, never above it, one line with why; "- [[<note>]] · <why it matters>" pins a note.`)
   }
@@ -2781,12 +2737,12 @@ async function anchorNow($: EngineInterface): Promise<Anchor | null> {
 }
 
 // `about` replaces what's typed in the prompt box: what a Jira update is for, for one.
-async function draftText($: EngineInterface, lens: Lens | null, about?: string): Promise<string> {
+async function draftText($: EngineInterface, lens: Lens | null, about?: string, writes = false): Promise<string> {
   const { trail, pinPaths, today } = await read($, swatch)
   const choice = await read($, picks)
   const typed = about ?? typedFrom((await $.prompt.read()).text)
 
-  return buildDraft(withPaths(trail.pins ?? [], pinPaths), choice, lens, typed, await anchorNow($), today.exists ? today.path : '')
+  return buildDraft(withPaths(trail.pins ?? [], pinPaths), choice, lens, typed, await anchorNow($), today.exists ? today.path : '', writes)
 }
 
 // Fills the prompt box with a pane draft. A prompt the user was typing is not lost:
@@ -2805,8 +2761,8 @@ async function fillOver($: EngineInterface, text: string): Promise<void> {
   await $.prompt.fill({ text, mode: 'replace' })
 }
 
-async function draft($: EngineInterface, lens: Lens | null, about?: string): Promise<void> {
-  await $.prompt.fill({ text: await draftText($, lens, about), mode: 'replace' })
+async function draft($: EngineInterface, lens: Lens | null, about?: string, writes = false): Promise<void> {
+  await $.prompt.fill({ text: await draftText($, lens, about, writes), mode: 'replace' })
 }
 
 const withPaths = (pins: Pin[], pinPaths: Record<string, string>): Pin[] =>
@@ -3164,20 +3120,18 @@ export const RECALL_EVERY_MS = 2 * 60_000
 export const GRADER_MODEL = 'sonnet'
 let isRecallBusy = false
 
-// The learning records under the learn folder, read for what is due today.
+// What is due today across every note with a Recall table: one grep over the notes folder
+// finds them, and only a table inside a note's Agent Log section counts.
 async function dueNow($: EngineInterface): Promise<Due[]> {
-  if (!(await $.fs.exists(P.learn))) {
-    return []
-  }
-  const records: { topic: string; path: string; text: string }[] = []
-  for (const file of await $.fs.list(P.learn)) {
-    if (file.name.endsWith('.md')) {
-      const path = `${P.learn}/${file.name}`
-      records.push({ topic: file.name.slice(0, -3), path, text: await $.fs.read(path) })
-    }
+  const { stdout } = await $.process.run([
+    'grep', '-rlE', '--include=*.md', '--exclude-dir=.git', '--exclude-dir=.obsidian', '--exclude-dir=.claude', '--exclude-dir=.trash', '^## Recall[[:space:]]*$', P.notes,
+  ])
+  const notes: { topic: string; path: string; text: string }[] = []
+  for (const path of stdout.split('\n').filter(Boolean)) {
+    notes.push({ topic: baseName(path).replace(/\.md$/, ''), path, text: await readOr($, path) })
   }
 
-  return dueRecalls(records, stamp(await $.clock.now()).slice(0, 10))
+  return dueRecalls(notes, stamp(await $.clock.now()).slice(0, 10))
 }
 
 async function typeRecall($: EngineInterface, text: string): Promise<void> {
@@ -3210,7 +3164,7 @@ async function askRecall($: EngineInterface, by: 'press' | 'auto'): Promise<void
     const at = await $.clock.now()
     if (found) {
       const anchor = await sessionAnchor($)
-      await showRecall($, { ...NO_RECALL, session: id, topic: anchor ?? NO_ANCHOR_TOPIC, isAnchor: Boolean(anchor), question: found.question, rubric: found.rubric, at })
+      await showRecall($, { ...NO_RECALL, session: id, topic: anchor ?? '', question: found.question, rubric: found.rubric, at })
 
       return
     }
@@ -3257,7 +3211,7 @@ async function loadDue($: EngineInterface): Promise<void> {
     return
   }
   const id = await $.session.id().catch(() => '')
-  await showRecall($, { ...NO_RECALL, session: id, topic: one.topic, isAnchor: true, id: one.id, question: one.question, rubric: one.rubric, rung: one.rung, from: 'due', at: await $.clock.now() })
+  await showRecall($, { ...NO_RECALL, session: id, topic: one.topic, path: one.path, id: one.id, question: one.question, rubric: one.rubric, from: 'due', at: await $.clock.now() })
 }
 
 // Grades the answer with a fresh model that sees only the question, its claims and the
@@ -3297,28 +3251,22 @@ async function gradeRecall($: EngineInterface, answer: string, peeked = false): 
     return
   }
   const day = stamp(await $.clock.now()).slice(0, 10)
-  const rung = nextRung(graded.grade, now.from === 'due' ? now.rung : null)
-  const next = addDays(day, rung)
-  const result: RecallResult = { ...graded, next }
-  try {
-    const path = `${P.learn}/${recordFileName(now.topic)}`
-    let text = (await readOr($, path)) || newRecord(now.topic, now.isAnchor)
-    let id = now.id
-    if (!id) {
-      const added = addRecallQuestion(text, now.question, now.rubric)
-      text = added.text
-      id = added.id
-    }
-    text = addAttempt(text, { date: day, id, grade: graded.grade, rung, next })
-    if (graded.misconception && graded.grade !== 'recalled') {
-      text = addMisconception(text, day, id, graded.misconception)
-    }
-    await $.process.run(['mkdir', '-p', P.learn])
-    await $.fs.write(path, text)
-    await update($, recall, old => ({ ...old, id, busy: '' as const, error: '', result }))
-  } catch (failure) {
-    await update($, recall, old => ({ ...old, busy: '' as const, error: `Graded, but the record could not be written: ${String(failure)}`, result }))
+  // With no anchor there is no note to keep it in: the grade shows and is not kept.
+  if (!now.topic) {
+    const rung = rungAfter([graded.grade])
+    await update($, recall, old => ({ ...old, busy: '' as const, error: 'No anchor: this grade is not kept. Anchor the chat to keep its questions in its note.', result: { ...graded!, next: addDays(day, rung) } }))
+
+    return
   }
+  let kept = { id: now.id, due: '' }
+  const isWritten = await writeTrail($, now.topic, text => {
+    const done = recordRecall(text, now, day, graded!)
+    kept = { id: done.id, due: done.due }
+
+    return done.text
+  }, now.path)
+  const result: RecallResult = { ...graded, next: kept.due || addDays(day, 1) }
+  await update($, recall, old => ({ ...old, id: kept.id, busy: '' as const, error: isWritten ? '' : `Graded, but no note was found for ${now.topic} to keep it in.`, result }))
   const due = await dueNow($).catch(() => [] as Due[])
   await update($, swatch, old => ({ ...old, due }))
 }
@@ -3331,11 +3279,13 @@ async function editRecallPrompt($: EngineInterface): Promise<void> {
   await load($)
 }
 
-// Drafts the explain-to-learn prompt over what this chat built.
+// Drafts the explain-back saved prompt with this chat's context, like any lens. A lens
+// folder without it gets it first, from the built-in prompt, so it can be edited after.
 async function explainBack($: EngineInterface): Promise<void> {
-  const { anchor, notePath } = await read($, swatch)
-  const topic = anchor?.note ?? NO_ANCHOR_TOPIC
-  await fillOver($, explainBackDraft(topic, anchor ? notePath : '', `${P.learn}/${recordFileName(topic)}`))
+  const path = `${P.lenses}/${EXPLAIN_LENS}.md`
+  await writeNew($, path, explainLensFile(EXPLAIN_LENS))
+  const text = await readOr($, path)
+  await draft($, { name: EXPLAIN_LENS, path, description: descriptionFrom(text) }, undefined, true)
 }
 
 // Remembers what is typed in the scratchpad's field, unsent.
@@ -4149,7 +4099,7 @@ export const register: Register = (on, options) => {
                 <Box key="recall-body" flexDirection="column">
                   {hasQuiz
                     ? <Text key="recall-question" bold wrap="wrap">{quiz.question}</Text>
-                    : <Text key="recall-none" dimColor wrap="wrap">No question yet. Quiz me asks this chat's model one question about what its last turns did: answer it in your own words while the next turn runs, and a fresh model grades it.</Text>}
+                    : <Text key="recall-none" dimColor wrap="wrap">{`No question yet. Quiz me asks this chat's model one question about what its last turns did: answer it in your own words while the next turn runs, and a fresh model grades it. ${anchor ? `Grades are kept in ${anchor.note}, under Agent Log → Recall.` : 'With no anchor, grades are not kept.'}`}</Text>}
                   {hasQuiz && quiz.from === 'due' && <Text key="recall-from" dimColor wrap="wrap">{`due again · ${quiz.topic}`}</Text>}
                   {hasQuiz && !quiz.result && (
                     <Box key="recall-answering" flexDirection="column">
@@ -4183,6 +4133,7 @@ export const register: Register = (on, options) => {
                   </Box>
                   <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                     <Button key="recall-auto" plain label={`${mark(settings.recallAuto === 'yes')} ask after each turn`} onPress={() => setOption($, 'recallAuto', settings.recallAuto === 'yes' ? 'no' : 'yes')} />
+                    {(quiz.path || (anchor && notePath)) && <Button key="recall-open" plain label={`▤ ${quiz.topic || anchor?.note} · Recall`} onPress={() => openNote($, quiz.path || notePath)} />}
                     <Button key="recall-edit" dimColor label="edit prompt" onPress={() => editRecallPrompt($)} />
                   </Box>
                 </Box>
@@ -4305,7 +4256,6 @@ export const register: Register = (on, options) => {
                     <Input key="set-dailyNote" label="daily note" value={settings.dailyNote ?? ''} placeholder="Daily/{{date:YYYY-MM-DD}}.md; empty reads Obsidian's setting, none turns it off" onSubmit={value => setOption($, 'dailyNote', value)} />
                     <Text key="daily-now" dimColor wrap="wrap">{today.path ? `Today's note: ${short(today.path)}${today.exists ? '' : ' (not made yet)'}` : 'No daily note: nothing about today is shown.'}</Text>
                     <Input key="set-dailyHeading" label="log heading in it" value={settings.dailyHeading ?? ''} placeholder="the end of the note" onSubmit={value => setOption($, 'dailyHeading', value)} />
-                    <Input key="set-learnFolder" label="learning records" value={settings.learnFolder ?? ''} placeholder="OpenAugi/Learning" onSubmit={value => setOption($, 'learnFolder', value)} />
                     <Input key="set-taskFolder" label="new task folder" value={settings.taskFolder ?? ''} placeholder="the notes folder's root" onSubmit={value => setOption($, 'taskFolder', value)} />
                     {!settings.taskFolder?.trim() && <Text key="task-folder-unset" dimColor wrap="wrap">⚠ No task folder set: new task notes go to the notes folder's root.</Text>}
                     <Input key="set-taskColumn" label="new task column" value={settings.taskColumn ?? ''} placeholder="the anchor's column, else the board's first" onSubmit={value => setOption($, 'taskColumn', value)} />

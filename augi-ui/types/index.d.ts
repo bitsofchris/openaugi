@@ -22,17 +22,17 @@ export type Trail = { chats: Chat[]; pins: Pin[]; states: Record<string, { when:
 export type Offer = { session: string; note: string; title: string; jira: string; why: string; busy: boolean; error: string; done: boolean }
 // Where a chat's work stands, as its own model last said when asked: see `chatState`.
 export type ChatState = { session: string; text: string; when: string; at: number; busy: boolean; error: string }
-// A recall question due again, from a learning record: its topic (the record's anchor),
-// the record's path, the question's id there, its claims, the rung it is on (in days) and
-// the day it fell due.
-export type Due = { topic: string; path: string; id: string; question: string; rubric: string[]; rung: number; due: string }
+// A recall question due again, from a note's Recall table: the note's name and path, the
+// question's id there, its claims, and the day it fell due.
+export type Due = { topic: string; path: string; id: string; question: string; rubric: string[]; due: string }
 // What the grader said about an answer, and the day the question is due again.
 export type RecallResult = { grade: 'recalled' | 'partial' | 'missed' | 'peeked'; missing: string; misconception: string; feedback: string; followUp: string; next: string }
 // The Recall card's question, this chat's (`session`): from the chat's own model
-// (`from: 'chat'`) or a due one from a record (`from: 'due'`, with its `id` and `rung`).
-// `topic` is the record it is kept in; `at` is when it was asked (it paces the automatic
-// asks); `busy` while asking or grading; `result` once graded.
-export type Recall = { session: string; topic: string; isAnchor: boolean; id: string; question: string; rubric: string[]; rung: number; from: 'chat' | 'due'; at: number; busy: '' | 'asking' | 'grading'; error: string; result: RecallResult | null }
+// (`from: 'chat'`) or a due one from a note's Recall table (`from: 'due'`, with its `id`).
+// `topic` is the note it is kept in (the anchor, empty for none) and `path` where that note
+// is, when known; `at` is when it was asked (it paces the automatic asks); `busy` while
+// asking or grading; `result` once graded.
+export type Recall = { session: string; topic: string; path: string; id: string; question: string; rubric: string[]; from: 'chat' | 'due'; at: number; busy: '' | 'asking' | 'grading'; error: string; result: RecallResult | null }
 // One thing setup checks: a setting, the path it resolves to, and whether it's there.
 export type SetupItem = { field: string; label: string; path: string; ok: boolean; starter: boolean }
 // Today's note: the pattern its path comes from (empty for none), the path for `day`

@@ -7,7 +7,7 @@ scope: >-
   This conversation and nothing else: no files are read and no search is run.
 trigger: on-demand
 target: >-
-  note — the Recall card in the Augi pane; once graded, a row in the anchor's learning record (the explain-to-learn format).
+  note — the Recall card in the Augi pane; once graded, a row of the ## Recall table at the end of the anchor note's Agent Log section.
 ---
 
 # recall-question

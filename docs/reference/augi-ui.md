@@ -51,7 +51,6 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `stateAuto` | `yes` asks for a chat's state by itself after a turn, at most every ten minutes, and offers a chat with no anchor a task once; `no` waits for a press | `no` |
 | `recallLens` | The saved prompt a chat's own model is asked for the Recall card's question | `recall-question` |
 | `recallAuto` | `yes` asks for a recall question by itself when a turn ends, at most every two minutes; `no` waits for a press | `no` |
-| `learnFolder` | Where graded recall questions are kept, one learning record per anchor, in the explain-to-learn skill's format | `OpenAugi/Learning` |
 | `tellChat` | `yes` tells each chat's own model its anchor (the note, its Agent Log section, today's note) beside your next prompt, so "update the task note" needs no path; `no` keeps the anchor in the pane only | `yes` |
 
 Each missing file can be created as a starter, pointed at an existing note, or
@@ -256,39 +255,45 @@ are `dimColor`, and the one primary button is the draft.
   re-reads the main thread's last request, so the question can be asked while a
   turn is still running. The reply is a `Question:` line and two to four
   `Claim:` lines (`parseRecall`); the claims stay hidden. Enter in the answer
-  field grades it: a fresh model (`$.model.complete`, `sonnet`) gets the
-  explain-to-learn skill's blind-grader instructions (`GRADER_SYSTEM`) and only
-  the question, the claims and the answer (`gradeAsk`), never the chat, so it
-  cannot root for the learner. It answers with a grade (`recalled`, `partial`,
-  `missed`), the missing claims, a misconception, one line of feedback and a
-  follow-up (`parseGrade`). The card then shows those and the claims.
-  `peek` shows the claims without grading and records `peeked`. An empty answer
-  grades nothing. The typed answer is kept on every change, as the scratchpad's
-  is. `☐ ask after each turn` (`recallAuto`) asks at the end of a main-thread
-  turn that answered, at most every `RECALL_EVERY_MS` (two minutes), and not
-  while an unanswered question has a typed answer. A `/clear` or resume
-  empties the card.
-  **The learning record.** Each grade is appended to
-  `<learnFolder>/<anchor>.md` (`Chats with no anchor.md` without one), made on
-  first use from `newRecord`. This is the record format of the explain-to-learn
-  skill (`references/grader.md`): a `## Questions` table (`id | question |
-  rubric`, a new question gets the next `qN`, the same question keeps its id),
-  `## Attempts` (`date | id | grade | confidence | rung | next due`), and
-  `## Misconceptions` (`- day · id · line · open`, for a grade below
-  `recalled`). The ladder is 1, 3, 7 and 21 days: `recalled` moves up a rung,
-  `partial` repeats it, `missed` and `peeked` go back to a day, and a new
-  question starts on the first (`nextRung`). **What is due**
-  (`dueRecalls`) is each question's latest attempt whose next-due day is today
-  or earlier, oldest first. A question recalled on two different days is known
-  and left out. The pane reads the folder on every load. With any due, the card
-  title counts them, and `↺ N due` (and `🎯 N recalls due` in the You card)
-  puts the oldest in the card; grading it adds an attempt on the same id from
-  its rung. The skill reads the same files for "what's due", so the pane and the
-  skill keep one list.
-  **`🎓 explain it back`** fills the prompt with a draft that asks the chat to
-  run the explain-to-learn skill in its agent-work mode, on what this chat
-  built, and to keep its say-it-back grades in the same record
-  (`explainBackDraft`). A half-typed prompt goes to the clipboard first.
+  field grades it: a fresh model (`$.model.complete`, `sonnet`) gets strict
+  grading rules (`GRADER_SYSTEM`) and only the question, the claims and the
+  answer (`gradeAsk`), never the chat, so it cannot root for the learner. It
+  answers with a grade (`recalled`, `partial`, `missed`), the missing claims, a
+  mix-up, one line of feedback and a follow-up (`parseGrade`), and the card
+  shows those and the claims. `peek` shows the claims without grading and
+  records `peeked`. An empty answer grades nothing. The typed answer is kept on
+  every change, as the scratchpad's is. `☐ ask after each turn` (`recallAuto`)
+  asks at the end of a main-thread turn that answered, at most every
+  `RECALL_EVERY_MS` (two minutes), and not while an unanswered question has a
+  typed answer. A `/clear` or resume empties the card.
+  **Where grades are kept: the anchor's own note.** No other note is made. A
+  grade goes on a row of the `## Recall` table, the last block of the note's
+  Agent Log section (see **Agent Log**): `| id | question | full answer |
+  grades | due | mix-up |`, one row per question (`recordRecall`). A new
+  question gets the next `qN`, and the same question keeps its row. Grades are
+  `YYYY-MM-DD grade`, comma separated, oldest first. The due day comes from
+  the 1, 3, 7, 21 day ladder replayed over all of a row's grades
+  (`rungAfter`): a new question starts on a day, `recalled` moves up a rung,
+  `partial` keeps it, and `missed` and `peeked` go back to a day. A mix-up stays
+  until the question is recalled. `▤ <anchor> · Recall` opens the note. With no
+  anchor a grade shows in the card and is not kept.
+  **What is due** (`dueRecalls`): one `grep` over the notes folder finds the
+  notes with a `## Recall` heading, and each row of a table inside a note's
+  Agent Log section whose due day is today or earlier counts, oldest first. A
+  question recalled on two different days is known and left out. The folder is
+  searched on every load. With any due, the card title counts them, and
+  `↺ N due` (and `🎯 N recalls due` in the You card) puts the oldest in the
+  card; grading it adds to its own row in its own note.
+  **`🎓 explain it back`** drafts the `explain-back` saved prompt with this
+  chat's context, the way a lens press does. It writes the lens into the lens
+  folder first when the folder has none, and never over an edited one. Because
+  this lens writes (an HTML page, pinned in the Agent Log, and rows in the
+  Recall table), its draft says to run it as written (`buildDraft`'s `writes`),
+  without the short-answer and no-files rules other lens drafts carry. The lens
+  asks for the chat's own work explained from the code and the diff: what was
+  wrong, a map of the changes, one real input traced, each decision with a
+  predict-first box, what would break. Then five say-it-back questions, graded
+  and kept in the same table.
   `edit prompt` opens `recall-question.md` in the lens folder, writing it from
   the built-in prompt first when it is not there.
 - **Task offer** (in the Anchor card, for a chat with no anchor):
@@ -394,18 +399,24 @@ are `dimColor`, and the one primary button is the draft.
   >   - Last: what the last few turns did
   >   - Next: the one next step
   >   - Waiting on me: no
+
+  ## Recall
+  | id | question | full answer | grades | due | mix-up |
+  |---|---|---|---|---|---|
+  | q1 | Why does the pane ask a fork? | the fork has the chat · it adds nothing | 2022-01-05 partial | 2022-01-06 | thinks the fork runs tools |
   ```
 
   The Chats callout is folded until opened (the `-` after the callout type):
   one line per chat and, indented under it, where that chat last stood, which
-  is the one part that is replaced and never added to. It is always the last
-  block: a line appended after it is moved up beside the others on the pane's
-  next write, unchanged. The section
+  is the one part that is replaced and never added to. It comes after
+  everything else but the `## Recall` table (see **Recall**), which is last
+  when there is one and holds only its table's rows. A line appended after
+  either is moved up beside the others on the pane's next write, unchanged. The section
   ends at the next level-1 heading or the end of the note, and the pane makes
   it, at the note's end, on its first write. The pane changes nothing above
   the heading when it writes the log (`splitLog` / `joinLog`); its other
   writes to the note are a saved scratchpad entry and a Jira link, each on a
-  press. **The log used to be a file of its own**
+  press. A grade is a write to the log, into its Recall table. **The log used to be a file of its own**
   (`<logFolder>/Agent Log - <note>.md`). The first time the pane reads or
   writes an anchor that still has one, what the file holds goes into the
   note's section (`withOldLog`): pins and kept lines, questions as the

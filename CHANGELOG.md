@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-**augi-ui 0.17.0: a Recall card, to learn from the chat while it works.**
+**augi-ui 0.18.0: a Recall card, to learn from the chat while it works.**
 `🎯 Recall` in the pane holds one question about what this chat's agent just
 did: why a change was made, what was ruled out, how a piece works. `🎯 quiz me`
 asks the chat's own model for it as a side question (a fork: no tools, nothing
@@ -13,16 +13,21 @@ cannot grade kindly. Then the card shows the grade, one line of feedback, the
 mix-up if there was one, the full answer's claims and a follow-up question.
 `peek` shows the claims and counts as a miss.
 
-Every graded question goes into a learning record, one per anchor, in
-`OpenAugi/Learning/` (`learnFolder`). It uses the explain-to-learn skill's
-format and its ladder (1, 3, 7, 21 days), so the pane and the skill keep one
-list of what is due. The You card shows `🎯 N recalls due` and puts the oldest
-one in the card. `🎓 explain it back` drafts the skill over what this chat
-built, keeping its questions in the same record. `☐ ask after each turn`
-(`recallAuto`, off by default) asks by itself when a turn ends, at most every
-two minutes and never over an answer you have started typing. Each question
-is one model call and each grade one more. The question is a saved prompt,
-`recall-question`, shipped as an engine lens; `edit prompt` opens it.
+Grades are kept in the anchor's own note, not in a new one: a `## Recall`
+table at the end of its `# Agent Log` section, one row per question, so there
+is one place to review. A question comes back on a 1, 3, 7, 21 day ladder. The
+pane finds what is due across every note with a Recall table; the You card
+shows `🎯 N recalls due` and puts the oldest in the card, and `▤ <anchor> ·
+Recall` opens the table. `🎓 explain it back` runs a new shipped lens,
+`explain-back`: a short HTML explainer of the chat's own work, traced through
+the code and the diff, then five say-it-back questions kept in the same table.
+`☐ ask after each turn` (`recallAuto`, off by default) asks by itself when a
+turn ends, at most every two minutes and never over an answer you have started
+typing. Each question is one model call and each grade one more. Both prompts,
+`recall-question` and `explain-back`, ship as engine lenses.
+
+0.17.0, out for a few hours, kept grades in a learning-record file per anchor
+under `OpenAugi/Learning/` and had a `learnFolder` setting; both are gone.
 
 **augi-ui: the pane offers a chat its task.** A chat with no anchor has
 `💡 suggest a task for this chat` in the Anchor card. A Jira key in the git
