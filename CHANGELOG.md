@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**augi-ui 0.18.1: a new chat starts with no anchor.** A new chat used to start
+on the anchor last picked in its working folder. In the vault that meant every
+zzz task run (each a new chat there) was filed into the last note picked, and
+grew that note's Agent Log with chats that were never about it. Now only a fork
+carries an anchor over, its parent's; any other chat has none, and writes no
+Agent Log, until you pick one or paste a pane draft. Picking an anchor no
+longer sets a default for the folder.
+
 **augi-ui 0.18.0: a Recall card, to learn from the chat while it works.**
 `🎯 Recall` in the pane holds one question about what this chat's agent just
 did: why a change was made, what was ruled out, how a piece works. `🎯 quiz me`

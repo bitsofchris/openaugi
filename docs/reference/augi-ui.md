@@ -102,14 +102,14 @@ are `dimColor`, and the one primary button is the draft.
   the pane sent the parent's model (see below) names the anchor, so the pane
   reads it there once (`anchorFromMessages`; a parent last told it has no
   anchor leaves the fork with none, and a parent never told, with `tellChat`
-  off, is treated as any new chat). Any other new chat starts on the anchor
-  last chosen in its working
-  folder (a Claude Code worktree counts as its repository). Either way the
-  card says it was carried over, with `keep`, `change` and `no anchor`. From
-  the folder, only a session that began in the
-  last ten minutes is given one, so an older chat that never had an anchor is
-  left alone; a headless run is never given one, and neither is any chat when
-  the folder's anchor names a note that is no longer on the board or in the
+  off, is treated as any new chat). **Any other new chat starts with no
+  anchor and writes no Agent Log**: picking one in a folder is that chat's
+  choice, never the next chat's, so a task run or a quick question is not
+  filed into whatever note was picked last (0.18.1; before it, every zzz task
+  run in the vault was filed into the last anchor picked there). A fork's
+  card says the anchor was carried over, with `keep`, `change` and `no
+  anchor`. A headless fork is never given one, and neither is a fork whose
+  parent's anchor names a note that is no longer on the board or in the
   notes folder; `no anchor` sticks for the session; a draft pasted from another
   anchor wins over one the chat only started on. A chat that is given its
   anchor this way is filed in the note's Agent Log with its first prompt, not
@@ -143,7 +143,8 @@ are `dimColor`, and the one primary button is the draft.
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note,
   which holds the Agent Log too: there is one button and one file.
 - **Chats.** A piece of an anchor's work gets a chat, not a note. A new chat
-  needs no button: open one in the same folder and it starts on the anchor, is
+  starts with no anchor; pick the anchor (or paste a pane draft, or fork an
+  anchored chat) and it is
   filed in the note's Agent Log, in the folded Chats callout, with its first
   prompt as its title, and its model is told the anchor. The pane keeps no
   list of those chats: the callout is the record of session ids, and the
@@ -171,7 +172,7 @@ are `dimColor`, and the one primary button is the draft.
   share context. Either way this chat's transcript is pinned there too and the
   board is read back into the pane. **A new task moves the chat onto it**: it
   is this chat starting something of its own, so the task becomes the chat's
-  anchor (and the folder's, for the next new chat), the chat is filed in its
+  anchor, the chat is filed in its
   Agent Log, and the next draft carries its context. **A sub-task leaves the
   chat on its anchor**: it is a piece of that work. The prompt box is left
   alone either way. A `✓ just made` row says where on the board it went and

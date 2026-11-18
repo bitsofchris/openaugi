@@ -522,13 +522,6 @@ const DRAFT_HEAD = 'Context for this chat:'
 // belongs to the session: a new one opens with none; a reload or a resume keeps it.
 const ANCHORS_KEY = 'anchors'
 const ANCHORS_KEPT = 200
-// The anchor last chosen in each working folder, as [folder, note] pairs, oldest first:
-// what a new chat there starts on.
-const FOLDERS_KEY = 'folders'
-const FOLDERS_KEPT = 100
-// How long after it began a session still counts as new, for carrying an anchor over. An
-// older chat that never had one (a resume, a chat open across an update) is left as it is.
-const NEW_SESSION_MS = 10 * 60_000
 // The title a chat gets in ## Chats when anchoring records it, until its first prompt names it.
 export const CHAT_PLACEHOLDER = 'chat'
 // The setup steps someone chose to skip; /augi setup clears it.
@@ -1916,10 +1909,6 @@ export const withAnchor = (pairs: [string, string][], id: string, note: string |
   return (note === null ? others : [...others, [id, note] as [string, string]]).slice(-kept)
 }
 
-// The folder a chat's anchor is remembered under: its working folder, a Claude Code
-// worktree counted as the repository it belongs to.
-export const folderKey = (cwd: string): string => cwd.replace(/\/+$/, '').replace(/\/\.claude\/worktrees\/[^/]+$/, '')
-
 // What a chat is called in its anchor's log when no pane draft names it: its prompt's
 // first line. Empty for a slash command or a line that is only markup.
 export const promptTitle = (text: string): string => {
@@ -2497,23 +2486,6 @@ async function setSessionAnchor($: EngineInterface, note: string | null): Promis
   }
 }
 
-// The session's working folder as the key its anchor is remembered under, or empty.
-async function folderNow($: EngineInterface): Promise<string> {
-  try {
-    return folderKey(await $.session.cwd())
-  } catch {
-    return ''
-  }
-}
-
-// A chosen anchor becomes what the next new chat in this folder starts on.
-async function rememberFolder($: EngineInterface, note: string): Promise<void> {
-  const folder = await folderNow($)
-  if (folder) {
-    await $.store.set(FOLDERS_KEY, withAnchor(anchorPairs(await $.store.get(FOLDERS_KEY)), folder, note, FOLDERS_KEPT))
-  }
-}
-
 // The session whose conversation was already read for a brief: once is enough, since what
 // a fork starts with is there from the start, and a long conversation is not read again
 // on every sync.
@@ -2535,13 +2507,13 @@ async function toldInConversation($: EngineInterface, id: string): Promise<strin
   }
 }
 
-// A chat that has not chosen starts on an anchor by itself, so starting one does not
-// begin with picking. A fork starts on its parent's: it opens with the parent's
-// conversation, and the brief in it names the anchor (a parent that had none leaves the
-// fork with none). Any other new chat starts on the anchor last chosen in its
-// working folder, and only if it just began: an older one that never had an anchor keeps
-// none. Nothing is written to the anchor's log until the chat says something (nameChat),
-// so an abandoned chat leaves no trace there. True when it anchored the session.
+// A new chat starts with no anchor. The one exception is a fork: it opens with its
+// parent's conversation, and the brief in it names the parent's anchor, so the fork starts
+// on that (a parent that had none leaves the fork with none). Nothing else carries an
+// anchor over: not the folder's last pick, which used to file every task run in the
+// vault into whatever note was picked last. Nothing is written to the anchor's log until
+// the chat says something (nameChat), so an abandoned fork leaves no trace there. True
+// when it anchored the session.
 async function inheritAnchor($: EngineInterface): Promise<boolean> {
   try {
     const id = await $.session.id()
@@ -2549,10 +2521,8 @@ async function inheritAnchor($: EngineInterface): Promise<boolean> {
     if (!id || pairs.some(([one]) => one === id)) {
       return false
     }
-    const told = await toldInConversation($, id)
-    const folder = told === null ? await folderNow($) : ''
-    const note = told ?? (folder ? anchorPairs(await $.store.get(FOLDERS_KEY)).find(([one]) => one === folder)?.[1] : '')
-    if (!note || (told === null && (await $.clock.now()) - (await $.session.usage()).startedAt > NEW_SESSION_MS)) {
+    const note = await toldInConversation($, id)
+    if (!note) {
       return false
     }
     // Never a headless run: nobody is there to see, keep or change it.
@@ -2626,7 +2596,7 @@ export async function resync($: EngineInterface): Promise<void> {
   await resyncToday($)
   if (!anchor) {
     // A chat cleared or resumed in this process is another session: it shows its own stored
-    // anchor, or, new, starts on the folder's as any new chat does.
+    // anchor, or, a fork, its parent's; any other new chat starts with none.
     const stored = await sessionAnchor($)
     if ((stored && stored !== unfound) || (await inheritAnchor($))) {
       const { cards } = await read($, swatch)
@@ -2693,7 +2663,6 @@ async function openOnce($: EngineInterface): Promise<void> {
 
 async function anchorSession($: EngineInterface, note: string): Promise<void> {
   await setSessionAnchor($, note)
-  await rememberFolder($, note)
   await keepInherited($)
   // A field opened for the anchor it leaves (a sub-task, a chat to make a task) closes.
   await update($, view, old => ({ ...old, taskMode: '' as const }))
@@ -3650,8 +3619,7 @@ export const register: Register = (on, options) => {
   })
 
   // A /clear goes on in this process under a new session id with no session.start: the
-  // pane drops the old session's anchor, and the next sync starts the new session on the
-  // folder's anchor as any new chat would.
+  // pane drops the old session's anchor, and the new session starts with none.
   on('session.end', async ($, e, next) => {
     const ended = await next(e)
     if (e.reason === 'clear' || e.reason === 'resume') {
@@ -3969,7 +3937,7 @@ export const register: Register = (on, options) => {
                   )}
                   {isCarried && (
                     <Box key="anchor-carried" flexDirection="column">
-                      <Text dimColor wrap="wrap">↩ Carried over: from the chat this one was forked from, else your last chat in this folder. It is filed here with its first prompt.</Text>
+                      <Text dimColor wrap="wrap">↩ Carried over: from the chat this one was forked from. It is filed here with its first prompt.</Text>
                       <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                         <Button key="inherit-keep" label="keep" onPress={() => keepInherited($)} />
                         <Button key="inherit-change" label="change" onPress={() => update($, view, old => ({ ...old, anchorsOpen: true }))} />

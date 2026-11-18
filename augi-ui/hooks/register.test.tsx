@@ -4,7 +4,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
-import { folderKey, promptTitle } from './register'
+import { promptTitle } from './register'
 import { anchorBrief, anchorFromMessages, anchorNews, unanchoredBrief } from './register'
 import { openArgv } from './register'
 import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
@@ -2093,11 +2093,7 @@ test('with dailyNote none, Obsidian\'s daily notes are ignored and the You card 
   await ui.unmount()
 })
 
-test('an anchor is remembered per working folder, a worktree counted as its repository; a chosen none is kept', async () => {
-  expect(folderKey('/r/garden')).toBe('/r/garden')
-  expect(folderKey('/r/garden/')).toBe('/r/garden')
-  expect(folderKey('/r/garden/.claude/worktrees/fix-gate')).toBe('/r/garden')
-  expect(folderKey('/r/garden/.claude/worktrees/fix-gate/src')).toBe('/r/garden/.claude/worktrees/fix-gate/src')
+test('a session\'s anchor pair: null drops it, a chosen none is kept', async () => {
   // null drops a session's pair; an empty note stays, as "no anchor, by choice".
   expect(withAnchor([['a', 'X'], ['b', 'Y']], 'a', null)).toEqual([['b', 'Y']])
   expect(withAnchor([['a', 'X'], ['b', 'Y']], 'a', '')).toEqual([['b', 'Y'], ['a', '']])
@@ -2112,7 +2108,8 @@ test('a chat is titled by its prompt\'s first line; a slash command titles nothi
   expect(promptTitle('x'.repeat(200)).length).toBe(70)
 })
 
-// A vault whose folder /r/garden last worked on PMOC - Garden. `state` can be changed
+// A vault whose folder /r/garden last worked on PMOC - Garden (a store key older versions
+// started every new chat on; it must not anchor anything now). `state` can be changed
 // mid-test: the session id, its folder, and how long ago it began.
 const inheritHooks = (on: On, folders: [string, string][] = [['/r/garden', 'PMOC - Garden']], anchors: [string, string][] = []) => {
   const state = { id: 'fresh', cwd: '/r/garden', age: 60_000, surfaces: ['terminal'] as ('terminal' | 'desktop')[] }
@@ -2129,13 +2126,27 @@ const inheritHooks = (on: On, folders: [string, string][] = [['/r/garden', 'PMOC
   return { ...got, state, seen }
 }
 
-test('a new chat starts on the anchor last chosen in its folder, is filed there with its first prompt, and keep, change or no anchor is one press', { options: OPTIONS }, async ($, on) => {
+test('a new chat starts with no anchor, whatever was picked last in its folder, and files nothing', { options: OPTIONS }, async ($, on) => {
   const got = inheritHooks(on)
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  // No picking: the pane is on the folder's anchor, and says where it came from.
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  expect(anchorOf(got.store, 'fresh')).toBe(undefined)
+  // A task run's prompt is filed nowhere, and nothing is told to its model.
+  expect(await sentWith(got, () => $.prompt.submit({ text: 'Read your skill file first: do the task' }))).toEqual([])
+  expect(got.written.size).toBe(0)
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  await ui.unmount()
+})
+
+test('a fork starts on its parent\'s anchor, is filed there with its first prompt, and says where the anchor came from', { options: OPTIONS }, async ($, on) => {
+  const got = inheritHooks(on)
+  got.said.push(toldBeside(anchorBrief(GARDEN_ANCHOR)))
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  // No picking: the pane is on the parent's anchor, and says where it came from.
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
-  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeTruthy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from/ })).toBeTruthy()
   expect(anchorOf(got.store, 'fresh')).toBe('PMOC - Garden')
   // Nothing is written to the anchor's log for a chat that has not said anything.
   expect(got.written.size).toBe(0)
@@ -2146,7 +2157,7 @@ test('a new chat starts on the anchor last chosen in its folder, is filed there 
   // Its first prompt files it under that prompt's first line, and the note about where it came from goes.
   await $.prompt.submit({ text: 'fix the sprinkler valve\nit leaks at the joint' })
   expect(parseTrail(got.written.get('/v/PMOC - Garden.md') ?? '').chats).toEqual([{ id: 'fresh', when: '2026-11-08 09:30', title: 'fix the sprinkler valve', done: false }])
-  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeFalsy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from/ })).toBeFalsy()
   // Later prompts do not rename it, and do not read the log again to find that out.
   const log = got.written.get('/v/PMOC - Garden.md')
   got.written.set('/v/PMOC - Garden.md', `${log}\n<!-- an edit made elsewhere -->\n`)
@@ -2215,6 +2226,7 @@ const sentWith = async (got: { beside: string[][] }, send: () => Promise<unknown
 
 test('an anchored chat is told its anchor beside its first prompt, unseen, and again only when the anchor changes', { options: OPTIONS }, async ($, on) => {
   const got = inheritHooks(on)
+  got.said.push(toldBeside(anchorBrief(GARDEN_ANCHOR)))
   on('session.compact', (_, e) => ({ messages: e.messages }))
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
@@ -2262,39 +2274,40 @@ test('a chat with no anchor carries nothing, and a pasted draft that anchors it 
 })
 
 test('tellChat: no keeps the anchor out of the chat', { options: { ...OPTIONS, tellChat: 'no' } }, async ($, on) => {
-  const got = inheritHooks(on)
+  const got = inheritHooks(on, [], [['fresh', 'PMOC - Garden']])
   await $.command.run({ command: 'augi', args: '' })
   expect(await sentWith(got, () => $.prompt.submit({ text: 'fix the sprinkler valve' }))).toEqual([])
 })
 
 test('keep confirms a carried-over anchor; change opens the menu; no anchor sticks for the session', { options: OPTIONS }, async ($, on) => {
   const got = inheritHooks(on)
+  got.said.push(toldBeside(anchorBrief(GARDEN_ANCHOR)))
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'inherit-keep' })
-  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeFalsy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from/ })).toBeFalsy()
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
   await ui.unmount()
 
-  // Another new chat in the folder: change opens the anchor list, and picking one is a choice.
+  // Another fork of it: change opens the anchor list, and picking one is a choice.
   got.state.id = 'second'
   await $.command.run({ command: 'augi', args: '' })
   const two = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await two.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeTruthy()
+  expect(await two.find({ text: /Carried over: from the chat this one was forked from/ })).toBeTruthy()
   expect(await two.find({ key: 'card-sub-PMOC - Garden-PMOC - Birdhouse' })).toBeFalsy()
   await two.press({ key: 'inherit-change' })
   await two.press({ key: 'card-sub-PMOC - Garden-PMOC - Birdhouse' })
   expect(anchorOf(got.store, 'second')).toBe('PMOC - Birdhouse')
-  expect(await two.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeFalsy()
-  // The choice is what the next new chat here starts on.
-  expect(got.store.get('folders')).toEqual([['/r/garden', 'PMOC - Birdhouse']])
+  expect(await two.find({ text: /Carried over: from the chat this one was forked from/ })).toBeFalsy()
+  // The choice is this chat's alone: the store's old folder key is not touched.
+  expect(got.store.get('folders')).toEqual([['/r/garden', 'PMOC - Garden']])
   await two.unmount()
 
-  // A third: no anchor, by choice. A refresh does not bring one back, and the folder keeps its last.
+  // A third fork: no anchor, by choice. A refresh does not bring one back.
   got.state.id = 'third'
   await $.command.run({ command: 'augi', args: '' })
   const three = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await three.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
+  expect((await three.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
   await three.press({ key: 'inherit-none' })
   expect((await three.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
   await three.press({ key: 'refresh' })
@@ -2302,7 +2315,6 @@ test('keep confirms a carried-over anchor; change opens the menu; no anchor stic
   await $.prompt.submit({ text: 'an unanchored question' })
   await new Promise(resolve => setTimeout(resolve, 20))
   expect((await three.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
-  expect(got.store.get('folders')).toEqual([['/r/garden', 'PMOC - Birdhouse']])
   // Nothing was filed anywhere for the chats that only looked.
   expect(got.written.has('/v/PMOC - Garden.md')).toBe(false)
   await three.unmount()
@@ -2330,7 +2342,7 @@ test('a conversation says what its chat is anchored to: the last brief decides, 
   expect(anchorFromMessages([{ role: 'assistant', content: garden.content }])).toBe(null)
 })
 
-test('a forked chat starts on the anchor its parent was told, not the folder\'s last one, however old the parent is; a parent with none leaves it with none', { options: OPTIONS }, async ($, on) => {
+test('a forked chat starts on the anchor its parent was told, however old the parent is; a parent with none leaves it with none', { options: OPTIONS }, async ($, on) => {
   // The folder last worked on the garden; the chat this one was forked from was on the birdhouse.
   const got = inheritHooks(on)
   got.state.id = 'fork-one'
@@ -2342,8 +2354,6 @@ test('a forked chat starts on the anchor its parent was told, not the folder\'s 
   expect(anchorOf(got.store, 'fork-one')).toBe('PMOC - Birdhouse')
   expect(await ui.find({ text: /Carried over: from the chat this one was forked from/ })).toBeTruthy()
   expect(await ui.find({ key: 'inherit-change' })).toBeTruthy()
-  // The folder's anchor is still the garden: a fork does not move it until the user chooses.
-  expect(got.store.get('folders')).toEqual([['/r/garden', 'PMOC - Garden']])
   expect(got.written.size).toBe(0)
   await ui.unmount()
 
@@ -2358,7 +2368,7 @@ test('a forked chat starts on the anchor its parent was told, not the folder\'s 
   await ui.unmount()
 })
 
-test('no anchor is carried over to an older chat, a chat in another folder, or one that already chose; a worktree counts as its repository', { options: OPTIONS }, async ($, on) => {
+test('no anchor is carried over to an older chat, a chat in another folder, or a worktree; one that already chose keeps its own', { options: OPTIONS }, async ($, on) => {
   const got = inheritHooks(on, [['/r/garden', 'PMOC - Garden']], [['chose', 'PMOC - Birdhouse']])
   // A chat that began two hours ago and never had an anchor (a resume, a chat open across an update).
   got.state.id = 'old'
@@ -2384,29 +2394,30 @@ test('no anchor is carried over to an older chat, a chat in another folder, or o
   await $.command.run({ command: 'augi', args: '' })
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
-  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeFalsy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from/ })).toBeFalsy()
   await ui.unmount()
 
-  // A new chat in a worktree of the repository starts on the repository's anchor.
+  // A new chat in a worktree of the repository starts with none too.
   got.state.id = 'tree'
   got.state.cwd = '/r/garden/.claude/worktrees/fix-gate'
   await $.command.run({ command: 'augi', args: '' })
   ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
   await ui.unmount()
 })
 
 test('no anchor is carried over to a headless run, or onto a note that is gone; a session resumed in this process shows its own stored anchor', { options: OPTIONS }, async ($, on) => {
-  const got = inheritHooks(on, [['/r/garden', 'PMOC - Garden'], ['/r/pond', 'Renamed since']], [['earlier', 'PMOC - Birdhouse']])
+  const got = inheritHooks(on, [['/r/garden', 'PMOC - Garden']], [['earlier', 'PMOC - Birdhouse']])
   on('session.end', (_, e) => ({ sessionId: e.sessionId }) as never)
-  // A run that draws nowhere: nobody could see, keep or change the anchor.
+  // A forked run that draws nowhere: nobody could see, keep or change the anchor.
+  got.said.push(toldBeside(anchorBrief(GARDEN_ANCHOR)))
   got.state.surfaces = []
   await $.command.run({ command: 'augi', args: '' })
   expect(anchorOf(got.store, 'fresh')).toBe(undefined)
-  // The folder's anchor names a note that is on no board and in no folder now.
+  // A fork whose parent's anchor names a note that is on no board and in no folder now.
   got.state.surfaces = ['terminal']
   got.state.id = 'pond'
-  got.state.cwd = '/r/pond'
+  got.said.push(toldBeside(anchorBrief({ note: 'Renamed since', notePath: '' })))
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
@@ -2421,12 +2432,13 @@ test('no anchor is carried over to a headless run, or onto a note that is gone; 
   await $.prompt.submit({ text: '/augi' })
   await new Promise(resolve => setTimeout(resolve, 20))
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Birdhouse/)
-  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeFalsy()
+  expect(await ui.find({ text: /Carried over: from the chat this one was forked from/ })).toBeFalsy()
   await ui.unmount()
 })
 
 test('a draft copied for a new chat wins over an anchor the chat only started on by itself', { options: OPTIONS }, async ($, on) => {
   const got = inheritHooks(on)
+  got.said.push(toldBeside(anchorBrief(GARDEN_ANCHOR)))
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(anchorOf(got.store, 'fresh')).toBe('PMOC - Garden')
@@ -2440,7 +2452,7 @@ test('a draft copied for a new chat wins over an anchor the chat only started on
   await ui.unmount()
 })
 
-test('after /clear the pane is the new session\'s: no anchor at first, then the folder\'s on the next sync', { options: OPTIONS }, async ($, on) => {
+test('after /clear the pane is the new session\'s: no anchor, and none on the next sync either', { options: OPTIONS }, async ($, on) => {
   const got = inheritHooks(on, [['/r/garden', 'PMOC - Garden']], [['fresh', 'PMOC - Garden']])
   on('session.end', (_, e) => ({ sessionId: e.sessionId }) as never)
   await $.command.run({ command: 'augi', args: '' })
@@ -2452,9 +2464,8 @@ test('after /clear the pane is the new session\'s: no anchor at first, then the 
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
   await $.prompt.submit({ text: '/augi' })
   await new Promise(resolve => setTimeout(resolve, 20))
-  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
-  expect(await ui.find({ text: /Carried over: from the chat this one was forked from, else your last chat in this folder/ })).toBeTruthy()
-  expect(anchorOf(got.store, 'cleared')).toBe('PMOC - Garden')
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  expect(anchorOf(got.store, 'cleared')).toBe(undefined)
   await ui.unmount()
 })
 
@@ -2466,7 +2477,8 @@ test('a chat on an anchor it chose is titled by its first prompt too, replacing 
   await ui.press({ key: 'card-PMOC - Garden' })
   const chats = () => parseTrail(got.written.get('/v/PMOC - Garden.md') ?? '').chats.map(chat => chat.title)
   expect(chats()).toEqual(['chat'])
-  expect(got.store.get('folders')).toEqual([['/r/garden', 'PMOC - Garden']])
+  // Picking is this chat's choice alone: no folder remembers it for the next chat.
+  expect(got.store.get('folders')).toEqual([])
   await $.prompt.submit({ text: 'plan the beds for spring' })
   expect(chats()).toEqual(['plan the beds for spring'])
   await $.prompt.submit({ text: 'something else entirely' })
