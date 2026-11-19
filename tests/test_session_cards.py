@@ -128,3 +128,28 @@ def test_card_render_and_filename():
     assert sc.card_filename(s) == "2026-08-28 - claude - Fix-the-widget - abc12345.md"
     index = sc.render_index([s])
     assert "[[2026-08-28 - claude - Fix-the-widget - abc12345]]" in index
+
+
+def test_harness_blocks_and_placeholder_lines_are_not_the_human(tmp_path):
+    """An image turn is [placeholder, <system-reminder>, the human's words]."""
+    f = tmp_path / "def67890-0000-0000-0000-000000000000.jsonl"
+    image_turn = [
+        {"type": "text", "text": "[Image: original 2160x960, displayed at 2000x889.]"},
+        {"type": "text", "text": "<system-reminder>\nharness status\n</system-reminder>"},
+        {"type": "text", "text": "Cut list approved, build it"},
+    ]
+    _write_jsonl(
+        f,
+        [
+            _claude_user(image_turn, "2026-08-28T10:00:00Z"),
+            _claude_user("[Request interrupted by user for tool use]", "2026-08-28T10:01:00Z"),
+            _claude_user("[[Some Note]]\nsee this one", "2026-08-28T10:02:00Z"),
+        ],
+    )
+    s = sc.parse_claude_session(f)
+    assert s.first_human == "Cut list approved, build it"
+    assert s.human_turns == 2  # the interrupt line alone is not a turn
+    assert s.last_human == "[[Some Note]]\nsee this one"  # a wikilink line is the user's
+    assert sc.card_filename(s) == (
+        "2026-08-28 - claude - Cut-list-approved-build-it - def67890.md"
+    )

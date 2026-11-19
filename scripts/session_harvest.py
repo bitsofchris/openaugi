@@ -104,6 +104,32 @@ def _text_of(content) -> str:
     return ""
 
 
+# A line the harness writes into a user turn, such as "[Image: original
+# 2160x960, displayed at …]", "[Request interrupted by user]" or "[Harness
+# note, …]": one bracketed line starting with a capital letter. A line that is
+# a wikilink ("[[Some Note]]") is the user's and stays.
+_HARNESS_LINE_RE = re.compile(r"^\[[A-Z][^\[\]]*\]$")
+
+
+def _human_text(content) -> str:
+    """The human's words in a user turn, judged block by block.
+
+    A turn can carry several text blocks: an image placeholder, a
+    <system-reminder>, then what the human typed. Harness blocks are dropped
+    one at a time, so the human's block survives the ones around it, and
+    harness placeholder lines are removed from what is left.
+    """
+    blocks = content if isinstance(content, list) else [content]
+    kept = []
+    for block in blocks:
+        text = _text_of(block if isinstance(block, str) else [block])
+        if _is_noise(text):
+            continue
+        lines = [ln for ln in text.splitlines() if not _HARNESS_LINE_RE.match(ln.strip())]
+        kept.append("\n".join(lines).strip())
+    return "\n".join(k for k in kept if k)
+
+
 def _is_noise(text: str) -> bool:
     """Harness-injected user turns that aren't the human speaking."""
     t = text.lstrip()
@@ -166,7 +192,7 @@ def parse_claude_slice(path: Path, start: datetime, end: datetime) -> SessionSli
             origin = obj.get("origin")
             if isinstance(origin, dict) and origin.get("kind") not in (None, "human"):
                 continue
-            text = _text_of(msg.get("content"))
+            text = _human_text(msg.get("content"))
             if _is_noise(text):
                 continue
             if not s.project:
@@ -196,9 +222,9 @@ def parse_codex_slice(path: Path, start: datetime, end: datetime) -> SessionSlic
             continue
         text = ""
         if payload.get("type") == "message" and payload.get("role") == "user":
-            text = _text_of(payload.get("content"))
+            text = _human_text(payload.get("content"))
         elif payload.get("type") == "user_message":
-            text = _text_of(payload.get("message"))
+            text = _human_text(payload.get("message"))
         if text and not _is_noise(text):
             before = len(s.turns)
             _add_turn(s, text, when, start, end)

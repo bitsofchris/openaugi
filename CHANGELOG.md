@@ -10,6 +10,13 @@ and quotes a `description` or value YAML would misread. `augi-agent.md` carries 
 notes agents write directly, and `scripts/fix_frontmatter_links.py` finds (`--write` fixes) any
 already in the vault.
 
+**Session cards and the chat harvest stop mistaking harness text for the human.** A user turn
+can be several text blocks: an image placeholder (`[Image: original …]`), a `<system-reminder>`,
+then what was typed. The filter judged the whole turn by its first block, so cards were titled
+after the image placeholder or `[Request interrupted by user]`, and turns with a reminder in
+front were dropped. `session_cards.py` and `session_harvest.py` now drop harness blocks and
+placeholder lines one at a time and keep the human's words.
+
 **augi-ui 0.19.0: a line above the prompt.** One row where you already look: this
 chat's anchor, what waits on you (or its next step) from the State card, and
 recalls due. Pressing it opens the pane. `band: no` under Setup hides it.

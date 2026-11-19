@@ -298,3 +298,20 @@ def test_collect_skips_files_untouched_since_the_window_opened(tmp_path):
     _claude_file(tmp_path, [_user("in window", _ts(9))], name="fresh")
     found = sh.collect(DAY, NEXT_DAY, tmp_path / "projects", tmp_path / "nope")
     assert [s.session_id for s in found] == ["fresh"]
+
+
+def test_harness_blocks_beside_human_text_are_dropped(tmp_path):
+    turn = [
+        {"type": "text", "text": "[Image: original 2160x960, displayed at 2000x889.]"},
+        {"type": "text", "text": "<system-reminder>status</system-reminder>"},
+        {"type": "text", "text": "what is in this screenshot"},
+    ]
+    path = _claude_file(
+        tmp_path,
+        [
+            _user(turn, _ts(9)),
+            _user("[Request interrupted by user]", _ts(10)),
+        ],
+    )
+    s = sh.parse_claude_slice(path, DAY, NEXT_DAY)
+    assert [t.text for t in s.turns] == ["what is in this screenshot"]
