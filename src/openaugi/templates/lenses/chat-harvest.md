@@ -81,7 +81,10 @@ something smoother than they said.
      something to it, propose an append instead, naming the exact note.
    - **Continues a live thread** → append to that thread's mirror
      (`OpenAugi/Threads/MIRROR - <source>.md`) in the dated-append format.
-   - **Genuinely standalone atomic idea** → a new note in `OpenAugi/Notes/`.
+   - **Belongs in a hub** (a MOC, AMOC or PMOC the hub check finds,
+     [[augi-agent]] How to work item 4) → propose a dated Journal block
+     there, not a new note.
+   - **Genuinely standalone atomic idea, no hub fits** → a new note in `OpenAugi/Notes/`.
    - **Research synthesis / plan / durable reference** → `OpenAugi/Research/`,
      `OpenAugi/Plans/`, `OpenAugi/Docs/` respectively.
 

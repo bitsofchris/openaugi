@@ -15,9 +15,12 @@ This file exists so agent output becomes durable memory instead of one-off summa
 
 ## Write Rules
 
-1. Search with OpenAugi before writing.
+1. Search with OpenAugi before writing, and before making any new note check
+   for a suitable hub: one search over MOCs, AMOCs and PMOCs; a match gets a
+   dated block under its `# Journal` instead of a new note
+   ([[augi-agent]], How to work item 4, "The hub check").
 2. If the output continues an existing long-running thread, append to a mirror note.
-3. If the output is a standalone artifact, create it in the right `OpenAugi/` folder.
+3. If the output is a standalone artifact and no hub fits, create it in the right `OpenAugi/` folder.
 4. If the idea already exists, do not create a duplicate. Link the existing note.
 5. Every agent-created or agent-edited note needs a `- [ ] seen` checkbox as
    the first line of its body.

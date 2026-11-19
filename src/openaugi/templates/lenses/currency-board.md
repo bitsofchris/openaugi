@@ -238,6 +238,12 @@ Plain markdown, headings not callouts, so every line can be tapped into
 on a phone. Empty sections are omitted. Bookkeeping lives in a collapsed
 `<details>` block near the bottom, never at the top.
 
+Every bookkeeping line is wrapped in `*…*`, inside an HTML block, so it
+holds no `*`, `_` or `<…>` of its own, not even inside backticks: a glob
+like `*/` or a placeholder like `<id>` breaks the italics or is swallowed
+as a tag in Obsidian. Name a command or path in words, or with its literal
+value.
+
 ````markdown
 ---
 type: document
