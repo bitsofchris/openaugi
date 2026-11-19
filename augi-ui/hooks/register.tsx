@@ -153,7 +153,6 @@ const USAGE_PREFIXES = [
   'card-sub', 'card', 'task',
   'pin-open', 'pin-drop', 'pin-paste',
   'pad-input', 'pad-save', 'pad-drop', 'recall-answer', 'today-log', 'state-pick', 'week-goal', 'week-anchor',
-  'sync-open-note', 'sync-done', 'sync-archive', 'sync-keep', 'sync-make',
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
 // Whole keys that only look like one of those.
@@ -185,7 +184,7 @@ export const USAGE_FEATURES = [
   'offer-ask', 'offer-link', 'offer-make', 'offer-dismiss',
   'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
   'today-log', 'today-open', 'today-make', 'pick-today', 'week-goal', 'week-anchor',
-  'sync-open', 'sync-apply', 'sync-open-note', 'sync-done', 'sync-archive', 'sync-keep', 'sync-make', 'sync-jira',
+  'sync-week',
   'close-out', 'close-yes', 'close-cancel', 'band-open',
   'draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
@@ -628,7 +627,7 @@ const SKIPPED_KEY = 'skipped'
 // Pins that go into every chat's draft, whatever its anchor: kept in the store, newest last.
 export const EMPTY_TRAIL: Trail = { chats: [], pins: [], states: {} }
 // No daily note: the Today card is not drawn.
-const NO_TODAY: Today = { pattern: '', path: '', day: '', exists: false, todo: [], mtime: 0, week: false, goals: [] }
+const NO_TODAY: Today = { pattern: '', path: '', day: '', exists: false, todo: [], mtime: 0, week: false, goals: [], entries: 0 }
 
 
 const swatch = atom(
@@ -654,7 +653,7 @@ const swatch = atom(
     due: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-22' },
+  { shape: 'swatch-23' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
 // Recall starts folded: it is there when wanted, not in the way of the chat's own cards.
@@ -666,8 +665,8 @@ const picks = atom(
 )
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
-  { ...CARDS_OPEN, anchorsOpen: false, statePickOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0, syncOpen: false, syncKept: [], closing: false } as View,
-  { shape: 'view-17' },
+  { ...CARDS_OPEN, anchorsOpen: false, statePickOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0, closing: false } as View,
+  { shape: 'view-18' },
 )
 // Where this chat's work stands, as its own model last said when asked (updateState): for
 // the session `session`, the answer and when it came (`at`, in ms, paces the automatic
@@ -1194,11 +1193,10 @@ export const insertCard = (board: string, note: string, anchor: string | null, i
 // What syncing the board would do, worked out from the week's workstreams and the board's
 // open cards. `add`: open linked workstreams with no open card or linked sub-item. `tick`:
 // done linked workstreams whose card is still open. `stale`: open cards that are not this
-// week's (nor hold one as a sub-item), less those kept this session. `unlinked`: open
-// workstreams that link no note yet.
+// week's (nor hold one as a sub-item). `unlinked`: open workstreams that link no note yet.
 export type BoardSync = { add: string[]; tick: string[]; stale: string[]; unlinked: Goal[] }
 
-export const boardSync = (goals: Goal[], cards: Card[], kept: string[] = []): BoardSync => {
+export const boardSync = (goals: Goal[], cards: Card[]): BoardSync => {
   const onBoard = new Set(cards.flatMap(card => [card.note, ...card.tasks.map(task => task.note).filter((note): note is string => Boolean(note))]))
   const linked = goals.filter(goal => goal.note)
   const weekNotes = new Set(linked.map(goal => goal.note ?? ''))
@@ -1208,7 +1206,7 @@ export const boardSync = (goals: Goal[], cards: Card[], kept: string[] = []): Bo
     add: [...new Set(linked.filter(goal => !goal.done && !onBoard.has(goal.note ?? '')).map(goal => goal.note ?? ''))],
     tick: [...new Set(linked.filter(goal => goal.done && isTopCard.has(goal.note ?? '') && !goals.some(one => !one.done && one.note === goal.note)).map(goal => goal.note ?? ''))],
     stale: cards
-      .filter(card => !weekNotes.has(card.note) && !card.tasks.some(task => task.note && weekNotes.has(task.note)) && !kept.includes(card.note))
+      .filter(card => !weekNotes.has(card.note) && !card.tasks.some(task => task.note && weekNotes.has(task.note)))
       .map(card => card.note),
     unlinked: goals.filter(goal => !goal.done && !goal.note),
   }
@@ -1238,47 +1236,9 @@ export const tickCard = (board: string, note: string): string => {
   return lines.join('\n')
 }
 
-// The board with the note's open card (and its indented lines) moved into the archive,
-// ticked, as the Kanban plugin keeps archived cards: last under `## Archive`, below `***`.
-// A board with no archive gets one, above the Kanban settings block when it has one.
-export const archiveCard = (board: string, note: string): string => {
-  const lines = board.split('\n')
-  const end = cardsEnd(lines)
-  const at = lines.findIndex((line, index) => index < end && /^- \[ \] /.test(line) && linkName(line) === note)
-  if (at < 0) {
-    return board
-  }
-  let after = at + 1
-  while (after < end && /^\s+\S/.test(lines[after] ?? '')) {
-    after += 1
-  }
-  const card = lines.splice(at, after - at)
-  card[0] = card[0]?.replace(/^- \[ \] /, '- [x] ') ?? ''
-  const stars = lines.indexOf('***')
-  const settings = lines.findIndex(line => /^%% kanban:settings/.test(line))
-  if (stars < 0) {
-    const where = settings >= 0 ? settings : lines.length
-    lines.splice(where, 0, ...(where > 0 && lines[where - 1] !== '' ? [''] : []), '***', '', '## Archive', '', ...card, '')
-
-    return lines.join('\n')
-  }
-  const stop = settings > stars ? settings : lines.length
-  let last = stop - 1
-  while (last > stars && (lines[last] ?? '').trim() === '') {
-    last -= 1
-  }
-  if (last === stars) {
-    lines.splice(stars + 1, 0, '', '## Archive', '', ...card)
-  } else {
-    lines.splice(last + 1, 0, ...card)
-  }
-
-  return lines.join('\n')
-}
-
-// The week's note with one workstream's line linking its new note: `- [ ] text` becomes
-// `- [ ] [[name]]`, the text kept after a `·` when the note's name is not the same words.
-// Only that line changes; a line no longer there changes nothing.
+// The week's note with one workstream's line linking its note: `- [ ] text` becomes
+// `- [ ] [[name]]`, the text kept after a `·` when the note's name is not the same words
+// (case aside). Only that line changes; a line no longer there changes nothing.
 export const linkGoal = (week: string, line: string, name: string): string => {
   const lines = week.split('\n')
   const at = lines.indexOf(line)
@@ -1287,7 +1247,7 @@ export const linkGoal = (week: string, line: string, name: string): string => {
     return week
   }
   const text = found[2] ?? ''
-  lines[at] = `${found[1]}[[${name}]]${text === name ? '' : ` · ${text}`}`
+  lines[at] = `${found[1]}[[${name}]]${text.toLowerCase() === name.toLowerCase() ? '' : ` · ${text}`}`
 
   return lines.join('\n')
 }
@@ -1308,18 +1268,79 @@ export const tickGoal = (week: string, heading: string, note: string): string =>
   return lines.join('\n')
 }
 
-// The prompt "↻ Jira" leaves in the box, unsent: the chat checks each of the week's
-// workstreams against Jira and changes nothing without a yes per row.
-export const jiraWeekDraft = (items: { note: string; path: string; jira: string }[], ask: JiraAsk): string =>
-  [
+// Open checkboxes in the week's note outside its workstream list, as written, each with
+// the heading it sits under: priorities the user wrote while journaling in a day's entry.
+export const entryBoxes = (week: string, heading: string): { under: string; line: string }[] => {
+  const lines = week.split('\n')
+  const range = sectionRange(lines, heading)
+  let under = ''
+
+  return lines.flatMap((line, at) => {
+    if (/^#{1,6}\s/.test(line)) {
+      under = line.replace(/^#+\s*/, '').trim()
+
+      return []
+    }
+    const isListed = range !== null && at >= range.start && at < range.end
+
+    return !isListed && /^\s*[-*] \[ \] \S/.test(line) ? [{ under, line: line.trim() }] : []
+  })
+}
+
+// What one press of `⇅ sync this week` leaves for the chat: the parts that need judgement.
+export type WeekLeft = {
+  // The week's note and what the pane already did (`done`, in words).
+  path: string
+  done: string[]
+  // Workstreams that link no note; checkboxes in the day entries; open cards not this week's.
+  unlinked: Goal[]
+  entries: { under: string; line: string }[]
+  stale: string[]
+  // Linked open workstreams whose note has no Jira key, with the note's path; Jira's names.
+  noKey: { note: string; path: string }[]
+  jira: JiraAsk | null
+  // Where a new card goes (a column's heading) and how a new task note starts.
+  column: string
+  template: string
+}
+
+// The prompt `⇅ sync this week` leaves in the box, unsent, when something needs judgement:
+// the chat resolves each item into one numbered table and changes nothing until the user
+// answers, then writes exactly what was agreed.
+export const weekSyncDraft = (left: WeekLeft): string => {
+  const lines = [
     DRAFT_HEAD,
-    '- This week\'s workstreams, each a note of mine with its Jira key when it has one:',
-    ...items.map(one => `  - [[${one.note}]] ${one.path ? `"${one.path}"` : '(find it in my notes by name)'} · ${one.jira ? `Jira ${one.jira}` : 'no Jira key'}`),
-    `- For each with a key: read the issue${jiraTools('', ask.server)}. Say its status and whether it still matches the note's outcome and Next; where it does not, propose the status change or a short comment.`,
-    `- For each without a key: search Jira${jiraTools(ask.project, '')} for the issue it most likely is, up to three candidates (KEY · summary · status), or say none fits and offer to create one.`,
-    '- Show it all first as one short table, one row per workstream. Change nothing in Jira and write nothing in a note until I say yes to a row. A key I confirm goes in that note as `jira: KEY` in its frontmatter, or a `Jira: KEY` line under its `Up:` line when it has no frontmatter.',
-    'Instruction: refresh the Jira links for this week\'s workstreams',
-  ].join('\n')
+    `- This week's note: "${left.path}". The checkboxes right under its "${P.weekHeading}" heading are my workstreams; below it I journal in a dated entry per day.`,
+    `- My board: "${P.board}" (Kanban; cards above "***", the archive below it).`,
+  ]
+  if (left.done.length > 0) {
+    lines.push(`- Already done by the pane: ${left.done.join('; ')}.`)
+  }
+  lines.push('Still to resolve, one row each:')
+  if (left.unlinked.length > 0) {
+    lines.push('- Workstreams with no note yet. Find the note each one is: a card on the board first, then a search of my notes (with the OpenAugi tools if you have them). If none fits, propose a new task note with a short name.')
+    lines.push(...left.unlinked.map(goal => `  - ${goal.line}`))
+  }
+  if (left.entries.length > 0) {
+    lines.push(`- Checkboxes I wrote in my day entries. Say for each whether it is a workstream for the week (a new line under "${P.weekHeading}", or part of one already there) or just a to-do for that day, which stays where it is.`)
+    lines.push(...left.entries.map(one => `  - ${one.under ? `under "${one.under}": ` : ''}${one.line}`))
+  }
+  if (left.stale.length > 0) {
+    lines.push('- Open cards on the board that are not this week\'s. Propose done (tick it where it is), archive (move it with its indented lines to the end of the archive, ticked) or keep (leave it).')
+    lines.push(...left.stale.map(note => `  - [[${note}]]`))
+  }
+  if (left.jira && left.noKey.length > 0) {
+    lines.push(`- Workstreams whose note has no Jira key. Search Jira${jiraTools(left.jira.project, left.jira.server)} for the issue each most likely is, up to three candidates (KEY · summary · status), or none.`)
+    lines.push(...left.noKey.map(one => `  - [[${one.note}]] ${one.path ? `"${one.path}"` : ''}`.trimEnd()))
+  }
+  lines.push(
+    'Show it all as one numbered table: item, what you propose, why in a few words. Change nothing until I answer `all`, row numbers, or `none`.',
+    `Then do exactly what I agreed. A workstream line becomes "- [ ] [[Note]]", my words kept after " · " when they differ from the name. A new note goes in "${P.tasks}" from ${left.template}, never over a note that exists, and gets a card "- [ ] [[Note]]" at the end of the "${left.column}" column. ${left.jira ? 'A Jira key goes in its note as `jira: KEY` in the frontmatter, or a `Jira: KEY` line under its `Up:` line when it has no frontmatter. Change nothing in Jira. ' : ''}Leave every other line of my notes and the board exactly as it is.`,
+    'Instruction: sync this week',
+  )
+
+  return lines.join('\n')
+}
 
 // What a note anchors as: its top-level card; else, for a linked sub-item of a card, a
 // card-shaped value in the parent's column (`under <parent>`, no tasks of its own); else null.
@@ -2427,7 +2448,7 @@ async function todayNow($: EngineInterface, pattern: string, week = false): Prom
   }
   const day = stamp(now).slice(0, 10)
   if (!(await $.fs.exists(path))) {
-    return { pattern, path, day, exists: false, todo: [], mtime: 0, week, goals: [] }
+    return { pattern, path, day, exists: false, todo: [], mtime: 0, week, goals: [], entries: 0 }
   }
   let mtime = 0
   try {
@@ -2438,7 +2459,7 @@ async function todayNow($: EngineInterface, pattern: string, week = false): Prom
   const text = await $.fs.read(path)
   const goals = week ? weekGoals(text, P.weekHeading) : []
 
-  return { pattern, path, day, exists: true, todo: week ? goals.filter(one => !one.done).map(one => one.text) : openBoxes(text), mtime, week, goals }
+  return { pattern, path, day, exists: true, todo: week ? goals.filter(one => !one.done).map(one => one.text) : openBoxes(text), mtime, week, goals, entries: week ? entryBoxes(text, P.weekHeading).length : 0 }
 }
 
 // Reads the note again when the day (or week) rolled over, the note appeared, or it
@@ -2585,72 +2606,75 @@ async function syncNow($: EngineInterface): Promise<{ goals: Goal[]; board: stri
   return { goals: weekGoals(week, P.weekHeading), board: await $.fs.read(P.board), week }
 }
 
-// `apply`: a card for each open workstream not on the board (in the task column setting's
-// column, else the first), and each done one's card ticked.
-async function syncBoard($: EngineInterface): Promise<void> {
+// `⇅ sync this week`, the one button. First what needs no judgement, at once: a plain
+// workstream whose words are a note's name (a card's, any case, else a note file's) is
+// linked to it; each open linked workstream with no card gets one (at the end of the task
+// column setting's column, else the first); each done one's card is ticked. Then, when
+// anything is left that needs judgement (which note a plain workstream is, checkboxes in
+// the day entries, cards that are not this week's, Jira keys), one draft for the chat.
+async function syncWeek($: EngineInterface): Promise<void> {
   const now = await syncNow($)
   if (!now) {
     return
   }
-  const plan = boardSync(now.goals, kanbanCards(now.board))
+  const { today, taskTemplate } = await read($, swatch)
+  let week = now.week
+  let linked = 0
+  for (const goal of now.goals.filter(one => !one.done && !one.note)) {
+    const card = kanbanCards(now.board).find(one => one.note.toLowerCase() === goal.text.toLowerCase())
+    // A name `find` would read as a pattern, or as a path, is never looked up.
+    const found = card ? '' : /[*?[\]/\\]/.test(goal.text) ? '' : await notePathOf($, goal.text)
+    const name = card?.note ?? (found ? baseName(found).replace(/\.md$/, '') : '')
+    if (name) {
+      week = linkGoal(week, goal.line, name)
+      linked += 1
+    }
+  }
+  if (week !== now.week) {
+    await $.fs.write(today.path, week)
+  }
+  const goals = weekGoals(week, P.weekHeading)
+  const plan = boardSync(goals, kanbanCards(now.board))
   const board = plan.tick.reduce(tickCard, plan.add.reduce((text, note) => insertCard(text, note, null, P.taskColumn), now.board))
   if (board !== now.board) {
     await writeBoard($, board)
   }
-  await $.ui.toast(`Board synced: ${plan.add.length} added, ${plan.tick.length} ticked.`)
-}
-
-// A card that is not this week's: ticked done where it is, moved to the archive, or kept
-// (left alone, and not listed again this session).
-async function settleCard($: EngineInterface, note: string, how: 'done' | 'archive' | 'keep'): Promise<void> {
-  if (how === 'keep') {
-    await update($, view, old => ({ ...old, syncKept: [...(old.syncKept ?? []), note] }))
-
-    return
-  }
-  const old = await readOr($, P.board)
-  const board = how === 'done' ? tickCard(old, note) : archiveCard(old, note)
-  if (board !== old) {
-    await writeBoard($, board)
-  }
-}
-
-// A workstream with no note yet gets one, on a press: a task note and card (see makeTask),
-// and its line in the week's note links it.
-async function makeGoalNote($: EngineInterface, line: string): Promise<void> {
-  const now = await syncNow($)
-  const goal = now?.goals.find(one => one.line === line)
-  if (!now || !goal) {
-    return
-  }
-  const made = await makeTask($, goal.text, P.taskColumn)
-  if (!made) {
-    return
-  }
-  const { today } = await read($, swatch)
-  await $.fs.write(today.path, linkGoal(await $.fs.read(today.path), line, made.name))
   const next = await todayNow($, today.pattern, today.week)
   await update($, swatch, old => ({ ...old, today: next }))
-  await madeTask($, made)
-}
 
-// `↻ Jira`: drafts a check of every linked workstream against Jira, keys read from the notes.
-async function refreshJira($: EngineInterface): Promise<void> {
-  const now = await syncNow($)
-  if (!now) {
-    return
-  }
-  const items: { note: string; path: string; jira: string }[] = []
-  for (const note of [...new Set(now.goals.filter(goal => !goal.done && goal.note).map(goal => goal.note ?? ''))]) {
+  const done = [
+    ...(linked > 0 ? [`linked ${linked} ${linked === 1 ? 'workstream' : 'workstreams'} to ${linked === 1 ? 'its note' : 'their notes'}`] : []),
+    ...(plan.add.length > 0 ? [`added ${plan.add.length} ${plan.add.length === 1 ? 'card' : 'cards'} (${plan.add.join(', ')})`] : []),
+    ...(plan.tick.length > 0 ? [`ticked ${plan.tick.length} ${plan.tick.length === 1 ? 'card' : 'cards'} (${plan.tick.join(', ')})`] : []),
+  ]
+  const jira = await jiraAsk($)
+  const noKey: { note: string; path: string }[] = []
+  for (const note of jira ? [...new Set(goals.filter(goal => !goal.done && goal.note).map(goal => goal.note ?? ''))] : []) {
     const path = await notePathOf($, note)
-    items.push({ note, path, jira: path ? jiraFrom(await readOr($, path)) : '' })
+    if (!jiraFrom(path ? await readOr($, path) : '')) {
+      noKey.push({ note, path })
+    }
   }
-  if (items.length === 0) {
-    await $.ui.toast(`No open workstream under "${P.weekHeading}" links a note: nothing to check.`)
+  const entries = entryBoxes(week, P.weekHeading)
+  const said = done.length > 0 ? `${done.join(', ')}.` : ''
+  if (plan.unlinked.length + entries.length + plan.stale.length + noKey.length === 0) {
+    await $.ui.toast(`${said ? `Synced: ${said} ` : ''}This week and the board match.`)
 
     return
   }
-  await fillOver($, jiraWeekDraft(items, (await jiraAsk($)) ?? { project: P.jiraProject, server: P.jiraServer }))
+  const firstColumn = board.split(/^\*\*\*$/m)[0]?.match(/^## (.+)$/m)?.[1]?.trim() ?? 'the first'
+  await fillOver($, weekSyncDraft({
+    path: today.path,
+    done,
+    unlinked: plan.unlinked,
+    entries,
+    stale: plan.stale,
+    noKey,
+    jira,
+    column: P.taskColumn || firstColumn,
+    template: taskTemplate === 'yours' ? `the template "${P.taskTemplate}"` : 'the sections "### Outcome", "### Verify", "# Journal" and "# Agent Log"',
+  }))
+  await $.ui.toast(`${said ? `Synced: ${said} ` : ''}The rest is drafted for the chat: press enter to see it as one table.`)
 }
 
 // What was typed in the You card's log field goes into today's note, stamped now.
@@ -4186,7 +4210,9 @@ export const register: Register = (on, options) => {
     const arrow = (isOpen: boolean): string => (isOpen ? '▾' : '▸')
     const flip = (key: keyof View) => () => update($, view, old => ({ ...old, [key]: !old[key] }))
     // What syncing the board would do now, from the week's workstreams and the open cards.
-    const plan = today.week && today.exists ? boardSync(today.goals, cards, shown.syncKept ?? []) : null
+    const plan = today.week && today.exists ? boardSync(today.goals, cards) : null
+    // What one sync press has to look at: board changes, plain workstreams, day-entry boxes.
+    const toSync = plan ? plan.add.length + plan.tick.length + plan.stale.length + plan.unlinked.length + (today.entries ?? 0) : 0
     const weekAnchors = today.week ? [...new Set(today.goals.filter(goal => !goal.done && goal.note).map(goal => goal.note ?? ''))] : []
     // What is pinned now: a line ticked off on the log was unpinned.
     const pins = withPaths((trail.pins ?? []).filter(pin => pin.on), pinPaths ?? {})
@@ -4596,35 +4622,7 @@ export const register: Register = (on, options) => {
                           : <Text key={`week-goal-text-${at}`} dimColor={goal.done} wrap="truncate-end">{`${goal.done ? '☑' : '☐'} ${goal.text}`}</Text>
                       ))}
                       {today.week && today.goals.length === 0 && <Text key="week-none" dimColor wrap="wrap">{`No checkboxes under "${P.weekHeading}" yet: each one is a workstream for the week, a [[note]] for the ones with a note.`}</Text>}
-                      {plan && <Button key="sync-open" plain label={`${arrow(shown.syncOpen)} ⇅ sync the board${plan.add.length + plan.tick.length + plan.stale.length + plan.unlinked.length > 0 ? ` (${plan.add.length + plan.tick.length + plan.stale.length + plan.unlinked.length})` : ' ✓'}`} onPress={flip('syncOpen')} />}
-                      {plan && shown.syncOpen && (
-                        <Box key="sync-body" flexDirection="column" paddingLeft={2} marginBottom={1}>
-                          {plan.add.length + plan.tick.length > 0 && (
-                            <Box key="sync-plan" flexDirection="column">
-                              <Text key="sync-what" wrap="wrap">{[...plan.add.map(note => `＋ ${note}`), ...plan.tick.map(note => `☑ ${note}`)].join('  ·  ')}</Text>
-                              <Button key="sync-apply" label={`apply: ${plan.add.length} to add, ${plan.tick.length} to tick`} onPress={() => syncBoard($)} />
-                            </Box>
-                          )}
-                          {plan.stale.length > 0 && <Text key="sync-stale-title" dimColor>{`On the board, not this week (${plan.stale.length}):`}</Text>}
-                          {plan.stale.map(note => line(
-                            `sync-stale-${note}`,
-                            <Button key={`sync-open-note-${note}`} plain label={note} onPress={() => openByName($, note)} />,
-                            [
-                              <Button key={`sync-done-${note}`} label="✓ done" onPress={() => settleCard($, note, 'done')} />,
-                              <Button key={`sync-archive-${note}`} label="archive" onPress={() => settleCard($, note, 'archive')} />,
-                              <Button key={`sync-keep-${note}`} plain dimColor label="keep" onPress={() => settleCard($, note, 'keep')} />,
-                            ],
-                          ))}
-                          {plan.unlinked.length > 0 && <Text key="sync-unlinked-title" dimColor>No note yet:</Text>}
-                          {plan.unlinked.map((goal, at) => line(
-                            `sync-unlinked-${at}`,
-                            <Text key={`sync-goal-${at}`} wrap="truncate-end">{goal.text}</Text>,
-                            <Button key={`sync-make-${at}`} label="make note" onPress={() => makeGoalNote($, goal.line)} />,
-                          ))}
-                          {plan.add.length + plan.tick.length + plan.stale.length + plan.unlinked.length === 0 && <Text key="sync-clear" dimColor>✓ The board matches this week.</Text>}
-                          {isJiraOn && weekAnchors.length > 0 && <Button key="sync-jira" plain label="↻ check this week's Jira links" onPress={() => refreshJira($)} />}
-                        </Box>
-                      )}
+                      {plan && <Button key="sync-week" label={`⇅ sync this week${toSync > 0 ? ` (${toSync})` : ' ✓'}`} onPress={() => syncWeek($)} />}
                       <Input key={`today-log-${shown.logged ?? 0}`} label="+ log" placeholder={today.week ? "what you just did or decided: Enter adds it under today in this week's note" : "what you just did or decided: Enter adds it to today's note"} submitLabel="log" onSubmit={value => logToday($, value)} />
                     </Box>
                   )}

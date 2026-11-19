@@ -1,6 +1,6 @@
 ---
 name: augi-ui
-description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, tell the chat which note it is on, keep this week's note and its workstreams in view, sync the board from them, close out finished work, a line above the prompt, run lenses, quiz yourself on what the chat did, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
+description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, tell the chat which note it is on, keep this week's note and its workstreams in view, sync the week and the board from them, close out finished work, a line above the prompt, run lenses, quiz yourself on what the chat did, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
 ---
 
 # augi-ui — the pane beside your agent chat
@@ -260,26 +260,28 @@ are `dimColor`.
   stops showing it.
   **This week's linked workstreams come first in the anchor menu**, under the
   heading's name, so the anchors in reach are the week's, not every card.
-- **Sync the board** (`⇅ sync the board (N)`, in the You card under the week's
-  workstreams; `✓` when there is nothing to do): the board brought in line with
-  the week, on presses only. It reads the week's note and the board fresh and
-  works out (`boardSync`): open linked workstreams with no open card or linked
-  sub-item (to add), done ones whose card is still open (to tick), open cards
-  that are not this week's and hold none of its workstreams as sub-items, and
-  open workstreams that link no note. `apply` adds the cards (at the end of the
-  `taskColumn` setting's column, else the first) and ticks the done ones, in one
-  write. Each card not this week's has `✓ done` (ticked where it is), `archive`
-  (moved with its indented lines into the board's archive, ticked, last under
-  `## Archive` below `***`, which is made above the Kanban settings block when
-  the board has none) and `keep` (left alone and not listed again this
-  session). A workstream with no note has `make note`: a task note from the
-  task template and a card, as `＋ new task` makes one, and its line in the
-  week's note becomes `- [ ] [[name]]` (the words kept after a `·` when the
-  name differs). With Jira on, `↻ check this week's Jira links` drafts one
-  prompt naming every open linked workstream and its key (read from each note):
-  the chat reads the issues with keys, searches for the ones without, shows one
-  table, and changes nothing in Jira or a note until the user says yes to a
-  row.
+- **Sync this week** (`⇅ sync this week (N)`, in the You card under the week's
+  workstreams; `✓` when there is nothing to do; N counts what a press would look
+  at): one button for the week, the board and the links. Workstreams may be
+  plain checkboxes, and priorities may sit in a day's entry: nothing has to be
+  linked or moved by hand first. A press reads the week's note and the board
+  fresh and does at once what needs no judgement (`syncWeek`): a plain
+  workstream whose words are a note's name (a board card's, any case, else a
+  note file's) becomes `- [ ] [[Note]]`; each open linked workstream with no
+  open card or linked sub-item gets a card (at the end of the `taskColumn`
+  setting's column, else the first); each done one's open card is ticked. Then,
+  when something is left that needs judgement, it drafts one prompt for the
+  chat (`weekSyncDraft`) naming only those items: plain workstreams to match to
+  a note (board first, then a search of the notes) or to propose a new task note
+  for; open checkboxes in the day entries (`entryBoxes`), each to promote to
+  the week's list or leave as that day's to-do; open cards that are not this
+  week's, each done, archive or keep; and, with Jira on, linked workstreams
+  whose note has no key, with up to three candidates each. The chat shows one
+  numbered table and changes nothing until the user answers `all`, row numbers
+  or `none`; then it writes what was agreed (links in the week's list, new task
+  notes from the task template with their cards, Jira keys in the notes) and
+  nothing else. With nothing left the press only says so. A card kept is listed
+  again on the next press: the pane remembers no answers.
 - **Context**: what the next chat is told to read is the anchor's pins plus
   four things that go in without being listed, each a checkbox under Setup →
   *What goes into every draft*, all on by default: the context note and board

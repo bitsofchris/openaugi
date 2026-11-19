@@ -1,7 +1,7 @@
 {
   "name": "augi-ui",
   "version": "0.19.0",
-  "description": "augi-ui, the OpenAugi pane beside your agent chat: anchor on a Kanban project or task, tell the chat which note it is on, pin its context (notes, sessions, artifacts, links), keep this week's note and its workstreams in view, sync the board from them, close out finished work, run lenses, and keep an Agent Log section in each anchor's note. Drafts only; you press enter.",
+  "description": "augi-ui, the OpenAugi pane beside your agent chat: anchor on a Kanban project or task, tell the chat which note it is on, pin its context (notes, sessions, artifacts, links), keep this week's note and its workstreams in view, sync the week and the board from them, close out finished work, run lenses, and keep an Agent Log section in each anchor's note. Drafts only; you press enter.",
   "types": "./types/index.d.ts",
   "userConfig": {
     "notesFolder": {

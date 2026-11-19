@@ -11,15 +11,14 @@ then ticks the anchor's card on the board, ticks its line in this week's note,
 and marks this chat done in the note's Chats list, so the board and the week stop
 going stale as chats finish.
 
-**augi-ui 0.19.0: sync the board from the week.** With a week's note, the You card
-has `⇅ sync the board (N)`: open workstreams missing from the board, done ones
-whose card is still open, cards on the board that are not this week's, and
-workstreams with no note yet. `apply` adds and ticks; each card that is not this
-week's can be ticked `✓ done`, moved to the board's `archive`, or kept; `make
-note` gives a plain workstream its task note and card and links its line. With
-Jira on, `↻ check this week's Jira links` drafts one check of every workstream
-against Jira that changes nothing until you say yes per row. The anchor menu
-lists this week's workstreams first.
+**augi-ui 0.19.0: one button syncs the week.** With a week's note, the You card
+has `⇅ sync this week (N)`. A press does the sure part at once: a plain
+workstream whose words are a note's name is linked to it, missing cards are
+added, done ones ticked. What needs judgement (which note a plain priority is,
+checkboxes you wrote in a day's entry, cards that are not this week's, Jira keys)
+goes into one draft for the chat, which shows one table and changes nothing
+until you answer. Nothing has to be linked or moved by hand first. The anchor
+menu lists this week's workstreams first.
 
 **augi-ui 0.19.0: a week's note in place of today's.** Set `weekNote` (a path with a
 date in it, such as `Inbox/{{date:YYYY-MM-DD}} - week.md`) and the You card

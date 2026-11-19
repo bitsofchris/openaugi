@@ -38,8 +38,9 @@ export type SetupItem = { field: string; label: string; path: string; ok: boolea
 // Today's note: the pattern its path comes from (empty for none), the path for `day`
 // (YYYY-MM-DD), whether the file is there, its first open checkboxes, and when it last changed.
 // Today's note, or this week's when the weekNote setting names one (`week`): where it is,
-// whether it is there, what is open in it, and for a week its workstreams (`goals`).
-export type Today = { pattern: string; path: string; day: string; exists: boolean; todo: string[]; mtime: number; week: boolean; goals: { text: string; note: string | null; done: boolean; line: string }[] }
+// whether it is there, what is open in it, and for a week its workstreams (`goals`) and
+// how many open checkboxes its day entries hold (`entries`).
+export type Today = { pattern: string; path: string; day: string; exists: boolean; todo: string[]; mtime: number; week: boolean; goals: { text: string; note: string | null; done: boolean; line: string }[]; entries: number }
 export type Swatch = {
   setup: SetupItem[]
   // Obsidian vaults found on this computer, offered on the setup screen.
@@ -97,10 +98,6 @@ export type View = {
   taskMode: '' | 'new'
   // How many lines the You card has logged to today's note this session: it empties the log field after each.
   logged: number
-  // The You card's board sync, open or not, and the cards kept on the board this session
-  // although they are not this week's (so sync stops listing them).
-  syncOpen: boolean
-  syncKept: string[]
   // The Anchor card's close-out confirmation is showing.
   closing: boolean
 }
