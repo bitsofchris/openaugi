@@ -40,6 +40,9 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `logFolder` | Where Agent Log files used to be kept; read once per anchor to move each into its note (see **Agent Log**) | `OpenAugi/Agent-Logs` |
 | `dailyNote` | Today's note, shown in the You card: a path inside the notes folder with the date in it (`Daily/{{date:YYYY-MM-DD}}.md`). Empty reads Obsidian's own daily-note settings (`.obsidian/daily-notes.json` for the folder and name format; with no folder named there, the default new-note folder from `.obsidian/app.json`, as Obsidian does); `none` turns it off | — |
 | `dailyHeading` | The heading in today's note that lines logged from the pane go under (made when missing); empty adds them at the end of the note | — |
+| `weekNote` | This week's note, shown instead of today's when set: a path with a date in it (`Inbox/{{date:YYYY-MM-DD}} - week.md`). The date may be any day of the week, Monday to Sunday; the pane makes Monday's. See **This week** | — |
+| `weekHeading` | The heading in the week's note whose checkboxes are the week's workstreams | `This week` |
+| `dayHeading` | The heading each day's logged lines go under in the week's note | `{{date:dddd YYYY-MM-DD}}` |
 | `taskFolder` | The one flat folder every new task note goes to; empty is the notes folder's root (Setup warns while it is). Tasks are organized by their `Up:` link, never by folder | — |
 | `taskColumn` | The board column a new standalone task goes to when the chat has no anchor, by its heading; with an anchor it goes to the anchor's column. Empty is the board's first column | — |
 | `jiraProject` | Optional. The Jira project key or board (`PROJ`), quoted into the Jira drafts | — |
@@ -220,6 +223,21 @@ are `dimColor`.
   their press. With no daily note found and none set, the card says where to
   set one. A standup or a plan for the day is a lens the user writes that
   reads this note, not code.
+- **This week** (in the You card, in place of Today when `weekNote` is set):
+  one note per week instead of one per day. The pane looks for it under each
+  day of the current week's name, Monday first, so it may be named for any of
+  them. Its **workstreams** are the top-level checkboxes right under
+  `weekHeading`, down to the next heading of any level (an indented checkbox is
+  a detail of the one above; a box under a day's heading is not a workstream).
+  The card lists them, ticked or not; one that links a note (`- [ ] [[Note]] ·
+  this week's outcome`) is a button that opens it. `+ log` writes `- HH:MM
+  text` under today's heading (`dayHeading`, made at the note's end when
+  missing). With no note for the week, `＋ make this week's note` makes
+  Monday's, on the press only: `# <weekHeading>` with last week's open
+  workstreams (and their indented lines) carried over, else one empty
+  checkbox. Drafts and the chat's brief name the week's note instead of
+  today's. The daily note is untouched: it stays the user's, the pane just
+  stops showing it.
 - **Context**: what the next chat is told to read is the anchor's pins plus
   four things that go in without being listed, each a checkbox under Setup →
   *What goes into every draft*, all on by default: the context note and board

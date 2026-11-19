@@ -76,6 +76,24 @@
       "description": "The heading in today's note that lines logged from the pane go under (made when missing). Empty adds them at the end of the note.",
       "default": ""
     },
+    "weekNote": {
+      "type": "string",
+      "title": "Week note",
+      "description": "This week's note, shown in the pane instead of today's: a path inside the notes folder with a date in it, e.g. Weekly/{{date:YYYY-MM-DD}} - week.md. The date may be any day of the week; the pane makes Monday's. Its checkboxes under the workstream heading are the week's workstreams. Empty shows today's note.",
+      "default": ""
+    },
+    "weekHeading": {
+      "type": "string",
+      "title": "Week workstream heading",
+      "description": "The heading in the week's note whose checkboxes are this week's workstreams. Empty is This week.",
+      "default": ""
+    },
+    "dayHeading": {
+      "type": "string",
+      "title": "Week day heading",
+      "description": "The heading each day's logged lines go under in the week's note, with the date in it. Empty is {{date:dddd YYYY-MM-DD}}.",
+      "default": ""
+    },
     "taskFolder": {
       "type": "string",
       "title": "Task folder",

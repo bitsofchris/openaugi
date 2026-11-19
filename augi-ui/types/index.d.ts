@@ -37,7 +37,9 @@ export type Recall = { session: string; topic: string; path: string; id: string;
 export type SetupItem = { field: string; label: string; path: string; ok: boolean; starter: boolean }
 // Today's note: the pattern its path comes from (empty for none), the path for `day`
 // (YYYY-MM-DD), whether the file is there, its first open checkboxes, and when it last changed.
-export type Today = { pattern: string; path: string; day: string; exists: boolean; todo: string[]; mtime: number }
+// Today's note, or this week's when the weekNote setting names one (`week`): where it is,
+// whether it is there, what is open in it, and for a week its workstreams (`goals`).
+export type Today = { pattern: string; path: string; day: string; exists: boolean; todo: string[]; mtime: number; week: boolean; goals: { text: string; note: string | null; done: boolean; line: string }[] }
 export type Swatch = {
   setup: SetupItem[]
   // Obsidian vaults found on this computer, offered on the setup screen.

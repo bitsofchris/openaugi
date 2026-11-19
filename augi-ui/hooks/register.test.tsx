@@ -4,6 +4,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
+import { newWeekNote, weekDays, weekGoals, weekNotePaths } from './register'
 import { promptTitle } from './register'
 import { anchorBrief, anchorFromMessages, anchorNews, unanchoredBrief } from './register'
 import { openArgv } from './register'
@@ -3407,4 +3408,95 @@ test('explain it back writes the explain-back lens when the folder has none, the
   await ui.press({ key: 'recall-explain' })
   expect(got.written.get('/v/lenses/explain-back.md')).toContain('Mine.')
   await ui.unmount()
+})
+
+// ---- The week's note ----
+
+const WEDNESDAY = new Date(2022, 0, 5, 9, 30).getTime()
+const WEEK_PATTERN = 'Inbox/{{date:YYYY-MM-DD}} - week'
+
+test('a week runs Monday to Sunday, and its note may be named for any of its days, Monday first', () => {
+  expect(weekDays(WEDNESDAY).map(ms => formatDate('YYYY-MM-DD ddd', ms))).toEqual([
+    '2022-01-03 Mon', '2022-01-04 Tue', '2022-01-05 Wed', '2022-01-06 Thu', '2022-01-07 Fri', '2022-01-08 Sat', '2022-01-09 Sun',
+  ])
+  // A Sunday night is still the week that began the Monday before; a week can start in the year before.
+  expect(formatDate('YYYY-MM-DD', weekDays(new Date(2022, 0, 9, 23, 59).getTime())[0] ?? 0)).toBe('2022-01-03')
+  expect(formatDate('YYYY-MM-DD', weekDays(new Date(2022, 0, 1, 8).getTime())[0] ?? 0)).toBe('2021-12-27')
+  expect(weekNotePaths(WEEK_PATTERN, WEDNESDAY, '/v', '/Users/t')).toEqual(
+    ['03', '04', '05', '06', '07', '08', '09'].map(day => `/v/Inbox/2022-01-${day} - week.md`),
+  )
+  // A pattern with no day in it is one note; no pattern, none.
+  expect(weekNotePaths('Weekly/current', WEDNESDAY, '/v', '/Users/t')).toEqual(['/v/Weekly/current.md'])
+  expect(weekNotePaths('', WEDNESDAY, '/v', '/Users/t')).toEqual([])
+})
+
+const WEEK_NOTE = [
+  '# This week',
+  '- [ ] [[PMOC - Garden]] · beds planted',
+  '\t- [ ] buy soil',
+  '- [x] [[PMOC - Birdhouse]]',
+  '- [ ] call the plumber',
+  '',
+  '## Monday 2022-01-03',
+  '- [ ] a box under a day is not a workstream',
+  '- 09:00 coffee',
+  '',
+].join('\n')
+
+test('the week\'s workstreams are the top-level checkboxes right under its heading', () => {
+  expect(weekGoals(WEEK_NOTE, 'this week')).toEqual([
+    { text: 'PMOC - Garden · beds planted', note: 'PMOC - Garden', done: false, line: '- [ ] [[PMOC - Garden]] · beds planted' },
+    { text: 'PMOC - Birdhouse', note: 'PMOC - Birdhouse', done: true, line: '- [x] [[PMOC - Birdhouse]]' },
+    { text: 'call the plumber', note: null, done: false, line: '- [ ] call the plumber' },
+  ])
+  expect(weekGoals(WEEK_NOTE, 'Next week')).toEqual([])
+  expect(weekGoals('## This week\n', 'This week')).toEqual([])
+})
+
+test('a new week\'s note carries over last week\'s open workstreams with their details, and nothing else', () => {
+  expect(newWeekNote(WEEK_NOTE, 'This week')).toBe('# This week\n\n- [ ] [[PMOC - Garden]] · beds planted\n\t- [ ] buy soil\n- [ ] call the plumber\n')
+  expect(newWeekNote('', 'This week')).toBe('# This week\n\n- [ ] \n')
+  expect(newWeekNote('# This week\n- [x] done\n', 'Focus')).toBe('# Focus\n\n- [ ] \n')
+})
+
+test('with a week note set, the You card keeps this week\'s note: made on a press for Monday with last week carried over, found under any day\'s name, its workstreams listed, a line logged under today', { options: { ...OPTIONS, weekNote: WEEK_PATTERN } }, async ($, on) => {
+  const lastWeek = '/v/Inbox/2021-12-29 - week.md'
+  const written = new Map<string, string>([[lastWeek, WEEK_NOTE], ['/v/PMOC - Garden.md', '# Journal\n']])
+  const toasts: string[] = []
+  const got = todayHooks(on, written, toasts)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'today-make' }))?.text).toMatch(/make this week's note/)
+  expect(await ui.find({ text: /No note for this week yet: it would be Inbox\/2022-01-03 - week\.md/ })).toBeTruthy()
+  // Nothing is made until the press; then Monday's note, last week's open workstreams in it.
+  expect([...written.keys()].some(path => path.includes('2022-01-0'))).toBe(false)
+  await ui.press({ key: 'today-make' })
+  const monday = '/v/Inbox/2022-01-03 - week.md'
+  expect(written.get(monday)).toBe('# This week\n\n- [ ] [[PMOC - Garden]] · beds planted\n\t- [ ] buy soil\n- [ ] call the plumber\n')
+  expect((await ui.find({ key: 'today-open' }))?.text).toMatch(/this week's note/)
+  expect(await ui.find({ text: 'This week · 2022-01-03 - week' })).toBeTruthy()
+  // A linked workstream opens its note; a plain one is text.
+  expect((await ui.find({ key: 'week-goal-0' }))?.text).toMatch(/☐ PMOC - Garden · beds planted ↗/)
+  expect(await ui.find({ text: '☐ call the plumber' })).toBeTruthy()
+
+  // + log goes under today's own heading, made at the end when missing.
+  await ui.input({ key: 'today-log-0', text: 'gate is fixed' })
+  expect(written.get(monday)?.endsWith('- [ ] call the plumber\n\n## Wednesday 2022-01-05\n- 09:30 gate is fixed\n')).toBe(true)
+  expect(toasts).toEqual(["Logged under today in this week's note"])
+
+  // The draft names the week's note.
+  await pressDraft(ui)
+  expect(got.filled[0]?.includes(`- This week: read "${monday}", my note for this week`)).toBe(true)
+
+  // Named for another day of the week, it is still this week's note.
+  written.delete(monday)
+  const thursday = '/v/Inbox/2022-01-06 - week.md'
+  written.set(thursday, '# This week\n- [x] [[PMOC - Garden]]\n')
+  await ui.press({ key: 'refresh' })
+  expect(await ui.find({ text: 'This week · 2022-01-06 - week' })).toBeTruthy()
+  expect((await ui.find({ key: 'week-goal-0' }))?.text).toMatch(/☑ PMOC - Garden/)
+  await ui.press({ key: 'week-goal-0' })
+  await ui.unmount()
+  // The paths the next tests see are the shared ones again.
+  configure(resolvePaths(OPTIONS, '/Users/t'))
 })

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**augi-ui: a week's note in place of today's.** Set `weekNote` (a path with a
+date in it, such as `Inbox/{{date:YYYY-MM-DD}} - week.md`) and the You card
+keeps this week's note instead of today's. It may be named for any day of the
+week; `＋ make this week's note` makes Monday's, with last week's open
+workstreams carried over. The checkboxes under `This week` (`weekHeading`) are
+the week's workstreams, listed in the card, a linked one opening its note.
+`+ log` writes under today's own heading in it (`dayHeading`). Drafts and the
+chat's brief name the week's note. With `weekNote` empty nothing changes.
+
 **augi-ui: a smaller This chat.** The cards read in the order you use them:
 the anchor (its pins now inside it, under the note button), the scratchpad, the
 chat's state, then Recall, which starts folded. Two buttons are gone. `＋ sub-task

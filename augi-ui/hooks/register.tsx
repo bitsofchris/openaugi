@@ -26,6 +26,14 @@ export type Options = {
   dailyNote: string
   // The heading in today's note that log lines go under; empty adds them at its end.
   dailyHeading: string
+  // This week's note, which replaces today's in the pane when set: a path with a date in
+  // it, `{{date:YYYY-MM-DD}}`, that may be any day of the week (Monday's when the pane makes it).
+  weekNote: string
+  // The heading in the week's note whose checkboxes are the week's workstreams; empty is `This week`.
+  weekHeading: string
+  // The heading each day's logged lines go under in the week's note, with the date in it;
+  // empty is `{{date:dddd YYYY-MM-DD}}`.
+  dayHeading: string
   lensPicks: string
   // `no` keeps the pane closed until /augi; anything else opens it with each new chat.
   openOnStart: string
@@ -63,6 +71,11 @@ export type Paths = {
   // The daily note setting as typed (a pattern, `none` or empty) and the log heading in it.
   daily: string
   dailyHeading: string
+  // This week's note setting (a pattern, or empty for none), its workstream heading, and
+  // the per-day heading pattern log lines go under.
+  week: string
+  weekHeading: string
+  dayHeading: string
   // Where Obsidian keeps its daily-note folder and name format for this notes folder.
   obsidianDaily: string
   // Obsidian's own settings for this notes folder: where it puts a new note by default.
@@ -103,6 +116,9 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
     taskTemplate: `${notes}/OpenAugi/AGENT/templates/Task.md`,
     daily: (options.dailyNote ?? '').trim(),
     dailyHeading: (options.dailyHeading ?? '').trim().replace(/^#+\s*/, ''),
+    week: (options.weekNote ?? '').trim(),
+    weekHeading: (options.weekHeading ?? '').trim().replace(/^#+\s*/, '') || 'This week',
+    dayHeading: (options.dayHeading ?? '').trim().replace(/^#+\s*/, '') || '{{date:dddd YYYY-MM-DD}}',
     obsidianDaily: `${notes}/.obsidian/daily-notes.json`,
     obsidianApp: `${notes}/.obsidian/app.json`,
     claudeDir: `${home}/.claude/projects`,
@@ -133,7 +149,7 @@ export type UsageEvent = { at: string; kind: 'press' | 'input' | 'sent'; what: s
 const USAGE_PREFIXES = [
   'card-sub', 'card', 'task',
   'pin-open', 'pin-drop', 'pin-paste',
-  'pad-input', 'pad-save', 'pad-drop', 'recall-answer', 'today-log', 'state-pick',
+  'pad-input', 'pad-save', 'pad-drop', 'recall-answer', 'today-log', 'state-pick', 'week-goal',
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
 // Whole keys that only look like one of those.
@@ -164,7 +180,7 @@ export const USAGE_FEATURES = [
   'recall-ask', 'recall-answer', 'recall-peek', 'recall-due', 'recall-explain', 'recall-auto', 'recall-edit', 'recall-open', 'you-due',
   'offer-ask', 'offer-link', 'offer-make', 'offer-dismiss',
   'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
-  'today-log', 'today-open', 'today-make', 'pick-today',
+  'today-log', 'today-open', 'today-make', 'pick-today', 'week-goal',
   'draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
@@ -354,6 +370,79 @@ export const dailyNotePath = (pattern: string, ms: number, notes: string, home: 
   return within(notes, filled.endsWith('.md') ? filled : `${filled}.md`, home)
 }
 
+// The seven days of the week `ms` falls in, Monday first, each at noon (clear of a clock
+// change at midnight).
+export const weekDays = (ms: number): number[] => {
+  const date = new Date(ms)
+  const back = (date.getDay() + 6) % 7
+
+  return [0, 1, 2, 3, 4, 5, 6].map(add => new Date(date.getFullYear(), date.getMonth(), date.getDate() - back + add, 12).getTime())
+}
+
+// Where this week's note may be: the pattern filled for each day of the week, Monday
+// first, a path that repeats (a pattern with no day in it) listed once. The note may be
+// named for any of its days; the pane makes Monday's.
+export const weekNotePaths = (pattern: string, ms: number, notes: string, home: string): string[] =>
+  pattern.trim() ? [...new Set(weekDays(ms).map(day => dailyNotePath(pattern, day, notes, home)))] : []
+
+// The lines right under `heading` (any level, any case): from the line after it to the
+// next heading of any level, so a day's heading below never reads as part of the week's
+// list. Null when the note has no such heading.
+const sectionRange = (lines: string[], heading: string): { start: number; end: number } | null => {
+  const isHeading = (line: string): boolean => /^#{1,6}\s/.test(line)
+  const at = lines.findIndex(line => isHeading(line) && line.replace(/^#+\s*/, '').trim().toLowerCase() === heading.toLowerCase())
+  if (at < 0) {
+    return null
+  }
+  let end = at + 1
+  while (end < lines.length && !isHeading(lines[end] ?? '')) {
+    end += 1
+  }
+
+  return { start: at + 1, end }
+}
+
+// One of the week's workstreams: a top-level checkbox under the week heading. `note` is
+// the note it links, when it links one; `line` is the line as written.
+export type Goal = { text: string; note: string | null; done: boolean; line: string }
+
+// The week's workstreams: the top-level checkboxes under `heading`, in order. An indented
+// checkbox is a detail of the one above it, not a workstream of its own.
+export const weekGoals = (text: string, heading: string): Goal[] => {
+  const lines = text.split('\n')
+  const range = sectionRange(lines, heading)
+  if (!range) {
+    return []
+  }
+
+  return lines.slice(range.start, range.end).flatMap(line => {
+    const found = line.match(/^[-*] \[([ xX])\] (.*\S.*)$/)
+
+    return found ? [{ text: plain(found[2] ?? ''), note: linkName(found[2] ?? ''), done: found[1] !== ' ', line }] : []
+  })
+}
+
+// A new week's note: the workstream heading with last week's open workstreams carried
+// over (each with its indented lines), or one empty checkbox when there are none.
+export const newWeekNote = (lastWeek: string, heading: string): string => {
+  const lines = lastWeek.split('\n')
+  const range = sectionRange(lines, heading)
+  const carried: string[] = []
+  let isCarrying = false
+  for (const line of range ? lines.slice(range.start, range.end) : []) {
+    if (/^[-*] \[[ xX]\] /.test(line)) {
+      isCarrying = /^[-*] \[ \] \S/.test(line)
+    } else if (!/^\s+\S/.test(line)) {
+      isCarrying = false
+    }
+    if (isCarrying) {
+      carried.push(line)
+    }
+  }
+
+  return `# ${heading}\n\n${(carried.length > 0 ? carried : ['- [ ] ']).join('\n')}\n`
+}
+
 // The first few open checkboxes of a note, as text: what today's note says is still to do.
 export const openBoxes = (text: string, limit = 5): string[] =>
   text.split('\n').map(line => line.match(/^\s*[-*] \[ \] (.*\S.*)$/)?.[1]).filter((one): one is string => Boolean(one)).map(plain).slice(0, limit)
@@ -529,7 +618,7 @@ const SKIPPED_KEY = 'skipped'
 // Pins that go into every chat's draft, whatever its anchor: kept in the store, newest last.
 export const EMPTY_TRAIL: Trail = { chats: [], pins: [], states: {} }
 // No daily note: the Today card is not drawn.
-const NO_TODAY: Today = { pattern: '', path: '', day: '', exists: false, todo: [], mtime: 0 }
+const NO_TODAY: Today = { pattern: '', path: '', day: '', exists: false, todo: [], mtime: 0, week: false, goals: [] }
 
 
 const swatch = atom(
@@ -555,7 +644,7 @@ const swatch = atom(
     due: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-21' },
+  { shape: 'swatch-22' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
 // Recall starts folded: it is there when wanted, not in the way of the chat's own cards.
@@ -1932,7 +2021,9 @@ export const buildDraft = (
   if (choice.aboutMe) {
     lines.push(`- About me and my projects: read "${P.context}" and "${P.board}".`)
   }
-  if (today && choice.today) {
+  if (today && choice.today && P.week) {
+    lines.push(`- This week: read "${today}", my note for this week: the workstreams under its "${P.weekHeading}" heading and what I logged under each day.`)
+  } else if (today && choice.today) {
     lines.push(`- Today: read "${today}", my note for today: what I set out to do and what I have logged so far.`)
   }
   if (choice.openAugi) {
@@ -1968,7 +2059,7 @@ export const anchorBrief = (anchor: Anchor, today = '', was = ''): string => {
     '- Its "# Agent Log" section, at the end of that note, is the pane\'s: what is pinned to this work, and a folded list of the chats on it with where each last stood. It is not a log for you to keep. Add a line there only when I ask you to save something, above the Chats list, one line with why; "- [[<note>]] · <why>" pins a note.',
   ]
   if (today) {
-    lines.push(`- Today's note: "${today}".`)
+    lines.push(P.week ? `- This week's note: "${today}". Its "${P.weekHeading}" checkboxes are what I am working on this week.` : `- Today's note: "${today}".`)
   }
   lines.push('When I say "the task note", "the project note", "log this" or "save this to the task" without naming a file, I mean this note. What I ask you to save goes under "# Agent Log" (add the heading at the note\'s end if it is missing). Write above that heading only when I ask for that ("update the task note"), as a dated entry at the top of its Journal: "### YYYY-MM-DD — <what happened>".')
   lines.push('This says where things go. It is not a request: write nothing there until I ask.')
@@ -2012,7 +2103,7 @@ export const unanchoredBrief = (was: string): string =>
   `Augi: this chat is no longer anchored to [[${was}]]. Leave its note alone unless I name it.`
 
 // And for a chat that already knows its anchor, when the day's note is another one.
-export const todayBrief = (today: string): string => `Augi: today's note is "${today}".`
+export const todayBrief = (today: string): string => `Augi: ${P.week ? "this week's" : "today's"} note is "${today}".`
 
 // What to tell the chat now, given what it was told (`before`): the whole brief for a new
 // anchor or after a compaction, one line when only today's note moved, null for no news.
@@ -2127,16 +2218,43 @@ async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatc
   }
 }
 
-// Today's note as the pane shows it: where it is, whether it is there, what is still open in it.
-async function todayNow($: EngineInterface, pattern: string): Promise<Today> {
+// Which note the pane keeps in view: this week's when the weekNote setting names one, else
+// today's, from the dailyNote setting or Obsidian's own daily-note settings.
+async function periodPattern($: EngineInterface): Promise<{ pattern: string; week: boolean }> {
+  if (P.week) {
+    return { pattern: P.week, week: true }
+  }
+
+  return { pattern: dailyPattern(P.daily, P.daily ? '' : await readOr($, P.obsidianDaily), P.daily ? '' : await readOr($, P.obsidianApp)), week: false }
+}
+
+// Where the note is now: today's path; for a week, the first of its days' paths that is
+// there, else Monday's (where the pane would make it). Empty for no pattern.
+async function periodPath($: EngineInterface, pattern: string, week: boolean, now: number): Promise<string> {
+  if (!week) {
+    return dailyNotePath(pattern, now, P.notes, P.home)
+  }
+  const paths = weekNotePaths(pattern, now, P.notes, P.home)
+  for (const path of paths) {
+    if (await $.fs.exists(path)) {
+      return path
+    }
+  }
+
+  return paths[0] ?? ''
+}
+
+// Today's (or this week's) note as the pane shows it: where it is, whether it is there,
+// what is still open in it; for a week, its workstreams.
+async function todayNow($: EngineInterface, pattern: string, week = false): Promise<Today> {
   const now = await $.clock.now()
-  const path = dailyNotePath(pattern, now, P.notes, P.home)
+  const path = await periodPath($, pattern, week, now)
   if (!path) {
     return NO_TODAY
   }
   const day = stamp(now).slice(0, 10)
   if (!(await $.fs.exists(path))) {
-    return { pattern, path, day, exists: false, todo: [], mtime: 0 }
+    return { pattern, path, day, exists: false, todo: [], mtime: 0, week, goals: [] }
   }
   let mtime = 0
   try {
@@ -2144,18 +2262,20 @@ async function todayNow($: EngineInterface, pattern: string): Promise<Today> {
   } catch {
     mtime = 0
   }
+  const text = await $.fs.read(path)
+  const goals = week ? weekGoals(text, P.weekHeading) : []
 
-  return { pattern, path, day, exists: true, todo: openBoxes(await $.fs.read(path)), mtime }
+  return { pattern, path, day, exists: true, todo: week ? goals.filter(one => !one.done).map(one => one.text) : openBoxes(text), mtime, week, goals }
 }
 
-// Reads today's note again when the day rolled over, the note appeared, or it changed
-// (ticked in the editor, say). One stat when nothing did.
+// Reads the note again when the day (or week) rolled over, the note appeared, or it
+// changed (ticked in the editor, say). A stat or two when nothing did.
 async function resyncToday($: EngineInterface): Promise<void> {
   const { today } = await read($, swatch)
   if (!today.pattern) {
     return
   }
-  const path = dailyNotePath(today.pattern, await $.clock.now(), P.notes, P.home)
+  const path = await periodPath($, today.pattern, today.week, await $.clock.now())
   let mtime = 0
   try {
     mtime = (await $.fs.exists(path)) ? (await $.fs.stat(path)).mtimeMs : 0
@@ -2165,7 +2285,7 @@ async function resyncToday($: EngineInterface): Promise<void> {
   if (path === today.path && mtime === today.mtime && today.exists === mtime > 0) {
     return
   }
-  const next = await todayNow($, today.pattern)
+  const next = await todayNow($, today.pattern, today.week)
   await update($, swatch, old => ({ ...old, today: next }))
 }
 
@@ -2183,40 +2303,49 @@ async function writeToday($: EngineInterface, entries: PadEntry[]): Promise<bool
       return false
     }
     const old = await $.fs.read(today.path)
-    await $.fs.write(today.path, [...entries].reverse().reduce((text, one) => addDailyLine(text, P.dailyHeading, one), old))
+    // In a week's note each line goes under its own day's heading.
+    const heading = today.week ? fillTemplate(P.dayHeading, await $.clock.now(), '') : P.dailyHeading
+    await $.fs.write(today.path, [...entries].reverse().reduce((text, one) => addDailyLine(text, heading, one), old))
   } catch (error) {
     await $.ui.toast(`Couldn't write today's note: ${String(error)}`)
 
     return false
   }
-  const next = await todayNow($, today.pattern)
+  const next = await todayNow($, today.pattern, today.week)
   await update($, swatch, old => ({ ...old, today: next }))
 
   return true
 }
 
 // Makes today's note, on the user's press and never by itself: from the template
-// Obsidian's daily notes use when its settings name one that is there, else empty. Never
-// over a note that exists. Then it opens.
+// Obsidian's daily notes use when its settings name one that is there, else empty. A
+// week's note is named for its Monday and starts with last week's open workstreams carried
+// over. Never over a note that exists. Then it opens.
 async function makeToday($: EngineInterface): Promise<void> {
   const { today } = await read($, swatch)
   if (!today.pattern) {
     return
   }
   const now = await $.clock.now()
-  const path = dailyNotePath(today.pattern, now, P.notes, P.home)
+  const path = await periodPath($, today.pattern, today.week, now)
   try {
     if (!(await $.fs.exists(path))) {
-      const template = dailyTemplatePath(await readOr($, P.obsidianDaily), P.notes)
-      const text = template ? fillTemplate(await readOr($, template), now, baseName(path).replace(/\.md$/, '')) : ''
+      let text = ''
+      if (today.week) {
+        const lastWeek = await periodPath($, today.pattern, true, now - 7 * 24 * 3600_000)
+        text = newWeekNote(await readOr($, lastWeek), P.weekHeading)
+      } else {
+        const template = dailyTemplatePath(await readOr($, P.obsidianDaily), P.notes)
+        text = template ? fillTemplate(await readOr($, template), now, baseName(path).replace(/\.md$/, '')) : ''
+      }
       await writeNew($, path, text)
     }
   } catch (error) {
-    await $.ui.toast(`Couldn't make today's note: ${String(error)}`)
+    await $.ui.toast(`Couldn't make ${today.week ? "this week's" : "today's"} note: ${String(error)}`)
 
     return
   }
-  const next = await todayNow($, today.pattern)
+  const next = await todayNow($, today.pattern, today.week)
   await update($, swatch, old => ({ ...old, today: next }))
   await openNote($, path)
 }
@@ -2228,7 +2357,8 @@ async function logToday($: EngineInterface, text: string): Promise<void> {
   }
   if (await writeToday($, [{ when: stamp(await $.clock.now()), text: text.trim() }])) {
     await update($, view, old => ({ ...old, logged: (old.logged ?? 0) + 1 }))
-    await $.ui.toast("Logged to today's note")
+    const { today } = await read($, swatch)
+    await $.ui.toast(today.week ? "Logged under today in this week's note" : "Logged to today's note")
   }
 }
 
@@ -2329,7 +2459,7 @@ async function load($: EngineInterface): Promise<void> {
     ...(await loadAnchor($, cards)),
     jiraServer: await jiraServerNow($),
     taskTemplate: taskTemplateState(await readOr($, P.taskTemplate)),
-    today: await todayNow($, dailyPattern(P.daily, P.daily ? '' : await readOr($, P.obsidianDaily), P.daily ? '' : await readOr($, P.obsidianApp))),
+    today: await periodPattern($).then(({ pattern, week }) => todayNow($, pattern, week)),
     lenses: [],
     due: await dueNow($),
     loadedAt: await $.clock.now(),
@@ -2846,7 +2976,8 @@ async function todayPathNow($: EngineInterface): Promise<string> {
 
     return today.exists ? today.path : ''
   }
-  const today = await todayNow($, dailyPattern(P.daily, P.daily ? '' : await readOr($, P.obsidianDaily), P.daily ? '' : await readOr($, P.obsidianApp)))
+  const { pattern, week } = await periodPattern($)
+  const today = await todayNow($, pattern, week)
 
   return today.exists ? today.path : ''
 }
@@ -4091,20 +4222,26 @@ export const register: Register = (on, options) => {
                   <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                     <Button key="edit-context" label="✏️ my context" hotkey="s" onPress={() => openNote($, P.context)} />
                     <Button key="open-board" label="📋 the board" hotkey="d" onPress={() => openNote($, P.board)} />
-                    {today.exists && <Button key="today-open" label="☀️ today's note" onPress={() => openNote($, today.path)} />}
-                    {today.path && !today.exists && <Button key="today-make" label="＋ make today's note" onPress={() => makeToday($)} />}
+                    {today.exists && <Button key="today-open" label={today.week ? "🗓 this week's note" : "☀️ today's note"} onPress={() => openNote($, today.path)} />}
+                    {today.path && !today.exists && <Button key="today-make" label={today.week ? "＋ make this week's note" : "＋ make today's note"} onPress={() => makeToday($)} />}
                     {due.length > 0 && <Button key="you-due" label={`🎯 ${due.length} ${due.length === 1 ? 'recall' : 'recalls'} due`} onPress={() => loadDue($)} />}
                   </Box>
-                  {today.path && !today.exists && <Text key="today-missing" dimColor wrap="wrap">{`No note for ${today.day} yet: it would be ${short(today.path)}.`}</Text>}
+                  {today.path && !today.exists && <Text key="today-missing" dimColor wrap="wrap">{today.week ? `No note for this week yet: it would be ${short(today.path)}, with last week's open "${P.weekHeading}" checkboxes carried over.` : `No note for ${today.day} yet: it would be ${short(today.path)}.`}</Text>}
                   {!today.path && P.daily.toLowerCase() !== 'none' && <Text key="today-unset" dimColor wrap="wrap">No daily note set: name one under Setup (daily note) to keep today's note here.</Text>}
                   {today.exists && (
                     <Box key="today-body" flexDirection="column" marginTop={1}>
-                      <Text key="today-title" dimColor>{`Today · ${today.day}`}</Text>
-                      {today.todo.map((one, at) => (
+                      <Text key="today-title" dimColor>{today.week ? `${P.weekHeading} · ${baseName(today.path).replace(/\.md$/, '')}` : `Today · ${today.day}`}</Text>
+                      {!today.week && today.todo.map((one, at) => (
                         <Text key={`today-todo-${at}`} wrap="truncate-end">{`☐ ${one}`}</Text>
                       ))}
-                      {today.todo.length === 0 && <Text key="today-clear" dimColor>Nothing open in today's note.</Text>}
-                      <Input key={`today-log-${shown.logged ?? 0}`} label="+ log" placeholder="what you just did or decided: Enter adds it to today's note" submitLabel="log" onSubmit={value => logToday($, value)} />
+                      {!today.week && today.todo.length === 0 && <Text key="today-clear" dimColor>Nothing open in today's note.</Text>}
+                      {today.week && today.goals.map((goal, at) => (
+                        goal.note
+                          ? <Button key={`week-goal-${at}`} plain dimColor={goal.done} label={`${goal.done ? '☑' : '☐'} ${goal.text} ↗`} onPress={() => openByName($, goal.note ?? '')} />
+                          : <Text key={`week-goal-text-${at}`} dimColor={goal.done} wrap="truncate-end">{`${goal.done ? '☑' : '☐'} ${goal.text}`}</Text>
+                      ))}
+                      {today.week && today.goals.length === 0 && <Text key="week-none" dimColor wrap="wrap">{`No checkboxes under "${P.weekHeading}" yet: each one is a workstream for the week, a [[note]] for the ones with a note.`}</Text>}
+                      <Input key={`today-log-${shown.logged ?? 0}`} label="+ log" placeholder={today.week ? "what you just did or decided: Enter adds it under today in this week's note" : "what you just did or decided: Enter adds it to today's note"} submitLabel="log" onSubmit={value => logToday($, value)} />
                     </Box>
                   )}
                 </Box>
@@ -4153,6 +4290,9 @@ export const register: Register = (on, options) => {
                     <Input key="set-dailyNote" label="daily note" value={settings.dailyNote ?? ''} placeholder="Daily/{{date:YYYY-MM-DD}}.md; empty reads Obsidian's setting, none turns it off" onSubmit={value => setOption($, 'dailyNote', value)} />
                     <Text key="daily-now" dimColor wrap="wrap">{today.path ? `Today's note: ${short(today.path)}${today.exists ? '' : ' (not made yet)'}` : 'No daily note: nothing about today is shown.'}</Text>
                     <Input key="set-dailyHeading" label="log heading in it" value={settings.dailyHeading ?? ''} placeholder="the end of the note" onSubmit={value => setOption($, 'dailyHeading', value)} />
+                    <Input key="set-weekNote" label="week note" value={settings.weekNote ?? ''} placeholder="Weekly/{{date:YYYY-MM-DD}} - week.md (any day of the week); empty shows today's note instead" onSubmit={value => setOption($, 'weekNote', value)} />
+                    {P.week && <Input key="set-weekHeading" label="workstreams under" value={settings.weekHeading ?? ''} placeholder="This week" onSubmit={value => setOption($, 'weekHeading', value)} />}
+                    {P.week && <Input key="set-dayHeading" label="each day's log under" value={settings.dayHeading ?? ''} placeholder="{{date:dddd YYYY-MM-DD}}" onSubmit={value => setOption($, 'dayHeading', value)} />}
                     <Input key="set-taskFolder" label="new task folder" value={settings.taskFolder ?? ''} placeholder="the notes folder's root" onSubmit={value => setOption($, 'taskFolder', value)} />
                     {!settings.taskFolder?.trim() && <Text key="task-folder-unset" dimColor wrap="wrap">⚠ No task folder set: new task notes go to the notes folder's root.</Text>}
                     <Input key="set-taskColumn" label="new task column" value={settings.taskColumn ?? ''} placeholder="the anchor's column, else the board's first" onSubmit={value => setOption($, 'taskColumn', value)} />
