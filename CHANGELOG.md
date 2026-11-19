@@ -2,16 +2,16 @@
 
 ## Unreleased
 
-**augi-ui: a line above the prompt.** One row where you already look: this
+**augi-ui 0.19.0: a line above the prompt.** One row where you already look: this
 chat's anchor, what waits on you (or its next step) from the State card, and
 recalls due. Pressing it opens the pane. `band: no` under Setup hides it.
 
-**augi-ui: close out an anchor.** `✓ close out` in the Anchor card asks once,
+**augi-ui 0.19.0: close out an anchor.** `✓ close out` in the Anchor card asks once,
 then ticks the anchor's card on the board, ticks its line in this week's note,
 and marks this chat done in the note's Chats list, so the board and the week stop
 going stale as chats finish.
 
-**augi-ui: sync the board from the week.** With a week's note, the You card
+**augi-ui 0.19.0: sync the board from the week.** With a week's note, the You card
 has `⇅ sync the board (N)`: open workstreams missing from the board, done ones
 whose card is still open, cards on the board that are not this week's, and
 workstreams with no note yet. `apply` adds and ticks; each card that is not this
@@ -21,7 +21,7 @@ Jira on, `↻ check this week's Jira links` drafts one check of every workstream
 against Jira that changes nothing until you say yes per row. The anchor menu
 lists this week's workstreams first.
 
-**augi-ui: a week's note in place of today's.** Set `weekNote` (a path with a
+**augi-ui 0.19.0: a week's note in place of today's.** Set `weekNote` (a path with a
 date in it, such as `Inbox/{{date:YYYY-MM-DD}} - week.md`) and the You card
 keeps this week's note instead of today's. It may be named for any day of the
 week; `＋ make this week's note` makes Monday's, with last week's open
@@ -30,7 +30,7 @@ the week's workstreams, listed in the card, a linked one opening its note.
 `+ log` writes under today's own heading in it (`dayHeading`). Drafts and the
 chat's brief name the week's note. With `weekNote` empty nothing changes.
 
-**augi-ui: a smaller This chat.** The cards read in the order you use them:
+**augi-ui 0.19.0: a smaller This chat.** The cards read in the order you use them:
 the anchor (its pins now inside it, under the note button), the scratchpad, the
 chat's state, then Recall, which starts folded. Two buttons are gone. `＋ sub-task
 of <anchor>` made a child note for each small piece of work, which scattered a

@@ -1,6 +1,6 @@
 ---
 name: augi-ui
-description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, tell the chat which note it is on, pick the context a chat gets, keep today's note in view, run lenses, quiz yourself on what the chat did, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
+description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, tell the chat which note it is on, keep this week's note and its workstreams in view, sync the board from them, close out finished work, a line above the prompt, run lenses, quiz yourself on what the chat did, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
 ---
 
 # augi-ui — the pane beside your agent chat
