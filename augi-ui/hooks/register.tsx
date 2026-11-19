@@ -54,6 +54,8 @@ export type Options = {
   recallLens: string
   // `yes` asks for a recall question by itself after a turn, at most every RECALL_EVERY_MS.
   recallAuto: string
+  // `no` hides the one-line row above the prompt; anything else shows it.
+  band: string
 }
 export type Paths = {
   home: string
@@ -183,7 +185,7 @@ export const USAGE_FEATURES = [
   'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
   'today-log', 'today-open', 'today-make', 'pick-today', 'week-goal', 'week-anchor',
   'sync-open', 'sync-apply', 'sync-open-note', 'sync-done', 'sync-archive', 'sync-keep', 'sync-make', 'sync-jira',
-  'close-out', 'close-yes', 'close-cancel',
+  'close-out', 'close-yes', 'close-cancel', 'band-open',
   'draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
@@ -2194,6 +2196,24 @@ export const buildDraft = (
   return lines.join('\n')
 }
 
+// The row above the prompt: the chat's anchor, then from its state what waits on the user
+// (when that is not "no"), else its next step, then how many recalls are due. Empty when
+// there is nothing to show: no anchor and nothing due.
+export const bandLine = (anchor: string, state: string, due: number): string => {
+  // A state line is `Label: text`, maybe bulleted or bold; the first one with text wins.
+  const said = (label: string): string =>
+    state.split('\n').map(line => line.replace(/\*/g, '').replace(/^[-\s]+/, '')).map(line => (line.toLowerCase().startsWith(`${label.toLowerCase()}:`) ? line.slice(label.length + 1).trim() : '')).find(Boolean) ?? ''
+  const waiting = said('Waiting on me')
+  const next = said('Next')
+  const parts = [
+    anchor ? `⚓ ${anchor}` : '',
+    waiting && !/^(no|nothing|none)\b/i.test(waiting) ? `⏳ ${waiting}` : next ? `→ ${next}` : '',
+    due > 0 ? `🎯 ${due} due` : '',
+  ].filter(Boolean)
+
+  return anchor || due > 0 ? parts.join('  ·  ') : ''
+}
+
 // What an anchored chat's model is told beside the user's next prompt, unseen by them:
 // which note the chat is on and where its writing goes, so "update the task note" needs
 // no path. `was` is the anchor it was told before. It says where; it asks for nothing.
@@ -4059,7 +4079,7 @@ export const register: Register = (on, options) => {
   // was typed and whose note it was on are not kept. A control added later is counted too.
   on('ui.press', async ($, e, next) => {
     const ran = await next(e)
-    if (e.plugin === 'augi-ui' && e.requestId === PANE) {
+    if (e.plugin === 'augi-ui' && (e.requestId === PANE || e.element === 'band-open')) {
       await track($, 'press', e.element, e.surface)
     }
 
@@ -4096,6 +4116,33 @@ export const register: Register = (on, options) => {
     }
 
     return ran
+  })
+
+  // One line above the prompt, where the eyes already are: the anchor, what waits on the
+  // user or comes next, and recalls due. Pressing it opens the pane. Nothing until the pane
+  // has loaded this session, and nothing over a survey; `band: no` turns it off.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey || settings.band === 'no') {
+      return next(e)
+    }
+    const { anchor, trail, due = [], loadedAt } = await read($, swatch)
+    if (!loadedAt) {
+      return next(e)
+    }
+    const ownId = await $.session.id().catch(() => '')
+    const asked = await read($, chatState)
+    const state = asked.session === ownId && asked.text ? asked.text : (anchor && trail.states?.[ownId]?.text) || ''
+    const text = bandLine(anchor?.note ?? '', state, due.length)
+    if (!text) {
+      return next(e)
+    }
+    const { Box, Button } = $.ui.resolve(e)
+
+    return (
+      <Box flexDirection="row">
+        <Button key="band-open" plain dimColor label={text} onPress={() => $.ui.open({ id: PANE, title: 'Augi' }).then(() => undefined)} />
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -4638,6 +4685,7 @@ export const register: Register = (on, options) => {
                     <Text bold>The pane</Text>
                     <Button key="set-openOnStart" plain label={`${mark(settings.openOnStart !== 'no')} open Augi with every new chat`} onPress={() => setOption($, 'openOnStart', settings.openOnStart === 'no' ? 'yes' : 'no')} />
                     <Input key="set-lensPicks" label="prompts to list first" value={settings.lensPicks ?? ''} placeholder="all of them" onSubmit={value => setOption($, 'lensPicks', value)} />
+                    <Button key="set-band" plain label={`${mark(settings.band !== 'no')} a line above the prompt: anchor, what's next, recalls due`} onPress={() => setOption($, 'band', settings.band === 'no' ? 'yes' : 'no')} />
                     <Button key="set-tellChat" plain label={`${mark(settings.tellChat !== 'no')} tell each chat its anchor (so "update the task note" needs no path)`} onPress={() => setOption($, 'tellChat', settings.tellChat === 'no' ? 'yes' : 'no')} />
                     <Button key="set-trackUsage" plain label={`${mark(settings.trackUsage !== 'no')} count which controls I use (kept on this computer only)`} onPress={() => setOption($, 'trackUsage', settings.trackUsage === 'no' ? 'yes' : 'no')} />
                     <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>

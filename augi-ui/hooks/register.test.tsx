@@ -4,6 +4,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
+import { bandLine } from './register'
 import { archiveCard, boardSync, jiraWeekDraft, linkGoal, markChatDone, newWeekNote, tickCard, tickGoal, weekDays, weekGoals, weekNotePaths } from './register'
 import { promptTitle } from './register'
 import { anchorBrief, anchorFromMessages, anchorNews, unanchoredBrief } from './register'
@@ -3650,4 +3651,48 @@ test('close out asks first, then ticks the anchor\'s card and its line in this w
   expect(toasts.at(-1)).toBe('Nothing left open for PMOC - Garden: no open card, week line or chat entry.')
   await ui.unmount()
   configure(resolvePaths(OPTIONS, '/Users/t'))
+})
+
+// ---- The line above the prompt ----
+
+test('the line above the prompt names the anchor, what waits on the user or else the next step, and recalls due; with neither anchor nor due, nothing', () => {
+  const state = 'Doing: wiring the gate\nLast: hung it\nNext: oil the hinges\nWaiting on me: no'
+  expect(bandLine('PMOC - Garden', state, 0)).toBe('⚓ PMOC - Garden  ·  → oil the hinges')
+  expect(bandLine('PMOC - Garden', state.replace('Waiting on me: no', '- **Waiting on me:** pick a paint'), 2)).toBe('⚓ PMOC - Garden  ·  ⏳ pick a paint  ·  🎯 2 due')
+  expect(bandLine('PMOC - Garden', '', 0)).toBe('⚓ PMOC - Garden')
+  expect(bandLine('', '', 3)).toBe('🎯 3 due')
+  expect(bandLine('', state, 0)).toBe('')
+})
+
+const BAND = {
+  plugin: 'augi-ui',
+  component: 'AbovePrompt',
+  props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { offset: 0, bodyRows: 6 }, view: {} },
+} as const
+
+test('an anchored chat shows its line above the prompt once the pane has loaded; pressing it opens the pane; band no hides it', { options: OPTIONS }, async ($, on) => {
+  const opened: string[] = []
+  todayHooks(except(on, ['ui.open']), new Map([['/v/PMOC - Garden.md', '# Journal\n']]), [])
+  on('ui.open', (_, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  const before = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await before.find({ key: 'band-open' })).toBeFalsy()
+  await before.unmount()
+  await $.command.run({ command: 'augi', args: '' })
+  const band = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await band.find({ key: 'band-open' }))?.text).toMatch(/⚓ PMOC - Garden/)
+  opened.length = 0
+  await band.press({ key: 'band-open' })
+  expect(opened).toEqual(['augi'])
+  await band.unmount()
+})
+
+test('with band no there is no line above the prompt', { options: { ...OPTIONS, band: 'no' } }, async ($, on) => {
+  todayHooks(on, new Map([['/v/PMOC - Garden.md', '# Journal\n']]), [])
+  await $.command.run({ command: 'augi', args: '' })
+  const band = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await band.find({ key: 'band-open' })).toBeFalsy()
+  await band.unmount()
 })

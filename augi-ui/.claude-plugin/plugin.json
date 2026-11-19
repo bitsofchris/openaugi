@@ -191,6 +191,16 @@
         "yes",
         "no"
       ]
+    },
+    "band": {
+      "type": "string",
+      "title": "Line above the prompt",
+      "description": "yes shows one line above the prompt with this chat's anchor, what waits on you or comes next (from its state), and recalls due; pressing it opens the pane. no hides it.",
+      "default": "yes",
+      "options": [
+        "yes",
+        "no"
+      ]
     }
   }
 }

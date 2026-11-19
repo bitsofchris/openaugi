@@ -54,6 +54,7 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `stateAuto` | `yes` asks for a chat's state by itself after a turn, at most every ten minutes, and offers a chat with no anchor a task once; `no` waits for a press | `no` |
 | `recallLens` | The saved prompt a chat's own model is asked for the Recall card's question | `recall-question` |
 | `recallAuto` | `yes` asks for a recall question by itself when a turn ends, at most every two minutes; `no` waits for a press | `no` |
+| `band` | `yes` shows one line above the prompt: this chat's anchor, what waits on you or comes next, recalls due; pressing it opens the pane. `no` hides it | `yes` |
 | `tellChat` | `yes` tells each chat's own model its anchor (the note, its Agent Log section, today's note) beside your next prompt, so "update the task note" needs no path; `no` keeps the anchor in the pane only | `yes` |
 
 Each missing file can be created as a starter, pointed at an existing note, or
@@ -145,6 +146,14 @@ are `dimColor`.
   parent/child story: the child's `Up:` line points back. A `jira:` key in the
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note,
   which holds the Agent Log too: there is one button and one file.
+- **The line above the prompt** (the band): one row, where the eyes already
+  are, for a chat whose pane has loaded this session: `⚓ <anchor>`, then from
+  the chat's state (see **State**) `⏳ <what waits on you>` when its `Waiting on
+  me` line says something other than no, else `→ <its Next line>`, then
+  `🎯 N due` (`bandLine`). With no anchor and nothing due there is no row, and
+  none over a survey. Pressing it opens the pane. `band: no` (⚙️ Setup) hides
+  it. It reads the State card's answer, so it says where the chat stands only
+  once State was asked (by a press or `☐ auto after a turn`).
 - **Close out** (`✓ close out`, in the Anchor card): when the anchor's work is
   done. The first press asks; `yes, close it out` then ticks the anchor's card on
   the board (its linked sub-item when it has no card of its own), ticks its line

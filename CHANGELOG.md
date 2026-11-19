@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+**augi-ui: a line above the prompt.** One row where you already look: this
+chat's anchor, what waits on you (or its next step) from the State card, and
+recalls due. Pressing it opens the pane. `band: no` under Setup hides it.
+
 **augi-ui: close out an anchor.** `✓ close out` in the Anchor card asks once,
 then ticks the anchor's card on the board, ticks its line in this week's note,
 and marks this chat done in the note's Chats list, so the board and the week stop
