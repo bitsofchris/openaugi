@@ -3743,3 +3743,42 @@ test('with band no there is no line above the prompt', { options: { ...OPTIONS, 
   expect(await band.find({ key: 'band-open' })).toBeFalsy()
   await band.unmount()
 })
+
+test('an update that resets what the pane keeps: a chat it opened in loads again on restart, board and anchor back', { options: OPTIONS }, async ($, on) => {
+  // After an update that changes the pane's shape, what it kept reads as new until it
+  // writes again: emulated here from the second start on.
+  let isReset = false
+  on('state.get', ($, e, next) => (isReset && e.key === 'swatch' ? { value: { loadedAt: 99, cards: 'old' }, version: 0 } : next(e)))
+  on('state.set', ($, e, next) => {
+    if (e.key === 'swatch') {
+      isReset = false
+    }
+    return next(e)
+  })
+  const store = new Map<string, unknown>([['anchors', [['own-session', 'PMOC - Garden']]]])
+  on('env.get', () => ({ value: '/Users/t' }))
+  on('command.register', () => ({ value: { command: 'augi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.id', () => ({ value: 'own-session' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 8, 9, 30).getTime() }))
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.set', (_, e) => {
+    store.set(e.key, e.value)
+    return { value: undefined }
+  })
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md', '/v/PMOC - Garden.md'].includes(e.path) || e.path.endsWith('Kanban.md') }))
+  on('fs.read', (_, e) => ({ value: e.path.endsWith('Kanban.md') ? BOARD_TEXT : '' }))
+  on('fs.list', () => ({ value: [] }))
+  on('process.run', (_, e) => ({ value: { exitCode: 0, stdout: e.argv[0] === 'find' ? '/v/PMOC - Garden.md\n' : '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+
+  // The pane opens beside the chat; then the update lands and the module starts again.
+  await $.session.start({ cwd: '/r', surface: 'desktop', isInteractive: true })
+  isReset = true
+  await $.session.start({ cwd: '/r', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  await ui.press({ key: 'anchor-menu' })
+  expect(await ui.find({ key: 'card-PMOC - Garden' })).toBeTruthy()
+  await ui.unmount()
+})

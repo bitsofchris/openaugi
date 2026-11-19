@@ -2381,6 +2381,8 @@ async function moveOldTrail($: EngineInterface, note: string): Promise<void> {
   }
 }
 
+const NO_ANCHOR: Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'jira' | 'trail' | 'pinPaths'> = { anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {} }
+
 // Reads the anchored card's note, its Agent Log section with it; the rest of the pane stays as it was.
 async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatch, 'anchor' | 'notePath' | 'outcome' | 'next' | 'jira' | 'trail' | 'pinPaths'>> {
   const chosen = await sessionAnchor($)
@@ -2392,7 +2394,7 @@ async function loadAnchor($: EngineInterface, cards: Card[]): Promise<Pick<Swatc
     anchor = { column: '', note: chosen, detail: '', tasks: [] }
   }
   if (!anchor) {
-    return { anchor: null, notePath: '', outcome: '', next: [], jira: '', trail: EMPTY_TRAIL, pinPaths: {} }
+    return NO_ANCHOR
   }
   const notePath = bare || (await notePathOf($, anchor.note))
   const noteText = notePath ? await withMovedLog($, anchor.note, notePath, await $.fs.read(notePath)) : ''
@@ -2749,6 +2751,9 @@ async function skippedNow($: EngineInterface): Promise<string[]> {
   return Array.isArray(value) ? value.filter((one): one is string => typeof one === 'string') : []
 }
 
+// A part of the pane's load, or `fallback` when it fails.
+const part = <T,>(work: Promise<T>, fallback: T): Promise<T> => work.catch(() => fallback)
+
 async function load($: EngineInterface): Promise<void> {
   const setup = await setupNow($)
   if (!setup[0]?.ok) {
@@ -2765,21 +2770,23 @@ async function load($: EngineInterface): Promise<void> {
 
     return
   }
-  await inheritAnchor($)
-  const cards = kanbanCards(await readOr($, P.board))
+  await inheritAnchor($).catch(() => false)
+  // Each part on its own: one that fails (a note gone, a server down) leaves its part
+  // empty and the rest of the pane, the board and the anchor above all, still loads.
+  const cards = await part(readOr($, P.board).then(kanbanCards), [])
   const next: Swatch = {
     setup,
     vaults: [],
     found: {},
     skipped,
-    season: anchorFrom(await readOr($, P.context)),
+    season: await part(readOr($, P.context).then(anchorFrom), ''),
     cards,
-    ...(await loadAnchor($, cards)),
-    jiraServer: await jiraServerNow($),
-    taskTemplate: taskTemplateState(await readOr($, P.taskTemplate)),
-    today: await periodPattern($).then(({ pattern, week }) => todayNow($, pattern, week)),
+    ...(await part(loadAnchor($, cards), NO_ANCHOR)),
+    jiraServer: await part(jiraServerNow($), ''),
+    taskTemplate: await part(readOr($, P.taskTemplate).then(taskTemplateState), taskTemplateState('')),
+    today: await part(periodPattern($).then(({ pattern, week }) => todayNow($, pattern, week)), NO_TODAY),
     lenses: [],
-    due: await dueNow($),
+    due: await part(dueNow($), []),
     loadedAt: await $.clock.now(),
   }
 
@@ -3056,6 +3063,12 @@ async function openOnce($: EngineInterface): Promise<void> {
     }
     const id = (await $.session.id()) ?? ''
     if ((await read($, opened)).session === id) {
+      // Opened already: but an update that changed the shape of what the pane keeps
+      // starts it over, empty, and an open pane would stay empty until /augi.
+      if (!(await read($, swatch)).loadedAt) {
+        await load($)
+        watchAnchor($)
+      }
       return
     }
     await load($)
@@ -3970,7 +3983,9 @@ export const register: Register = (on, options) => {
       await $.store.delete('starter')
       await writeStarter($, starter)
     }
-    if ((await read($, swatch)).loadedAt > 0) {
+    // Loaded before, or opened in this session and then reset by an update: load again.
+    const id = await $.session.id().catch(() => '')
+    if ((await read($, swatch)).loadedAt > 0 || (id && (await read($, opened)).session === id)) {
       await load($)
       // The reload dropped this module's timer; an open pane goes on following its anchor.
       watchAnchor($)

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**augi-ui: an update no longer empties an open pane.** When an update changed the
+shape of what the pane keeps, a chat the pane had already opened in came back with
+no board cards to pick and no anchor, until `/augi`. The pane now loads again on
+restart in that case, and loads each part on its own, so one failing read (a note
+gone, a server down) no longer leaves the board list empty.
+
 **Frontmatter links are always a list.** Obsidian links a property only when its whole value
 is one link, so a value like `sources: "[[A]] · [[B]]"` showed up as a bogus note name in every
 `[[` suggestion (and `related: [[A]], [[B]]` was not valid YAML). `write_document` now writes link
