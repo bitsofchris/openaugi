@@ -110,11 +110,15 @@ are `dimColor`.
   opens to `＋ make its note` (a task note and card, as `＋ new task` makes
   them, with `section:`) or a list of the board's cards to link
   (`linkSection`). When the chat sits outside its anchor's section,
-  `📂 file this chat under <section>` drafts the move (`fileChatDraft`). **A
+  `📂 file this chat under <section>` drafts the move (`fileChatDraft`).
+  **Under the sections the menu lists the board's cards too** (`Or a card on the
+  board`), so a chat in no section, or one that should sit on another note,
+  anchors as before; a choice by hand stays, since a section anchors only a chat
+  that has none. **A
   mod can read the sidebar but not change it**: the app refuses
   `move_sessions` and `start_session` when a plugin's own code calls them, so
   those go through the chat's own model, on your enter. Where the tools are
-  not there (a terminal, an older app), the menu is the board, as below.
+  not there (a terminal, an older app), the menu is the board alone.
 - **Sessions** (`🗂 Sessions · <section>`, under the anchor): the other chats
   filed under this chat's section, those whose last turn ended on a question
   to you first (`⏳`, with that question under it), then those working (`⚙`),

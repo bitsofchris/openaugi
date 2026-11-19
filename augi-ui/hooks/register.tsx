@@ -4267,8 +4267,10 @@ export const register: Register = (on, options) => {
                           {sections.length === 0 && <Text dimColor wrap="wrap">No sections in the sidebar yet. Make one there and file chats under it: each gets one note, shared by its chats.</Text>}
                         </Box>
                       )}
-                      {sections === null && (
-                        <Box key="column-board" flexDirection="column">
+                      {/* The board too: a chat in no section, or on another note, picks a card. */}
+                      {cards.length > 0 && (
+                        <Box key="column-board" flexDirection="column" marginTop={sections !== null ? 1 : 0}>
+                          {sections !== null && <Text dimColor>Or a card on the board</Text>}
                       {byColumn(cards).map(([column, list]) => (
                         <Box key={`column-${column}`} flexDirection="column">
                           <Text dimColor>{column}</Text>

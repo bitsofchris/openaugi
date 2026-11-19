@@ -3580,7 +3580,7 @@ const sectionPane = (on: On, files: Map<string, string>, opened: string[][] = []
   return store
 }
 
-test('a chat filed under a section with a note is anchored on that note; the menu lists the sections, not the board', { options: OPTIONS }, async ($, on) => {
+test('a chat filed under a section with a note is anchored on that note; the menu lists the sections, then the board', { options: OPTIONS }, async ($, on) => {
   const files = new Map([['/v/PMOC - Garden.md', '---\nsection: garden app\n---\n# Next\n- [ ] Plant the beds\n']])
   const store = sectionPane(on, files)
   sidebar(on, 'garden app')
@@ -3591,7 +3591,9 @@ test('a chat filed under a section with a note is anchored on that note; the men
   await ui.press({ key: 'anchor-menu' })
   expect((await ui.find({ key: 'section-garden app' }))?.text).toMatch(/● garden app · this chat → PMOC - Garden/)
   expect((await ui.find({ key: 'section-yard' }))?.text).toMatch(/yard · no note yet/)
-  expect(await ui.find({ key: 'card-PMOC - Garden' })).toBeFalsy()
+  // The board is there too, for a chat in no section or on another note.
+  expect(await ui.find({ type: 'Text', text: 'Or a card on the board' })).toBeTruthy()
+  expect(await ui.find({ key: 'card-2022-01-04 - Sketch' })).toBeTruthy()
   // Filed where its note says: nothing to file.
   expect(await ui.find({ key: 'section-file' })).toBeFalsy()
   await ui.unmount()
@@ -3710,5 +3712,20 @@ test('in the anchor\'s Next, ＋ adds a task to its note and ▶ drafts a chat f
   expect(await ui.find({ key: 'next-start-Oil the hinges' })).toBeTruthy()
   await ui.press({ key: 'next-start-Oil the hinges' })
   expect(filled.at(-1)).toBe(startChatDraft('Oil the hinges', 'PMOC - Garden', '/v/PMOC - Garden.md', 'garden app'))
+  await ui.unmount()
+})
+
+test('a chat in no section anchors on a board card from the same menu, and stays on it', { options: OPTIONS }, async ($, on) => {
+  const files = new Map([['/v/PMOC - Garden.md', '# Next\n- [ ] Plant the beds\n']])
+  const store = sectionPane(on, files)
+  sidebar(on, null)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'anchor-menu' })
+  await ui.press({ key: 'card-PMOC - Garden' })
+  expect(store.get('anchors')).toEqual([['own-session', 'PMOC - Garden']])
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  // Its note names no section: nothing to file.
+  expect(await ui.find({ key: 'section-file' })).toBeFalsy()
   await ui.unmount()
 })

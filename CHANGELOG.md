@@ -23,7 +23,7 @@ anchored on it by itself. The anchor menu lists the sections; one with no note y
 offers `＋ make its note` (a task note and card, as ＋ new task makes) or a card on the
 board to link. When the chat sits outside its anchor's section, `📂 file this chat under
 …` drafts the move for the chat to make (a mod can read the sidebar but not move a
-chat). Where the sidebar can't be read, as in a terminal, the menu is the board as before.
+chat). Below the sections the menu still lists the board's cards, so a chat in no section anchors on a note as before; where the sidebar can't be read, as in a terminal, the menu is the board alone.
 
 **augi-ui: Recall leaves the pane.** The Recall card (quiz me, blind grading, the
 due ladder, explain it back), its count in the line above the prompt and its two
