@@ -4,7 +4,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
-import { archiveCard, boardSync, jiraWeekDraft, linkGoal, newWeekNote, tickCard, weekDays, weekGoals, weekNotePaths } from './register'
+import { archiveCard, boardSync, jiraWeekDraft, linkGoal, markChatDone, newWeekNote, tickCard, tickGoal, weekDays, weekGoals, weekNotePaths } from './register'
 import { promptTitle } from './register'
 import { anchorBrief, anchorFromMessages, anchorNews, unanchoredBrief } from './register'
 import { openArgv } from './register'
@@ -3604,6 +3604,50 @@ test('sync the board from the week: the plan in the You card, apply adds the mis
   expect(kanbanCards(written.get('/v/Kanban.md') ?? '').map(card => card.note)).toContain('call the plumber')
   expect(await ui.find({ text: '✓ The board matches this week.' })).toBeTruthy()
   expect((await ui.find({ key: 'sync-open' }))?.text).toMatch(/⇅ sync the board ✓/)
+  await ui.unmount()
+  configure(resolvePaths(OPTIONS, '/Users/t'))
+})
+
+// ---- Close out ----
+
+test('closing out ticks a linked sub-item when the note has no card of its own, the week\'s line under its heading only, and the chat\'s log line', () => {
+  expect(tickCard(MANY_COLUMNS, 'Dig the hole')).toBe(MANY_COLUMNS.replace('\t- [ ] [[Dig the hole]]', '\t- [x] [[Dig the hole]]'))
+  expect(tickGoal(WEEK_NOTE, 'This week', 'PMOC - Garden')).toBe(WEEK_NOTE.replace('- [ ] [[PMOC - Garden]] · beds planted', '- [x] [[PMOC - Garden]] · beds planted'))
+  expect(tickGoal(WEEK_NOTE, 'This week', 'call the plumber')).toBe(WEEK_NOTE)
+  expect(tickGoal(WEEK_NOTE, 'Next week', 'PMOC - Garden')).toBe(WEEK_NOTE)
+  const log = addChat('# Journal\n', { when: '2022-01-05 09:30', title: 'fix the gate', id: 'abc', done: false })
+  const done = markChatDone(log, 'abc')
+  expect(parseTrail(done).chats).toEqual([{ when: '2022-01-05 09:30', title: 'fix the gate', id: 'abc', done: true }])
+  expect(markChatDone(done, 'abc')).toBe(done)
+  expect(markChatDone(log, 'other')).toBe(log)
+})
+
+test('close out asks first, then ticks the anchor\'s card and its line in this week\'s note and marks this chat done; the chat keeps its anchor', { options: { ...OPTIONS, weekNote: WEEK_PATTERN } }, async ($, on) => {
+  const monday = '/v/Inbox/2022-01-03 - week.md'
+  const week = '# This week\n- [ ] [[PMOC - Garden]]\n- [ ] [[PMOC - Pond]]\n'
+  const written = new Map<string, string>([[monday, week], ['/v/PMOC - Garden.md', '# Journal\n']])
+  const toasts: string[] = []
+  todayHooks(on, written, toasts)
+  await $.command.run({ command: 'augi', args: '' })
+  await $.prompt.submit({ text: 'fix the gate' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(parseTrail(written.get('/v/PMOC - Garden.md') ?? '').chats.map(chat => chat.done)).toEqual([false])
+  // The first press only asks; cancel changes nothing.
+  await ui.press({ key: 'close-out' })
+  expect(await ui.find({ text: /^Close out PMOC - Garden\? Ticks its card on the board and its line in this week's note/ })).toBeTruthy()
+  await ui.press({ key: 'close-cancel' })
+  expect(written.has('/v/Kanban.md')).toBe(false)
+  await ui.press({ key: 'close-out' })
+  await ui.press({ key: 'close-yes' })
+  expect(written.get('/v/Kanban.md')).toBe(BOARD_TEXT.replace('- [ ] [[PMOC - Garden|the garden]]', '- [x] [[PMOC - Garden|the garden]]'))
+  expect(written.get(monday)).toBe(week.replace('- [ ] [[PMOC - Garden]]', '- [x] [[PMOC - Garden]]'))
+  expect(parseTrail(written.get('/v/PMOC - Garden.md') ?? '').chats.map(chat => chat.done)).toEqual([true])
+  expect(toasts).toContain("Closed out PMOC - Garden: its card ticked, ticked in this week's note, this chat marked done in its log.")
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  // Again: nothing left to close.
+  await ui.press({ key: 'close-out' })
+  await ui.press({ key: 'close-yes' })
+  expect(toasts.at(-1)).toBe('Nothing left open for PMOC - Garden: no open card, week line or chat entry.')
   await ui.unmount()
   configure(resolvePaths(OPTIONS, '/Users/t'))
 })

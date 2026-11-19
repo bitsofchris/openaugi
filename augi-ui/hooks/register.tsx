@@ -183,6 +183,7 @@ export const USAGE_FEATURES = [
   'pad-input', 'pad-save', 'pad-drop', 'pad-save-all',
   'today-log', 'today-open', 'today-make', 'pick-today', 'week-goal', 'week-anchor',
   'sync-open', 'sync-apply', 'sync-open-note', 'sync-done', 'sync-archive', 'sync-keep', 'sync-make', 'sync-jira',
+  'close-out', 'close-yes', 'close-cancel',
   'draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
@@ -658,8 +659,8 @@ const picks = atom(
 )
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
-  { ...CARDS_OPEN, anchorsOpen: false, statePickOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0, syncOpen: false, syncKept: [] } as View,
-  { shape: 'view-16' },
+  { ...CARDS_OPEN, anchorsOpen: false, statePickOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0, syncOpen: false, syncKept: [], closing: false } as View,
+  { shape: 'view-17' },
 )
 // Where this chat's work stands, as its own model last said when asked (updateState): for
 // the session `session`, the answer and when it came (`at`, in ms, paces the automatic
@@ -1213,16 +1214,19 @@ const cardsEnd = (lines: string[]): number => {
   return at >= 0 ? at : lines.length
 }
 
-// The board with the note's open top-level card ticked (`- [x]`), where it is. Every other
-// line as it was; a note with no open card changes nothing.
+// The board with the note's open top-level card ticked (`- [x]`), where it is; with no
+// such card, its open linked sub-item under a card. Every other line as it was; a note
+// with neither changes nothing.
 export const tickCard = (board: string, note: string): string => {
   const lines = board.split('\n')
   const end = cardsEnd(lines)
-  const at = lines.findIndex((line, index) => index < end && /^- \[ \] /.test(line) && linkName(line) === note)
+  const open = (pattern: RegExp): number => lines.findIndex((line, index) => index < end && pattern.test(line) && linkName(line) === note)
+  const top = open(/^- \[ \] /)
+  const at = top >= 0 ? top : open(/^\t- \[ \] /)
   if (at < 0) {
     return board
   }
-  lines[at] = lines[at]?.replace(/^- \[ \] /, '- [x] ') ?? ''
+  lines[at] = lines[at]?.replace(/- \[ \] /, '- [x] ') ?? ''
 
   return lines.join('\n')
 }
@@ -1277,6 +1281,22 @@ export const linkGoal = (week: string, line: string, name: string): string => {
   }
   const text = found[2] ?? ''
   lines[at] = `${found[1]}[[${name}]]${text === name ? '' : ` · ${text}`}`
+
+  return lines.join('\n')
+}
+
+// The week's note with the note's open workstream line(s) ticked, under `heading` only.
+export const tickGoal = (week: string, heading: string, note: string): string => {
+  const lines = week.split('\n')
+  const range = sectionRange(lines, heading)
+  if (!range) {
+    return week
+  }
+  for (let at = range.start; at < range.end; at += 1) {
+    if (/^[-*] \[ \] /.test(lines[at] ?? '') && linkName(lines[at] ?? '') === note) {
+      lines[at] = (lines[at] ?? '').replace(/\[ \]/, '[x]')
+    }
+  }
 
   return lines.join('\n')
 }
@@ -1951,6 +1971,19 @@ export const addChat = (text: string, chat: Chat): string => {
   return joinLog({ ...parts, chats: [chatLine(chat), ...parts.chats] })
 }
 
+// Marks a chat finished on its log line, `(done)`, as an agent or the user would. A chat
+// not listed, or already done, changes nothing.
+export const markChatDone = (text: string, id: string): string => {
+  const parts = splitLog(text)
+  const chats = parts.chats.map(line => {
+    const found = line.match(CHAT_LINE)
+
+    return found && found[3] === id && !found[4] ? chatLine({ when: found[1] ?? '', title: found[2] ?? '', id, done: true }) : line
+  })
+
+  return chats.some((line, index) => line !== parts.chats[index]) ? joinLog({ ...parts, chats }) : text
+}
+
 // Names a chat recorded with the placeholder title; a real title stays as it is.
 export const retitleChat = (text: string, id: string, title: string): string => {
   const parts = splitLog(text)
@@ -2463,6 +2496,43 @@ async function makeToday($: EngineInterface): Promise<void> {
   const next = await todayNow($, today.pattern, today.week)
   await update($, swatch, old => ({ ...old, today: next }))
   await openNote($, path)
+}
+
+// `✓ close out`, confirmed: the anchor's card ticked on the board, its line ticked in this
+// week's note, and this chat marked done in its log. The chat keeps its anchor, so a
+// wrap-up (an update to Jira, say) still lands there.
+async function closeOut($: EngineInterface): Promise<void> {
+  await update($, view, old => ({ ...old, closing: false }))
+  const { anchor, today, jira } = await read($, swatch)
+  if (!anchor) {
+    return
+  }
+  const done: string[] = []
+  const old = await readOr($, P.board)
+  const board = tickCard(old, anchor.note)
+  if (board !== old) {
+    await writeBoard($, board)
+    done.push('its card ticked')
+  }
+  if (today.week && today.exists) {
+    const week = await $.fs.read(today.path)
+    const ticked = tickGoal(week, P.weekHeading, anchor.note)
+    if (ticked !== week) {
+      await $.fs.write(today.path, ticked)
+      const next = await todayNow($, today.pattern, today.week)
+      await update($, swatch, current => ({ ...current, today: next }))
+      done.push("ticked in this week's note")
+    }
+  }
+  const id = await $.session.id().catch(() => '')
+  const { trail } = await read($, swatch)
+  if (id && trail.chats.some(chat => chat.id === id && !chat.done)) {
+    await writeTrail($, anchor.note, text => markChatDone(text, id))
+    done.push('this chat marked done in its log')
+  }
+  await $.ui.toast(done.length > 0
+    ? `Closed out ${anchor.note}: ${done.join(', ')}.${jira ? ' ↑ update Jira drafts the wrap-up.' : ''}`
+    : `Nothing left open for ${anchor.note}: no open card, week line or chat entry.`)
 }
 
 // ---- Board sync, on the user's press ----
@@ -3898,7 +3968,7 @@ export const register: Register = (on, options) => {
       await update($, recall, () => NO_RECALL)
       await typeRecall($, '')
       await update($, justMade, () => NO_TASK)
-      await update($, view, old => ({ ...old, taskMode: '' as const }))
+      await update($, view, old => ({ ...old, taskMode: '' as const, closing: false }))
     }
 
     return ended
@@ -4226,6 +4296,18 @@ export const register: Register = (on, options) => {
                   {anchor && (
                     <Box key="anchor-links" flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
                       <Button key="open-note" label="🧠 Human Notes" hotkey="p" onPress={() => (notePath ? openNote($, notePath) : openByName($, anchor.note))} />
+                    </Box>
+                  )}
+                  {anchor && !shown.closing && (
+                    <Button key="close-out" plain dimColor label="✓ close out" onPress={() => update($, view, old => ({ ...old, closing: true }))} />
+                  )}
+                  {anchor && shown.closing && (
+                    <Box key="close-confirm" flexDirection="column" marginBottom={1}>
+                      <Text key="close-what" wrap="wrap">{`Close out ${anchor.note}? Ticks its card on the board${today.week && today.exists ? " and its line in this week's note" : ''}, and marks this chat done in its log. The chat stays on it.`}</Text>
+                      <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+                        <Button key="close-yes" label="yes, close it out" onPress={() => closeOut($)} />
+                        <Button key="close-cancel" plain dimColor label="cancel" onPress={() => update($, view, old => ({ ...old, closing: false }))} />
+                      </Box>
                     </Box>
                   )}
                   {anchor && (

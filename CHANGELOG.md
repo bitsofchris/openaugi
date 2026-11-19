@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**augi-ui: close out an anchor.** `✓ close out` in the Anchor card asks once,
+then ticks the anchor's card on the board, ticks its line in this week's note,
+and marks this chat done in the note's Chats list, so the board and the week stop
+going stale as chats finish.
+
 **augi-ui: sync the board from the week.** With a week's note, the You card
 has `⇅ sync the board (N)`: open workstreams missing from the board, done ones
 whose card is still open, cards on the board that are not this week's, and

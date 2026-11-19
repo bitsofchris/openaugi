@@ -145,6 +145,13 @@ are `dimColor`.
   parent/child story: the child's `Up:` line points back. A `jira:` key in the
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note,
   which holds the Agent Log too: there is one button and one file.
+- **Close out** (`✓ close out`, in the Anchor card): when the anchor's work is
+  done. The first press asks; `yes, close it out` then ticks the anchor's card on
+  the board (its linked sub-item when it has no card of its own), ticks its line
+  under the week's workstream heading when there is a week's note, and marks this
+  chat `(done)` on its line in the Agent Log's Chats list. The chat keeps its
+  anchor, so a wrap-up (`↑ update Jira`) still lands there. Nothing already
+  closed is touched twice.
 - **Chats.** A piece of an anchor's work gets a chat, not a note. A new chat
   starts with no anchor; pick the anchor (or paste a pane draft, or fork an
   anchored chat) and it is
