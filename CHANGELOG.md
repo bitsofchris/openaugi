@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**augi-ui: a Sessions card, and what waits on you above the prompt.** Under the anchor,
+`🗂 Sessions · <section>` lists the other chats filed under this chat's section: the
+ones whose last turn ended on a question to you first (`⏳`, with that question), then
+the ones working (`⚙`), then the rest, each with how long ago. Pressing one opens it.
+Each chat's pane records how its own turns end, since the app reports only running or
+not; the line above the prompt adds `● N chats wait on you`. The card refreshes every
+30 seconds while the pane is open.
+
 **augi-ui: a sidebar section is the anchor.** In the desktop app the pane reads the
 sidebar: each section you file chats under stands for one note, the note whose
 frontmatter says `section: <name>`, and a chat filed under a section with a note is

@@ -5,7 +5,7 @@ import { expect, test } from 'claude-code/testing'
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
 import { bandLine } from './register'
-import { fileChatDraft, mcpJson, sectionFrom, sectionsFrom, withSection } from './register'
+import { ago, bareId, fileChatDraft, lastLine, mcpJson, sectionChats, sectionFrom, sectionsFrom, turnFrom, withSection } from './register'
 import { boardSync, entryBoxes, linkGoal, markChatDone, weekSyncDraft, newWeekNote, tickCard, tickGoal, weekDays, weekGoals, weekNotePaths } from './register'
 import { promptTitle } from './register'
 import { anchorBrief, anchorFromMessages, anchorNews, unanchoredBrief } from './register'
@@ -3424,6 +3424,9 @@ test('the line above the prompt names the anchor and what waits on the user, els
   expect(bandLine('PMOC - Garden', state.replace('Waiting on me: no', '- **Waiting on me:** pick a paint'))).toBe('⚓ PMOC - Garden  ·  ⏳ pick a paint')
   expect(bandLine('PMOC - Garden', '')).toBe('⚓ PMOC - Garden')
   expect(bandLine('', state)).toBe('')
+  // Other chats in the section that ended on a question to the user are counted last.
+  expect(bandLine('PMOC - Garden', state, 2)).toBe('⚓ PMOC - Garden  ·  → oil the hinges  ·  ● 2 chats wait on you')
+  expect(bandLine('PMOC - Garden', '', 1)).toBe('⚓ PMOC - Garden  ·  ● 1 chat waits on you')
 })
 
 const BAND = {
@@ -3539,10 +3542,15 @@ const sidebar = (on: On, group: string | null) => {
   const tool = (text: unknown) => ({ value: { content: [{ type: 'text', text: JSON.stringify(text) }], isError: false } })
   on('mcp.call', (_, e) => (e.tool === 'list_sections'
     ? tool([{ id: 'cg-1', kind: 'manual', name: 'garden app', order: 2 }, { id: 'cg-2', kind: 'manual', name: 'yard', order: 3 }])
-    : tool({ sessionId: 'local_own-session', group: group ? { id: 'cg-1', name: group } : null })))
+    : e.tool === 'list_sessions'
+      ? tool([
+        { sessionId: 'local_quiet', title: 'Seed list import', link: 'claude://x/local_quiet', lastActivityAt: '2026-11-08T08:00:00.000Z' },
+        { sessionId: 'local_asking', title: 'Fix flaky sensor test', link: 'claude://x/local_asking', lastActivityAt: '2026-11-08T09:00:00.000Z' },
+      ])
+      : tool({ sessionId: 'local_own-session', group: group ? { id: 'cg-1', name: group } : null })))
 }
 
-const sectionPane = (on: On, files: Map<string, string>) => {
+const sectionPane = (on: On, files: Map<string, string>, opened: string[][] = []) => {
   const store = new Map<string, unknown>()
   on('env.get', () => ({ value: '/Users/t' }))
   on('command.register', () => ({ value: { command: 'augi' } }))
@@ -3563,6 +3571,9 @@ const sectionPane = (on: On, files: Map<string, string>) => {
   })
   on('fs.list', () => ({ value: [] }))
   on('process.run', (_, e) => {
+    if (e.argv[0] === 'open') {
+      opened.push([...e.argv])
+    }
     const named = e.argv[0] === 'find' ? [...files.keys()].filter(path => path.endsWith(`/${e.argv[3] ?? ''}`)) : e.argv[0] === 'grep' ? [...files.keys()].filter(path => /^section:/m.test(files.get(path) ?? '')) : []
     return { value: { exitCode: 0, stdout: named.join('\n'), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -3620,5 +3631,45 @@ test('where the sidebar can\'t be read, the anchor menu is the board as before',
   await ui.press({ key: 'anchor-menu' })
   expect(await ui.find({ key: 'card-PMOC - Garden' })).toBeTruthy()
   expect(await ui.find({ key: 'section-file' })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('a turn that ended on a question asks the user; the section\'s chats list what asks first, then what works, then the rest', () => {
+  expect(lastLine('Done.\n\n- **Retry or mock the clock?**\n')).toBe('Retry or mock the clock?')
+  expect(turnFrom('Wired it.\nRetry or mock the clock?', 5)).toEqual({ state: 'asks', at: 5, line: 'Retry or mock the clock?' })
+  expect(turnFrom('All 12 tests pass.', 5).state).toBe('idle')
+  expect(bareId('local_abc')).toBe('abc')
+  const listed = [
+    { sessionId: 'local_a', title: 'quiet', link: 'l-a', lastActivityAt: '2026-11-08T08:00:00.000Z' },
+    { sessionId: 'local_b', title: 'busy', link: 'l-b', lastActivityAt: '2026-11-08T08:00:00.000Z' },
+    { sessionId: 'local_c', title: 'asking', link: 'l-c', lastActivityAt: '2026-11-08T08:00:00.000Z' },
+    { sessionId: 'local_d', title: 'gone', isArchived: true },
+  ]
+  const chats = sectionChats(listed, { b: { state: 'works', at: 30, line: '' }, c: { state: 'asks', at: 20, line: 'which one?' } })
+  expect(chats.map(one => `${one.state || '-'} ${one.title}`)).toEqual(['asks asking', 'works busy', '- quiet'])
+  expect(chats[2]?.at).toBe(Date.parse('2026-11-08T08:00:00.000Z'))
+  expect([ago(0, 1), ago(1000, 30_000), ago(0 + 1, 5 * 60_000 + 1), ago(1, 3 * 3_600_000 + 1), ago(1, 72 * 3_600_000 + 1)]).toEqual(['now', 'now', '5m', '3h', '3d'])
+})
+
+test('the Sessions card lists the other chats in this chat\'s section, what asks you first; this chat\'s turns are recorded for theirs', { options: OPTIONS }, async ($, on) => {
+  const files = new Map([['/v/PMOC - Garden.md', '---\nsection: garden app\n---\n# Next\n']])
+  const opened: string[][] = []
+  const store = sectionPane(on, files, opened)
+  store.set('turn-asking', { state: 'asks', at: new Date(2026, 10, 8, 9, 20).getTime(), line: 'Retry or mock the clock?' })
+  sidebar(on, 'garden app')
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /Sessions · garden app · 2 · 1 ask you/ })).toBeTruthy()
+  const rows = (await ui.findAll({ type: 'Button' })).map(one => one.key).filter(key => key?.startsWith('chat-open-'))
+  expect(rows).toEqual(['chat-open-local_asking', 'chat-open-local_quiet'])
+  expect((await ui.find({ key: 'chat-open-local_asking' }))?.text).toMatch(/⏳ Fix flaky sensor test · 10m/)
+  expect(await ui.find({ type: 'Text', text: /Retry or mock the clock\?/ })).toBeTruthy()
+  await ui.press({ key: 'chat-open-local_asking' })
+  expect(opened).toEqual([['open', 'claude://x/local_asking']])
+  // This chat's own turn ending is kept where the other chats' panes read it.
+  await $.turn.complete({ answer: 'Wired the gate.\nShall I paint it?', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(store.get('turn-own-session')).toEqual({ state: 'asks', at: new Date(2026, 10, 8, 9, 30).getTime(), line: 'Shall I paint it?' })
   await ui.unmount()
 })

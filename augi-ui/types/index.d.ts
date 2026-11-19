@@ -61,8 +61,17 @@ export type Swatch = {
   sections: Section[] | null
   // The section this chat is filed under in the sidebar, or empty.
   section: string
+  // The other chats filed under that section, what waits on the user first.
+  chats: SectionChat[]
   loadedAt: number
 }
+// How a chat's last turn stands, as its own pane recorded it: `works` while a turn runs,
+// `asks` when the turn ended on a question to the user, `idle` when it ended otherwise.
+export type TurnState = 'works' | 'asks' | 'idle'
+export type ChatTurn = { state: TurnState; at: number; line: string }
+// Another chat in this chat's section: its id, title and app link, and how its last turn
+// stands (`state` empty when its pane recorded none: `at` is then its last activity).
+export type SectionChat = { id: string; title: string; link: string; state: TurnState | ''; at: number; line: string }
 // A sidebar section and its one note: `note` and `path` empty while no note names it.
 export type Section = { id: string; name: string; note: string; path: string }
 // A note to self on this chat's scratchpad; `when` as `stamp()` writes it.
@@ -91,6 +100,8 @@ export type View = {
   taskMode: '' | 'new'
   // How many lines the You card has logged to today's note this session: it empties the log field after each.
   logged: number
+  // The Sessions card, folded or open.
+  sessionsOpen: boolean
   // The Anchor card's close-out confirmation is showing.
   closing: boolean
   // The section in the anchor menu whose ways to get a note are open, or empty.

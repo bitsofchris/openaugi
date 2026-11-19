@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { Card, Chat, Inherited, ChatState, JustMade, Lens, Offer, Opened, PadEntry, Picks, Pin, PinKind, Section, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
+import type { Card, Chat, ChatTurn, Inherited, ChatState, JustMade, Lens, Offer, Opened, PadEntry, Picks, Pin, PinKind, Section, SectionChat, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -147,7 +147,7 @@ export type UsageEvent = { at: string; kind: 'press' | 'input' | 'sent'; what: s
 // Keys that end in something of the user's: `card-<note>`, `pin-open-<kind>-<target>`.
 const USAGE_PREFIXES = [
   'card-sub', 'card', 'task',
-  'pin-open', 'pin-drop', 'pin-paste', 'section', 'section-make', 'section-card',
+  'pin-open', 'pin-drop', 'pin-paste', 'section', 'section-make', 'section-card', 'chat-open',
   'pad-input', 'pad-save', 'pad-drop', 'today-log', 'state-pick', 'week-goal', 'week-anchor',
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
@@ -171,7 +171,7 @@ export const usageName = (element: string): string => {
 // Every control the pane draws, by its log name: what a report checks for never used.
 // tests/test_augi_ui_usage.py reads this file's Button and Input keys and fails when one is missing here.
 export const USAGE_FEATURES = [
-  'anchor-menu', 'card', 'card-sub', 'section', 'section-make', 'section-card', 'section-file', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'anchor-details', 'task',
+  'anchor-menu', 'card', 'card-sub', 'section', 'section-make', 'section-card', 'section-file', 'chat-open', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'anchor-details', 'task',
   'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-title-new', 'task-cancel',
   'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss',
   'pin-open', 'pin-drop', 'pin-paste',
@@ -184,7 +184,7 @@ export const USAGE_FEATURES = [
   'draft', 'draft-sent',
   'lens', 'edit', 'new-lens', 'all-lenses', 'lens-menu', 'setup-menu',
   'about-me', 'pick-project', 'openaugi', 'edit-context', 'open-board', 'set-openOnStart', 'set-trackUsage', 'usage-report', 'usage-clear', 'start-over', 'refresh',
-  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-stateOpen', 'head-pinsOpen', 'head-padOpen', 'head-youOpen',
+  'head-chatOpen', 'head-anywhereOpen', 'head-anchorOpen', 'head-sessionsOpen', 'head-stateOpen', 'head-pinsOpen', 'head-padOpen', 'head-youOpen',
 ]
 
 // The log's lines as events; a line that is not one is skipped.
@@ -647,12 +647,13 @@ const swatch = atom(
     lenses: [],
     sections: null,
     section: '',
+    chats: [],
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-24' },
+  { shape: 'swatch-25' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
-const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, stateOpen: true, pinsOpen: true, padOpen: true, youOpen: true }
+const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, sessionsOpen: true, stateOpen: true, pinsOpen: true, padOpen: true, youOpen: true }
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
   { aboutMe: true, openAugi: true, project: true, today: true } as Picks,
@@ -661,7 +662,7 @@ const picks = atom(
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
   { ...CARDS_OPEN, anchorsOpen: false, statePickOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0, closing: false, sectionOpen: '' } as View,
-  { shape: 'view-19' },
+  { shape: 'view-20' },
 )
 // Where this chat's work stands, as its own model last said when asked (updateState): for
 // the session `session`, the answer and when it came (`at`, in ms, paces the automatic
@@ -1022,6 +1023,48 @@ export const sectionsFrom = (listed: unknown, notes: { path: string; text: strin
 // but not move a chat, so the chat's own model does it, on the user's enter.
 export const fileChatDraft = (section: string): string =>
   `Move this chat into the sidebar section "${section}": call the ccd_sidebar move_sessions tool with session_ids ["self"] and that section. Then reply with one line saying it is done.`
+
+// The last line of a reply with text, plain and short: what a chat said last.
+export const lastLine = (text: string): string =>
+  (text.split('\n').map(line => line.replace(/[*_`#>]/g, '').replace(/^[-\s]+/, '').trim()).filter(Boolean).at(-1) ?? '').slice(0, 140)
+
+// How a turn that just ended stands: asking the user when its last line is a question.
+export const turnFrom = (text: string, at: number): ChatTurn => {
+  const line = lastLine(text)
+
+  return { state: /\?\s*$/.test(line) ? 'asks' : 'idle', at, line }
+}
+
+// A session's id as the app's tools give it (`local_<id>`) or as the engine does (`<id>`).
+export const bareId = (id: string): string => id.replace(/^local_/, '')
+
+// The section's other chats from what list_sessions answered and each one's recorded turn
+// (by bare id): what asks the user first, then what works, then the rest, newest first.
+export const sectionChats = (listed: unknown, turns: Record<string, ChatTurn | undefined>): SectionChat[] => {
+  const rows = Array.isArray(listed) ? (listed as { sessionId?: unknown; title?: unknown; link?: unknown; lastActivityAt?: unknown; isArchived?: unknown }[]) : []
+  const rank = { asks: 0, works: 1, idle: 2, '': 3 } as const
+
+  return rows
+    .filter(one => typeof one.sessionId === 'string' && !one.isArchived)
+    .map((one): SectionChat => {
+      const id = String(one.sessionId)
+      const turn = turns[bareId(id)]
+      const last = Date.parse(String(one.lastActivityAt ?? '')) || 0
+
+      return { id, title: String(one.title ?? '') || 'untitled', link: String(one.link ?? ''), state: turn?.state ?? '', at: turn?.at ?? last, line: turn?.line ?? '' }
+    })
+    .sort((one, other) => rank[one.state] - rank[other.state] || other.at - one.at)
+}
+
+// How long ago, short: now, 5m, 3h, 2d.
+export const ago = (at: number, now: number): string => {
+  const minutes = Math.floor((now - at) / 60_000)
+  if (!at || minutes < 1) {
+    return 'now'
+  }
+
+  return minutes < 60 ? `${minutes}m` : minutes < 48 * 60 ? `${Math.floor(minutes / 60)}h` : `${Math.floor(minutes / 1440)}d`
+}
 
 // A body line that links the note's issue: a key and nothing else.
 const JIRA_LINE = /^Jira:[ \t]*\S+[ \t]*$/
@@ -2056,8 +2099,9 @@ export const buildDraft = (
 }
 
 // The row above the prompt: the chat's anchor, then from its state what waits on the user
-// (when that is not "no"), else its next step. Empty with no anchor.
-export const bandLine = (anchor: string, state: string): string => {
+// (when that is not "no"), else its next step, then how many other chats in its section
+// wait on the user. Empty with no anchor.
+export const bandLine = (anchor: string, state: string, others = 0): string => {
   // A state line is `Label: text`, maybe bulleted or bold; the first one with text wins.
   const said = (label: string): string =>
     state.split('\n').map(line => line.replace(/\*/g, '').replace(/^[-\s]+/, '')).map(line => (line.toLowerCase().startsWith(`${label.toLowerCase()}:`) ? line.slice(label.length + 1).trim() : '')).find(Boolean) ?? ''
@@ -2066,6 +2110,7 @@ export const bandLine = (anchor: string, state: string): string => {
   const parts = [
     anchor ? `⚓ ${anchor}` : '',
     waiting && !/^(no|nothing|none)\b/i.test(waiting) ? `⏳ ${waiting}` : next ? `→ ${next}` : '',
+    others > 0 ? `● ${others} ${others === 1 ? 'chat waits' : 'chats wait'} on you` : '',
   ].filter(Boolean)
 
   return anchor ? parts.join('  ·  ') : ''
@@ -2614,6 +2659,54 @@ async function sectionsNow($: EngineInterface): Promise<{ sections: Section[] | 
   return { sections: sectionsFrom(listed, await sectionNotes($)), section: typeof group?.name === 'string' ? group.name : '' }
 }
 
+// Where a chat's pane keeps how its last turn stands: one store key per chat, so two
+// chats ending at once never write over each other.
+const turnKey = (id: string): string => `turn-${bareId(id)}`
+
+async function recordTurn($: EngineInterface, turn: ChatTurn): Promise<void> {
+  const id = await $.session.id().catch(() => '')
+  if (id) {
+    await $.store.set(turnKey(id), turn)
+  }
+}
+
+// The other chats filed under `section`, each with how its last turn stands.
+async function chatsNow($: EngineInterface, section: string): Promise<SectionChat[]> {
+  if (!section) {
+    return []
+  }
+  const listed = mcpJson(await $.mcp.call('ccd_session_mgmt', 'list_sessions', { group: section, limit: 30 }))
+  const turns: Record<string, ChatTurn | undefined> = {}
+  for (const one of Array.isArray(listed) ? (listed as { sessionId?: unknown }[]) : []) {
+    const id = bareId(String(one.sessionId ?? ''))
+    const kept = await $.store.get(turnKey(id)).catch(() => undefined)
+    if (kept && typeof kept === 'object' && 'state' in kept) {
+      turns[id] = kept as ChatTurn
+    }
+  }
+
+  return sectionChats(listed, turns)
+}
+
+// When the Sessions card last asked the app: it asks again at most every CHATS_MS.
+let chatsAt = 0
+const CHATS_MS = 30_000
+
+// Reads this chat's section and the chats in it again, at most every CHATS_MS.
+async function resyncChats($: EngineInterface): Promise<void> {
+  const now = await $.clock.now()
+  const { sections } = await read($, swatch)
+  if (sections === null || now - chatsAt < CHATS_MS) {
+    return
+  }
+  chatsAt = now
+  const self = mcpJson(await $.mcp.call('ccd_session_mgmt', 'get_session', { session_id: 'self' }))
+  const group = (self as { group?: { name?: unknown } | null } | null)?.group
+  const section = typeof group?.name === 'string' ? group.name : ''
+  const chats = await chatsNow($, section)
+  await update($, swatch, old => ({ ...old, section, chats }))
+}
+
 // A part of the pane's load, or `fallback` when it fails.
 const part = <T,>(work: Promise<T>, fallback: T): Promise<T> => work.catch(() => fallback)
 
@@ -2658,6 +2751,7 @@ async function load($: EngineInterface): Promise<void> {
     lenses: [],
     sections,
     section,
+    chats: await part(chatsNow($, section), []),
     loadedAt: await $.clock.now(),
   }
 
@@ -2882,6 +2976,7 @@ export async function resync($: EngineInterface): Promise<void> {
     return
   }
   await resyncToday($)
+  await resyncChats($).catch(() => undefined)
   if (!anchor) {
     // A chat cleared or resumed in this process is another session: it shows its own stored
     // anchor, or, a fork, its parent's; any other new chat starts with none.
@@ -3798,6 +3893,11 @@ export const register: Register = (on, options) => {
       news = await tellNow($).catch(() => null)
     }
 
+    // A turn starts: the chats in this one's section see it working.
+    if (!e.command && !e.isMeta) {
+      void $.clock.now().then(at => recordTurn($, { state: 'works', at, line: '' })).catch(() => undefined)
+    }
+
     // Sending a prompt is a good moment to catch up with what other chats wrote.
     resync($).catch(() => undefined)
 
@@ -3818,6 +3918,10 @@ export const register: Register = (on, options) => {
   // Not awaited: the ask is a model call, and the turn does not wait on it.
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
+    // How the main thread's turn ended, for the Sessions card of every chat in its section.
+    if (e.agentId === undefined) {
+      void $.clock.now().then(at => recordTurn($, e.reason === 'answer' ? turnFrom(e.answer, at) : { state: 'idle', at, line: '' })).catch(() => undefined)
+    }
     if (e.agentId === undefined && !e.isAborted && e.reason === 'answer') {
       void autoState($).catch(() => undefined)
     }
@@ -3884,14 +3988,14 @@ export const register: Register = (on, options) => {
     if (e.props.hasSurvey || settings.band === 'no') {
       return next(e)
     }
-    const { anchor, trail, loadedAt } = await read($, swatch)
+    const { anchor, trail, chats = [], loadedAt } = await read($, swatch)
     if (!loadedAt) {
       return next(e)
     }
     const ownId = await $.session.id().catch(() => '')
     const asked = await read($, chatState)
     const state = asked.session === ownId && asked.text ? asked.text : (anchor && trail.states?.[ownId]?.text) || ''
-    const text = bandLine(anchor?.note ?? '', state)
+    const text = bandLine(anchor?.note ?? '', state, chats.filter(one => one.state === 'asks').length)
     if (!text) {
       return next(e)
     }
@@ -3908,7 +4012,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Input, Text } = $.ui.resolve(e)
     // Svg is drawn by the desktop, editor and phone, not the terminal.
     const Svg = e.surface === 'terminal' ? null : (($.ui.resolve(e) as unknown as { Svg?: typeof Text }).Svg ?? null)
-    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, trail, pinPaths, lenses, sections = null, section: chatSection = '' } = await read($, swatch)
+    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, trail, pinPaths, lenses, sections = null, section: chatSection = '', chats = [] } = await read($, swatch)
     // Jira shows only when it is on: a server found or named, a project or site set, or a key on the anchor.
     const isJiraOn = Boolean(jiraServer || P.jiraServer || P.jiraProject || P.jiraSite || jira)
     const choice = await read($, picks)
@@ -3936,6 +4040,8 @@ export const register: Register = (on, options) => {
     const plan = today.week && today.exists ? boardSync(today.goals, cards) : null
     // What one sync press has to look at: board changes, plain workstreams, day-entry boxes.
     const toSync = plan ? plan.add.length + plan.tick.length + plan.stale.length + plan.unlinked.length + (today.entries ?? 0) : 0
+    const now = await $.clock.now()
+    const CHAT_MARK = { asks: '⏳', works: '⚙', idle: '·', '': '·' } as const
     // The section the anchor's note stands for, when it names one.
     const anchorSection = anchor ? (sections ?? []).find(one => one.note === anchor.note)?.name ?? '' : ''
     const weekAnchors = today.week ? [...new Set(today.goals.filter(goal => !goal.done && goal.note).map(goal => goal.note ?? ''))] : []
@@ -4238,6 +4344,23 @@ export const register: Register = (on, options) => {
                 </Box>
               )}
             </Box>
+
+            {sections !== null && chatSection && (
+              <Box key="card-sessions" {...CARD} borderColor="subtle">
+                {head('sessionsOpen', `🗂 Sessions · ${chatSection}${chats.length > 0 ? ` · ${chats.length}` : ''}${chats.some(one => one.state === 'asks') ? ` · ${chats.filter(one => one.state === 'asks').length} ask you` : ''}`)}
+                {shown.sessionsOpen && (
+                  <Box key="sessions-body" flexDirection="column">
+                    {chats.map(one => (
+                      <Box key={`chat-row-${one.id}`} flexDirection="column">
+                        <Button key={`chat-open-${one.id}`} plain dimColor={one.state === 'idle' || one.state === ''} label={`${CHAT_MARK[one.state]} ${one.title} · ${ago(one.at, now)}`} onPress={() => (one.link ? launch($, ['open', one.link]) : undefined)} />
+                        {one.state === 'asks' && one.line && <Text key={`chat-line-${one.id}`} dimColor wrap="wrap">{`   “${one.line}”`}</Text>}
+                      </Box>
+                    ))}
+                    {chats.length === 0 && <Text dimColor wrap="wrap">No other chats in this section yet.</Text>}
+                  </Box>
+                )}
+              </Box>
+            )}
 
             <Box key="card-pad" {...CARD} borderColor="subtle">
               {head('padOpen', `📝 Scratchpad · this chat${jotted.length > 0 ? ` · ${jotted.length}` : ''}`)}
