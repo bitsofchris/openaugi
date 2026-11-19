@@ -4,7 +4,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
-import { newWeekNote, weekDays, weekGoals, weekNotePaths } from './register'
+import { archiveCard, boardSync, jiraWeekDraft, linkGoal, newWeekNote, tickCard, weekDays, weekGoals, weekNotePaths } from './register'
 import { promptTitle } from './register'
 import { anchorBrief, anchorFromMessages, anchorNews, unanchoredBrief } from './register'
 import { openArgv } from './register'
@@ -3498,5 +3498,112 @@ test('with a week note set, the You card keeps this week\'s note: made on a pres
   await ui.press({ key: 'week-goal-0' })
   await ui.unmount()
   // The paths the next tests see are the shared ones again.
+  configure(resolvePaths(OPTIONS, '/Users/t'))
+})
+
+// ---- Board sync from the week's workstreams ----
+
+const goal = (line: string) => weekGoals(`# This week\n${line}\n`, 'This week')[0] ?? { text: '', note: null, done: false, line }
+
+test('sync works out what the board lacks: a card for each open workstream not on it, a tick for each done one, the cards that are not this week, and the workstreams with no note', () => {
+  const cards = kanbanCards(MANY_COLUMNS)
+  const goals = [
+    goal('- [ ] [[PMOC - Garden]] · on the board already'),
+    goal('- [x] [[PMOC - Birdhouse]]'),
+    goal('- [ ] [[Dig the hole]] · a sub-item counts as on the board'),
+    goal('- [ ] [[New thing]]'),
+    goal('- [ ] call the plumber'),
+    goal('- [x] a done plain one'),
+  ]
+  expect(boardSync(goals, cards)).toEqual({
+    add: ['New thing'],
+    tick: ['PMOC - Birdhouse'],
+    // Pond holds a workstream as its sub-item: it is this week's too.
+    stale: [],
+    unlinked: [goals[4]],
+  })
+  // Only Garden this week: the others are listed, less the ones kept.
+  expect(boardSync([goals[0] ?? goal('')], cards).stale).toEqual(['PMOC - Birdhouse', 'PMOC - Pond'])
+  expect(boardSync([goals[0] ?? goal('')], cards, ['PMOC - Pond']).stale).toEqual(['PMOC - Birdhouse'])
+  // A note both open and done this week is not ticked.
+  expect(boardSync([goal('- [x] [[PMOC - Garden]]'), goal('- [ ] [[PMOC - Garden]] · still going')], cards).tick).toEqual([])
+})
+
+test('a card is ticked where it is, or archived with its lines, ticked, last in the archive; nothing else moves', () => {
+  const ticked = tickCard(MANY_COLUMNS, 'PMOC - Birdhouse')
+  expect(ticked).toBe(MANY_COLUMNS.replace('- [ ] [[PMOC - Birdhouse]]', '- [x] [[PMOC - Birdhouse]]'))
+  // The open card above the archive, never the archived copy.
+  expect(tickCard(MANY_COLUMNS, 'PMOC - Garden')).toBe(MANY_COLUMNS.replace('- [ ] [[PMOC - Garden]] — the main project', '- [x] [[PMOC - Garden]] — the main project'))
+  expect(tickCard(MANY_COLUMNS, 'Archived thing')).toBe(MANY_COLUMNS)
+
+  const archived = archiveCard(MANY_COLUMNS, 'PMOC - Garden')
+  expect(archived.split('***')[0]?.includes('PMOC - Garden')).toBe(false)
+  expect(archived.endsWith('- [ ] [[Archived thing]]\n- [x] [[PMOC - Garden]] — the main project ^abc123\n\t- [ ] Plant the beds ^def456\n\t[[Some related note]]\n')).toBe(true)
+  expect(kanbanCards(archived).map(card => card.note)).toEqual(['PMOC - Birdhouse', 'PMOC - Pond'])
+  expect(archiveCard(MANY_COLUMNS, 'Not on the board')).toBe(MANY_COLUMNS)
+  // A board with no archive gets one, above the Kanban settings block.
+  const plain = '## Doing\n\n- [ ] [[A]]\n- [ ] [[B]]\n\n%% kanban:settings\n```\n{}\n```\n%%'
+  expect(archiveCard(plain, 'A')).toBe('## Doing\n\n- [ ] [[B]]\n\n***\n\n## Archive\n\n- [x] [[A]]\n\n%% kanban:settings\n```\n{}\n```\n%%')
+})
+
+test('a workstream line links its new note, its words kept when they differ from the name; only that line changes', () => {
+  const week = '# This week\n- [ ] call the plumber\n- [ ] fix: the gate\n'
+  expect(linkGoal(week, '- [ ] call the plumber', 'call the plumber')).toBe('# This week\n- [ ] [[call the plumber]]\n- [ ] fix: the gate\n')
+  expect(linkGoal(week, '- [ ] fix: the gate', 'fix- the gate')).toBe('# This week\n- [ ] call the plumber\n- [ ] [[fix- the gate]] · fix: the gate\n')
+  expect(linkGoal(week, '- [ ] gone', 'gone')).toBe(week)
+})
+
+test('the Jira check names each workstream and its key, and changes nothing without a yes per row', () => {
+  const draft = jiraWeekDraft([{ note: 'PMOC - Garden', path: '/v/PMOC - Garden.md', jira: 'PROJ-1' }, { note: 'New thing', path: '', jira: '' }], { project: 'PROJ', server: 'atlassian' })
+  expect(draft.includes('  - [[PMOC - Garden]] "/v/PMOC - Garden.md" · Jira PROJ-1')).toBe(true)
+  expect(draft.includes('  - [[New thing]] (find it in my notes by name) · no Jira key')).toBe(true)
+  expect(draft.includes('using the atlassian MCP server')).toBe(true)
+  expect(draft.includes('in project PROJ')).toBe(true)
+  expect(draft.includes('Change nothing in Jira and write nothing in a note until I say yes to a row')).toBe(true)
+  // A draft of the pane's own, which names no anchor.
+  expect(anchorFromDraft(draft)).toBe(null)
+})
+
+test('sync the board from the week: the plan in the You card, apply adds the missing cards, a card not this week is archived on a press, a workstream with no note gets one and its line links it', { options: { ...OPTIONS, weekNote: WEEK_PATTERN } }, async ($, on) => {
+  const monday = '/v/Inbox/2022-01-03 - week.md'
+  const week = '# This week\n- [ ] [[PMOC - Garden]]\n- [ ] [[PMOC - Pond]]\n- [ ] call the plumber\n'
+  const written = new Map<string, string>([[monday, week], ['/v/PMOC - Garden.md', '# Journal\n']])
+  const toasts: string[] = []
+  todayHooks(on, written, toasts)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // This week's linked workstreams come first in the anchor menu.
+  await ui.press({ key: 'anchor-menu' })
+  expect(await ui.find({ key: 'week-anchor-PMOC - Pond' })).toBeTruthy()
+  expect(await ui.find({ key: 'week-anchor-call the plumber' })).toBeFalsy()
+  await ui.press({ key: 'anchor-menu' })
+
+  // Pond to add, the Sketch card not this week, the plumber with no note: three to look at.
+  expect((await ui.find({ key: 'sync-open' }))?.text).toMatch(/⇅ sync the board \(3\)/)
+  expect(await ui.find({ key: 'sync-apply' })).toBeFalsy()
+  await ui.press({ key: 'sync-open' })
+  expect(await ui.find({ text: '＋ PMOC - Pond' })).toBeTruthy()
+  // Jira is off: no Jira check.
+  expect(await ui.find({ key: 'sync-jira' })).toBeFalsy()
+  // Nothing is written until a press.
+  expect(written.has('/v/Kanban.md')).toBe(false)
+  await ui.press({ key: 'sync-apply' })
+  expect(without(written.get('/v/Kanban.md') ?? '', '- [ ] [[PMOC - Pond]]')).toBe(BOARD_TEXT)
+  expect(kanbanCards(written.get('/v/Kanban.md') ?? '').find(card => card.note === 'PMOC - Pond')?.column).toBe('Ideas')
+  expect(toasts).toContain('Board synced: 1 added, 0 ticked.')
+  expect(await ui.find({ key: 'sync-apply' })).toBeFalsy()
+
+  await ui.press({ key: 'sync-archive-2022-01-04 - Sketch' })
+  // Pond went to the first column, Ideas, before Work.
+  expect(kanbanCards(written.get('/v/Kanban.md') ?? '').map(card => card.note)).toEqual(['PMOC - Pond', 'PMOC - Garden'])
+  expect((written.get('/v/Kanban.md') ?? '').includes('- [x] [[2022-01-04 - Sketch]] ^abc123\n\t[[Some related note]]')).toBe(true)
+
+  await ui.press({ key: 'sync-make-0' })
+  expect(written.has('/v/call the plumber.md')).toBe(true)
+  expect(written.get(monday)).toBe(week.replace('- [ ] call the plumber', '- [ ] [[call the plumber]]'))
+  expect(kanbanCards(written.get('/v/Kanban.md') ?? '').map(card => card.note)).toContain('call the plumber')
+  expect(await ui.find({ text: '✓ The board matches this week.' })).toBeTruthy()
+  expect((await ui.find({ key: 'sync-open' }))?.text).toMatch(/⇅ sync the board ✓/)
+  await ui.unmount()
   configure(resolvePaths(OPTIONS, '/Users/t'))
 })

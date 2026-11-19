@@ -238,6 +238,28 @@ are `dimColor`.
   checkbox. Drafts and the chat's brief name the week's note instead of
   today's. The daily note is untouched: it stays the user's, the pane just
   stops showing it.
+  **This week's linked workstreams come first in the anchor menu**, under the
+  heading's name, so the anchors in reach are the week's, not every card.
+- **Sync the board** (`⇅ sync the board (N)`, in the You card under the week's
+  workstreams; `✓` when there is nothing to do): the board brought in line with
+  the week, on presses only. It reads the week's note and the board fresh and
+  works out (`boardSync`): open linked workstreams with no open card or linked
+  sub-item (to add), done ones whose card is still open (to tick), open cards
+  that are not this week's and hold none of its workstreams as sub-items, and
+  open workstreams that link no note. `apply` adds the cards (at the end of the
+  `taskColumn` setting's column, else the first) and ticks the done ones, in one
+  write. Each card not this week's has `✓ done` (ticked where it is), `archive`
+  (moved with its indented lines into the board's archive, ticked, last under
+  `## Archive` below `***`, which is made above the Kanban settings block when
+  the board has none) and `keep` (left alone and not listed again this
+  session). A workstream with no note has `make note`: a task note from the
+  task template and a card, as `＋ new task` makes one, and its line in the
+  week's note becomes `- [ ] [[name]]` (the words kept after a `·` when the
+  name differs). With Jira on, `↻ check this week's Jira links` drafts one
+  prompt naming every open linked workstream and its key (read from each note):
+  the chat reads the issues with keys, searches for the ones without, shows one
+  table, and changes nothing in Jira or a note until the user says yes to a
+  row.
 - **Context**: what the next chat is told to read is the anchor's pins plus
   four things that go in without being listed, each a checkbox under Setup →
   *What goes into every draft*, all on by default: the context note and board

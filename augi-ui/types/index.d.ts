@@ -97,6 +97,10 @@ export type View = {
   taskMode: '' | 'new'
   // How many lines the You card has logged to today's note this session: it empties the log field after each.
   logged: number
+  // The You card's board sync, open or not, and the cards kept on the board this session
+  // although they are not this week's (so sync stops listing them).
+  syncOpen: boolean
+  syncKept: string[]
 }
 // The task this chat just made, for the Anchor card's "just made" row; an empty `note` is none.
 // `jira` is the key typed with its title, if any; `where` says where on the board it went.
