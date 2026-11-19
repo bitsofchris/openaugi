@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**augi-ui: Recall leaves the pane.** The Recall card (quiz me, blind grading, the
+due ladder, explain it back), its count in the line above the prompt and its two
+settings are gone; learning from a chat lives in a skill instead. A `## Recall`
+table already in a note is kept as written.
+
 **augi-ui: an update no longer empties an open pane.** When an update changed the
 shape of what the pane keeps, a chat the pane had already opened in came back with
 no board cards to pick and no anchor, until `/augi`. The pane now loads again on
