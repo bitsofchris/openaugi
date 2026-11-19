@@ -4291,7 +4291,8 @@ export const register: Register = (on, options) => {
                       {anchor && <Button key="anchor-clear" plain dimColor label="○ no anchor" onPress={() => clearAnchor($)} />}
                     </Box>
                   )}
-                  {anchorSection && anchorSection !== chatSection && (
+                  {/* Only a chat filed nowhere: one moved to another section stays where it was put. */}
+                  {anchorSection && !chatSection && (
                     <Button key="section-file" plain dimColor label={`📂 file this chat under ${anchorSection}`} onPress={() => fillOver($, fileChatDraft(anchorSection))} />
                   )}
                   {isCarried && (

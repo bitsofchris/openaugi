@@ -109,8 +109,14 @@ are `dimColor`.
   lists the sections, `● <section> · this chat → <note>`; one with no note yet
   opens to `＋ make its note` (a task note and card, as `＋ new task` makes
   them, with `section:`) or a list of the board's cards to link
-  (`linkSection`). When the chat sits outside its anchor's section,
-  `📂 file this chat under <section>` drafts the move (`fileChatDraft`).
+  (`linkSection`). **The anchor and the section are apart**: the anchor is
+  where everything is saved and pinned (pins, scratchpad, Next, State, close
+  out), whatever section the note names; the section is where the chat's
+  siblings are managed from (its default anchor, **Sessions**, the waiting count
+  above the prompt). A chat on a note that names no section works the same,
+  without the Sessions card. A chat filed in no section whose anchor's note
+  names one gets `📂 file this chat under <section>`, which drafts the move
+  (`fileChatDraft`); a chat filed in another section is left where you put it.
   **Under the sections the menu lists the board's cards too** (`Or a card on the
   board`), so a chat in no section, or one that should sit on another note,
   anchors as before; a choice by hand stays, since a section anchors only a chat

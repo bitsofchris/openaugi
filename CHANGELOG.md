@@ -21,7 +21,7 @@ sidebar: each section you file chats under stands for one note, the note whose
 frontmatter says `section: <name>`, and a chat filed under a section with a note is
 anchored on it by itself. The anchor menu lists the sections; one with no note yet
 offers `＋ make its note` (a task note and card, as ＋ new task makes) or a card on the
-board to link. When the chat sits outside its anchor's section, `📂 file this chat under
+board to link. When the chat is filed in no section and its anchor's note names one, `📂 file this chat under
 …` drafts the move for the chat to make (a mod can read the sidebar but not move a
 chat). Below the sections the menu still lists the board's cards, so a chat in no section anchors on a note as before; where the sidebar can't be read, as in a terminal, the menu is the board alone.
 

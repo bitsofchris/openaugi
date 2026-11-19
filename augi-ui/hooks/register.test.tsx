@@ -3729,3 +3729,18 @@ test('a chat in no section anchors on a board card from the same menu, and stays
   expect(await ui.find({ key: 'section-file' })).toBeFalsy()
   await ui.unmount()
 })
+
+test('the anchor and the section are apart: a chat moved into another section keeps its anchor, is not asked to move back, and shows that section\'s chats', { options: OPTIONS }, async ($, on) => {
+  // The chat is anchored by hand on the garden note, which names its own section; it sits in yard.
+  const files = new Map([['/v/PMOC - Garden.md', '---\nsection: garden app\n---\n# Next\n- [ ] Plant the beds\n']])
+  const store = sectionPane(on, files)
+  store.set('anchors', [['own-session', 'PMOC - Garden']])
+  sidebar(on, 'yard')
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  expect(await ui.find({ key: 'section-file' })).toBeFalsy()
+  expect(await ui.find({ type: 'Text', text: /Sessions · yard/ })).toBeTruthy()
+  expect(store.get('anchors')).toEqual([['own-session', 'PMOC - Garden']])
+  await ui.unmount()
+})
