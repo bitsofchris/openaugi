@@ -12,6 +12,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from openaugi.frontmatter_links import property_lines, scalar
+
 logger = logging.getLogger(__name__)
 
 # Characters not valid in Obsidian note titles
@@ -32,7 +34,7 @@ class VaultWriter:
         content: str,
         subfolder: str = "Notes",
         overwrite: bool = False,
-        extra_frontmatter: dict[str, str] | None = None,
+        extra_frontmatter: dict[str, str | list[str]] | None = None,
     ) -> dict:
         """Create a markdown note in OpenAugi/{subfolder}/.
 
@@ -46,8 +48,11 @@ class VaultWriter:
                        views (e.g. Views/) — default False protects notes.
             extra_frontmatter: Optional machine-readable frontmatter keys emitted
                        after the standard ones (e.g. {"lens": "echoes"} so the
-                       lens-output index is reconstructible from disk). Keys and
-                       values are coerced to single-line strings; the reserved
+                       lens-output index is reconstructible from disk). String
+                       values are coerced to one line and quoted when YAML
+                       needs it; a list, or a string that starts and ends
+                       with a wikilink but holds several, is written as a YAML list (one link per
+                       item), the only shape Obsidian links. The reserved
                        keys type/description/created cannot be overridden.
 
         Returns:
@@ -89,13 +94,13 @@ class VaultWriter:
                 key = str(key).strip()
                 if not key or key in reserved:
                     continue
-                # Collapse to a single line — frontmatter values are scalars.
-                flat = " ".join(str(value).split())
-                extra_lines += f"{key}: {flat}\n"
+                # Scalars collapse to one line; links become a list (see
+                # frontmatter_links for why a multi-link string breaks Obsidian).
+                extra_lines += "\n".join(property_lines(key, value)) + "\n"
         note = (
             f"---\n"
             f"type: document\n"
-            f"description: {description}\n"
+            f"description: {scalar(description)}\n"
             f"created: {created}\n"
             f"{extra_lines}"
             f"---\n\n"

@@ -95,6 +95,7 @@ src/openaugi/
 │   ├── main.py            # typer CLI (init, up, ingest, serve, watch, search, query, tasks, kb, hubs, status, service)
 │   ├── kb.py              # `openaugi kb`: every MCP tool as a CLI command, generated from the registry (Light install's agent API)
 │   └── setup.py           # `openaugi init` guided setup: vault, search mode, Light or Full
+├── frontmatter_links.py   # frontmatter key/value → lines; several links become a YAML list (Obsidian links one per value)
 └── config.py              # TOML config loader + .env loader + vault path resolution
 ```
 

@@ -112,3 +112,43 @@ def test_subfolder_cannot_escape_root(tmp_path: Path):
     res = w.write_document("Escape", "d", "b", subfolder="../../etc")
     assert res["status"] == "error"
     assert "Invalid subfolder" in res["reason"]
+
+
+def test_link_list_value_written_as_yaml_list(tmp_path: Path):
+    w = VaultWriter(str(tmp_path))
+    w.write_document("Linked", "d", "b", extra_frontmatter={"sources": ["[[Alpha]]", "[[Beta]]"]})
+    text = _read(tmp_path, "OpenAugi/Notes/Linked.md")
+    assert 'sources:\n  - "[[Alpha]]"\n  - "[[Beta]]"\n' in text
+
+
+def test_multi_link_string_is_split_into_a_list(tmp_path: Path):
+    """ "[[a]] · [[b]]" in one string is one bogus link to Obsidian."""
+    w = VaultWriter(str(tmp_path))
+    w.write_document(
+        "Split", "d", "b", extra_frontmatter={"related": "[[Alpha]] · routed by [[Beta]]"}
+    )
+    text = _read(tmp_path, "OpenAugi/Notes/Split.md")
+    assert 'related:\n  - "[[Alpha]]"\n  - "[[Beta]]"\n' in text
+    assert "routed by" not in text
+
+
+def test_prose_mentioning_links_stays_a_scalar(tmp_path: Path):
+    w = VaultWriter(str(tmp_path))
+    w.write_document("Prose", "maps [[Alpha]] to [[Beta]] threads", "b")
+    assert "description: maps [[Alpha]] to [[Beta]] threads\n" in _read(
+        tmp_path, "OpenAugi/Notes/Prose.md"
+    )
+
+
+def test_single_link_is_one_quoted_scalar(tmp_path: Path):
+    w = VaultWriter(str(tmp_path))
+    w.write_document("One", "d", "b", extra_frontmatter={"parent": "[[Alpha]]"})
+    assert 'parent: "[[Alpha]]"\n' in _read(tmp_path, "OpenAugi/Notes/One.md")
+
+
+def test_yaml_unsafe_description_is_quoted(tmp_path: Path):
+    w = VaultWriter(str(tmp_path))
+    w.write_document("Colon", 'answer: "yes" for now', "b")
+    assert 'description: "answer: \\"yes\\" for now"\n' in _read(
+        tmp_path, "OpenAugi/Notes/Colon.md"
+    )

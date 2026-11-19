@@ -299,6 +299,14 @@ push = 0.15       # reserved — push notifications need a stricter gate (no con
 
 `write_document` takes a `description` field — a one-liner that goes in frontmatter for scanning.
 
+**Links in `extra_frontmatter` are written as a YAML list**, one quoted link per item. Obsidian links a
+property only when its whole value is one link, so `sources: "[[A]] · [[B]]"` is read as a single link to
+a note named `A]] · [[B` that does not exist. Pass a list (`{"sources": ["[[A]]", "[[B]]"]}`); a string
+that starts and ends with a link but holds several is split into one for you, keeping only the
+links. Prose that merely mentions a link (a `description`) stays a plain string. Scalars are quoted when YAML would
+misread them. The rule lives in `src/openaugi/frontmatter_links.py`; `scripts/fix_frontmatter_links.py`
+reports (or with `--write`, fixes) notes already on disk that break it, including ones agents wrote directly.
+
 **Write scope**: All writes are constrained to `{vault_path}/OpenAugi/`.
 The agent picks the subfolder but cannot escape the `OpenAugi/` root.
 This keeps agent output separate from your own notes.

@@ -932,7 +932,7 @@ def write_document(
     content: str,
     subfolder: str = "Notes",
     overwrite: bool = False,
-    extra_frontmatter: dict[str, str] | None = None,
+    extra_frontmatter: dict[str, str | list[str]] | None = None,
 ) -> str:
     """Save something to the user's vault under OpenAugi/{subfolder}/.
 
@@ -954,6 +954,11 @@ def write_document(
     - extra_frontmatter: Optional machine-readable frontmatter keys, e.g.
       {"lens": "echoes"} when a lens writes its output — this is what keeps
       the Dashboard's Lenses section reconstructible from disk.
+      Links go in a list, one per item: {"sources": ["[[A]]", "[[B]]"]}.
+      Never put several links in one string ("[[A]] · [[B]]"): Obsidian
+      reads that as one link to a note that does not exist (such a string
+      that starts and ends with a link is split into a list for you,
+      dropping any prose between the links).
       Reserved keys (type/description/created) are ignored.
 
     Requires vault path configured via 'openaugi init' or OPENAUGI_VAULT_PATH env var."""

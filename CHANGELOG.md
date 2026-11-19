@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**Frontmatter links are always a list.** Obsidian links a property only when its whole value
+is one link, so a value like `sources: "[[A]] · [[B]]"` showed up as a bogus note name in every
+`[[` suggestion (and `related: [[A]], [[B]]` was not valid YAML). `write_document` now writes link
+values in `extra_frontmatter` as a list, one link per item, splitting a multi-link string for you,
+and quotes a `description` or value YAML would misread. `augi-agent.md` carries the same rule for
+notes agents write directly, and `scripts/fix_frontmatter_links.py` finds (`--write` fixes) any
+already in the vault.
+
 **augi-ui 0.19.0: a line above the prompt.** One row where you already look: this
 chat's anchor, what waits on you (or its next step) from the State card, and
 recalls due. Pressing it opens the pane. `band: no` under Setup hides it.

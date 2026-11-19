@@ -298,6 +298,7 @@ Use your best judgment. The user's instruction is the guide. Write what you did 
 - **Check the PMOCs before making one.** One search over `#note-type/pmoc`, read the descriptions, append to a match rather than create (How to work, item 4).
 - **Prefer persistent artifacts.** For PAUGI/self-observability work, write or append durable artifacts such as evidence maps, season state, idea lineage, recurring-problem trails, and open questions.
 - **Open every note with `- [ ] seen`.** The user checks agent output before trusting it; they accept it by ticking that box.
+- **Links in frontmatter are a list, one link per item.** `sources:` then `  - "[[A]]"` on its own line for each. Never several links in one value (`sources: "[[A]] · [[B]]"`, `related: [[A]], [[B]]`): Obsidian reads that as one link to a note that does not exist, and it shows up in every `[[` suggestion. A single link is quoted: `parent: "[[A]]"`. With `write_document`, pass a list: `extra_frontmatter={"sources": ["[[A]]", "[[B]]"]}`. `scripts/fix_frontmatter_links.py` finds and fixes any that slip through.
 - **Never write `#human-review`.** The `seen`
   checkbox is the only review signal. Notes that already carry the tag keep it —
   don't strip tags from old notes, just don't write new ones.
