@@ -91,7 +91,7 @@
     "dayHeading": {
       "type": "string",
       "title": "Week day heading",
-      "description": "The heading each day's logged lines go under in the week's note, with the date in it. Empty is {{date:dddd YYYY-MM-DD}}.",
+      "description": "The heading each day's logged lines go under in the week's note, with its level and the date in it. Empty is ### {{date:YYYY-MM-DD}}: a dated entry, the same one you write that day, which the pane finds even when you added words after the date.",
       "default": ""
     },
     "taskFolder": {

@@ -1834,6 +1834,15 @@ test('what is still open in a note is its first open checkboxes, links read as t
   expect(openBoxes('nothing here')).toEqual([])
 })
 
+test('a day\'s line can go under a heading that starts with the date, made at the level asked when missing; a longer date is not the same day', async () => {
+  const one = { when: '2022-01-05T09:30', text: 'hung it' }
+  expect(addDailyLine('# This week\n- [ ] a\n', '2022-01-05', one, 3, true)).toBe('# This week\n- [ ] a\n\n### 2022-01-05\n- 09:30 hung it\n')
+  expect(addDailyLine('### 2022-01-05 gate day\nnotes\n', '2022-01-05', one, 3, true)).toBe('### 2022-01-05 gate day\nnotes\n- 09:30 hung it\n')
+  // Without isPrefix only the exact title counts; a different date never does.
+  expect(addDailyLine('### 2022-01-05 gate day\n', '2022-01-05', one, 3)).toBe('### 2022-01-05 gate day\n\n### 2022-01-05\n- 09:30 hung it\n')
+  expect(addDailyLine('### 2022-01-050\n', '2022-01-05', one, 3, true)).toBe('### 2022-01-050\n\n### 2022-01-05\n- 09:30 hung it\n')
+})
+
 test('a logged line goes last under the named heading, made when missing, or at the end of the note; every other line as it was', async () => {
   const one = { when: '2022-01-05 09:30', text: 'fixed the gate\nand oiled it' }
   // No heading named: the note's last line, with a newline between when the note had none.
@@ -3480,10 +3489,16 @@ test('with a week note set, the You card keeps this week\'s note: made on a pres
   expect((await ui.find({ key: 'week-goal-0' }))?.text).toMatch(/☐ PMOC - Garden · beds planted ↗/)
   expect(await ui.find({ text: '☐ call the plumber' })).toBeTruthy()
 
-  // + log goes under today's own heading, made at the end when missing.
+  // + log goes under today's dated entry, an H3 made at the end when missing.
   await ui.input({ key: 'today-log-0', text: 'gate is fixed' })
-  expect(written.get(monday)?.endsWith('- [ ] call the plumber\n\n## Wednesday 2022-01-05\n- 09:30 gate is fixed\n')).toBe(true)
+  expect(written.get(monday)?.endsWith('- [ ] call the plumber\n\n### 2022-01-05\n- 09:30 gate is fixed\n')).toBe(true)
   expect(toasts).toEqual(["Logged under today in this week's note"])
+  // An entry the user wrote that day, words after the date, is the one it goes under.
+  written.set(monday, `${written.get(monday)?.replace('### 2022-01-05\n- 09:30 gate is fixed\n', '### 2022-01-05 hinges came\nthey fit\n\n### 2022-01-04\n- older\n')}`)
+  await ui.input({ key: 'today-log-1', text: 'oiled them' })
+  expect(written.get(monday)?.endsWith('### 2022-01-05 hinges came\nthey fit\n- 09:30 oiled them\n\n### 2022-01-04\n- older\n')).toBe(true)
+  // The dated entries below the list are never workstreams.
+  expect(await ui.find({ key: 'week-goal-2' })).toBeFalsy()
 
   // The draft names the week's note.
   await pressDraft(ui)

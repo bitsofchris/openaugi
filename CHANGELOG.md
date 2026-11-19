@@ -27,7 +27,9 @@ keeps this week's note instead of today's. It may be named for any day of the
 week; `＋ make this week's note` makes Monday's, with last week's open
 workstreams carried over. The checkboxes under `This week` (`weekHeading`) are
 the week's workstreams, listed in the card, a linked one opening its note.
-`+ log` writes under today's own heading in it (`dayHeading`). Drafts and the
+`+ log` writes under today's dated entry in it, `### 2026-11-18` (`dayHeading`),
+the same one you write that day, words after the date allowed. Done or dropped,
+a workstream is just ticked. Drafts and the
 chat's brief name the week's note. With `weekNote` empty nothing changes.
 
 **augi-ui 0.19.0: a smaller This chat.** The cards read in the order you use them:

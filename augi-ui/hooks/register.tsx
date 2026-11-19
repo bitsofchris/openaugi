@@ -31,8 +31,9 @@ export type Options = {
   weekNote: string
   // The heading in the week's note whose checkboxes are the week's workstreams; empty is `This week`.
   weekHeading: string
-  // The heading each day's logged lines go under in the week's note, with the date in it;
-  // empty is `{{date:dddd YYYY-MM-DD}}`.
+  // The heading each day's logged lines go under in the week's note, with the date in it
+  // and its level as `#`s; empty is `### {{date:YYYY-MM-DD}}`, the dated entry the user
+  // writes there too.
   dayHeading: string
   lensPicks: string
   // `no` keeps the pane closed until /augi; anything else opens it with each new chat.
@@ -120,7 +121,7 @@ export const resolvePaths = (options: Partial<Options>, home: string): Paths => 
     dailyHeading: (options.dailyHeading ?? '').trim().replace(/^#+\s*/, ''),
     week: (options.weekNote ?? '').trim(),
     weekHeading: (options.weekHeading ?? '').trim().replace(/^#+\s*/, '') || 'This week',
-    dayHeading: (options.dayHeading ?? '').trim().replace(/^#+\s*/, '') || '{{date:dddd YYYY-MM-DD}}',
+    dayHeading: (options.dayHeading ?? '').trim() || '### {{date:YYYY-MM-DD}}',
     obsidianDaily: `${notes}/.obsidian/daily-notes.json`,
     obsidianApp: `${notes}/.obsidian/app.json`,
     claudeDir: `${home}/.claude/projects`,
@@ -453,9 +454,11 @@ export const openBoxes = (text: string, limit = 5): string[] =>
   text.split('\n').map(line => line.match(/^\s*[-*] \[ \] (.*\S.*)$/)?.[1]).filter((one): one is string => Boolean(one)).map(plain).slice(0, limit)
 
 // Adds a line to today's note: `- HH:MM text` as the last line under the heading named
-// `heading` (any level, any case; made at the end when the note has none), or as the
-// note's last line when no heading is named. Every other line stays as it was.
-export const addDailyLine = (text: string, heading: string, one: PadEntry): string => {
+// `heading` (any level, any case; made at the end when the note has none, at `level`), or
+// as the note's last line when no heading is named. With `isPrefix`, a heading that starts
+// with the name and goes on after a space counts too (`### 2022-01-05 hinges` for
+// `2022-01-05`): the dated entry the user wrote that day. Every other line stays as it was.
+export const addDailyLine = (text: string, heading: string, one: PadEntry, level = 2, isPrefix = false): string => {
   const entry = journalLines(one)
   if (entry.length === 0) {
     return text
@@ -470,13 +473,15 @@ export const addDailyLine = (text: string, heading: string, one: PadEntry): stri
 
     return found ? { level: (found[1] ?? '').length, title: found[2] ?? '' } : null
   }
-  const at = lines.findIndex((_, index) => headingAt(index)?.title.toLowerCase() === heading.toLowerCase())
+  const wanted = heading.toLowerCase()
+  const isIt = (title: string): boolean => title.toLowerCase() === wanted || (isPrefix && title.toLowerCase().startsWith(`${wanted} `))
+  const at = lines.findIndex((_, index) => isIt(headingAt(index)?.title ?? '\n'))
   if (at < 0) {
-    return atEnd(text, [...(text.trim() ? [''] : []), `## ${heading}`, ...entry])
+    return atEnd(text, [...(text.trim() ? [''] : []), `${'#'.repeat(Math.min(6, Math.max(1, level)))} ${heading}`, ...entry])
   }
-  const level = headingAt(at)?.level ?? 1
+  const found = headingAt(at)?.level ?? 1
   let end = at + 1
-  while (end < lines.length && (headingAt(end)?.level ?? 7) > level) {
+  while (end < lines.length && (headingAt(end)?.level ?? 7) > found) {
     end += 1
   }
   let last = end - 1
@@ -2472,8 +2477,11 @@ async function writeToday($: EngineInterface, entries: PadEntry[]): Promise<bool
     }
     const old = await $.fs.read(today.path)
     // In a week's note each line goes under its own day's heading.
-    const heading = today.week ? fillTemplate(P.dayHeading, await $.clock.now(), '') : P.dailyHeading
-    await $.fs.write(today.path, [...entries].reverse().reduce((text, one) => addDailyLine(text, heading, one), old))
+    // A day's heading in the week's note keeps its level from the setting (`### …`).
+    const day = fillTemplate(P.dayHeading, await $.clock.now(), '')
+    const level = today.week ? (day.match(/^#+/)?.[0].length ?? 3) : 2
+    const heading = today.week ? day.replace(/^#+\s*/, '') : P.dailyHeading
+    await $.fs.write(today.path, [...entries].reverse().reduce((text, one) => addDailyLine(text, heading, one, level, today.week), old))
   } catch (error) {
     await $.ui.toast(`Couldn't write today's note: ${String(error)}`)
 
@@ -4668,7 +4676,7 @@ export const register: Register = (on, options) => {
                     <Input key="set-dailyHeading" label="log heading in it" value={settings.dailyHeading ?? ''} placeholder="the end of the note" onSubmit={value => setOption($, 'dailyHeading', value)} />
                     <Input key="set-weekNote" label="week note" value={settings.weekNote ?? ''} placeholder="Weekly/{{date:YYYY-MM-DD}} - week.md (any day of the week); empty shows today's note instead" onSubmit={value => setOption($, 'weekNote', value)} />
                     {P.week && <Input key="set-weekHeading" label="workstreams under" value={settings.weekHeading ?? ''} placeholder="This week" onSubmit={value => setOption($, 'weekHeading', value)} />}
-                    {P.week && <Input key="set-dayHeading" label="each day's log under" value={settings.dayHeading ?? ''} placeholder="{{date:dddd YYYY-MM-DD}}" onSubmit={value => setOption($, 'dayHeading', value)} />}
+                    {P.week && <Input key="set-dayHeading" label="each day's log under" value={settings.dayHeading ?? ''} placeholder="### {{date:YYYY-MM-DD}}" onSubmit={value => setOption($, 'dayHeading', value)} />}
                     <Input key="set-taskFolder" label="new task folder" value={settings.taskFolder ?? ''} placeholder="the notes folder's root" onSubmit={value => setOption($, 'taskFolder', value)} />
                     {!settings.taskFolder?.trim() && <Text key="task-folder-unset" dimColor wrap="wrap">⚠ No task folder set: new task notes go to the notes folder's root.</Text>}
                     <Input key="set-taskColumn" label="new task column" value={settings.taskColumn ?? ''} placeholder="the anchor's column, else the board's first" onSubmit={value => setOption($, 'taskColumn', value)} />
