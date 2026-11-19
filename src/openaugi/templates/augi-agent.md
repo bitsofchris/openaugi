@@ -69,8 +69,7 @@ Review); they dispatch fixes with `zzz: run the ticked janitor fixes`.
    `Notes/` drafted notes (open with `- [ ] seen`) · `Research/` ·
    `Docs/` system docs, [[MOC - My Operating System]], the deck · `Plans/` ·
    `Drafts/` · `Views/` regenerable caches (the only legal overwrite) ·
-   `Board/` the daily boards · `Habit Log/` · `Sessions/` (old session
-   cards, no longer written) · `Tasks/` · `Agent-Logs/` Agent Log files from
+   `Board/` the daily boards · `Habit Log/` · `Tasks/` · `Agent-Logs/` Agent Log files from
    before each log became its note's own `# Agent Log` section, kept and
    no longer written ([[pmoc]]) ·
    `YYYY/MM/DD/` dated artifacts · `AGENT/` rules and lenses. Never ask
