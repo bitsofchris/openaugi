@@ -1,6 +1,6 @@
 ---
 name: augi-ui
-description: augi-ui, the Claude Code pane over an OpenAugi vault — anchor on a board card, tell the chat which note it is on, keep this week's note and its workstreams in view, sync the week and the board from them, close out finished work, a line above the prompt, run lenses, quiz yourself on what the chat did, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
+description: augi-ui, the Claude Code pane over an OpenAugi vault — a desktop sidebar section is the project and its one note the anchor (a board card where there is no sidebar), the section's chats and what waits on you, capture a task and start a chat on it, tell the chat which note it is on, keep this week's note and its workstreams in view, sync the week and the board from them, close out finished work, a line above the prompt, run lenses, and keep an Agent Log per anchor. Drafts prompts only; the user presses enter.
 ---
 
 # augi-ui — the pane beside your agent chat
@@ -52,9 +52,7 @@ in `/config` under `augi-ui`; `/augi setup` runs it again):
 | `openOnStart` | `yes` opens the pane when a new interactive chat starts; `no` keeps it closed until `/augi` | `yes` |
 | `stateLens` | The saved prompt (a lens name) a chat's own model is asked for the State card | `chat-state` |
 | `stateAuto` | `yes` asks for a chat's state by itself after a turn, at most every ten minutes, and offers a chat with no anchor a task once; `no` waits for a press | `no` |
-| `recallLens` | The saved prompt a chat's own model is asked for the Recall card's question | `recall-question` |
-| `recallAuto` | `yes` asks for a recall question by itself when a turn ends, at most every two minutes; `no` waits for a press | `no` |
-| `band` | `yes` shows one line above the prompt: this chat's anchor, what waits on you or comes next, recalls due; pressing it opens the pane. `no` hides it | `yes` |
+| `band` | `yes` shows one line above the prompt: this chat's anchor, what waits on you or comes next, and how many other chats in its section wait on you; pressing it opens the pane. `no` hides it | `yes` |
 | `tellChat` | `yes` tells each chat's own model its anchor (the note, its Agent Log section, today's note) beside your next prompt, so "update the task note" needs no path; `no` keeps the anchor in the pane only | `yes` |
 
 Each missing file can be created as a starter, pointed at an existing note, or
@@ -70,17 +68,22 @@ reconnects does not reopen a pane you closed, and a headless run or a phone
 joining opens nothing. An open pane follows its anchor's files: every ten
 seconds, and when a prompt is sent, it checks whether the board or the anchor's
 note changed and reads them again if so, so two chats on one
-anchor see each other's pins and tasks without a refresh.
+anchor see each other's pins and tasks without a refresh. **An update never
+leaves an open pane empty**: when an update changes the shape of what the pane
+keeps, the engine reads the old value as new and empty; a chat the pane had
+already opened in loads again when its session restarts, and the load reads
+each part (board, sections, anchor, week, Jira, lenses) on its own, so one that
+fails leaves only its own part empty.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
 chat is attached to, in this order: the anchor card (with the anchor's pins
-in it), the scratchpad, the chat's state, and the Recall card. **Always** holds what is not tied to one chat: the You card (the
+in it), the section's other chats (**Sessions**), the scratchpad, and the chat's state. **Always** holds what is not tied to one chat: the You card (the
 season line from the context note, `✏️ my context`, `📋 the board` and today's
 note: see **Today** below), the saved prompts, and setup. Setup holds paths
 and switches only.
 
 Both sections and every card fold: each title row ends in a `▾ hide` /
-`▸ show` button, and a folded card keeps its count in the title. Recall,
+`▸ show` button, and a folded card keeps its count in the title.
 Lenses and Setup start folded, everything else open. The fold state is kept for the
 session.
 
@@ -92,7 +95,38 @@ together at the right edge (the `line` helper); indentation is a Box's
 not divider characters; secondary actions (`unpin`, `done`, `drop`, `cancel`)
 are `dimColor`.
 
-- **Anchor** (`a`): a linked card from the board — a project or a task. The
+- **Sections** (desktop app): the sidebar's own sections are the projects. The
+  pane reads them through the app's tools (`ccd_sidebar` `list_sections`,
+  `ccd_session_mgmt` `get_session self` and `list_sessions`; `sectionsNow`), so
+  it follows how you file chats instead of asking per chat. **Each section
+  stands for one note**, the one whose frontmatter says `section: <name>`
+  (`sectionFrom`, `withSection`; found by one `grep` for `^section:` on load):
+  the reusable context every chat in the section shares, with its outcome,
+  `# Next`, pins, scratchpad entries and Journal. That note can be a card on
+  the board and carry `jira:`, which is how a section links to the board and
+  to Jira. **A chat filed under a section with a note, and anchored on
+  nothing, is anchored on that note by itself** (on load). The anchor menu
+  lists the sections, `● <section> · this chat → <note>`; one with no note yet
+  opens to `＋ make its note` (a task note and card, as `＋ new task` makes
+  them, with `section:`) or a list of the board's cards to link
+  (`linkSection`). When the chat sits outside its anchor's section,
+  `📂 file this chat under <section>` drafts the move (`fileChatDraft`). **A
+  mod can read the sidebar but not change it**: the app refuses
+  `move_sessions` and `start_session` when a plugin's own code calls them, so
+  those go through the chat's own model, on your enter. Where the tools are
+  not there (a terminal, an older app), the menu is the board, as below.
+- **Sessions** (`🗂 Sessions · <section>`, under the anchor): the other chats
+  filed under this chat's section, those whose last turn ended on a question
+  to you first (`⏳`, with that question under it), then those working (`⚙`),
+  then the rest, newest first, each with how long ago (`sectionChats`).
+  Pressing one opens it by its app link. The app reports only whether a
+  chat's process runs, so **each chat's pane records how its own turns end**
+  (`recordTurn`, one `$.store` key per chat, `turn-<id>`): `works` when a
+  prompt is sent, `asks` when the answer's last line is a question
+  (`turnFrom`), `idle` otherwise. A chat with no record shows its last
+  activity. The card is read on load and again at most every 30 seconds.
+- **Anchor** (`a`): the section's note (see **Sections**), or where the sidebar
+  can't be read a linked card from the board — a project or a task. The
   menu lists each card's linked sub-items (`\t- [ ] [[Child task]]`) indented
   under it, and any of them can be the anchor too: it anchors in its parent's
   column with `under <parent>` as its detail and no tasks of its own. A stored
@@ -143,15 +177,20 @@ are `dimColor`.
   is opened: then the card's detail, the note's `🎯` outcome, and its open
   sub-items and the note's `# Next` checkboxes as tasks; one that links a
   note (`\t- [ ] [[Child task]]`) is a button that opens it, which is the whole
-  parent/child story: the child's `Up:` line points back. A `jira:` key in the
+  parent/child story: the child's `Up:` line points back. The `＋` field under
+  them adds a task at the end of the note's `# Next` (`addNext`; with no such
+  heading it makes `# Next`, before the Journal). **`▶` beside a task starts a
+  chat on it**: it drafts a request for this chat's model to call
+  `start_session`, briefed to read the anchor's note first, and to file the new
+  chat under the section (`startChatDraft`). You press enter. A `jira:` key in the
   note's frontmatter shows as `🔗 PROJ-123` (see **Jira**). `p` opens the note,
   which holds the Agent Log too: there is one button and one file.
 - **The line above the prompt** (the band): one row, where the eyes already
   are, for a chat whose pane has loaded this session: `⚓ <anchor>`, then from
   the chat's state (see **State**) `⏳ <what waits on you>` when its `Waiting on
   me` line says something other than no, else `→ <its Next line>`, then
-  `🎯 N due` (`bandLine`). With no anchor and nothing due there is no row, and
-  none over a survey. Pressing it opens the pane. `band: no` (⚙️ Setup) hides
+  `● N chats wait on you` when other chats in its section ended on a question
+  (`bandLine`). With no anchor there is no row, and none over a survey. Pressing it opens the pane. `band: no` (⚙️ Setup) hides
   it. It reads the State card's answer, so it says where the chat stands only
   once State was asked (by a press or `☐ auto after a turn`).
 - **Close out** (`✓ close out`, in the Anchor card): when the anchor's work is
@@ -306,55 +345,9 @@ are `dimColor`.
   is not there. What is asked is the lens file's text under its frontmatter and
   title; the built-in goes by the last few turns and asks for four lines:
   Doing, Last, Next, Waiting on me.
-- **Recall** (`🎯 Recall`, in This chat, under State): one question about what
-  this chat's agent just did, to answer in your own words while it works,
-  because watching an agent work teaches little unless you recall it.
-  `🎯 quiz me` asks the chat's own model the `recall-question` saved prompt the
-  way State does (`$.model.fork`: no tools, nothing added to the chat). A fork
-  re-reads the main thread's last request, so the question can be asked while a
-  turn is still running. The reply is a `Question:` line and two to four
-  `Claim:` lines (`parseRecall`); the claims stay hidden. Enter in the answer
-  field grades it: a fresh model (`$.model.complete`, `sonnet`) gets strict
-  grading rules (`GRADER_SYSTEM`) and only the question, the claims and the
-  answer (`gradeAsk`), never the chat, so it cannot root for the learner. It
-  answers with a grade (`recalled`, `partial`, `missed`), the missing claims, a
-  mix-up, one line of feedback and a follow-up (`parseGrade`), and the card
-  shows those and the claims. `peek` shows the claims without grading and
-  records `peeked`. An empty answer grades nothing. The typed answer is kept on
-  every change, as the scratchpad's is. `☐ ask after each turn` (`recallAuto`)
-  asks at the end of a main-thread turn that answered, at most every
-  `RECALL_EVERY_MS` (two minutes), and not while an unanswered question has a
-  typed answer. A `/clear` or resume empties the card.
-  **Where grades are kept: the anchor's own note.** No other note is made. A
-  grade goes on a row of the `## Recall` table, the last block of the note's
-  Agent Log section (see **Agent Log**): `| id | question | full answer |
-  grades | due | mix-up |`, one row per question (`recordRecall`). A new
-  question gets the next `qN`, and the same question keeps its row. Grades are
-  `YYYY-MM-DD grade`, comma separated, oldest first. The due day comes from
-  the 1, 3, 7, 21 day ladder replayed over all of a row's grades
-  (`rungAfter`): a new question starts on a day, `recalled` moves up a rung,
-  `partial` keeps it, and `missed` and `peeked` go back to a day. A mix-up stays
-  until the question is recalled. `▤ <anchor> · Recall` opens the note. With no
-  anchor a grade shows in the card and is not kept.
-  **What is due** (`dueRecalls`): one `grep` over the notes folder finds the
-  notes with a `## Recall` heading, and each row of a table inside a note's
-  Agent Log section whose due day is today or earlier counts, oldest first. A
-  question recalled on two different days is known and left out. The folder is
-  searched on every load. With any due, the card title counts them, and
-  `↺ N due` (and `🎯 N recalls due` in the You card) puts the oldest in the
-  card; grading it adds to its own row in its own note.
-  **`🎓 explain it back`** drafts the `explain-back` saved prompt with this
-  chat's context, the way a lens press does. It writes the lens into the lens
-  folder first when the folder has none, and never over an edited one. Because
-  this lens writes (an HTML page, pinned in the Agent Log, and rows in the
-  Recall table), its draft says to run it as written (`buildDraft`'s `writes`),
-  without the short-answer and no-files rules other lens drafts carry. The lens
-  asks for the chat's own work explained from the code and the diff: what was
-  wrong, a map of the changes, one real input traced, each decision with a
-  predict-first box, what would break. Then five say-it-back questions, graded
-  and kept in the same table.
-  `edit prompt` opens `recall-question.md` in the lens folder, writing it from
-  the built-in prompt first when it is not there.
+- **Recall** was a card here (quiz me, blind grading, a due ladder, explain it
+  back) and is retired: learning from a chat is a skill you run when you
+  choose. A `## Recall` table already in a note's Agent Log is kept as written.
 - **Task offer** (in the Anchor card, for a chat with no anchor):
   `💡 suggest a task for this chat` works out which task the chat belongs to
   and shows it as an offer; nothing is linked, made or written until a press.
@@ -471,14 +464,14 @@ are `dimColor`.
   The Chats callout is folded until opened (the `-` after the callout type):
   one line per chat and, indented under it, where that chat last stood, which
   is the one part that is replaced and never added to. It comes after
-  everything else but the `## Recall` table (see **Recall**), which is last
+  everything else but a `## Recall` table (from the retired Recall card), which is last
   when there is one and holds only its table's rows. A line appended after
   either is moved up beside the others on the pane's next write, unchanged. The section
   ends at the next level-1 heading or the end of the note, and the pane makes
   it, at the note's end, on its first write. The pane changes nothing above
   the heading when it writes the log (`splitLog` / `joinLog`); its other
   writes to the note are a saved scratchpad entry and a Jira link, each on a
-  press. A grade is a write to the log, into its Recall table. **The log used to be a file of its own**
+  press. **The log used to be a file of its own**
   (`<logFolder>/Agent Log - <note>.md`). The first time the pane reads or
   writes an anchor that still has one, what the file holds goes into the
   note's section (`withOldLog`): pins and kept lines, questions as the
