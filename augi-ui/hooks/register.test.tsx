@@ -5,7 +5,7 @@ import { expect, test } from 'claude-code/testing'
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
 import { bandLine } from './register'
-import { ago, bareId, fileChatDraft, lastLine, mcpJson, sectionChats, sectionFrom, sectionsFrom, turnFrom, withSection } from './register'
+import { addNext, ago, bareId, fileChatDraft, startChatDraft, lastLine, mcpJson, sectionChats, sectionFrom, sectionsFrom, turnFrom, withSection } from './register'
 import { boardSync, entryBoxes, linkGoal, markChatDone, weekSyncDraft, newWeekNote, tickCard, tickGoal, weekDays, weekGoals, weekNotePaths } from './register'
 import { promptTitle } from './register'
 import { anchorBrief, anchorFromMessages, anchorNews, unanchoredBrief } from './register'
@@ -3671,5 +3671,44 @@ test('the Sessions card lists the other chats in this chat\'s section, what asks
   await $.turn.complete({ answer: 'Wired the gate.\nShall I paint it?', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
   await new Promise(resolve => setTimeout(resolve, 20))
   expect(store.get('turn-own-session')).toEqual({ state: 'asks', at: new Date(2026, 10, 8, 9, 30).getTime(), line: 'Shall I paint it?' })
+  await ui.unmount()
+})
+
+test('a new task goes at the end of the note\'s Next, before the blank line and the next heading; a note with no Next gets one before its Journal', () => {
+  expect(addNext('# Next\n- [ ] Plant the beds\n\n# Journal\n', 'Oil the hinges')).toBe('# Next\n- [ ] Plant the beds\n- [ ] Oil the hinges\n\n# Journal\n')
+  expect(addNext('## Next\n- [ ] a\n### Detail\nmore\n## Done\n', 'b')).toBe('## Next\n- [ ] a\n### Detail\nmore\n- [ ] b\n## Done\n')
+  expect(addNext('---\nsection: yard\n---\n# Journal\nwent well\n', 'mow')).toBe('---\nsection: yard\n---\n# Next\n- [ ] mow\n\n# Journal\nwent well\n')
+  expect(addNext('Some words.\n', 'mow')).toBe('Some words.\n\n# Next\n- [ ] mow\n')
+  expect(addNext('', 'mow')).toBe('# Next\n- [ ] mow\n')
+})
+
+test('▶ asks this chat to start one on the task, briefed by the section note, and to file it with the section', () => {
+  const draft = startChatDraft('Oil the hinges', 'PMOC - Garden', '/v/PMOC - Garden.md', 'garden app')
+  expect(draft).toMatch(/start_session tool with initiation "user_asked"/)
+  expect(draft).toMatch(/read "\/v\/PMOC - Garden\.md" first/)
+  expect(draft).toMatch(/move_sessions/)
+  expect(draft.endsWith('\n\nTask: Oil the hinges')).toBe(true)
+  expect(startChatDraft('Oil the hinges', 'PMOC - Garden', '', '')).not.toMatch(/move_sessions/)
+})
+
+test('in the anchor\'s Next, ＋ adds a task to its note and ▶ drafts a chat for one', { options: OPTIONS }, async ($, on) => {
+  const files = new Map([['/v/PMOC - Garden.md', '---\nsection: garden app\n---\n# Next\n- [ ] Plant the beds\n\n# Journal\n']])
+  sectionPane(on, files)
+  sidebar(on, 'garden app')
+  const filled: string[] = []
+  on('prompt.read', () => ({ value: { text: '', cursor: 0 } }))
+  on('prompt.fill', (_, e) => {
+    filled.push(e.text)
+    return { isFilled: true }
+  })
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'anchor-details' })
+  const field = (await ui.findAll({ type: 'Input' })).map(one => one.key ?? '').find(key => key.startsWith('next-add-')) ?? ''
+  await ui.input({ key: field, text: 'Oil the hinges' })
+  expect(files.get('/v/PMOC - Garden.md')).toMatch(/# Next\n- \[ \] Plant the beds\n- \[ \] Oil the hinges\n\n# Journal/)
+  expect(await ui.find({ key: 'next-start-Oil the hinges' })).toBeTruthy()
+  await ui.press({ key: 'next-start-Oil the hinges' })
+  expect(filled.at(-1)).toBe(startChatDraft('Oil the hinges', 'PMOC - Garden', '/v/PMOC - Garden.md', 'garden app'))
   await ui.unmount()
 })

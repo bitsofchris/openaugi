@@ -147,7 +147,7 @@ export type UsageEvent = { at: string; kind: 'press' | 'input' | 'sent'; what: s
 // Keys that end in something of the user's: `card-<note>`, `pin-open-<kind>-<target>`.
 const USAGE_PREFIXES = [
   'card-sub', 'card', 'task',
-  'pin-open', 'pin-drop', 'pin-paste', 'section', 'section-make', 'section-card', 'chat-open',
+  'pin-open', 'pin-drop', 'pin-paste', 'section', 'section-make', 'section-card', 'chat-open', 'next-start', 'next-add',
   'pad-input', 'pad-save', 'pad-drop', 'today-log', 'state-pick', 'week-goal', 'week-anchor',
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
@@ -171,7 +171,7 @@ export const usageName = (element: string): string => {
 // Every control the pane draws, by its log name: what a report checks for never used.
 // tests/test_augi_ui_usage.py reads this file's Button and Input keys and fails when one is missing here.
 export const USAGE_FEATURES = [
-  'anchor-menu', 'card', 'card-sub', 'section', 'section-make', 'section-card', 'section-file', 'chat-open', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'anchor-details', 'task',
+  'anchor-menu', 'card', 'card-sub', 'section', 'section-make', 'section-card', 'section-file', 'chat-open', 'next-start', 'next-add', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'anchor-details', 'task',
   'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-title-new', 'task-cancel',
   'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss',
   'pin-open', 'pin-drop', 'pin-paste',
@@ -865,6 +865,47 @@ export const nextFrom = (text: string): SubItem[] => {
 
   return tasks
 }
+
+// The note with one more open item at the end of its Next section; a note with no Next
+// heading gets `# Next`, before its Journal when it has one, else at the end.
+export const addNext = (text: string, item: string): string => {
+  const line = `- [ ] ${item.trim()}`
+  const lines = text.split('\n')
+  const at = lines.findIndex(one => /^#{1,6}\s+next\s*$/i.test(one))
+  if (at < 0) {
+    const journal = lines.findIndex(one => /^#{1,6}\s+journal\s*$/i.test(one))
+    if (journal >= 0) {
+      lines.splice(journal, 0, '# Next', line, '')
+
+      return lines.join('\n')
+    }
+
+    return `${text.replace(/\n*$/, '')}${text.trim() ? '\n\n' : ''}# Next\n${line}\n`
+  }
+  const level = (lines[at] ?? '').match(/^#+/)?.[0].length ?? 1
+  let end = lines.findIndex((one, index) => index > at && (one.match(/^(#{1,6})\s/)?.[1]?.length ?? 99) <= level)
+  end = end < 0 ? lines.length : end
+  // After the section's last line with text, so a blank line before the next heading stays.
+  let last = end - 1
+  while (last > at && !(lines[last] ?? '').trim()) {
+    last -= 1
+  }
+  lines.splice(last + 1, 0, line)
+
+  return lines.join('\n')
+}
+
+// What the pane asks the chat to do for ▶ on a Next item: start a chat of its own on it,
+// briefed by the section's note, and file it with the section. A mod can't start a chat
+// itself, so this chat's model does it on the user's enter.
+export const startChatDraft = (task: string, note: string, notePath: string, section: string): string =>
+  [
+    `Start a new chat for this task: call the ccd_session start_session tool with initiation "user_asked", a short title from the task, and a prompt that gives it the task and tells it to read ${notePath ? `"${notePath}"` : `the note "${note}"`} first: its outcome, Next, pinned context and Journal are the shared context for every chat on ${section ? `the "${section}" section` : note}.`,
+    section ? `Then file the new chat under the sidebar section "${section}" with the ccd_sidebar move_sessions tool.` : '',
+    'Reply with one line naming the chat you started.',
+    '',
+    `Task: ${task}`,
+  ].filter((one, index) => one || index === 3).join('\n')
 
 // The lens menu: the picks in their order (the lens picks setting is the only filter).
 // With no picks, every lens in the folder.
@@ -3500,6 +3541,33 @@ async function linkSection($: EngineInterface, name: string, note: string): Prom
   await chooseAnchor($, anchorCard(cards, note) ?? { column: '', note, detail: '', tasks: [] })
 }
 
+// Adds a task to the anchor note's Next, then reads the note again.
+async function addNextItem($: EngineInterface, typed: string): Promise<void> {
+  const { anchor, notePath, cards } = await read($, swatch)
+  if (!anchor || !typed.trim()) {
+    return
+  }
+  if (!notePath) {
+    await $.ui.toast(`No note found for ${anchor.note}: nothing added.`)
+
+    return
+  }
+  await $.fs.write(notePath, addNext(await $.fs.read(notePath), typed))
+  const found = await loadAnchor($, cards)
+  await update($, swatch, old => (old.anchor?.note === anchor.note ? { ...old, ...found } : old))
+}
+
+// ▶ on a Next item: drafts the request to start a chat on it, for the user's enter.
+async function startChat($: EngineInterface, task: string): Promise<void> {
+  const { anchor, notePath, sections } = await read($, swatch)
+  if (!anchor) {
+    return
+  }
+  const section = (sections ?? []).find(one => one.note === anchor.note)?.name ?? ''
+  await fillOver($, startChatDraft(task, anchor.note, notePath, section))
+  await $.ui.toast('Drafted: press enter and this chat starts the new one.')
+}
+
 // Remembers what is typed in the scratchpad's field, unsent.
 async function typePad($: EngineInterface, text: string): Promise<void> {
   typedPad = text
@@ -4304,10 +4372,14 @@ export const register: Register = (on, options) => {
                       {anchor.detail && <Text dimColor>{anchor.detail}</Text>}
                       {outcome && <Text>🎯 {outcome}</Text>}
                       {openTasks.map(task => (
-                        task.note
-                          ? <Button key={`task-${task.text}`} plain label={`☐ ${task.text} ↗`} onPress={() => openByName($, task.note ?? '')} />
-                          : <Text key={`task-${task.text}`}>☐ {task.text}</Text>
+                        <Box key={`task-row-${task.text}`} flexDirection="row" alignItems="center" gap={1}>
+                          {task.note
+                            ? <Button key={`task-${task.text}`} plain label={`☐ ${task.text} ↗`} onPress={() => openByName($, task.note ?? '')} />
+                            : <Text key={`task-${task.text}`}>☐ {task.text}</Text>}
+                          <Button key={`next-start-${task.text}`} plain dimColor label="▶" onPress={() => startChat($, task.text)} />
+                        </Box>
                       ))}
+                      {notePath && <Input key={`next-add-${openTasks.length}`} label="＋" placeholder={`a new task: Enter adds it to ${anchor.note}'s Next`} submitLabel="add" onSubmit={value => addNextItem($, value)} />}
                     </Box>
                   )}
                   {taskMode === '' && (

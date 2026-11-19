@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**augi-ui: capture a task and start a chat on it.** Under `outcome and next`, a field
+adds a task to the end of the anchor note's `# Next` (making the heading, before the
+Journal, when there is none), and `▶` beside a task drafts a request for this chat to
+start a new one on it: briefed to read the section's note first, and filed under the
+section. You press enter; the app does not let a mod start a chat itself.
+
 **augi-ui: a Sessions card, and what waits on you above the prompt.** Under the anchor,
 `🗂 Sessions · <section>` lists the other chats filed under this chat's section: the
 ones whose last turn ended on a question to you first (`⏳`, with that question), then
