@@ -7,7 +7,7 @@ import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTempl
 import { promptTitle } from './register'
 import { anchorBrief, anchorFromMessages, anchorNews, unanchoredBrief } from './register'
 import { openArgv } from './register'
-import { anchorCard, findInJiraDraft, insertCard, insertSubItem, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
+import { anchorCard, findInJiraDraft, insertCard, jiraBrowseUrl, jiraFrom, jiraKeyFrom, jiraServerFrom, jiraUpdateDraft, newTaskDraft, parseNewTask, TASK_TEMPLATE, taskNoteName, taskNoteText, taskTemplateState, withJira } from './register'
 import { addChat, addJournalEntry, anchorFromDraft, anchorPairs, artifactsFirst, retitleChat, withAnchor, logName, nextFrom, addPin, parsePin, pinFrom, pinLine, removePin, configure, editorArgv, obsidianConfigs, resolvePaths, setupItems, vaultsFrom, anchorFrom, buildDraft, chatTitleFrom, descriptionFrom, kanbanCards, lensFileName, lensNames, newLensSkeleton, outcomeFrom, parseTrail, tidyTrail, trailPath, toggled, typedFrom } from './register'
 import { isMovedLog, markMoved, splitLog, withOldLog } from './register'
 import { jiraKeyIn, offerAsk, offerCandidates, parseOffer } from './register'
@@ -29,6 +29,14 @@ const PANE = {
 } as const
 
 const row = (fields: object): string => JSON.stringify(fields)
+// The plain context draft is the first row of the Saved prompts card, which starts folded.
+type Mounted = { find: (query: { key: string }) => Promise<unknown>; press: (query: { key: string }) => Promise<unknown> }
+const pressDraft = async (ui: Mounted): Promise<void> => {
+  if (!(await ui.find({ key: 'draft' }))) {
+    await ui.press({ key: 'lens-menu' })
+  }
+  await ui.press({ key: 'draft' })
+}
 // An Agent Log with one more open question on top, as an agent would write it there.
 const withQuestion = (log: string, when: string, text: string): string => log.replace('## Questions\n', `## Questions\n\n- [ ] ${when} · ${text}`)
 // An Agent Log file as the pane wrote it while the log was a file of its own.
@@ -197,37 +205,6 @@ test('a new card goes after its anchor card and sub-items, else at the end of th
   const filled = insertCard(empty, 'Fix the gate', null)
   expect(filled).toBe('---\n\nkanban-plugin: board\n\n---\n\n## Todo\n\n- [ ] [[Fix the gate]]\n\n\n## Doing\n\n- [ ] [[A]]\n')
   expect(kanbanCards(filled)[0]).toEqual({ column: 'Todo', note: 'Fix the gate', detail: '', tasks: [] })
-})
-
-test('a sub-item goes last under its parent card, beside a parent that is a sub-item, nowhere for a parent off the board', async () => {
-  const item = '\t- [ ] [[Fix the gate]]'
-  const under = insertSubItem(MANY_COLUMNS, 'Fix the gate', 'PMOC - Garden')
-  expect(under.split('\n').indexOf(item)).toBe(MANY_COLUMNS.split('\n').indexOf('\t[[Some related note]]') + 1)
-  expect(without(under, item)).toBe(MANY_COLUMNS)
-  expect(under.includes('- [ ] [[PMOC - Garden]] — the main project ^abc123\n\t- [ ] Plant the beds ^def456\n')).toBe(true)
-  expect(kanbanCards(under)[0]?.tasks).toEqual([{ text: 'Plant the beds', note: null }, { text: 'Fix the gate', note: 'Fix the gate' }])
-
-  // A card with no sub-items takes it right under its line.
-  const none = insertSubItem(MANY_COLUMNS, 'Fix the gate', 'PMOC - Birdhouse')
-  expect(none.split('\n').indexOf(item)).toBe(MANY_COLUMNS.split('\n').indexOf('- [ ] [[PMOC - Birdhouse]]') + 1)
-  expect(without(none, item)).toBe(MANY_COLUMNS)
-
-  // A parent that is a linked sub-item: beside it, under the same card.
-  const beside = insertSubItem(MANY_COLUMNS, 'Fix the gate', 'Dig the hole')
-  expect(beside.split('\n').indexOf(item)).toBe(MANY_COLUMNS.split('\n').indexOf('\t- [ ] [[Dig the hole]]') + 1)
-  expect(without(beside, item)).toBe(MANY_COLUMNS)
-  expect(kanbanCards(beside).find(card => card.note === 'PMOC - Pond')?.tasks.map(task => task.note)).toEqual(['Dig the hole', 'Fix the gate'])
-
-  // Off the board, or only in the archive: nothing changes.
-  for (const parent of ['Archived thing', 'Not on the board']) {
-    expect(insertSubItem(MANY_COLUMNS, 'Fix the gate', parent)).toBe(MANY_COLUMNS)
-  }
-  for (const board of [under, none, beside]) {
-    expect(board.slice(board.indexOf('***'))).toBe(MANY_COLUMNS.slice(MANY_COLUMNS.indexOf('***')))
-  }
-  // Above the Kanban settings block on a board with no archive.
-  const settings = '## Doing\n\n- [ ] [[A]]\n\n\n%% kanban:settings\n```\n{}\n```\n%%'
-  expect(insertSubItem(settings, 'B', 'A')).toBe('## Doing\n\n- [ ] [[A]]\n\t- [ ] [[B]]\n\n\n%% kanban:settings\n```\n{}\n```\n%%')
 })
 
 test('an anchor is a top-level card, else a linked sub-item shaped as a card under its parent', async () => {
@@ -837,7 +814,7 @@ test('pins on an anchor: paste to pin, press the name to open, unpin ticks the l
 
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ text: '📌 Pinned to PMOC - Garden · 0' })).toBeTruthy()
+  expect((await ui.find({ key: 'head-pinsOpen' }))?.text).toMatch(/📌 pinned \(0\)/)
 
   await ui.input({ key: 'pin-paste-0', text: '/r/docs/ARCH.md' })
   expect(pinned()).toEqual([{ on: true, kind: 'file', target: '/r/docs/ARCH.md', label: 'ARCH.md' }])
@@ -845,7 +822,7 @@ test('pins on an anchor: paste to pin, press the name to open, unpin ticks the l
   expect(pinned().map(pin => pin.target)).toEqual(['/r/docs/ARCH.md', 'Sprinkler Benchmarks'])
   // In the note's Agent Log section a pin is a plain bullet, not a ticked box.
   expect(logNow().includes('# Agent Log\n\n- file: `/r/docs/ARCH.md` · ARCH.md\n- [[Sprinkler Benchmarks]]\n')).toBe(true)
-  expect(await ui.find({ text: '📌 Pinned to PMOC - Garden · 2' })).toBeTruthy()
+  expect((await ui.find({ key: 'head-pinsOpen' }))?.text).toMatch(/📌 pinned \(2\)/)
 
   // A pin row is its name, which opens it, and unpin: no tick box, and no line explaining one.
   expect((await ui.find({ key: 'pin-open-note-Sprinkler Benchmarks' }))?.text).toMatch(/Sprinkler Benchmarks/)
@@ -861,8 +838,8 @@ test('pins on an anchor: paste to pin, press the name to open, unpin ticks the l
   expect(pinned().map(pin => pin.target)).toEqual(['Sprinkler Benchmarks'])
   expect(logNow().includes('- [x] file: `/r/docs/ARCH.md` · ARCH.md\n- [[Sprinkler Benchmarks]]\n')).toBe(true)
   expect(await ui.find({ key: 'pin-open-file-/r/docs/ARCH.md' })).toBeFalsy()
-  expect(await ui.find({ text: '📌 Pinned to PMOC - Garden · 1' })).toBeTruthy()
-  await ui.press({ key: 'draft' })
+  expect((await ui.find({ key: 'head-pinsOpen' }))?.text).toMatch(/📌 pinned \(1\)/)
+  await pressDraft(ui)
   expect(filled[0]?.includes('- Note: "/v/Notes/Sprinkler Benchmarks.md"')).toBe(true)
   expect(filled[0]?.includes('ARCH.md')).toBe(false)
   // A pin an older pane kept for every chat is in no draft: there is one place to pin.
@@ -894,9 +871,9 @@ test('pins on an anchor: paste to pin, press the name to open, unpin ticks the l
     expect(await ui.find({ key })).toBeFalsy()
   }
 
-  // Every card and both sections fold from their title, and open again. The draft button
-  // is in the Anchor card, with the anchor's note buttons, and folds with it.
-  for (const [head, inside] of [['head-pinsOpen', 'pin-paste-3'], ['head-anchorOpen', 'draft'], ['head-padOpen', 'pad-input-0']] as const) {
+  // Every card and both sections fold from their title, and open again. The pins are in
+  // the Anchor card, under its note button, and fold on their own and with it.
+  for (const [head, inside] of [['head-pinsOpen', 'pin-paste-3'], ['head-anchorOpen', 'open-note'], ['head-anchorOpen', 'pin-paste-3'], ['head-padOpen', 'pad-input-0']] as const) {
     expect(await ui.find({ key: inside })).toBeTruthy()
     await ui.press({ key: head })
     expect(await ui.find({ key: inside })).toBeFalsy()
@@ -905,7 +882,7 @@ test('pins on an anchor: paste to pin, press the name to open, unpin ticks the l
   }
   await ui.press({ key: 'head-chatOpen' })
   expect(await ui.find({ key: 'head-anchorOpen' })).toBeFalsy()
-  expect(await ui.find({ key: 'draft' })).toBeFalsy()
+  expect(await ui.find({ key: 'open-note' })).toBeFalsy()
   expect(await ui.find({ key: 'edit-context' })).toBeTruthy()
   await ui.press({ key: 'head-anywhereOpen' })
   expect(await ui.find({ key: 'edit-context' })).toBeFalsy()
@@ -1085,7 +1062,8 @@ test('a new session opens with no anchor; anchoring logs the chat and pins nothi
   // With no anchor there is nothing to pin to, so no Pins card; the Anchor card still drafts a prompt.
   expect(await ui.find({ key: 'head-pinsOpen' })).toBeFalsy()
   expect((await ui.findAll({ type: 'Input' })).some(one => String(one.key ?? '').startsWith('pin-paste'))).toBe(false)
-  expect((await ui.find({ key: 'draft' }))?.text).toMatch(/draft a prompt with my context/)
+  await ui.press({ key: 'lens-menu' })
+  expect((await ui.find({ key: 'draft' }))?.text).toMatch(/just my context/)
 
   // An artifact published before anchoring is written nowhere, then or on anchoring.
   await $.tool.call({ tool: 'Artifact', file_path: '/s/early.html', title: 'Early plan' })
@@ -1096,7 +1074,7 @@ test('a new session opens with no anchor; anchoring logs the chat and pins nothi
   expect(store.get('anchors')).toEqual([['other-session', 'PMOC - Garden'], ['new-session', 'PMOC - Garden']])
   expect(logNow().chats).toEqual([{ id: 'new-session', when: '2026-11-08 09:30', title: 'chat', done: false }])
   expect(logNow().pins).toEqual([])
-  expect((await ui.find({ key: 'draft' }))?.text).toMatch(/draft a prompt with this context/)
+  expect((await ui.find({ key: 'draft' }))?.text).toMatch(/just this context/)
 
   // Published after anchoring: not pinned either. Its link pasted in the Pins card pins it,
   // and pressing its name opens it.
@@ -1109,7 +1087,7 @@ test('a new session opens with no anchor; anchoring logs the chat and pins nothi
   expect(opened).toEqual([['open', 'https://claude.ai/artifact/late-2']])
 
   // A draft sent later names the chat; the pinned artifact goes in it.
-  await ui.press({ key: 'draft' })
+  await pressDraft(ui)
   expect(filled[0]?.includes('https://claude.ai/artifact/late-2')).toBe(true)
   await $.prompt.submit({ text: filled[0] ?? '' })
   expect(logNow().chats.map(chat => chat.title)).toEqual(['explain the cache'])
@@ -1321,7 +1299,8 @@ test('no task field is open until a button opens it; ＋ new task makes a standa
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ key: 'task-new' })).toBeTruthy()
-  expect((await ui.find({ key: 'task-sub' }))?.text).toMatch(/sub-task of PMOC - Garden/)
+  // A piece of the anchor's work is a fork of this chat, not a sub-task note: no such button.
+  expect(await ui.find({ key: 'task-sub' })).toBeFalsy()
   expect((await ui.findAll({ type: 'Input' })).some(one => /^task-title/.test(String(one.key ?? '')))).toBe(false)
   // Typing a thought where the old field was makes nothing.
   try {
@@ -1381,7 +1360,7 @@ test('no task field is open until a button opens it; ＋ new task makes a standa
   expect(await ui.find({ key: 'made-copy' })).toBeFalsy()
   // Already on it: nothing to press to get there, and the draft button has its context.
   expect(await ui.find({ key: 'made-anchor' })).toBeFalsy()
-  await ui.press({ key: 'draft' })
+  await pressDraft(ui)
   expect(anchorFromDraft(got.filled[1] ?? '')).toBe('Fix the gate')
   expect(got.filled[1]?.includes('"/v/Fix the gate.md"')).toBe(true)
   await ui.press({ key: 'made-dismiss' })
@@ -1392,33 +1371,6 @@ test('no task field is open until a button opens it; ＋ new task makes a standa
   await ui.input({ key: 'task-title-new', text: 'Fix the gate' })
   expect(got.toasts.some(text => text.includes('already there'))).toBe(true)
   expect(got.written.get('/v/Kanban.md')).toBe(board)
-  await ui.unmount()
-})
-
-test('＋ sub-task makes a note Up the anchor, a linked sub-item under its card, the anchor pinned in its log; the anchor stays', { options: OPTIONS }, async ($, on) => {
-  const got = taskHooks(on, [['own-session', 'PMOC - Garden']], { '/v/PMOC - Garden.md': GARDEN_PLAIN })
-  await $.command.run({ command: 'augi', args: '' })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'task-sub' })
-  await ui.press({ key: 'task-cancel' })
-  expect(got.written.size).toBe(0)
-  await ui.press({ key: 'task-sub' })
-  await ui.input({ key: 'task-title-sub', text: 'Fix the gate' })
-  expect(got.written.get('/v/Fix the gate.md')?.startsWith('Up: [[PMOC - Garden]]\n')).toBe(true)
-  const item = '\t- [ ] [[Fix the gate]]'
-  const board = got.written.get('/v/Kanban.md') ?? ''
-  expect(board.split('\n').indexOf(item)).toBe(BOARD_TEXT.split('\n').indexOf('\t- [ ] [[PMOC - Birdhouse]]') + 1)
-  expect(without(board, item)).toBe(BOARD_TEXT)
-  expect(parseTrail(got.written.get('/v/Fix the gate.md') ?? '').pins).toEqual([
-    { on: true, kind: 'note', target: 'PMOC - Garden', label: 'PMOC - Garden' },
-    { on: true, kind: 'session', target: got.transcript, label: 'the chat this task came from' },
-  ])
-  expect(anchorOf(got.store, 'own-session')).toBe('PMOC - Garden')
-  expect(got.filled).toEqual([])
-  expect(got.toasts.some(text => text.includes("under PMOC - Garden's card"))).toBe(true)
-  // The board was read back: the new sub-item is among the anchor's open tasks.
-  await ui.press({ key: 'anchor-details' })
-  expect(await ui.find({ key: 'task-Fix the gate' })).toBeTruthy()
   await ui.unmount()
 })
 
@@ -1445,12 +1397,6 @@ test('a linked sub-item chosen from the anchor menu becomes the anchor, its outc
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/Loose note/)
   expect(await ui.find({ text: '🎯 It is tidy.' })).toBeTruthy()
   expect(await ui.find({ key: 'open-note' })).toBeTruthy()
-  // A sub-task of an anchor off the board: Up the anchor, its own card at the end of the first column, and the toast says so.
-  await ui.press({ key: 'task-sub' })
-  await ui.input({ key: 'task-title-sub', text: 'Sweep up' })
-  expect(got.written.get('/v/Sweep up.md')?.startsWith('Up: [[Loose note]]\n')).toBe(true)
-  expect(without(got.written.get('/v/Kanban.md') ?? '', '- [ ] [[Sweep up]]')).toBe(BOARD_TEXT)
-  expect(got.toasts.some(text => text.includes('Loose note is not on the board'))).toBe(true)
   expect(anchorOf(got.store, 'loose')).toBe('Loose note')
   // No such note anywhere: no anchor.
   session.id = 'gone'
@@ -1683,10 +1629,10 @@ test('a new task goes to the task folder even when the anchor note sits in a sub
   const got = jiraHooks(on, GARDEN_NOTE, [])
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'task-sub' })
-  await ui.input({ key: 'task-title-sub', text: 'Fix the gate' })
+  await ui.press({ key: 'task-new' })
+  await ui.input({ key: 'task-title-new', text: 'Fix the gate' })
   expect(got.written.has('/v/Tasks/Fix the gate.md')).toBe(true)
-  expect(got.written.get('/v/Tasks/Fix the gate.md')?.includes('Up: [[PMOC - Garden]]')).toBe(true)
+  expect(got.written.get('/v/Tasks/Fix the gate.md')?.includes('Up: ')).toBe(false)
   expect(got.toasts.some(text => text.includes('Setup → new task folder'))).toBe(false)
   expect(got.filled).toEqual([])
   await ui.press({ key: 'made-define' })
@@ -1698,8 +1644,8 @@ test('with no task folder, a new task goes to the notes root, never beside the a
   const got = jiraHooks(on, GARDEN_NOTE, [])
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'task-sub' })
-  await ui.input({ key: 'task-title-sub', text: 'Fix the gate' })
+  await ui.press({ key: 'task-new' })
+  await ui.input({ key: 'task-title-new', text: 'Fix the gate' })
   expect(got.written.has('/v/Fix the gate.md')).toBe(true)
   expect(got.written.has('/v/Projects/Fix the gate.md')).toBe(false)
   await ui.press({ key: 'made-define' })
@@ -1781,14 +1727,15 @@ test('a task template that still embeds an Agent Log file is what new tasks get,
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ text: /setup items? needs? you/ })).toBeFalsy()
-  await ui.press({ key: 'task-sub' })
-  await ui.input({ key: 'task-title-sub', text: 'Old shape' })
+  await ui.press({ key: 'task-new' })
+  await ui.input({ key: 'task-title-new', text: 'Old shape' })
   const made = got.written.get('/v/Old shape.md') ?? ''
-  // The template is theirs: its frontmatter and sections are kept. Its Agent Log heading now
-  // holds the log itself (the anchor pinned), not an embed of a file that will never exist.
-  expect(made.startsWith('---\noutcome: \nstatus: active\n---\n\nUp: [[PMOC - Garden]]\n')).toBe(true)
+  // The template is theirs: its frontmatter and sections are kept, its empty Up line gone.
+  // Its Agent Log heading now holds the log itself (this chat pinned), not an embed of a
+  // file that will never exist.
+  expect(made.startsWith('---\noutcome: \nstatus: active\n---\n\n# Next\n')).toBe(true)
   expect(made.includes('![[Agent Log - ')).toBe(false)
-  expect(made.includes('\n# Agent Log\n\n- [[PMOC - Garden]]\n')).toBe(true)
+  expect(made.includes('\n# Agent Log\n\n- session: `')).toBe(true)
   await ui.press({ key: 'setup-menu' })
   expect(await ui.find({ text: '✓ task template: OpenAugi/AGENT/templates/Task.md' })).toBeTruthy()
   expect(await ui.find({ key: 'template-update' })).toBeFalsy()
@@ -1988,7 +1935,7 @@ test('today\'s note in the You card: found where Obsidian puts new notes, it lis
 
   // It goes into every draft until switched off: the box is under Setup with the others,
   // not in the You card.
-  await ui.press({ key: 'draft' })
+  await pressDraft(ui)
   expect(got.filled[0]?.includes(`- Today: read "${today}"`)).toBe(true)
   expect(await ui.find({ key: 'pick-today' })).toBeFalsy()
   await ui.press({ key: 'setup-menu' })
@@ -1996,7 +1943,7 @@ test('today\'s note in the You card: found where Obsidian puts new notes, it lis
   await ui.press({ key: 'pick-today' })
   expect((await ui.find({ key: 'pick-today' }))?.text).toMatch(/☐/)
   await ui.press({ key: 'setup-menu' })
-  await ui.press({ key: 'draft' })
+  await pressDraft(ui)
   expect(got.filled[1]?.includes('Today:')).toBe(false)
 
   // The You card folds with everything in it.
@@ -2021,7 +1968,7 @@ test('a note for today that is not there is made only on a press: empty, never o
   expect(await ui.find({ key: 'today-make' })).toBeTruthy()
   expect(await ui.find({ key: 'today-open' })).toBeFalsy()
   expect((await ui.findAll({ type: 'Input' })).some(one => /^today-log/.test(String(one.key ?? '')))).toBe(false)
-  await ui.press({ key: 'draft' })
+  await pressDraft(ui)
   expect(got.filled[0]?.includes('Today:')).toBe(false)
   await $.prompt.submit({ text: 'hello' })
   await new Promise(resolve => setTimeout(resolve, 20))
@@ -2494,7 +2441,7 @@ test('a pane draft pasted into a new chat anchors it and files it in the anchor\
   // One way to draft, and no form or button for a chat of its own.
   expect(await ui.find({ key: 'task-child' })).toBeFalsy()
   expect(await ui.find({ key: 'copy-draft' })).toBeFalsy()
-  await ui.press({ key: 'draft' })
+  await pressDraft(ui)
   const draft = (got.filled[0] ?? '').replace(/Instruction: .*$/, 'Instruction: wire the sprinkler timer')
   expect(anchorFromDraft(draft)).toBe('PMOC - Garden')
   expect(draft.includes('"/v/PMOC - Garden.md"')).toBe(true)
@@ -2587,7 +2534,7 @@ test('a pane draft sent in a chat with no anchor anchors that chat; one with an 
   const got = chatHooks(on, session, [['first', 'PMOC - Garden'], ['other', 'PMOC - Birdhouse']])
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  await ui.press({ key: 'draft' })
+  await pressDraft(ui)
   expect(got.filled.length).toBe(1)
   expect(anchorFromDraft(got.filled[0] ?? '')).toBe('PMOC - Garden')
 
@@ -2867,12 +2814,12 @@ test('with the usage log on, a press, a submit and a sent draft each append one 
   await ui.input({ key: 'pad-input-0', text: 'a secret half', kind: 'change' })
   await ui.input({ key: 'pad-input-0', text: 'does the secret cache survive?', kind: 'change' })
   await ui.input({ key: 'pad-input-0', text: 'does the secret cache survive?' })
-  await ui.press({ key: 'draft' })
+  await pressDraft(ui)
   await $.prompt.submit({ text: filled[0] ?? '' })
 
   const events = parseUsage(lines.join('\n'))
-  expect(events.map(one => `${one.kind} ${one.what}`)).toEqual(['press anchor-menu', 'press card', 'input pad-input', 'press draft', 'sent draft-sent'])
-  expect(events.map(one => one.anchored)).toEqual([false, true, true, true, true])
+  expect(events.map(one => `${one.kind} ${one.what}`)).toEqual(['press anchor-menu', 'press card', 'input pad-input', 'press lens-menu', 'press draft', 'sent draft-sent'])
+  expect(events.map(one => one.anchored)).toEqual([false, true, true, true, true, true])
   expect(events[0]?.surface).toBe('desktop')
   expect(events[0]?.at).toBe('2022-03-30T09:00:00.000Z')
   expect(lines.join('\n')).not.toMatch(/Garden|secret|cache/)
@@ -2880,7 +2827,7 @@ test('with the usage log on, a press, a submit and a sent draft each append one 
   // /augi usage prints the report from the log file.
   written.set('/Users/t/.openaugi/usage/augi-ui.jsonl', lines.join('\n'))
   const said = await $.command.run({ command: 'augi', args: 'usage' })
-  expect(JSON.stringify(said)).toContain('5 events')
+  expect(JSON.stringify(said)).toContain('6 events')
   await ui.unmount()
 })
 
@@ -3322,6 +3269,9 @@ test('quiz me asks this chat\'s model for a question; the answer is graded blind
   got.model.reply = { isAnswered: true, text: 'Question: Why does the pane ask a fork, not the chat?\nClaim: the fork has the conversation\nClaim: it adds nothing to the chat' }
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // The Recall card starts folded: it is there when wanted, out of the way of the chat's own cards.
+  expect(await ui.find({ key: 'recall-ask' })).toBeFalsy()
+  await ui.press({ key: 'head-recallOpen' })
   expect(await ui.find({ text: /^No question yet\. .*Grades are kept in PMOC - Garden, under Agent Log → Recall\.$/ })).toBeTruthy()
   expect((await ui.find({ key: 'recall-auto' }))?.text).toMatch(/☐ ask after each turn/)
   // Off by default: a turn ending asks nothing.
@@ -3378,6 +3328,7 @@ test('with no anchor a grade shows and is not kept anywhere', { options: OPTIONS
   got.model.reply = { isAnswered: true, text: 'Question: Why?\nClaim: because' }
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'head-recallOpen' })
   expect(await ui.find({ text: /With no anchor, grades are not kept\.$/ })).toBeTruthy()
   await ui.press({ key: 'recall-ask' })
   await ui.input({ key: `recall-answer-${got.clock.now}`, text: 'because' })
@@ -3392,6 +3343,7 @@ test('with recall on, a turn ending asks a question, at most every two minutes, 
   got.model.reply = { isAnswered: true, text: 'Question: First?\nClaim: one' }
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'head-recallOpen' })
   expect((await ui.find({ key: 'recall-auto' }))?.text).toMatch(/☑ ask after each turn/)
   await $.turn.complete(turnEnds)
   await settle()
@@ -3419,6 +3371,7 @@ test('a due recall comes back from a note\'s Recall table: the You card counts i
   got.grader.reply = { isAnswered: true, text: 'Grade: recalled\nMissing: none\nMisconception: none\nFeedback: All claims met.\nFollow-up: none' }
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'head-recallOpen' })
   expect(await ui.find({ text: '🎯 Recall · 1 due' })).toBeTruthy()
   await ui.press({ key: 'you-due' })
   expect(await ui.find({ text: 'Why a fork?' })).toBeTruthy()
@@ -3439,6 +3392,7 @@ test('explain it back writes the explain-back lens when the folder has none, the
   const got = recallHooks(on, [['own-session', 'PMOC - Garden']])
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'head-recallOpen' })
   await ui.press({ key: 'recall-explain' })
   expect(got.written.get('/v/lenses/explain-back.md')).toBe(explainLensFile(EXPLAIN_LENS))
   expect(got.filled.length).toBe(1)

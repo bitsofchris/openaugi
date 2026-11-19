@@ -137,7 +137,7 @@ const USAGE_PREFIXES = [
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
 // Whole keys that only look like one of those.
-const USAGE_WHOLE = ['task-new', 'task-sub', 'task-cancel', 'task-title-new', 'task-title-sub', 'pad-save-all', 'edit-context']
+const USAGE_WHOLE = ['task-new', 'task-cancel', 'task-title-new', 'pad-save-all', 'edit-context']
 
 // A control's name for the log. A key nobody listed is logged as written unless it
 // looks like it carries a name or a path, so a new button is tracked without a change here.
@@ -157,7 +157,7 @@ export const usageName = (element: string): string => {
 // tests/test_augi_ui_usage.py reads this file's Button and Input keys and fails when one is missing here.
 export const USAGE_FEATURES = [
   'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'anchor-details', 'task',
-  'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-sub', 'task-title-new', 'task-title-sub', 'task-cancel',
+  'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-title-new', 'task-cancel',
   'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss',
   'pin-open', 'pin-drop', 'pin-paste',
   'state-update', 'state-auto', 'state-prompt', 'state-edit', 'state-pick',
@@ -558,7 +558,8 @@ const swatch = atom(
   { shape: 'swatch-21' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
-const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, stateOpen: true, recallOpen: true, pinsOpen: true, padOpen: true, youOpen: true }
+// Recall starts folded: it is there when wanted, not in the way of the chat's own cards.
+const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, stateOpen: true, recallOpen: false, pinsOpen: true, padOpen: true, youOpen: true }
 const picks = atom(
   { plugin: 'augi-ui', key: 'picks' } as const,
   { aboutMe: true, openAugi: true, project: true, today: true } as Picks,
@@ -567,7 +568,7 @@ const picks = atom(
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
   { ...CARDS_OPEN, anchorsOpen: false, statePickOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0 } as View,
-  { shape: 'view-14' },
+  { shape: 'view-15' },
 )
 // Where this chat's work stands, as its own model last said when asked (updateState): for
 // the session `session`, the answer and when it came (`at`, in ms, paces the automatic
@@ -1087,48 +1088,6 @@ export const insertCard = (board: string, note: string, anchor: string | null, i
   lines.splice(last + 1, 0, card)
 
   return lines.join('\n')
-}
-
-// Puts `\t- [ ] [[note]]` on the board as a linked sub-item of `parent`: the last of the
-// parent card's indented lines. A parent that is itself a linked sub-item of a card gets
-// the new one beside it, under the same card, after the parent's own deeper lines. A
-// parent not on the board (or only in the archive) changes nothing: the caller decides.
-// Never in the archive or the Kanban settings block; every other line stays as it was.
-export const insertSubItem = (board: string, note: string, parent: string): string => {
-  const lines = board.split('\n')
-  const archive = lines.findIndex(line => line === '***' || /^%% kanban:settings/.test(line))
-  const end = archive >= 0 ? archive : lines.length
-  const item = `\t- [ ] [[${note}]]`
-  const card = lines.findIndex((line, index) => index < end && /^- \[.\] /.test(line) && linkName(line) === parent)
-  if (card >= 0) {
-    let after = card + 1
-    while (after < end && /^\s+\S/.test(lines[after] ?? '')) {
-      after += 1
-    }
-    lines.splice(after, 0, item)
-
-    return lines.join('\n')
-  }
-  // A linked sub-item: an indented checkbox under a top-level card.
-  let isUnderCard = false
-  for (let at = 0; at < end; at += 1) {
-    const line = lines[at] ?? ''
-    if (/^- /.test(line) || /^#/.test(line)) {
-      isUnderCard = /^- \[.\] /.test(line)
-      continue
-    }
-    if (isUnderCard && /^\t- \[.\] /.test(line) && linkName(line) === parent) {
-      let after = at + 1
-      while (after < end && /^\t\s+\S/.test(lines[after] ?? '')) {
-        after += 1
-      }
-      lines.splice(after, 0, item)
-
-      return lines.join('\n')
-    }
-  }
-
-  return board
 }
 
 // What a note anchors as: its top-level card; else, for a linked sub-item of a card, a
@@ -3329,12 +3288,10 @@ async function ownTranscript($: EngineInterface): Promise<string> {
   return ''
 }
 
-// Writes a task note from the template and puts it on the board: a top-level card (no
-// `parent`: standalone, no `Up:`, at the end of the column `into`, else of the first) or a
-// linked sub-item under the parent's card (`Up:` the parent; a parent not on the board gets
-// the task its own card so it is not lost). The board is read back into the pane. Null,
-// after a toast saying why, when nothing was made: never over a note that is there.
-async function makeTask($: EngineInterface, typed: string, parent: string | null, into: string): Promise<{ name: string; path: string; jira: string; where: string } | null> {
+// Writes a task note from the template and puts it on the board as a top-level card at
+// the end of the column `into` (else of the first). The board is read back into the pane.
+// Null, after a toast saying why, when nothing was made: never over a note that is there.
+async function makeTask($: EngineInterface, typed: string, into: string): Promise<{ name: string; path: string; jira: string; where: string } | null> {
   const { title, jira } = parseNewTask(typed)
   const name = taskNoteName(title)
   if (!name) {
@@ -3355,27 +3312,14 @@ async function makeTask($: EngineInterface, typed: string, parent: string | null
     return null
   }
   const template = (await readOr($, P.taskTemplate)) || TASK_TEMPLATE
-  await writeNew($, path, taskNoteText(template, name, stamp(await $.clock.now()).slice(0, 10), parent, jira))
-  const old = await $.fs.read(P.board)
-  let board = parent ? insertSubItem(old, name, parent) : old
-  let where = ''
-  const columnOf = (text: string): string => kanbanCards(text).find(one => one.note === name)?.column || 'the first column'
-  if (!parent) {
-    board = insertCard(old, name, null, into)
-    where = `a card at the end of ${columnOf(board)}`
-  } else if (board === old) {
-    // A bare anchor (not on the board): its own card, so the task is not lost.
-    board = insertCard(old, name, null, P.taskColumn)
-    where = `${parent} is not on the board, so a card at the end of ${columnOf(board)}`
-  } else {
-    const holder = kanbanCards(old).find(one => one.note === parent || one.tasks.some(task => task.note === parent))
-    where = !holder || holder.note === parent ? `under ${parent}'s card` : `under ${holder.note}'s card, beside ${parent}`
-  }
+  await writeNew($, path, taskNoteText(template, name, stamp(await $.clock.now()).slice(0, 10), null, jira))
+  const board = insertCard(await $.fs.read(P.board), name, null, into)
+  const column = kanbanCards(board).find(one => one.note === name)?.column || 'the first column'
   await $.fs.write(P.board, board)
   const cards = kanbanCards(board)
   await update($, swatch, current => ({ ...current, cards, anchor: current.anchor ? (anchorCard(cards, current.anchor.note) ?? current.anchor) : null }))
 
-  return { name, path, jira, where }
+  return { name, path, jira, where: `a card at the end of ${column}` }
 }
 
 // What every new task ends with: the just-made row and a toast saying where it went.
@@ -3385,37 +3329,24 @@ async function madeTask($: EngineInterface, one: { name: string; path: string; j
   await $.ui.toast(`Made ${one.name} at ${one.path}; on the board: ${one.where}.${also}${folder}`)
 }
 
-// A new task from this chat, on the user's press: standalone ('new': a card in the
-// anchor's column, else the task column setting's, else the first) or a sub-task of the
-// anchor ('sub': the anchor pinned in its Agent Log so the two share context). This chat's
-// transcript is pinned to it too. A standalone task is this chat starting something of
-// its own, so the chat moves onto it: the next draft carries the new task's context. A
-// sub-task is a piece of the anchor's work, so the chat stays where it is and the
-// just-made row offers `anchor on it`. The prompt box is left alone either way.
-async function newTask($: EngineInterface, typed: string, mode: 'new' | 'sub'): Promise<void> {
+// A new task from this chat, on the user's press: a card in the anchor's column, else the
+// task column setting's, else the first. This chat's transcript is pinned to it. A new task
+// is this chat starting something of its own, so the chat moves onto it: the next draft
+// carries the new task's context. The prompt box is left alone. A piece of an anchor's work
+// is a chat (a fork keeps the anchor), not a sub-task note: there is no sub-task button.
+async function newTask($: EngineInterface, typed: string): Promise<void> {
   await update($, view, old => ({ ...old, taskMode: '' as const }))
   const anchored = (await read($, swatch)).anchor
-  const parent = mode === 'sub' ? (anchored?.note ?? null) : null
-  if (mode === 'sub' && !parent) {
-    await $.ui.toast('Pick an anchor first: a sub-task hangs off it. Nothing made.')
-
-    return
-  }
   // A standalone task belongs where the chat is working: its anchor's column.
-  const made = await makeTask($, typed, parent, anchored?.column || P.taskColumn)
+  const made = await makeTask($, typed, anchored?.column || P.taskColumn)
   if (!made) {
     return
   }
   const transcript = await ownTranscript($)
-  await writeTrail($, made.name, text => {
-    const withParent = parent ? addPin(text, { on: true, kind: 'note', target: parent, label: parent }) : text
-
-    return transcript ? addPin(withParent, { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' }) : withParent
-  }, made.path)
-  await madeTask($, made, mode === 'new' ? ' This chat is anchored on it now.' : '')
-  if (mode === 'new') {
-    await anchorOnMade($)
-  }
+  // Written even with nothing to pin: the first write drops a template's old log embed.
+  await writeTrail($, made.name, text => (transcript ? addPin(text, { on: true, kind: 'session', target: transcript, label: 'the chat this task came from' }) : text), made.path)
+  await madeTask($, made, ' This chat is anchored on it now.')
+  await anchorOnMade($)
 }
 
 async function defineHere($: EngineInterface): Promise<void> {
@@ -3788,10 +3719,8 @@ export const register: Register = (on, options) => {
     // An offer is this chat's, and live until taken or turned down.
     const isOffered = offered.session === ownId && !offered.done && !offered.busy && Boolean(offered.note || offered.title)
     const isCarried = Boolean(anchor) && carried.note === anchor?.note && carried.session === ownId
-    // Every field but a standalone task's needs an anchor; with none it reads as closed.
-    // A mode this pane no longer has (an older one's child-chat or chat-to-task form) is no form.
-    const storedMode = shown.taskMode === 'new' || shown.taskMode === 'sub' ? shown.taskMode : ''
-    const taskMode = storedMode !== 'new' && !anchor ? '' : storedMode
+    // A mode this pane no longer has (an older one's sub-task or chat-to-task form) is no form.
+    const taskMode = shown.taskMode === 'new' ? shown.taskMode : ''
     const mark = (isOn: boolean): string => (isOn ? '☑' : '☐')
     const arrow = (isOpen: boolean): string => (isOpen ? '▾' : '▸')
     const flip = (key: keyof View) => () => update($, view, old => ({ ...old, [key]: !old[key] }))
@@ -3950,6 +3879,21 @@ export const register: Register = (on, options) => {
                       <Button key="open-note" label="🧠 Human Notes" hotkey="p" onPress={() => (notePath ? openNote($, notePath) : openByName($, anchor.note))} />
                     </Box>
                   )}
+                  {anchor && (
+                    <Box key="anchor-pins" flexDirection="column">
+                      <Button key="head-pinsOpen" plain dimColor label={`${arrow(shown.pinsOpen)} 📌 pinned (${pins.length})`} onPress={flip('pinsOpen')} />
+                      {shown.pinsOpen && (
+                        <Box key="pins-body" flexDirection="column" paddingLeft={2}>
+                          {artifactsFirst(pins).map(pin => line(
+                            `pin-${pinKey(pin)}`,
+                            <Button key={`pin-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.kind === 'note' && pin.label !== pin.target ? `${pin.target} · ${pin.label}` : pin.label}`} onPress={() => openPin($, pin)} />,
+                            <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => onPins(text => removePin(text, pin))} />,
+                          ))}
+                          <Input key={`pin-paste-${pins.length}`} label="⧉" placeholder="paste a [[note]], file path or link: Enter pins it" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
+                        </Box>
+                      )}
+                    </Box>
+                  )}
                   {!anchor && isOffered && (
                     <Box key="offer" flexDirection="column" marginBottom={1}>
                       <Text key="offer-what" wrap="wrap">{offered.note ? `💡 This chat looks like ${offered.note}.` : `💡 No task on the board fits. New task: “${offered.title}”${offered.jira ? ` (${offered.jira})` : ''}`}</Text>
@@ -3965,7 +3909,6 @@ export const register: Register = (on, options) => {
                   {!anchor && !isOffered && (
                     <Button key="offer-ask" plain dimColor label={offered.session === ownId && offered.busy ? '… asking' : '💡 suggest a task for this chat'} onPress={() => suggestTask($, 'press')} />
                   )}
-                  <Button key="draft" variant="primary" label={anchor ? '💬 draft a prompt with this context' : '💬 draft a prompt with my context'} hotkey="n" onPress={() => draft($, null)} />
                   {anchor && jira && (
                     <Box key="jira-linked" flexDirection="row" alignItems="center" gap={1}>
                       {P.jiraSite
@@ -3997,21 +3940,18 @@ export const register: Register = (on, options) => {
                   )}
                   {taskMode === '' && (
                     <Box key="task-buttons" flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
-                      {anchor && (
-                        <Button key="task-sub" label={`＋ sub-task of ${anchor.note.length <= 32 ? anchor.note : `${anchor.note.slice(0, 31)}…`}`} onPress={() => update($, view, old => ({ ...old, taskMode: 'sub' as const }))} />
-                      )}
-                      <Button key="task-new" label="＋ new task" onPress={() => update($, view, old => ({ ...old, taskMode: 'new' as const }))} />
+                      <Button key="task-new" plain dimColor label="＋ new task" onPress={() => update($, view, old => ({ ...old, taskMode: 'new' as const }))} />
                     </Box>
                   )}
-                  {(taskMode === 'new' || taskMode === 'sub') && (
+                  {taskMode === 'new' && (
                     <Box key="task-form" flexDirection="column">
                       <Input
-                        key={`task-title-${taskMode}`}
-                        label={taskMode === 'sub' ? '＋ sub-task' : '＋ new task'}
-                        placeholder={taskMode === 'sub' ? `title (add PROJ-123 to link Jira): Enter makes it under ${anchor?.note ?? 'the anchor'}` : 'title (add PROJ-123 to link Jira): Enter makes a standalone task'}
+                        key="task-title-new"
+                        label="＋ new task"
+                        placeholder="title (add PROJ-123 to link Jira): Enter makes a task and anchors this chat on it"
                         submitLabel="create"
                         autoFocus
-                        onSubmit={value => newTask($, value, taskMode)}
+                        onSubmit={value => newTask($, value)}
                       />
                       <Button key="task-cancel" plain dimColor label="cancel" onPress={() => update($, view, old => ({ ...old, taskMode: '' as const }))} />
                     </Box>
@@ -4029,6 +3969,36 @@ export const register: Register = (on, options) => {
                       </Box>
                     </Box>
                   )}
+                </Box>
+              )}
+            </Box>
+
+            <Box key="card-pad" {...CARD} borderColor="subtle">
+              {head('padOpen', `📝 Scratchpad · this chat${jotted.length > 0 ? ` · ${jotted.length}` : ''}`)}
+              {shown.padOpen && (
+                <Box key="pad-body" flexDirection="column">
+                  <Input
+                    key={`pad-input-${jotted.length}`}
+                    placeholder="a note, a question, a side quest: Enter keeps it here for this chat"
+                    submitLabel="keep"
+                    rows={2}
+                    value={typedPad}
+                    onInput={value => typePad($, value)}
+                    onSubmit={value => jot($, value)}
+                  />
+                  {jotted.map((one, at) => (
+                    <Box key={`pad-row-${at}`} flexDirection="column" marginTop={1}>
+                      <Text key={`pad-text-${at}`} wrap="wrap">{`${one.when.slice(11, 16)} ${one.text}`}</Text>
+                      <Box flexDirection="row" alignItems="center" gap={2}>
+                        {anchor && notePath && <Button key={`pad-save-${at}`} plain label="→ save to notes" onPress={() => saveToNotes($, [one])} />}
+                        <Button key={`pad-drop-${at}`} plain dimColor label="✕ drop" onPress={() => unjot($, [one])} />
+                      </Box>
+                    </Box>
+                  ))}
+                  {anchor && notePath && jotted.length >= 2 && (
+                    <Button key="pad-save-all" plain label="→ save all to Human Notes" onPress={() => saveToNotes($, jotted)} />
+                  )}
+                  {!(anchor && notePath) && <Text dimColor>{anchor ? `No note found for ${anchor.note}: entries stay here.` : 'Pick an anchor to save these to its Human Notes.'}</Text>}
                 </Box>
               )}
             </Box>
@@ -4107,50 +4077,6 @@ export const register: Register = (on, options) => {
                 </Box>
               )}
             </Box>
-
-            {anchor && (
-              <Box key="card-pins" {...CARD} borderColor="remember">
-                {head('pinsOpen', `📌 Pinned to ${anchor.note} · ${pins.length}`, 'remember')}
-                {shown.pinsOpen && artifactsFirst(pins).map(pin => line(
-                  `pin-${pinKey(pin)}`,
-                  <Button key={`pin-open-${pinKey(pin)}`} plain label={`${PIN_ICON[pin.kind]} ${pin.kind === 'note' && pin.label !== pin.target ? `${pin.target} · ${pin.label}` : pin.label}`} onPress={() => openPin($, pin)} />,
-                  <Button key={`pin-drop-${pinKey(pin)}`} dimColor label="✕ unpin" onPress={() => onPins(text => removePin(text, pin))} />,
-                ))}
-                {shown.pinsOpen && (
-                  <Input key={`pin-paste-${pins.length}`} label="⧉" placeholder="paste a [[note]], file path or link: Enter pins it" submitLabel="pin" onSubmit={value => pinTyped($, value)} />
-                )}
-              </Box>
-            )}
-
-            <Box key="card-pad" {...CARD} borderColor="subtle">
-              {head('padOpen', `📝 Scratchpad · this chat${jotted.length > 0 ? ` · ${jotted.length}` : ''}`)}
-              {shown.padOpen && (
-                <Box key="pad-body" flexDirection="column">
-                  <Input
-                    key={`pad-input-${jotted.length}`}
-                    placeholder="a note, a question, a side quest: Enter keeps it here for this chat"
-                    submitLabel="keep"
-                    rows={2}
-                    value={typedPad}
-                    onInput={value => typePad($, value)}
-                    onSubmit={value => jot($, value)}
-                  />
-                  {jotted.map((one, at) => (
-                    <Box key={`pad-row-${at}`} flexDirection="column" marginTop={1}>
-                      <Text key={`pad-text-${at}`} wrap="wrap">{`${one.when.slice(11, 16)} ${one.text}`}</Text>
-                      <Box flexDirection="row" alignItems="center" gap={2}>
-                        {anchor && notePath && <Button key={`pad-save-${at}`} plain label="→ save to notes" onPress={() => saveToNotes($, [one])} />}
-                        <Button key={`pad-drop-${at}`} plain dimColor label="✕ drop" onPress={() => unjot($, [one])} />
-                      </Box>
-                    </Box>
-                  ))}
-                  {anchor && notePath && jotted.length >= 2 && (
-                    <Button key="pad-save-all" plain label="→ save all to Human Notes" onPress={() => saveToNotes($, jotted)} />
-                  )}
-                  {!(anchor && notePath) && <Text dimColor>{anchor ? `No note found for ${anchor.note}: entries stay here.` : 'Pick an anchor to save these to its Human Notes.'}</Text>}
-                </Box>
-              )}
-            </Box>
           </Box>
         )}
 
@@ -4187,6 +4113,9 @@ export const register: Register = (on, options) => {
 
             <Box key="card-lenses" {...CARD} borderColor="suggestion">
               {head('lensesOpen', `🔍 Saved prompts · ${lenses.length}`, 'suggestion', 'lens-menu', 'l')}
+              {shown.lensesOpen && (
+                <Button key="draft" plain label={anchor ? '💬 no prompt: just this context' : '💬 no prompt: just my context'} hotkey="n" onPress={() => draft($, null)} />
+              )}
               {shown.lensesOpen && lenses.map((lens, index) => line(
                 `lens-row-${lens.name}`,
                 <Button key={lens.name} plain label={lens.name} hotkey={index < 9 ? String(index + 1) : undefined} onPress={() => draft($, lens)} />,

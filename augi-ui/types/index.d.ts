@@ -91,8 +91,8 @@ export type View = {
   inOpen: boolean
   // The Anchor card's detail, outcome and open tasks, folded away by default.
   detailsOpen: boolean
-  // Which field is open in the Anchor card: none, a standalone task, or a sub-task of the anchor.
-  taskMode: '' | 'new' | 'sub'
+  // Which field is open in the Anchor card: none or a new task.
+  taskMode: '' | 'new'
   // How many lines the You card has logged to today's note this session: it empties the log field after each.
   logged: number
 }

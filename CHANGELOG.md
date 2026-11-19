@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**augi-ui: a smaller This chat.** The cards read in the order you use them:
+the anchor (its pins now inside it, under the note button), the scratchpad, the
+chat's state, then Recall, which starts folded. Two buttons are gone. `＋ sub-task
+of <anchor>` made a child note for each small piece of work, which scattered a
+few lines over many notes and left board cards to go stale; a piece of an
+anchor's work is now a fork of the chat, which keeps the anchor. `💬 draft a
+prompt with this context` was never sent once in the usage log, and a chat told
+its anchor needs it rarely: it is now `💬 no prompt: just this context`, the
+first row of Saved prompts (still `n`).
+
 **augi-ui 0.18.1: a new chat starts with no anchor.** A new chat used to start
 on the anchor last picked in its working folder. In the vault that meant every
 zzz task run (each a new chat there) was filed into the last note picked, and

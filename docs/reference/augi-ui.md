@@ -69,15 +69,15 @@ note changed and reads them again if so, so two chats on one
 anchor see each other's pins and tasks without a refresh.
 
 The pane has two sections. **This chat** holds what belongs to the anchor this
-chat is attached to: the anchor card, its
-state, the Recall card, its pins, and the scratchpad. **Always** holds what is not tied to one chat: the You card (the
+chat is attached to, in this order: the anchor card (with the anchor's pins
+in it), the scratchpad, the chat's state, and the Recall card. **Always** holds what is not tied to one chat: the You card (the
 season line from the context note, `✏️ my context`, `📋 the board` and today's
 note: see **Today** below), the saved prompts, and setup. Setup holds paths
 and switches only.
 
 Both sections and every card fold: each title row ends in a `▾ hide` /
-`▸ show` button, and a folded card keeps its count in the title. Lenses and
-Setup start folded, everything else open. The fold state is kept for the
+`▸ show` button, and a folded card keeps its count in the title. Recall,
+Lenses and Setup start folded, everything else open. The fold state is kept for the
 session.
 
 Layout rules, so the pane reads the same on the terminal and the desktop
@@ -86,7 +86,7 @@ text, never a button; a list row puts what it is on the left and its actions
 together at the right edge (the `line` helper); indentation is a Box's
 `paddingLeft`, never spaces in a label; rows space their children with `gap`,
 not divider characters; secondary actions (`unpin`, `done`, `drop`, `cancel`)
-are `dimColor`, and the one primary button is the draft.
+are `dimColor`.
 
 - **Anchor** (`a`): a linked card from the board — a project or a task. The
   menu lists each card's linked sub-items (`\t- [ ] [[Child task]]`) indented
@@ -152,35 +152,31 @@ are `dimColor`, and the one primary button is the draft.
   A line there is `- <when> · <title> · \`<id>\``; one ending in `(done)` (or
   the older `(hidden)`) reads as finished, which is the agent's or the user's
   to write.
-- **New task** (two buttons in the Anchor card): `＋ new task` (always) and
-  `＋ sub-task of <anchor>` (with an anchor). No field that makes a file is open
-  until one is pressed: it opens a title field and `cancel`; an empty title or
-  `cancel` makes nothing. A title may carry a Jira key or issue link at either
+- **New task** (`＋ new task`, in the Anchor card). A piece of an anchor's
+  work is a chat, not a note: fork the chat and the fork keeps the anchor.
+  There is no sub-task button (it made a child note per small piece, which
+  scattered a few lines over many notes). No field that makes a file is open
+  until the button is pressed: it opens a title field and `cancel`; an empty
+  title or `cancel` makes nothing. A title may carry a Jira key or issue link at either
   end. The note goes into `taskFolder`, one flat folder whatever the anchor
   (hierarchy is the `Up:` link, never where the file sits; with `taskFolder`
   empty, the notes folder's root, and the toast says Setup changes it), from
   `OpenAugi/AGENT/templates/Task.md` in the notes folder (else a built-in copy
   of the shipped one: date and title filled, a `Jira: KEY` line under `Up:`).
-  A **new task** is standalone: no `Up:` line, a top-level `- [ ] [[<title>]]`
+  A new task is standalone: no `Up:` line, a top-level `- [ ] [[<title>]]`
   card at the end of the anchor's column (the chat is working there), else of
-  the `taskColumn` setting, else of the board's first column. A **sub-task** hangs off the anchor:
-  `Up: [[<anchor>]]`, a linked sub-item `\t- [ ] [[<title>]]` as the last of
-  the anchor card's indented lines (`insertSubItem`; an anchor that is itself a
-  sub-item gets it beside it under the same card; an anchor not on the board
-  gets a top-level card at the end of the `taskColumn` setting's column, else the first, and the toast says
-  which), and the anchor pinned in the child's Agent Log section so the two
-  share context. Either way this chat's transcript is pinned there too and the
+  the `taskColumn` setting, else of the board's first column. This chat's
+  transcript is pinned in its Agent Log section and the
   board is read back into the pane. **A new task moves the chat onto it**: it
   is this chat starting something of its own, so the task becomes the chat's
   anchor, the chat is filed in its
-  Agent Log, and the next draft carries its context. **A sub-task leaves the
-  chat on its anchor**: it is a piece of that work. The prompt box is left
-  alone either way. A `✓ just made` row says where on the board it went and
+  Agent Log, and the next draft carries its context. The prompt box is left
+  alone. A `✓ just made` row says where on the board it went and
   offers: `open` (the note in the editor), `open the board`, `define here` (an unsent draft in this chat's box asking it to fill
   in the note's Outcome and Verify and keep the context under its `# Agent Log`
   heading, and with
   Jira on and no key typed to find the task's issue; a half-typed prompt goes to
-  the clipboard first), `anchor on it` (for a sub-task; a new task already is the anchor), and `dismiss`. The row is this chat's: `/clear` and a
+  the clipboard first), and `dismiss`. The row is this chat's: `/clear` and a
   resume drop it. It never writes over a note that already exists.
   **The template.** The notes folder's own `OpenAugi/AGENT/templates/Task.md`
   wins over the built-in one (Outcome, Verify, Journal, Agent Log); Setup
@@ -310,7 +306,8 @@ are `dimColor`, and the one primary button is the draft.
   `jiraProject` set; `not a task` turns the offer down. With `auto after a
   turn` ticked the offer is made by itself, once, after the first turn of a
   chat that has no anchor and has not said it wants none.
-- **Pins** (`📌 Pinned to <anchor> · N`, in This chat): the one place to pin.
+- **Pins** (`▾ 📌 pinned (N)`, in the Anchor card under the note button; it
+  folds on its own and with the card): the one place to pin.
   The list is the anchor's own, kept in its note's Agent Log section:
   artifacts (listed first), notes, files, links and coding sessions. Paste a
   `[[note]]`, a file path or a link in the card to pin it. A new note the
@@ -331,10 +328,12 @@ are `dimColor`, and the one primary button is the draft.
 - **Opening a file**: a markdown note in the notes folder opens with `editor`;
   a web page (`.html`, `.htm`) with the system's handler for it, which is the
   browser; anything else with `fileEditor`. A file that is gone says so.
-- **Draft** (`n`, the primary button in the Anchor card, under the note
-  buttons): fills the prompt with that context. Nothing is sent until
-  the user presses enter. It is the one way to draft: the context is that of
-  the chat's anchor: a new task just made already is the anchor, a sub-task is one `anchor on it` away. The draft's
+- **Draft** (`n`, `💬 no prompt: just this context`, the first row of Saved
+  prompts): fills the prompt with the context alone, no lens. Nothing is sent
+  until the user presses enter. Since the chat is told its anchor (`tellChat`),
+  most prompts need no draft, so it is no longer a button in the Anchor card;
+  a lens press drafts the same context with its prompt. The context is that of
+  the chat's anchor: a new task just made already is the anchor. The draft's
   `- Project [[<note>]]:` line names the anchor, so when it is sent in a chat
   with no anchor, that chat is anchored on it first and lands in the same Agent
   Log; a chat that already has an anchor keeps its own. A draft with the
