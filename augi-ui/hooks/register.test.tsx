@@ -5,6 +5,7 @@ import { expect, test } from 'claude-code/testing'
 import { parseUsage, usageName, usageReport } from './register'
 import { addDailyLine, dailyNotePath, dailyPattern, dailyTemplatePath, fillTemplate, formatDate, openBoxes } from './register'
 import { bandLine } from './register'
+import { fileChatDraft, mcpJson, sectionFrom, sectionsFrom, withSection } from './register'
 import { boardSync, entryBoxes, linkGoal, markChatDone, weekSyncDraft, newWeekNote, tickCard, tickGoal, weekDays, weekGoals, weekNotePaths } from './register'
 import { promptTitle } from './register'
 import { anchorBrief, anchorFromMessages, anchorNews, unanchoredBrief } from './register'
@@ -3494,5 +3495,130 @@ test('an update that resets what the pane keeps: a chat it opened in loads again
   expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
   await ui.press({ key: 'anchor-menu' })
   expect(await ui.find({ key: 'card-PMOC - Garden' })).toBeTruthy()
+  await ui.unmount()
+})
+
+// ---- Sections ----
+
+test('a note names its section in frontmatter; adding, replacing and removing it leaves every other byte', () => {
+  expect(sectionFrom('---\nsection: garden app\nstatus: active\n---\n# Next\n')).toBe('garden app')
+  expect(sectionFrom('---\nsection: "work/research: q4"\n---\n')).toBe('work/research: q4')
+  expect(sectionFrom('section: not frontmatter\n')).toBe('')
+  const note = '---\nstatus: active\n---\n# Next\n- [ ] Plant the beds\n'
+  expect(withSection(note, 'garden app')).toBe('---\nstatus: active\nsection: garden app\n---\n# Next\n- [ ] Plant the beds\n')
+  expect(withSection(withSection(note, 'garden app'), 'yard')).toBe('---\nstatus: active\nsection: yard\n---\n# Next\n- [ ] Plant the beds\n')
+  expect(withSection(withSection(note, 'garden app'), '')).toBe(note)
+  expect(withSection('# Next\n', 'garden app')).toBe('---\nsection: garden app\n---\n# Next\n')
+  // A name YAML would misread is quoted, and reads back the same.
+  expect(sectionFrom(withSection(note, 'q4: ship'))).toBe('q4: ship')
+})
+
+test('sections are the sidebar\'s own, in order, each with the note that names it; built-ins and hidden ones are left out', () => {
+  const listed = [
+    { id: 'pinned', kind: 'pinned', name: '', order: 0 },
+    { id: 'cg-2', kind: 'manual', name: 'yard', order: 3, shown: true },
+    { id: 'cg-1', kind: 'manual', name: 'garden app', order: 2, shown: true },
+    { id: 'cg-3', kind: 'manual', name: 'old', order: 4, shown: false },
+    { id: 'sessions', kind: 'sessions', name: '', order: 9 },
+  ]
+  const notes = [
+    { path: '/v/PMOC - Garden.md', text: '---\nsection: garden app\n---\n' },
+    { path: '/v/Second Garden.md', text: '---\nsection: garden app\n---\n' },
+  ]
+  expect(sectionsFrom(listed, notes)).toEqual([
+    { id: 'cg-1', name: 'garden app', note: 'PMOC - Garden', path: '/v/PMOC - Garden.md' },
+    { id: 'cg-2', name: 'yard', note: '', path: '' },
+  ])
+  expect(sectionsFrom(null, notes)).toEqual([])
+  expect(mcpJson({ content: [{ type: 'text', text: '[1]' }], isError: false })).toEqual([1])
+  expect(mcpJson({ content: [{ type: 'text', text: 'refused' }], isError: true })).toBe(null)
+  expect(fileChatDraft('yard')).toMatch(/move_sessions.*"self".*/)
+})
+
+const sidebar = (on: On, group: string | null) => {
+  const tool = (text: unknown) => ({ value: { content: [{ type: 'text', text: JSON.stringify(text) }], isError: false } })
+  on('mcp.call', (_, e) => (e.tool === 'list_sections'
+    ? tool([{ id: 'cg-1', kind: 'manual', name: 'garden app', order: 2 }, { id: 'cg-2', kind: 'manual', name: 'yard', order: 3 }])
+    : tool({ sessionId: 'local_own-session', group: group ? { id: 'cg-1', name: group } : null })))
+}
+
+const sectionPane = (on: On, files: Map<string, string>) => {
+  const store = new Map<string, unknown>()
+  on('env.get', () => ({ value: '/Users/t' }))
+  on('command.register', () => ({ value: { command: 'augi' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.toast', () => ({ value: undefined }))
+  on('session.id', () => ({ value: 'own-session' }))
+  on('clock.now', () => ({ value: new Date(2026, 10, 8, 9, 30).getTime() }))
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.set', (_, e) => {
+    store.set(e.key, e.value)
+    return { value: undefined }
+  })
+  on('fs.exists', (_, e) => ({ value: ['/v', '/v/lenses', '/v/AGENT/Slowly Changing Context.md'].includes(e.path) || files.has(e.path) || e.path.endsWith('Kanban.md') }))
+  on('fs.read', (_, e) => ({ value: files.get(e.path) ?? (e.path.endsWith('Kanban.md') ? BOARD_TEXT : '') }))
+  on('fs.write', (_, e) => {
+    files.set(e.path, e.text)
+    return { value: undefined }
+  })
+  on('fs.list', () => ({ value: [] }))
+  on('process.run', (_, e) => {
+    const named = e.argv[0] === 'find' ? [...files.keys()].filter(path => path.endsWith(`/${e.argv[3] ?? ''}`)) : e.argv[0] === 'grep' ? [...files.keys()].filter(path => /^section:/m.test(files.get(path) ?? '')) : []
+    return { value: { exitCode: 0, stdout: named.join('\n'), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  return store
+}
+
+test('a chat filed under a section with a note is anchored on that note; the menu lists the sections, not the board', { options: OPTIONS }, async ($, on) => {
+  const files = new Map([['/v/PMOC - Garden.md', '---\nsection: garden app\n---\n# Next\n- [ ] Plant the beds\n']])
+  const store = sectionPane(on, files)
+  sidebar(on, 'garden app')
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(store.get('anchors')).toEqual([['own-session', 'PMOC - Garden']])
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/PMOC - Garden/)
+  await ui.press({ key: 'anchor-menu' })
+  expect((await ui.find({ key: 'section-garden app' }))?.text).toMatch(/● garden app · this chat → PMOC - Garden/)
+  expect((await ui.find({ key: 'section-yard' }))?.text).toMatch(/yard · no note yet/)
+  expect(await ui.find({ key: 'card-PMOC - Garden' })).toBeFalsy()
+  // Filed where its note says: nothing to file.
+  expect(await ui.find({ key: 'section-file' })).toBeFalsy()
+  await ui.unmount()
+})
+
+test('a section with no note links a card on the board: section: goes into that note and the chat is anchored on it; one filed elsewhere offers to file the chat', { options: OPTIONS }, async ($, on) => {
+  const files = new Map([['/v/PMOC - Garden.md', '# Next\n- [ ] Plant the beds\n']])
+  const store = sectionPane(on, files)
+  sidebar(on, null)
+  const filled: string[] = []
+  on('prompt.read', () => ({ value: { text: '', cursor: 0 } }))
+  on('prompt.fill', (_, e) => {
+    filled.push(e.text)
+    return { isFilled: true }
+  })
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a section/)
+  await ui.press({ key: 'anchor-menu' })
+  await ui.press({ key: 'section-garden app' })
+  await ui.press({ key: 'section-card-garden app-PMOC - Garden' })
+  // Its frontmatter names the section; the rest of the note is as it was, the chat logged under it.
+  expect(files.get('/v/PMOC - Garden.md')).toMatch(/^---\nsection: garden app\n---\n# Next\n- \[ \] Plant the beds\n/)
+  expect(store.get('anchors')).toEqual([['own-session', 'PMOC - Garden']])
+  // This chat is in no section: the pane drafts the move for the chat to make.
+  await ui.press({ key: 'section-file' })
+  expect(filled.at(-1)).toBe(fileChatDraft('garden app'))
+  await ui.unmount()
+})
+
+test('where the sidebar can\'t be read, the anchor menu is the board as before', { options: OPTIONS }, async ($, on) => {
+  const files = new Map<string, string>()
+  sectionPane(on, files)
+  await $.command.run({ command: 'augi', args: '' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ key: 'anchor-menu' }))?.text).toMatch(/pick a project or task/)
+  await ui.press({ key: 'anchor-menu' })
+  expect(await ui.find({ key: 'card-PMOC - Garden' })).toBeTruthy()
+  expect(await ui.find({ key: 'section-file' })).toBeFalsy()
   await ui.unmount()
 })

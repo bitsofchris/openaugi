@@ -56,8 +56,15 @@ export type Swatch = {
   // Where each pinned note was found, by name.
   pinPaths: Record<string, string>
   lenses: Lens[]
+  // The desktop sidebar's sections, each with the note that stands for it (`section:` in its
+  // frontmatter), or null where the sidebar can't be read (a terminal, an older app).
+  sections: Section[] | null
+  // The section this chat is filed under in the sidebar, or empty.
+  section: string
   loadedAt: number
 }
+// A sidebar section and its one note: `note` and `path` empty while no note names it.
+export type Section = { id: string; name: string; note: string; path: string }
 // A note to self on this chat's scratchpad; `when` as `stamp()` writes it.
 export type PadEntry = { when: string; text: string }
 // What goes into every draft: `today` is today's note, when there is one.
@@ -86,6 +93,8 @@ export type View = {
   logged: number
   // The Anchor card's close-out confirmation is showing.
   closing: boolean
+  // The section in the anchor menu whose ways to get a note are open, or empty.
+  sectionOpen: string
 }
 // The task this chat just made, for the Anchor card's "just made" row; an empty `note` is none.
 // `jira` is the key typed with its title, if any; `where` says where on the board it went.

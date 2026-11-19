@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import type { Card, Chat, Inherited, ChatState, JustMade, Lens, Offer, Opened, PadEntry, Picks, Pin, PinKind, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
+import type { Card, Chat, Inherited, ChatState, JustMade, Lens, Offer, Opened, PadEntry, Picks, Pin, PinKind, Section, SetupItem, SubItem, Swatch, Today, Told, Trail, View } from '../types'
 
 // Everything machine-specific comes from the settings: the manifest's userConfig,
 // set at install, in /config, or from the pane's setup menu.
@@ -147,7 +147,7 @@ export type UsageEvent = { at: string; kind: 'press' | 'input' | 'sent'; what: s
 // Keys that end in something of the user's: `card-<note>`, `pin-open-<kind>-<target>`.
 const USAGE_PREFIXES = [
   'card-sub', 'card', 'task',
-  'pin-open', 'pin-drop', 'pin-paste',
+  'pin-open', 'pin-drop', 'pin-paste', 'section', 'section-make', 'section-card',
   'pad-input', 'pad-save', 'pad-drop', 'today-log', 'state-pick', 'week-goal', 'week-anchor',
   'edit', 'new-lens', 'starter', 'vault', 'found', 'editor', 'file-editor',
 ].sort((one, other) => other.length - one.length)
@@ -171,7 +171,7 @@ export const usageName = (element: string): string => {
 // Every control the pane draws, by its log name: what a report checks for never used.
 // tests/test_augi_ui_usage.py reads this file's Button and Input keys and fails when one is missing here.
 export const USAGE_FEATURES = [
-  'anchor-menu', 'card', 'card-sub', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'anchor-details', 'task',
+  'anchor-menu', 'card', 'card-sub', 'section', 'section-make', 'section-card', 'section-file', 'anchor-clear', 'inherit-keep', 'inherit-change', 'inherit-none', 'open-note', 'anchor-details', 'task',
   'jira-open', 'jira-update', 'jira-unlink', 'jira-link', 'jira-find', 'task-new', 'task-title-new', 'task-cancel',
   'made-open', 'made-board', 'made-define', 'made-anchor', 'made-dismiss',
   'pin-open', 'pin-drop', 'pin-paste',
@@ -645,9 +645,11 @@ const swatch = atom(
     trail: EMPTY_TRAIL,
     pinPaths: {},
     lenses: [],
+    sections: null,
+    section: '',
     loadedAt: 0,
   } as Swatch,
-  { shape: 'swatch-23' },
+  { shape: 'swatch-24' },
 )
 // The two sections and the cards inside them start open; Lenses and Setup start folded.
 const CARDS_OPEN = { chatOpen: true, anywhereOpen: true, anchorOpen: true, stateOpen: true, pinsOpen: true, padOpen: true, youOpen: true }
@@ -658,8 +660,8 @@ const picks = atom(
 )
 const view = atom(
   { plugin: 'augi-ui', key: 'view' } as const,
-  { ...CARDS_OPEN, anchorsOpen: false, statePickOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0, closing: false } as View,
-  { shape: 'view-18' },
+  { ...CARDS_OPEN, anchorsOpen: false, statePickOpen: false, lensesOpen: false, setupOpen: false, inOpen: true, detailsOpen: false, taskMode: '', logged: 0, closing: false, sectionOpen: '' } as View,
+  { shape: 'view-19' },
 )
 // Where this chat's work stands, as its own model last said when asked (updateState): for
 // the session `session`, the answer and when it came (`at`, in ms, paces the automatic
@@ -951,6 +953,75 @@ export const jiraFrom = (text: string): string => {
 
   return fromFront || (body.match(/^Jira:[ \t]*(\S+)[ \t]*$/m)?.[1] ?? '')
 }
+
+// ── Sections ──
+// A section of the desktop sidebar is a project: the chats filed under it share one note,
+// the note whose frontmatter says `section: <its name>`. The sidebar is read through the
+// app's own tools; where it can't be (a terminal), the anchor menu lists the board instead.
+
+// The sidebar section a note stands for: `section:` in its frontmatter. Or empty.
+export const sectionFrom = (text: string): string => {
+  const front = text.match(/^---\n([\s\S]*?)\n---/)
+
+  return ((front?.[1] ?? '').match(/^section:[ \t]*(.*)$/m)?.[1] ?? '').trim().replace(/^["']|["']$/g, '')
+}
+
+// A YAML value as written: quoted when it would otherwise read as something else.
+const yamlValue = (text: string): string => (/[:#'"]|^[\s\-[\]{}!&*>|%@`?,]|\s$/.test(text) ? JSON.stringify(text) : text)
+
+// The note with `section: <name>` in its frontmatter: added, replaced, or with no name
+// removed. Every other byte as it was; a note with no frontmatter gets one.
+export const withSection = (text: string, name: string): string => {
+  const front = text.match(/^---\n([\s\S]*?\n)?---(?=\n|$)/)
+  const field = name ? `section: ${yamlValue(name)}\n` : ''
+  if (!front) {
+    return name ? `---\n${field}---\n${text}` : text
+  }
+  const fields = front[1] ?? ''
+  const next = /^section:.*$/m.test(fields) ? fields.replace(/^section:.*\n?/m, field) : `${fields}${field}`
+
+  return `---\n${next}---${text.slice(front[0].length)}`
+}
+
+// The JSON an app tool answered, from its first text block; null for an error or no JSON.
+export const mcpJson = (out: { content?: { type: string; text?: string }[]; isError?: boolean } | null | undefined): unknown => {
+  if (!out || out.isError) {
+    return null
+  }
+  try {
+    return JSON.parse(out.content?.find(one => one.type === 'text')?.text ?? '')
+  } catch {
+    return null
+  }
+}
+
+// The user's own sections, in sidebar order, each with the note that names it: from what
+// list_sections answered (built-ins and hidden ones left out) and the notes found with a
+// `section:` field, by name (the first note found wins).
+export const sectionsFrom = (listed: unknown, notes: { path: string; text: string }[]): Section[] => {
+  const byName = new Map<string, string>()
+  for (const one of notes) {
+    const name = sectionFrom(one.text)
+    if (name && !byName.has(name)) {
+      byName.set(name, one.path)
+    }
+  }
+  const rows = Array.isArray(listed) ? (listed as { id?: unknown; kind?: unknown; name?: unknown; shown?: unknown; order?: unknown }[]) : []
+
+  return rows
+    .filter(one => one.kind === 'manual' && one.shown !== false && typeof one.name === 'string' && one.name)
+    .sort((one, other) => Number(one.order ?? 0) - Number(other.order ?? 0))
+    .map(one => {
+      const path = byName.get(String(one.name)) ?? ''
+
+      return { id: String(one.id ?? ''), name: String(one.name), note: path ? baseName(path).replace(/\.md$/, '') : '', path }
+    })
+}
+
+// What the pane asks the chat to do to file it under a section: a mod can read the sidebar
+// but not move a chat, so the chat's own model does it, on the user's enter.
+export const fileChatDraft = (section: string): string =>
+  `Move this chat into the sidebar section "${section}": call the ccd_sidebar move_sessions tool with session_ids ["self"] and that section. Then reply with one line saying it is done.`
 
 // A body line that links the note's issue: a key and nothing else.
 const JIRA_LINE = /^Jira:[ \t]*\S+[ \t]*$/
@@ -2510,6 +2581,39 @@ async function skippedNow($: EngineInterface): Promise<string[]> {
   return Array.isArray(value) ? value.filter((one): one is string => typeof one === 'string') : []
 }
 
+// The notes that name a section: one grep over the notes folder for a `section:` line, then
+// each file read. Few notes have one, so this stays cheap.
+async function sectionNotes($: EngineInterface): Promise<{ path: string; text: string }[]> {
+  const { stdout } = await $.process.run([
+    'grep', '-rlE', '--include=*.md', '--exclude-dir=.git', '--exclude-dir=.obsidian', '--exclude-dir=.claude', '--exclude-dir=.trash', '^section:', P.notes,
+  ])
+  const notes: { path: string; text: string }[] = []
+  for (const path of stdout.split('\n').filter(line => line.endsWith('.md'))) {
+    notes.push({ path, text: await readOr($, path) })
+  }
+
+  return notes
+}
+
+// The sidebar's sections with their notes, and the one this chat is filed under. Null
+// sections where the app's tools aren't there to ask (a terminal) or say no.
+async function sectionsNow($: EngineInterface): Promise<{ sections: Section[] | null; section: string }> {
+  let listed: unknown = null
+  let self: unknown = null
+  try {
+    listed = mcpJson(await $.mcp.call('ccd_sidebar', 'list_sections', {}))
+    self = mcpJson(await $.mcp.call('ccd_session_mgmt', 'get_session', { session_id: 'self' }))
+  } catch {
+    return { sections: null, section: '' }
+  }
+  if (!Array.isArray(listed)) {
+    return { sections: null, section: '' }
+  }
+  const group = (self as { group?: { name?: unknown } | null } | null)?.group
+
+  return { sections: sectionsFrom(listed, await sectionNotes($)), section: typeof group?.name === 'string' ? group.name : '' }
+}
+
 // A part of the pane's load, or `fallback` when it fails.
 const part = <T,>(work: Promise<T>, fallback: T): Promise<T> => work.catch(() => fallback)
 
@@ -2533,6 +2637,13 @@ async function load($: EngineInterface): Promise<void> {
   // Each part on its own: one that fails (a note gone, a server down) leaves its part
   // empty and the rest of the pane, the board and the anchor above all, still loads.
   const cards = await part(readOr($, P.board).then(kanbanCards), [])
+  const { sections, section } = await part(sectionsNow($), { sections: null, section: '' })
+  // A chat filed under a section with a note, and anchored on nothing yet, is on that note.
+  const own = sections?.find(one => one.name === section && one.note)
+  const isDetected = Boolean(own) && !(await part(sessionAnchor($), null))
+  if (own && isDetected) {
+    await setSessionAnchor($, own.note)
+  }
   const next: Swatch = {
     setup,
     vaults: [],
@@ -2545,6 +2656,8 @@ async function load($: EngineInterface): Promise<void> {
     taskTemplate: await part(readOr($, P.taskTemplate).then(taskTemplateState), taskTemplateState('')),
     today: await part(periodPattern($).then(({ pattern, week }) => todayNow($, pattern, week)), NO_TODAY),
     lenses: [],
+    sections,
+    section,
     loadedAt: await $.clock.now(),
   }
 
@@ -2559,6 +2672,9 @@ async function load($: EngineInterface): Promise<void> {
   }
 
   await update($, swatch, () => next)
+  if (isDetected) {
+    await recordChat($, CHAT_PLACEHOLDER).catch(() => undefined)
+  }
 }
 
 // The Jira MCP server this session has, read from its tool list (a plain read: nothing
@@ -3259,6 +3375,36 @@ async function editStatePrompt($: EngineInterface): Promise<void> {
   await load($)
 }
 
+// Makes the note a section stands for: a task note and its card, as ＋ new task makes them,
+// with `section:` in its frontmatter; then this chat is anchored on it.
+async function makeSectionNote($: EngineInterface, name: string): Promise<void> {
+  await update($, view, old => ({ ...old, sectionOpen: '' }))
+  const made = await makeTask($, name, P.taskColumn)
+  if (!made) {
+    return
+  }
+  await $.fs.write(made.path, withSection(await $.fs.read(made.path), name))
+  await load($)
+  await chooseAnchor($, { column: '', note: made.name, detail: '', tasks: [] })
+  await $.ui.toast(`Made ${made.name} for the section ${name}, ${made.where}.`)
+}
+
+// Links a section to a note already there (a card on the board): writes `section:` into
+// it, then anchors this chat on it.
+async function linkSection($: EngineInterface, name: string, note: string): Promise<void> {
+  await update($, view, old => ({ ...old, sectionOpen: '' }))
+  const path = await notePathOf($, note)
+  if (!path) {
+    await $.ui.toast(`No note found for ${note}: nothing linked.`)
+
+    return
+  }
+  await $.fs.write(path, withSection(await $.fs.read(path), name))
+  await load($)
+  const { cards } = await read($, swatch)
+  await chooseAnchor($, anchorCard(cards, note) ?? { column: '', note, detail: '', tasks: [] })
+}
+
 // Remembers what is typed in the scratchpad's field, unsent.
 async function typePad($: EngineInterface, text: string): Promise<void> {
   typedPad = text
@@ -3762,7 +3908,7 @@ export const register: Register = (on, options) => {
     const { Box, Button, Input, Text } = $.ui.resolve(e)
     // Svg is drawn by the desktop, editor and phone, not the terminal.
     const Svg = e.surface === 'terminal' ? null : (($.ui.resolve(e) as unknown as { Svg?: typeof Text }).Svg ?? null)
-    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, trail, pinPaths, lenses } = await read($, swatch)
+    const { setup, vaults, found, skipped, season, cards, anchor, notePath, outcome, next, jira, jiraServer, taskTemplate, today, trail, pinPaths, lenses, sections = null, section: chatSection = '' } = await read($, swatch)
     // Jira shows only when it is on: a server found or named, a project or site set, or a key on the anchor.
     const isJiraOn = Boolean(jiraServer || P.jiraServer || P.jiraProject || P.jiraSite || jira)
     const choice = await read($, picks)
@@ -3790,6 +3936,8 @@ export const register: Register = (on, options) => {
     const plan = today.week && today.exists ? boardSync(today.goals, cards) : null
     // What one sync press has to look at: board changes, plain workstreams, day-entry boxes.
     const toSync = plan ? plan.add.length + plan.tick.length + plan.stale.length + plan.unlinked.length + (today.entries ?? 0) : 0
+    // The section the anchor's note stands for, when it names one.
+    const anchorSection = anchor ? (sections ?? []).find(one => one.note === anchor.note)?.name ?? '' : ''
     const weekAnchors = today.week ? [...new Set(today.goals.filter(goal => !goal.done && goal.note).map(goal => goal.note ?? ''))] : []
     // What is pinned now: a line ticked off on the log was unpinned.
     const pins = withPaths((trail.pins ?? []).filter(pin => pin.on), pinPaths ?? {})
@@ -3903,14 +4051,14 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         {gaps > 0 && <Text dimColor>{gaps} setup {gaps === 1 ? 'item needs' : 'items need'} you: open setup below.</Text>}
         {Svg && <Svg key="augi-face" source={AUGI_SVG} alt="Augi" width={40} height={40} />}
-        <Box key="section-chat" flexDirection="column">{section('chatOpen', `This chat${anchor ? ` · ${anchor.note}` : ''}`)}</Box>
+        <Box key="section-chat" flexDirection="column">{section('chatOpen', `This chat${chatSection ? ` · ${chatSection}` : ''}${anchor ? ` · ${anchor.note}` : ''}`)}</Box>
         {shown.chatOpen && (
           <Box key="chat-body" flexDirection="column">
             <Box key="card-anchor" {...CARD} borderColor="claude">
               {head('anchorOpen', `⚓ Anchor${anchor && !shown.anchorOpen ? ` · ${anchor.note}` : ''}`, 'claude')}
               {shown.anchorOpen && (
                 <Box key="anchor-body" flexDirection="column">
-                  <Button key="anchor-menu" label={`${arrow(shown.anchorsOpen)} ${anchor ? anchor.note : 'pick a project or task'}`} hotkey="a" onPress={flip('anchorsOpen')} />
+                  <Button key="anchor-menu" label={`${arrow(shown.anchorsOpen)} ${anchor ? anchor.note : sections !== null ? 'pick a section' : 'pick a project or task'}`} hotkey="a" onPress={flip('anchorsOpen')} />
                   {shown.anchorsOpen && (
                     <Box key="anchor-list" flexDirection="column" paddingLeft={2} marginBottom={1}>
                       {weekAnchors.length > 0 && (
@@ -3923,6 +4071,30 @@ export const register: Register = (on, options) => {
                           ))}
                         </Box>
                       )}
+                      {sections !== null && (
+                        <Box key="column-sections" flexDirection="column">
+                          <Text dimColor>Sections</Text>
+                          {sections.map(one => (
+                            <Box key={`section-box-${one.id}`} flexDirection="column" paddingLeft={2}>
+                              {one.note
+                                ? <Button key={`section-${one.name}`} plain label={`${anchor?.note === one.note ? '●' : '○'} ${one.name}${one.name === chatSection ? ' · this chat' : ''} → ${one.note}`} onPress={() => chooseAnchor($, anchorCard(cards, one.note) ?? { column: '', note: one.note, detail: '', tasks: [] })} />
+                                : <Button key={`section-${one.name}`} plain dimColor label={`${arrow(shown.sectionOpen === one.name)} ${one.name}${one.name === chatSection ? ' · this chat' : ''} · no note yet`} onPress={() => update($, view, old => ({ ...old, sectionOpen: old.sectionOpen === one.name ? '' : one.name }))} />}
+                              {!one.note && shown.sectionOpen === one.name && (
+                                <Box key={`section-ways-${one.id}`} flexDirection="column" paddingLeft={2}>
+                                  <Button key={`section-make-${one.name}`} label={`＋ make its note: ${one.name}`} onPress={() => makeSectionNote($, one.name)} />
+                                  {cards.length > 0 && <Text dimColor>or link a card on the board:</Text>}
+                                  {cards.map(card => (
+                                    <Button key={`section-card-${one.name}-${card.note}`} plain label={`○ ${card.note}`} onPress={() => linkSection($, one.name, card.note)} />
+                                  ))}
+                                </Box>
+                              )}
+                            </Box>
+                          ))}
+                          {sections.length === 0 && <Text dimColor wrap="wrap">No sections in the sidebar yet. Make one there and file chats under it: each gets one note, shared by its chats.</Text>}
+                        </Box>
+                      )}
+                      {sections === null && (
+                        <Box key="column-board" flexDirection="column">
                       {byColumn(cards).map(([column, list]) => (
                         <Box key={`column-${column}`} flexDirection="column">
                           <Text dimColor>{column}</Text>
@@ -3938,8 +4110,13 @@ export const register: Register = (on, options) => {
                           ))}
                         </Box>
                       ))}
+                        </Box>
+                      )}
                       {anchor && <Button key="anchor-clear" plain dimColor label="○ no anchor" onPress={() => clearAnchor($)} />}
                     </Box>
+                  )}
+                  {anchorSection && anchorSection !== chatSection && (
+                    <Button key="section-file" plain dimColor label={`📂 file this chat under ${anchorSection}`} onPress={() => fillOver($, fileChatDraft(anchorSection))} />
                   )}
                   {isCarried && (
                     <Box key="anchor-carried" flexDirection="column">

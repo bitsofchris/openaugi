@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**augi-ui: a sidebar section is the anchor.** In the desktop app the pane reads the
+sidebar: each section you file chats under stands for one note, the note whose
+frontmatter says `section: <name>`, and a chat filed under a section with a note is
+anchored on it by itself. The anchor menu lists the sections; one with no note yet
+offers `＋ make its note` (a task note and card, as ＋ new task makes) or a card on the
+board to link. When the chat sits outside its anchor's section, `📂 file this chat under
+…` drafts the move for the chat to make (a mod can read the sidebar but not move a
+chat). Where the sidebar can't be read, as in a terminal, the menu is the board as before.
+
 **augi-ui: Recall leaves the pane.** The Recall card (quiz me, blind grading, the
 due ladder, explain it back), its count in the line above the prompt and its two
 settings are gone; learning from a chat lives in a skill instead. A `## Recall`
