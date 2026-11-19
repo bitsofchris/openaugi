@@ -3569,10 +3569,10 @@ test('the open boxes in the day entries are listed with the heading they sit und
   expect(entryBoxes('# This week\n- [ ] [[A]]\n', 'This week')).toEqual([])
 })
 
-test('the sync draft names only what is left, says what the pane did, and changes nothing until the user answers', () => {
+test('the sync draft lists the sure edits as rows and the rest to resolve, and changes nothing until the user answers', () => {
   const left = {
     path: '/v/Inbox/2022-01-03 - week.md',
-    done: ['added 1 card (PMOC - Pond)'],
+    sure: ['add a card "- [ ] [[PMOC - Pond]]" at the end of the "Ideas" column'],
     unlinked: [goal('- [ ] call the plumber')],
     entries: [{ under: '2022-01-04', line: '- [ ] fix the eval pipeline' }],
     stale: ['2022-01-04 - Sketch'],
@@ -3584,7 +3584,7 @@ test('the sync draft names only what is left, says what the pane did, and change
   const draft = weekSyncDraft(left)
   for (const part of [
     '- This week\'s note: "/v/Inbox/2022-01-03 - week.md".',
-    '- Already done by the pane: added 1 card (PMOC - Pond).',
+    '  - add a card "- [ ] [[PMOC - Pond]]" at the end of the "Ideas" column',
     '  - - [ ] call the plumber',
     '  - under "2022-01-04": - [ ] fix the eval pipeline',
     '  - [[2022-01-04 - Sketch]]',
@@ -3597,15 +3597,15 @@ test('the sync draft names only what is left, says what the pane did, and change
     expect(draft.includes(part)).toBe(true)
   }
   // Nothing about a kind of item that has none, and nothing about Jira when it is off.
-  const bare = weekSyncDraft({ ...left, done: [], entries: [], stale: [], jira: null })
-  expect(bare.includes('Already done')).toBe(false)
+  const bare = weekSyncDraft({ ...left, sure: [], entries: [], stale: [], jira: null })
+  expect(bare.includes('Sure, worked out by the pane')).toBe(false)
   expect(bare.includes('day entries')).toBe(false)
   expect(bare.includes('not this week')).toBe(false)
   expect(bare.includes('Jira key')).toBe(false)
   expect(anchorFromDraft(draft)).toBe(null)
 })
 
-test('one press syncs the week: a plain workstream that names a note is linked, missing cards added, done ones ticked, and the rest drafted for the chat; with nothing left, no draft', { options: { ...OPTIONS, weekNote: WEEK_PATTERN } }, async ($, on) => {
+test('one press drafts the week\'s sync and writes nothing: the sure edits as rows (a plain line that names a note, a missing card, a done card) and the rest for the chat; with nothing to do, no draft', { options: { ...OPTIONS, weekNote: WEEK_PATTERN } }, async ($, on) => {
   const monday = '/v/Inbox/2022-01-03 - week.md'
   const week = '# This week\n- [ ] pmoc - garden\n- [ ] [[PMOC - Pond]]\n- [x] [[2022-01-04 - Sketch]]\n- [ ] call the plumber\n\n### 2022-01-04\n- [ ] fix the eval pipeline\n'
   const written = new Map<string, string>([[monday, week], ['/v/PMOC - Garden.md', '# Journal\n']])
@@ -3619,36 +3619,39 @@ test('one press syncs the week: a plain workstream that names a note is linked, 
   await $.command.run({ command: 'augi', args: '' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   // One button. Pond to add, Sketch to tick, two plain workstreams, one box in a day entry,
-  // and Garden's card, not this week's until its plain line is linked.
+  // and Garden's card, not this week's while its line is plain.
   expect((await ui.find({ key: 'sync-week' }))?.text).toMatch(/⇅ sync this week \(6\)/)
-  expect(written.has('/v/Kanban.md')).toBe(false)
   await ui.press({ key: 'sync-week' })
 
-  // The sure part, at once: the plain line that is a card's name (any case) links it;
-  // Pond's card is added, Sketch's ticked.
-  expect(written.get(monday)).toBe(week.replace('- [ ] pmoc - garden', '- [ ] [[PMOC - Garden]]'))
-  const board = written.get('/v/Kanban.md') ?? ''
-  expect(board.includes('- [x] [[2022-01-04 - Sketch]] ^abc123')).toBe(true)
-  expect(kanbanCards(board).map(card => card.note)).toEqual(['PMOC - Pond', 'PMOC - Garden'])
-  // The rest is one draft: the plumber, the entry's box; no stale card left, Jira off.
+  // Nothing is written: not the week's note, not the board.
+  expect(written.get(monday)).toBe(week)
+  expect(written.has('/v/Kanban.md')).toBe(false)
+  // One draft. The sure rows: the plain line that is a card's name (any case), Pond's card,
+  // Sketch's tick. Garden is then this week's, so no stale card is left; Jira is off.
   expect(got.filled.length).toBe(1)
   const draft = got.filled[0] ?? ''
-  expect(draft.includes('linked 1 workstream to its note; added 1 card (PMOC - Pond); ticked 1 card (2022-01-04 - Sketch)')).toBe(true)
-  expect(draft.includes('  - - [ ] call the plumber')).toBe(true)
-  expect(draft.includes('  - under "2022-01-04": - [ ] fix the eval pipeline')).toBe(true)
+  for (const part of [
+    '  - link "- [ ] pmoc - garden" to [[PMOC - Garden]], an existing card',
+    '  - add a card "- [ ] [[PMOC - Pond]]" at the end of the "Ideas" column',
+    '  - tick the card for [[2022-01-04 - Sketch]] where it is',
+    '  - - [ ] call the plumber',
+    '  - under "2022-01-04": - [ ] fix the eval pipeline',
+  ]) {
+    expect(draft.includes(part)).toBe(true)
+  }
   expect(draft.includes('not this week')).toBe(false)
-  expect(draft.includes('at the end of the "Ideas" column')).toBe(true)
-  expect(toasts.at(-1)).toMatch(/^Synced: .*The rest is drafted for the chat/)
+  expect(toasts.at(-1)).toBe('Sync drafted: press enter to see every edit as one table. Nothing is changed until you answer.')
   // What was half-typed in the prompt box went to the clipboard first.
   expect(copied).toEqual(['what next'])
 
-  // The chat resolved it: nothing left, so a press drafts nothing and says so.
+  // Once the chat made the edits, a press drafts nothing and says so.
   written.set(monday, '# This week\n- [ ] [[PMOC - Garden]]\n- [ ] [[PMOC - Pond]]\n\n### 2022-01-04\n- [x] fix the eval pipeline\n')
+  written.set('/v/Kanban.md', BOARD_TEXT.replace('- [ ] [[2022-01-04 - Sketch]] ^abc123', '- [ ] [[PMOC - Pond]]\n- [x] [[2022-01-04 - Sketch]] ^abc123'))
   await ui.press({ key: 'refresh' })
   expect((await ui.find({ key: 'sync-week' }))?.text).toMatch(/⇅ sync this week ✓/)
   await ui.press({ key: 'sync-week' })
   expect(got.filled.length).toBe(1)
-  expect(toasts.at(-1)).toBe('This week and the board match.')
+  expect(toasts.at(-1)).toBe('This week and the board match: nothing to sync.')
   await ui.unmount()
   configure(resolvePaths(OPTIONS, '/Users/t'))
 })

@@ -1289,9 +1289,9 @@ export const entryBoxes = (week: string, heading: string): { under: string; line
 
 // What one press of `⇅ sync this week` leaves for the chat: the parts that need judgement.
 export type WeekLeft = {
-  // The week's note and what the pane already did (`done`, in words).
+  // The week's note, and the edits that need no judgement, each one row (`sure`).
   path: string
-  done: string[]
+  sure: string[]
   // Workstreams that link no note; checkboxes in the day entries; open cards not this week's.
   unlinked: Goal[]
   entries: { under: string; line: string }[]
@@ -1304,19 +1304,20 @@ export type WeekLeft = {
   template: string
 }
 
-// The prompt `⇅ sync this week` leaves in the box, unsent, when something needs judgement:
-// the chat resolves each item into one numbered table and changes nothing until the user
-// answers, then writes exactly what was agreed.
+// The prompt `⇅ sync this week` leaves in the box, unsent: every edit the week needs,
+// the sure ones as they are and the rest for the chat to resolve, in one numbered table.
+// Nothing is changed until the user answers; then exactly what was agreed is written.
 export const weekSyncDraft = (left: WeekLeft): string => {
   const lines = [
     DRAFT_HEAD,
     `- This week's note: "${left.path}". The checkboxes right under its "${P.weekHeading}" heading are my workstreams; below it I journal in a dated entry per day.`,
     `- My board: "${P.board}" (Kanban; cards above "***", the archive below it).`,
   ]
-  if (left.done.length > 0) {
-    lines.push(`- Already done by the pane: ${left.done.join('; ')}.`)
+  lines.push('Rows for the table, one each:')
+  if (left.sure.length > 0) {
+    lines.push('- Sure, worked out by the pane: propose them as they are.')
+    lines.push(...left.sure.map(one => `  - ${one}`))
   }
-  lines.push('Still to resolve, one row each:')
   if (left.unlinked.length > 0) {
     lines.push('- Workstreams with no note yet. Find the note each one is: a card on the board first, then a search of my notes (with the OpenAugi tools if you have them). If none fits, propose a new task note with a short name.')
     lines.push(...left.unlinked.map(goal => `  - ${goal.line}`))
@@ -2606,47 +2607,39 @@ async function syncNow($: EngineInterface): Promise<{ goals: Goal[]; board: stri
   return { goals: weekGoals(week, P.weekHeading), board: await $.fs.read(P.board), week }
 }
 
-// `⇅ sync this week`, the one button. First what needs no judgement, at once: a plain
-// workstream whose words are a note's name (a card's, any case, else a note file's) is
-// linked to it; each open linked workstream with no card gets one (at the end of the task
-// column setting's column, else the first); each done one's card is ticked. Then, when
-// anything is left that needs judgement (which note a plain workstream is, checkboxes in
-// the day entries, cards that are not this week's, Jira keys), one draft for the chat.
+// `⇅ sync this week`, the one button. It writes nothing: it reads the week's note and the
+// board and drafts every edit they need for the chat to show as one table. The pane works
+// out the sure rows itself: a plain workstream whose words are a note's name (a board
+// card's, any case, else a note file's) to link to it; a card for each open linked
+// workstream with none; a tick for each done one's card. The rows that need judgement are
+// left to the chat: which note a plain workstream is, checkboxes in the day entries, cards
+// that are not this week's, Jira keys.
 async function syncWeek($: EngineInterface): Promise<void> {
   const now = await syncNow($)
   if (!now) {
     return
   }
   const { today, taskTemplate } = await read($, swatch)
+  const cards = kanbanCards(now.board)
+  // The week as it reads once the sure links are made: what the board rows follow.
   let week = now.week
-  let linked = 0
+  const sure: string[] = []
   for (const goal of now.goals.filter(one => !one.done && !one.note)) {
-    const card = kanbanCards(now.board).find(one => one.note.toLowerCase() === goal.text.toLowerCase())
+    const card = cards.find(one => one.note.toLowerCase() === goal.text.toLowerCase())
     // A name `find` would read as a pattern, or as a path, is never looked up.
     const found = card ? '' : /[*?[\]/\\]/.test(goal.text) ? '' : await notePathOf($, goal.text)
     const name = card?.note ?? (found ? baseName(found).replace(/\.md$/, '') : '')
     if (name) {
       week = linkGoal(week, goal.line, name)
-      linked += 1
+      sure.push(`link "${goal.line}" to [[${name}]], an existing ${card ? 'card' : 'note'}`)
     }
   }
-  if (week !== now.week) {
-    await $.fs.write(today.path, week)
-  }
   const goals = weekGoals(week, P.weekHeading)
-  const plan = boardSync(goals, kanbanCards(now.board))
-  const board = plan.tick.reduce(tickCard, plan.add.reduce((text, note) => insertCard(text, note, null, P.taskColumn), now.board))
-  if (board !== now.board) {
-    await writeBoard($, board)
-  }
-  const next = await todayNow($, today.pattern, today.week)
-  await update($, swatch, old => ({ ...old, today: next }))
+  const plan = boardSync(goals, cards)
+  const column = P.taskColumn || (now.board.split(/^\*\*\*$/m)[0]?.match(/^## (.+)$/m)?.[1]?.trim() ?? 'the first')
+  sure.push(...plan.add.map(note => `add a card "- [ ] [[${note}]]" at the end of the "${column}" column`))
+  sure.push(...plan.tick.map(note => `tick the card for [[${note}]] where it is: its line is ticked in the week's note`))
 
-  const done = [
-    ...(linked > 0 ? [`linked ${linked} ${linked === 1 ? 'workstream' : 'workstreams'} to ${linked === 1 ? 'its note' : 'their notes'}`] : []),
-    ...(plan.add.length > 0 ? [`added ${plan.add.length} ${plan.add.length === 1 ? 'card' : 'cards'} (${plan.add.join(', ')})`] : []),
-    ...(plan.tick.length > 0 ? [`ticked ${plan.tick.length} ${plan.tick.length === 1 ? 'card' : 'cards'} (${plan.tick.join(', ')})`] : []),
-  ]
   const jira = await jiraAsk($)
   const noKey: { note: string; path: string }[] = []
   for (const note of jira ? [...new Set(goals.filter(goal => !goal.done && goal.note).map(goal => goal.note ?? ''))] : []) {
@@ -2655,26 +2648,24 @@ async function syncWeek($: EngineInterface): Promise<void> {
       noKey.push({ note, path })
     }
   }
-  const entries = entryBoxes(week, P.weekHeading)
-  const said = done.length > 0 ? `${done.join(', ')}.` : ''
-  if (plan.unlinked.length + entries.length + plan.stale.length + noKey.length === 0) {
-    await $.ui.toast(`${said ? `Synced: ${said} ` : ''}This week and the board match.`)
+  const entries = entryBoxes(now.week, P.weekHeading)
+  if (sure.length + plan.unlinked.length + entries.length + plan.stale.length + noKey.length === 0) {
+    await $.ui.toast('This week and the board match: nothing to sync.')
 
     return
   }
-  const firstColumn = board.split(/^\*\*\*$/m)[0]?.match(/^## (.+)$/m)?.[1]?.trim() ?? 'the first'
   await fillOver($, weekSyncDraft({
     path: today.path,
-    done,
+    sure,
     unlinked: plan.unlinked,
     entries,
     stale: plan.stale,
     noKey,
     jira,
-    column: P.taskColumn || firstColumn,
+    column,
     template: taskTemplate === 'yours' ? `the template "${P.taskTemplate}"` : 'the sections "### Outcome", "### Verify", "# Journal" and "# Agent Log"',
   }))
-  await $.ui.toast(`${said ? `Synced: ${said} ` : ''}The rest is drafted for the chat: press enter to see it as one table.`)
+  await $.ui.toast("Sync drafted: press enter to see every edit as one table. Nothing is changed until you answer.")
 }
 
 // What was typed in the You card's log field goes into today's note, stamped now.

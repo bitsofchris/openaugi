@@ -262,26 +262,26 @@ are `dimColor`.
   heading's name, so the anchors in reach are the week's, not every card.
 - **Sync this week** (`⇅ sync this week (N)`, in the You card under the week's
   workstreams; `✓` when there is nothing to do; N counts what a press would look
-  at): one button for the week, the board and the links. Workstreams may be
-  plain checkboxes, and priorities may sit in a day's entry: nothing has to be
-  linked or moved by hand first. A press reads the week's note and the board
-  fresh and does at once what needs no judgement (`syncWeek`): a plain
-  workstream whose words are a note's name (a board card's, any case, else a
-  note file's) becomes `- [ ] [[Note]]`; each open linked workstream with no
-  open card or linked sub-item gets a card (at the end of the `taskColumn`
-  setting's column, else the first); each done one's open card is ticked. Then,
-  when something is left that needs judgement, it drafts one prompt for the
-  chat (`weekSyncDraft`) naming only those items: plain workstreams to match to
-  a note (board first, then a search of the notes) or to propose a new task note
-  for; open checkboxes in the day entries (`entryBoxes`), each to promote to
-  the week's list or leave as that day's to-do; open cards that are not this
-  week's, each done, archive or keep; and, with Jira on, linked workstreams
-  whose note has no key, with up to three candidates each. The chat shows one
-  numbered table and changes nothing until the user answers `all`, row numbers
-  or `none`; then it writes what was agreed (links in the week's list, new task
-  notes from the task template with their cards, Jira keys in the notes) and
-  nothing else. With nothing left the press only says so. A card kept is listed
-  again on the next press: the pane remembers no answers.
+  at): one button for the week, the board and the links, and it **writes
+  nothing**. Workstreams may be plain checkboxes, and priorities may sit in a
+  day's entry: nothing has to be linked or moved by hand first. A press reads
+  the week's note and the board fresh (`syncWeek`) and drafts one prompt for the
+  chat (`weekSyncDraft`) with every edit the week needs, as rows of one
+  numbered table. The pane works out the sure rows itself: a plain workstream
+  whose words are a note's name (a board card's, any case, else a note file's)
+  to link as `- [ ] [[Note]]`; a card for each open linked workstream with no
+  open card or linked sub-item (at the end of the `taskColumn` setting's column,
+  else the first); a tick for each done one's open card. The chat resolves the
+  rest: plain workstreams to match to a note (board first, then a search of the
+  notes) or to propose a new task note for; open checkboxes in the day entries
+  (`entryBoxes`), each to promote to the week's list or leave as that day's
+  to-do; open cards that are not this week's, each done, archive or keep; and,
+  with Jira on, linked workstreams whose note has no key. Nothing changes until
+  the user answers `all`, row numbers or `none`; then the chat writes exactly
+  what was agreed (links in the week's list, new task notes from the task
+  template with their cards, ticks, Jira keys in the notes) and nothing else.
+  With nothing to do the press only says so. A card kept is listed again on the
+  next press: the pane remembers no answers.
 - **Context**: what the next chat is told to read is the anchor's pins plus
   four things that go in without being listed, each a checkbox under Setup →
   *What goes into every draft*, all on by default: the context note and board
