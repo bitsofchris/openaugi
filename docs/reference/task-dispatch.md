@@ -5,7 +5,7 @@ description: ZZZ dispatch + task watcher. Blocks with zzz instructions become ta
 
 # Task Dispatch — ZZZ to tmux
 
-Write `zzz: <instruction>` in your notes. The file watcher ingests the block, the dispatch hook writes a task file, and the task watcher launches a Claude Code agent in a named tmux session on OpenAugi's own tmux server. Attach any time with `tmux -L openaugi attach -t <task_id>` to watch it work.
+Write `zzz: <instruction>` in your notes. The file watcher ingests the block, the dispatch hook writes a task file, and the task watcher launches a Claude Code agent in a named tmux session. Attach any time with `tmux attach -t <task_id>` to watch it work.
 
 > **`zzz:` vs `aaa:`** — `zzz:` means *go do this now* (the watcher acts on
 > it at ingest and spawns an agent task, this doc). `aaa:` means *file this
@@ -36,7 +36,6 @@ openaugi tasks              # sync the vault, list what's waiting (= tasks list)
 openaugi tasks show 1       # read task #1 in full
 openaugi tasks run 1        # show its instruction, confirm, launch it in tmux
 openaugi tasks run 1 --yes  # skip the confirmation
-openaugi tasks run 1 --force  # run a failed, stuck or finished task again
 openaugi tasks --all        # include done / duplicate / superseded (= tasks list --all)
 ```
 
@@ -49,7 +48,7 @@ too, with the usual settle window.
 comes from a note, and a note can hold text you didn't write — something
 pasted from an email or a shared doc. The launch itself is the same as the
 watcher's: duplicate ledger, hydration, augi-agent brief, detached tmux
-session, launch check, `tmux -L openaugi attach -t <task_id>`.
+session, `tmux attach -t <task_id>`.
 
 **First ingest skips history.** On a fresh database every block is new, so
 every `zzz:` ever written would become a task at once. `ingest`, `tasks` and
@@ -95,68 +94,11 @@ you write `zzz: research deep learning` in a note
     → hydrate: assign task_id, flip status→active, inject ## Session
     → resolve working dir via OpenAugi/Repos.md
     → build prompt: augi-agent skill + task body + linked notes
-    → launch tmux: detached session on `tmux -L openaugi` + `claude "$(cat ctx)"`
-    → 5s later: pane dead? → status: failed, pane output under ## Results
+    → launch tmux: detached session + `claude "$(cat ctx)"`
   → agent reads skill file, uses MCP tools, does the work
   → writes output to OpenAugi/ tagged #human-review
   → marks task file status: done
 ```
-
-## The task tmux server, and launches that fail
-
-Every task session lives on OpenAugi's own tmux server, `tmux -L openaugi`,
-never your default one. Every tmux call the engine makes names that socket:
-launch, the launch check, reaping, supersession, and the attach line written
-into the task note's `## Session`. Sessions are targeted exactly (`-t =NAME`),
-because a bare `-t NAME` is a prefix match in tmux.
-
-**Why its own server.** A tmux server keeps the macOS permissions of the
-process that started it, and every session launched into it is its child.
-When every task shared the default server, a server spawned by an
-`openaugi up` from days earlier outlived a launchd restart and lost
-Files-and-Folders access to a vault under `~/Documents`. Each new `claude`
-exited at once ("can't read the current directory", EPERM), the watcher
-logged "Launched", and the task stayed `active` with nothing running.
-
-**Recycled when idle.** When the watcher starts, and again after a failed
-launch, it kills the task server if no task in it is still running, so the
-next launch starts a server under the current daemon. A server with a running
-task is kept, with a WARNING naming the sessions: killing it would kill those
-agents mid-work. The cost of recycling an idle server is the dead panes of
-finished tasks; their conversations stay on disk (`claude --resume <id>`). If
-launches keep failing while a long task holds the server, run
-`tmux -L openaugi kill-server` once it finishes.
-
-**Every launch is checked.** `remain-on-exit` is set in the same tmux command
-as `new-session`, so a claude that dies in its first millisecond still leaves
-its pane. `LAUNCH_CHECK_DELAY` (5s) after launch the watcher reads
-`#{pane_dead}`. A dead pane, or a session already gone, is a failed launch:
-
-- an ERROR in `~/.openaugi/logs/openaugi.log` with the exit status and the
-  pane's last 40 lines (where claude says why);
-- the task note gets `status: failed` and a `### Launch failed` block right
-  under `## Results`, with the same output;
-- the ledger does **not** record it, since the work never ran.
-
-`openaugi tasks` lists failed tasks between pending and active. A claude that
-fails after the first 5 seconds is not caught here; its task stays `active`.
-
-**Running a task again.** Fix the cause, then either:
-
-- set the note's `status:` back to `pending`. The watcher sees the file
-  changed and runs it after the settle window, without a restart: the poll
-  tries each *version* of a file once (path + mtime), so a file that keeps
-  failing to dispatch is not retried every 5 seconds, but one you edit is.
-  The duplicate ledger lets it through because the file's own `task_id` is
-  the one the ledger recorded: it is the same task, not a copy.
-- or `openaugi tasks run <#> --force`. It sets the task back to `pending`,
-  drops its ledger row (so a task marked `duplicate` can be run on purpose),
-  and launches. It refuses while the task's agent is still running.
-
-Either way, a dead session of the same name is replaced; a live one is not.
-
-Code: `launch_tmux`, `check_launch`, `mark_failed`, `recycle_idle_server`,
-`dispatch_pending` in [agents/task_watcher.py](../../src/openaugi/agents/task_watcher.py).
 
 ## The daemon runs the code it started with
 
@@ -311,7 +253,7 @@ Process the user instruction(s) above in the context of the source block.
 ```
 
 **Required frontmatter:**
-- `status: pending` — the watcher only picks up pending files. Flows `pending → active → done` (or `needs-input`, or `failed` when the agent died at launch). **This is the dispatch lifecycle for the task file, not the same as `status/*` tag facet on blocks** — see [taxonomy.md § disambiguation](taxonomy.md#disambiguation--block-status-tag-vs-task-file-status-field).
+- `status: pending` — the watcher only picks up pending files. Flows `pending → active → done` (or `needs-input`). **This is the dispatch lifecycle for the task file, not the same as `status/*` tag facet on blocks** — see [taxonomy.md § disambiguation](taxonomy.md#disambiguation--block-status-tag-vs-task-file-status-field).
 
 **Optional frontmatter:**
 - `workstream` — area slug without `area/` prefix (e.g., `openaugi`)
@@ -320,7 +262,7 @@ Process the user instruction(s) above in the context of the source block.
 - `source_block_id`, `source_note` — provenance back to the block that triggered the task
 - `task_id`, `created`, `tmux_session` — added by the watcher during hydration (don't set these yourself)
 
-Hydration also adds a `## Session` section (the `tmux -L openaugi attach` line; a rerun upgrades an older `tmux attach -t` line in place) just above the `## Results` heading, and appends `## Results` if there is none. Both are matched as whole heading lines, so a body that mentions `## Results` in a sentence is left as written.
+Hydration also adds a `## Session` section (the `tmux attach` line) just above the `## Results` heading, and appends `## Results` if there is none. Both are matched as whole heading lines, so a body that mentions `## Results` in a sentence is left as written.
 
 See [src/openaugi/templates/augi-zzz-task.md](../../src/openaugi/templates/augi-zzz-task.md) for the annotated authoritative version.
 
@@ -404,7 +346,7 @@ The `--settle` window exists so Obsidian Sync (or any other file-based writer) h
    ```
 2. The file watcher detects the change, ingests the block, and `dispatch.py` writes `OpenAugi/Tasks/task-in-openaugi-repo-20260419-143022.md` with `status: pending`.
 3. The task watcher picks it up after 30s, hydrates it to `TASK-2026-04-19-task-in-openaugi-repo.md`, flips to `status: active`, and launches `claude` in a detached tmux session.
-4. Attach with `tmux -L openaugi attach -t TASK-2026-04-19-task-in-openaugi-repo` to watch the agent work.
+4. Attach with `tmux attach -t TASK-2026-04-19-task-in-openaugi-repo` to watch the agent work.
 5. When the agent finishes, it edits `## Results` and sets `status: done`. Detach from tmux any time — the session keeps running regardless.
 
 ## Writing a task by hand (no zzz)
@@ -430,9 +372,9 @@ Save it, wait ~30s (the settle window), and it dispatches. Useful for mobile cap
 
 **Why polling instead of inotify/fswatch?** Polling is simpler because we already need `settle` logic (inotify fires on every write of a syncing file). A 5s poll with a 30s settle is roughly equivalent to "dispatch once the file has stopped changing for half a minute."
 
-**Why tmux?** Detached sessions survive if the watcher or your terminal dies. Named sessions make attaching trivial (`tmux -L openaugi attach -t TASK-...`). You can have ten agent sessions running in parallel, switch between them, and close/kill any individual one.
+**Why tmux?** Detached sessions survive if the watcher or your terminal dies. Named sessions make attaching trivial (`tmux attach -t TASK-...`). You can have ten agent sessions running in parallel, switch between them, and close/kill any individual one.
 
-**When are finished sessions torn down?** Once a task file is `status: done`, the watcher kills its tmux wrapper, hourly, but only after the file has been untouched for 3 days (`DEFAULT_REAP_RETENTION`). So a finished weekly run stays attachable for a few days. The Claude conversation is never deleted: `claude --resume <session-id>` opens it after the wrapper is gone. Reaping and supersession also look on the default tmux server, where tasks launched before the dedicated socket still live.
+**When are finished sessions torn down?** Once a task file is `status: done`, the watcher kills its tmux wrapper, hourly, but only after the file has been untouched for 3 days (`DEFAULT_REAP_RETENTION`). So a finished weekly run stays attachable for a few days. The Claude conversation is never deleted: `claude --resume <session-id>` opens it after the wrapper is gone.
 
 **Why no defaults for workstream/priority?** The writer (zzz dispatch or you) owns those fields. If `workstream` is missing, the task is logged un-scoped — which is honest.
 

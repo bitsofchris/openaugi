@@ -1573,8 +1573,8 @@ def task_dispatch(
     watcher hydrates it (assigns a task_id, timestamps, tmux session name),
     resolves the working directory from `working_dir` / `repo` frontmatter
     (via `OpenAugi/Repos.md` by default), builds a prompt, and launches
-    `claude` in a detached named tmux session on OpenAugi's own tmux server.
-    Attach any time with `tmux -L openaugi attach -t <task_id>`.
+    `claude` in a detached named tmux session. Attach any time with
+    `tmux attach -t <task_id>`.
 
     Raw notes are never modified — the watcher only touches files in the
     configured Tasks folder. Task files are written by the zzz dispatch
@@ -1621,7 +1621,6 @@ app.add_typer(tasks_app, name="tasks")
 
 _TASK_STATUS_LABEL = {
     "pending": "⏳ pending",
-    "failed": "❌ failed",
     "active": "▶️  active",
     "done": "✅ done",
     "duplicate": "♻️  duplicate",
@@ -1723,7 +1722,7 @@ def tasks_list(
     no_sync: bool = typer.Option(False, "--no-sync", help="Skip checking the vault first"),
 ):
     """List tasks waiting for you (syncs the vault first)."""
-    from openaugi.agents.task_watcher import TMUX_SOCKET, list_tasks
+    from openaugi.agents.task_watcher import list_tasks
 
     config, vault_path, tasks_dir = _tasks_context(path)
     if not no_sync:
@@ -1732,9 +1731,7 @@ def tasks_list(
     tasks = list_tasks(tasks_dir, include_finished=show_all)
     pending = sum(t.status == "pending" for t in tasks)
     active = sum(t.status == "active" for t in tasks)
-    failed = sum(t.status == "failed" for t in tasks)
-    counts = f"{pending} pending · {active} active" + (f" · {failed} failed" if failed else "")
-    console.print(f"\n[bold]📋 Tasks[/bold]  [dim]{counts}[/dim]\n")
+    console.print(f"\n[bold]📋 Tasks[/bold]  [dim]{pending} pending · {active} active[/dim]\n")
     if not tasks:
         console.print("  Nothing waiting. Write [cyan]zzz: <instruction>[/cyan] in any note")
         console.print("  and it shows up here on the next [cyan]openaugi tasks[/cyan].\n")
@@ -1744,12 +1741,8 @@ def tasks_list(
     if pending:
         console.print("  [dim]Read one:[/dim]    openaugi tasks show [bold]<#>[/bold]")
         console.print("  [dim]Launch one:[/dim]  openaugi tasks run [bold]<#>[/bold]")
-    if failed:
-        console.print("  [dim]Rerun one:[/dim]   openaugi tasks run [bold]<#>[/bold] --force")
     if active:
-        console.print(
-            f"  [dim]Attach:[/dim]      tmux -L {TMUX_SOCKET} attach -t [bold]<task id>[/bold]"
-        )
+        console.print("  [dim]Attach:[/dim]      tmux attach -t [bold]<task id>[/bold]")
     console.print()
 
 
@@ -1777,40 +1770,21 @@ def tasks_run(
     ref: str | None = typer.Argument(None, help="Task number from `openaugi tasks`, or its id"),
     path: str | None = typer.Option(None, "--path", "-p", help="Path to Obsidian vault"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Launch without asking"),
-    force: bool = typer.Option(
-        False,
-        "--force",
-        "-f",
-        help="Run a task that is not pending (failed, stuck active, done, duplicate) again",
-    ),
     repos_note: str | None = typer.Option(
         None, "--repos-note", help="Repo map note (default: OpenAugi/AGENT/Repos.md)"
     ),
 ):
     """Launch one pending task as a Claude Code agent in tmux."""
-    from openaugi.agents.task_watcher import (
-        TaskLaunchError,
-        attach_command,
-        detect_tmux,
-        list_tasks,
-        reset_for_rerun,
-        run_task,
-        session_running,
-    )
+    from openaugi.agents.task_watcher import list_tasks, run_task
 
     _, vault_path, tasks_dir = _tasks_context(path)
-    # --force can pick a finished task; the open ones sort first, so their
-    # numbers match plain `openaugi tasks`.
-    tasks = list_tasks(tasks_dir, include_finished=force)
+    tasks = list_tasks(tasks_dir)
     pending = [t for t in tasks if t.status == "pending"]
+    if not pending:
+        console.print("✨ No pending tasks. [dim](openaugi tasks syncs new zzz: lines)[/dim]")
+        return
 
     if ref is None:
-        if force:
-            console.print("[red]Name the task to rerun:[/red] openaugi tasks run <#> --force")
-            raise typer.Exit(2)
-        if not pending:
-            console.print("✨ No pending tasks. [dim](openaugi tasks syncs new zzz: lines)[/dim]")
-            return
         if len(pending) == 1:
             task = pending[0]
         else:
@@ -1820,50 +1794,28 @@ def tasks_run(
         task = _pick_task(tasks, ref)
 
     if task.status != "pending":
-        if not force:
-            console.print(f"[yellow]'{task.title}' is {task.status}, not pending.[/yellow]")
-            if task.task_id:
-                console.print(f"  Attach: [cyan]{attach_command(task.task_id)}[/cyan]")
-            console.print("  Run it again: [cyan]openaugi tasks run <#> --force[/cyan]")
-            raise typer.Exit(1)
-        session = task.task_id
-        try:
-            running = bool(session) and session_running(detect_tmux(), session)
-        except FileNotFoundError as e:
-            console.print(f"[red]❌ {e}[/red]")
-            raise typer.Exit(1) from None
-        if session and running:
-            console.print(f"[yellow]'{task.title}' is still running.[/yellow]")
-            console.print(f"  Attach: [cyan]{attach_command(session)}[/cyan]")
-            raise typer.Exit(1)
+        console.print(f"[yellow]'{task.title}' is {task.status}, not pending.[/yellow]")
+        if task.task_id:
+            console.print(f"  Attach: [cyan]tmux attach -t {task.task_id}[/cyan]")
+        raise typer.Exit(1)
 
     console.print(f"\n[bold]🤖 {task.title}[/bold]")
-    if task.status != "pending":
-        console.print(f"   [dim]Status:[/dim] {task.status} → run again")
     console.print(f"   [dim]Instruction:[/dim] {task.instruction or '(none)'}")
     console.print(f"   [dim]File:[/dim] {task.path}\n")
     if not yes and not typer.confirm("Launch a Claude Code agent for this task?", default=True):
-        console.print(f"[dim]Left {task.status}.[/dim]")
+        console.print("[dim]Left pending.[/dim]")
         return
 
-    if task.status != "pending":
-        reset_for_rerun(task.path)
     try:
         task_id = run_task(task.path, vault_path, repos_note=repos_note)
     except FileNotFoundError as e:
         console.print(f"[red]❌ {e}[/red]")
         raise typer.Exit(1) from None
-    except TaskLaunchError as e:
-        console.print(f"[red]❌ {e.task_id} died at launch.[/red]")
-        console.print(f"[dim]{e.report}[/dim]")
-        console.print(f"   Marked failed in {e.path}")
-        console.print("   Fix the cause, then: [cyan]openaugi tasks run <#> --force[/cyan]")
-        raise typer.Exit(1) from None
     if task_id is None:
         console.print("[yellow]♻️  Same instruction already ran — marked duplicate.[/yellow]")
         return
     console.print(f"🚀 Launched [bold]{task_id}[/bold]")
-    console.print(f"   Watch it:  [cyan]{attach_command(task_id)}[/cyan]\n")
+    console.print(f"   Watch it:  [cyan]tmux attach -t {task_id}[/cyan]\n")
 
 
 # ── Service management ─────────────────────────────────────────────

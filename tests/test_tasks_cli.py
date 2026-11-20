@@ -140,21 +140,6 @@ def test_list_tasks_orders_pending_first_and_hides_history(tmp_path: Path):
     assert len(list_tasks(d, include_finished=True)) == 3
 
 
-def test_list_tasks_shows_failed_between_pending_and_active(tmp_path: Path):
-    d = tmp_path / "Tasks"
-    _task(d, "running", status="active", extra="task_id: TASK-1\n")
-    _task(d, "broken", status="failed", extra="task_id: TASK-2\n")
-    _task(d, "waiting")
-    _task(d, "finished", status="done")
-    assert [t.status for t in list_tasks(d)] == ["pending", "failed", "active"]
-    # The open tasks lead the --all list too, so a number means the same task.
-    assert [t.status for t in list_tasks(d, include_finished=True)][:3] == [
-        "pending",
-        "failed",
-        "active",
-    ]
-
-
 def test_list_tasks_missing_folder_is_empty(tmp_path: Path):
     assert list_tasks(tmp_path / "nope") == []
 
@@ -214,7 +199,7 @@ def test_tasks_run_confirms_then_launches(configured, vault: Path, monkeypatch):
     accepted = runner.invoke(app, ["tasks", "run", "1"], input="y\n")
     assert accepted.exit_code == 0, accepted.output
     assert launched == [path]
-    assert "tmux -L openaugi attach -t TASK-2026-01-01-memo" in accepted.output
+    assert "tmux attach -t TASK-2026-01-01-memo" in accepted.output
 
 
 def test_tasks_run_refuses_an_active_task(configured, vault: Path, monkeypatch):
@@ -224,8 +209,7 @@ def test_tasks_run_refuses_an_active_task(configured, vault: Path, monkeypatch):
     # Active tasks sort after pending ones, so #2 is the active one.
     result = runner.invoke(app, ["tasks", "run", "2", "--yes"])
     assert result.exit_code == 1
-    assert "tmux -L openaugi attach -t TASK-9" in result.output
-    assert "--force" in result.output  # says how to run it again
+    assert "tmux attach -t TASK-9" in result.output
 
 
 def test_tasks_run_reports_missing_tmux(configured, vault: Path, monkeypatch):
@@ -251,87 +235,3 @@ def test_ingest_skips_history_on_first_run(configured, tmp_path: Path):
     assert result.exit_code == 0, result.output
     assert "Skipped 1 zzz" in result.output
     assert "Embeddings off" in result.output
-
-
-# ── tasks run --force ──────────────────────────────────────────────────────
-
-
-def _failed_task(vault: Path):
-    return _task(
-        vault / "OpenAugi" / "Tasks",
-        "TASK-2026-01-01-board",
-        status="failed",
-        extra="task_id: TASK-2026-01-01-board\n",
-        instruction="apply lens board",
-    )
-
-
-def test_tasks_list_offers_a_rerun_for_failed_tasks(configured, vault: Path):
-    _failed_task(vault)
-    result = runner.invoke(app, ["tasks", "--no-sync"])
-    assert result.exit_code == 0, result.output
-    assert "1 failed" in result.output
-    assert "--force" in result.output
-
-
-def test_tasks_run_force_resets_and_launches_a_failed_task(
-    configured, vault: Path, monkeypatch, tmp_path: Path
-):
-    path = _failed_task(vault)
-    monkeypatch.setattr(task_watcher, "LEDGER_PATH", tmp_path / "ledger.json")
-    monkeypatch.setattr(task_watcher, "detect_tmux", lambda: "tmux")
-    monkeypatch.setattr(task_watcher, "session_running", lambda *a: False)
-    seen = []
-
-    def fake_run(filepath, vault_path, repos_note=None):
-        seen.append(task_watcher.parse_note(filepath.read_text())[0]["status"])
-        return "TASK-2026-01-01-board"
-
-    monkeypatch.setattr(task_watcher, "run_task", fake_run)
-    result = runner.invoke(app, ["tasks", "run", "1", "--force", "--yes"])
-    assert result.exit_code == 0, result.output
-    assert seen == ["pending"]  # reset before the launch
-    assert "Launched" in result.output
-    assert path.exists()
-
-
-def test_tasks_run_without_force_refuses_a_failed_task(configured, vault: Path, monkeypatch):
-    _failed_task(vault)
-    monkeypatch.setattr(task_watcher, "run_task", lambda *a, **k: pytest.fail("launched"))
-    result = runner.invoke(app, ["tasks", "run", "1", "--yes"])
-    assert result.exit_code == 1
-    assert "failed, not pending" in result.output
-    assert "--force" in result.output
-
-
-def test_tasks_run_force_refuses_a_task_still_running(configured, vault: Path, monkeypatch):
-    _task(vault / "OpenAugi" / "Tasks", "busy", status="active", extra="task_id: TASK-9\n")
-    monkeypatch.setattr(task_watcher, "detect_tmux", lambda: "tmux")
-    monkeypatch.setattr(task_watcher, "session_running", lambda tmux, name: name == "TASK-9")
-    monkeypatch.setattr(task_watcher, "run_task", lambda *a, **k: pytest.fail("launched"))
-    result = runner.invoke(app, ["tasks", "run", "1", "--force", "--yes"])
-    assert result.exit_code == 1
-    assert "still running" in result.output
-
-
-def test_tasks_run_force_needs_a_task(configured, vault: Path):
-    _failed_task(vault)
-    result = runner.invoke(app, ["tasks", "run", "--force"])
-    assert result.exit_code == 2
-    assert "Name the task" in result.output
-
-
-def test_tasks_run_reports_a_launch_that_died(configured, vault: Path, monkeypatch):
-    path = _task(vault / "OpenAugi" / "Tasks", "memo")
-
-    def died(filepath, vault_path, repos_note=None):
-        raise task_watcher.TaskLaunchError(
-            "TASK-2026-01-01-memo", path, "claude exited at launch (exit status 1)."
-        )
-
-    monkeypatch.setattr(task_watcher, "run_task", died)
-    result = runner.invoke(app, ["tasks", "run", "memo", "--yes"])
-    assert result.exit_code == 1
-    assert "died at launch" in result.output
-    assert "exit status 1" in result.output
-    assert "--force" in result.output

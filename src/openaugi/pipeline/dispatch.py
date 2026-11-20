@@ -70,6 +70,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -740,12 +741,7 @@ def _retire_task_file(path: Path, new_id: str) -> None:
     only the live session is torn down, so the instruction that replaced this
     one is the only one still running.
     """
-    from openaugi.agents.task_watcher import (
-        detect_tmux,
-        kill_task_session,
-        parse_note,
-        rebuild_note,
-    )
+    from openaugi.agents.task_watcher import detect_tmux, parse_note, rebuild_note
 
     if not path.exists():
         logger.warning("Superseded task file is gone: %s", path)
@@ -775,7 +771,11 @@ def _retire_task_file(path: Path, new_id: str) -> None:
             tmux = detect_tmux()
         except FileNotFoundError:
             return
-        if kill_task_session(tmux, session):
+        if (
+            subprocess.run([tmux, "has-session", "-t", session], capture_output=True).returncode
+            == 0
+        ):
+            subprocess.run([tmux, "kill-session", "-t", session], check=False)
             logger.info("Killed superseded task session: %s", session)
 
 
