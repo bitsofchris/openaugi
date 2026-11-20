@@ -184,6 +184,7 @@ you write `zzz: <instruction>` in a vault note
     → resolve working dir via OpenAugi/Repos.md
     → build prompt: augi-agent skill file + task body + linked notes
     → launch tmux: detached session + `claude "$(cat ctx)"`
+    → 5s later: claude already exited? → status: failed + its output in ## Results
   → agent reads skill file, uses MCP tools, does the work
   → writes output to OpenAugi/ tagged #human-review
   → marks task file status: done

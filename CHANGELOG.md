@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**A task that fails at launch says so, and setting it back to pending reruns it.** Five
+seconds after starting a task's agent, OpenAugi checks it is still running. If claude
+already quit (no permission on the vault folder, logged out, a bad flag), the task note
+gets `status: failed` with claude's output under `## Results`, instead of staying
+`active` with nothing running. Nothing retries it on its own: set `status: pending` and
+it runs again, with no daemon restart (before, the watcher ignored a file it had already
+seen until it restarted). `openaugi tasks` lists failed tasks.
+
 **augi-ui: capture a task and start a chat on it.** Under `outcome and next`, a field
 adds a task to the end of the anchor note's `# Next` (making the heading, before the
 Journal, when there is none), and `▶` beside a task drafts a request for this chat to

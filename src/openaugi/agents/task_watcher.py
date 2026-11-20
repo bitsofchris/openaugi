@@ -20,6 +20,9 @@ Workflow:
      (no shell middleman). The prompt is passed as an argv element, so
      there is no shell quoting or startup race. `remain-on-exit` keeps
      the pane around so the user can attach later and see the transcript.
+  7. A few seconds later the pane is checked. If claude already exited, the
+     task is marked `status: failed` with claude's last output under
+     `## Results`. Nothing retries it: set it back to `pending` to rerun.
 
 No LLM calls in this module. Dispatch only.
 
@@ -98,6 +101,13 @@ DEFAULT_REAP_INTERVAL = 3600.0  # seconds between reaps of tmux sessions for don
 # so a finished weekly run is still attachable for a few days. The conversation
 # itself is on disk either way (`claude --resume <id>`).
 DEFAULT_REAP_RETENTION = 3 * 24 * 3600.0
+# Seconds after launch before checking that claude is still running. A claude
+# that cannot start (no permission on its working dir, a bad flag, logged out)
+# exits well within this; one doing real work does not. The watcher waits this
+# long per launch, so keep it short.
+LAUNCH_CHECK_DELAY = 5.0
+# Lines of a dead pane's output copied into the task note.
+PANE_TAIL_LINES = 40
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]")
@@ -451,6 +461,11 @@ def build_tmux_argv(
     if remote_control:
         cmd += ["--remote-control", remote_control]
     cmd.append(prompt)
+    # Set remain-on-exit in the same tmux command (a lone `;` argument), so a
+    # claude that exits at once still leaves its pane to inspect. Set in a
+    # second call, an instant exit took the session with it. `=NAME:` is the
+    # session's window, by exact name.
+    cmd += [";", "set-option", "-t", f"={session_name}:", "remain-on-exit", "on"]
     return cmd
 
 
@@ -470,27 +485,101 @@ def launch_tmux(
     `remain-on-exit` is set so the pane persists after claude finishes,
     letting the user attach later and see the transcript.
 
-    Returns True if launched, False if the session already existed.
+    A session of the same name whose claude has exited is an earlier run of
+    this task, set back to pending: it is replaced. One still running is not.
+
+    Returns True if launched, False if a running session already had the name.
     """
-    result = subprocess.run(
-        [tmux, "has-session", "-t", session_name],
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode == 0:
-        logger.warning("tmux session %s already exists, skipping", session_name)
-        return False
+    state = pane_state(tmux, session_name)
+    if state is not None:
+        dead, _ = state
+        if not dead:
+            logger.warning("tmux session %s is still running, skipping", session_name)
+            return False
+        subprocess.run([tmux, "kill-session", "-t", f"={session_name}"], check=False)
+        logger.info("Replaced the finished tmux session %s", session_name)
 
     argv = build_tmux_argv(
         tmux, claude, session_name, prompt, working_dir=working_dir, remote_control=remote_control
     )
     subprocess.run(argv, check=True)
+    return True
 
-    subprocess.run(
-        [tmux, "set-option", "-t", session_name, "remain-on-exit", "on"],
+
+def pane_state(tmux: str, session_name: str) -> tuple[bool, str] | None:
+    """(claude has exited, its exit status) for a task session; None if no such session."""
+    result = subprocess.run(
+        [
+            tmux,
+            "display-message",
+            "-p",
+            "-t",
+            f"={session_name}:",
+            "#{pane_dead} #{pane_dead_status}",
+        ],
+        capture_output=True,
+        text=True,
         check=False,
     )
-    return True
+    if result.returncode != 0:
+        return None
+    dead, _, status = (result.stdout or "").strip().partition(" ")
+    return dead == "1", status.strip()
+
+
+def check_launch(tmux: str, session_name: str) -> str | None:
+    """Wait LAUNCH_CHECK_DELAY, then return why claude is not running, or None if it is.
+
+    tmux returns from `new-session` as soon as claude is started, so a claude
+    that quits a moment later used to look like a successful launch. The
+    report carries the exit status and claude's last output, which says why.
+    """
+    time.sleep(LAUNCH_CHECK_DELAY)
+    state = pane_state(tmux, session_name)
+    if state is None:
+        return "The tmux session was gone a few seconds after launch."
+    dead, status = state
+    if not dead:
+        return None
+    report = f"claude exited right after launch (exit status {status or 'unknown'})."
+    out = subprocess.run(
+        [tmux, "capture-pane", "-p", "-J", "-S", "-", "-t", f"={session_name}:"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    lines = [ln.rstrip() for ln in (out.stdout or "").splitlines() if ln.strip()]
+    if lines:
+        report += "\n" + "\n".join(lines[-PANE_TAIL_LINES:])
+    return report
+
+
+class TaskLaunchError(RuntimeError):
+    """claude exited right after launch. The task note is marked failed."""
+
+    def __init__(self, task_id: str, report: str):
+        super().__init__(f"{task_id}: claude exited right after launch")
+        self.task_id = task_id
+        self.report = report
+
+
+def mark_failed(filepath: Path, report: str) -> None:
+    """Set `status: failed` and put the report first under `## Results`."""
+    fm, body = parse_note(filepath.read_text())
+    fm["status"] = "failed"
+    stamp = datetime.now().isoformat(timespec="seconds")
+    summary, _, output = report.partition("\n")
+    block = f"### Launch failed, {stamp}\n\n{summary}\n"
+    if output:
+        fence = "````" if "```" in output else "```"
+        block += f"\n{fence}text\n{output}\n{fence}\n"
+    block += "\nTo run it again, set `status: pending`.\n"
+    m = RESULTS_HEADING_RE.search(body)
+    if m:
+        body = body[: m.end()] + "\n\n" + block + body[m.end() :]
+    else:
+        body = body.rstrip() + "\n\n## Results\n\n" + block
+    filepath.write_text(rebuild_note(fm, body))
 
 
 # ── Duplicate suppression ──────────────────────────────────────────────────
@@ -653,16 +742,24 @@ def dispatch_task(
 ) -> str | None:
     """Hydrate a single pending task and launch it in tmux.
 
-    Returns the task_id on success, None on skip (e.g. session already exists).
-    Raises on hydrate / launch errors so the caller can record the failure.
+    Returns the task_id on success, None on skip (a duplicate, or a session of
+    that name still running). Raises TaskLaunchError when claude exited right
+    after launch (the note is marked `failed` first, and the ledger does not
+    record it), and anything else on hydrate / launch errors.
     """
     logger.info("Found pending task: %s", filepath.name)
 
     # Check before hydrating: hydration renames the file and flips it to
     # active, so a duplicate caught later would already look like real work.
-    fingerprint = task_fingerprint(*parse_note(filepath.read_text()))
+    pending_fm, pending_body = parse_note(filepath.read_text())
+    fingerprint = task_fingerprint(pending_fm, pending_body)
     prior = load_ledger().get(fingerprint)
-    if prior:
+    # A file whose own task_id is the one the ledger recorded is that task, set
+    # back to pending by hand: run it again. The ledger guards against *other*
+    # files carrying the same words (a fresh, unhydrated copy has no task_id).
+    if prior and pending_fm.get("task_id") and prior.get("task_id") == pending_fm["task_id"]:
+        logger.info("Rerunning %s (set back to pending)", prior.get("task_id"))
+    elif prior:
         logger.warning(
             "Skipping %s — same instruction already dispatched as %s on %s",
             filepath.name,
@@ -711,12 +808,19 @@ def dispatch_task(
     launched = launch_tmux(
         tmux, claude, session_name, prompt, working_dir=work_dir, remote_control=remote_name
     )
-    if launched:
-        logger.info("Launched tmux session: %s", session_name)
-        record_fingerprint(fingerprint, task_id)
-        return task_id
-    logger.warning("Skipped launch for %s", task_id)
-    return None
+    if not launched:
+        logger.warning("Skipped launch for %s", task_id)
+        return None
+
+    failure = check_launch(tmux, session_name)
+    if failure:
+        logger.error("Task %s failed at launch: %s", task_id, failure)
+        mark_failed(new_path, failure)
+        raise TaskLaunchError(task_id, failure)
+
+    logger.info("Launched tmux session: %s", session_name)
+    record_fingerprint(fingerprint, task_id)
+    return task_id
 
 
 # ── On demand (no watcher) ─────────────────────────────────────────────────
@@ -727,7 +831,7 @@ def dispatch_task(
 # its own. See docs/reference/task-dispatch.md § On demand.
 
 # Display order for `openaugi tasks`: what needs a decision first.
-_STATUS_ORDER = {"pending": 0, "active": 1, "done": 2}
+_STATUS_ORDER = {"pending": 0, "failed": 1, "active": 2, "done": 3}
 
 
 @dataclass
@@ -762,7 +866,7 @@ def _summarize(path: Path) -> TaskSummary | None:
 
 
 def list_tasks(tasks_dir: Path, include_finished: bool = False) -> list[TaskSummary]:
-    """Task files in `tasks_dir`: pending, then active, then the rest; newest first.
+    """Task files in `tasks_dir`: pending, failed, active, then the rest; newest first.
 
     `include_finished` adds done/duplicate/superseded tasks, which are history.
     """
@@ -770,8 +874,8 @@ def list_tasks(tasks_dir: Path, include_finished: bool = False) -> list[TaskSumm
         return []
     tasks = [t for f in tasks_dir.glob("*.md") if (t := _summarize(f)) is not None]
     if not include_finished:
-        tasks = [t for t in tasks if t.status in ("pending", "active")]
-    tasks.sort(key=lambda t: (_STATUS_ORDER.get(t.status, 3), -t.modified))
+        tasks = [t for t in tasks if t.status in ("pending", "failed", "active")]
+    tasks.sort(key=lambda t: (_STATUS_ORDER.get(t.status, 4), -t.modified))
     return tasks
 
 
@@ -865,7 +969,11 @@ def watch_tasks(
     logger.info("Watching %s (poll=%.1fs, settle=%.1fs)", tasks_dir, poll_interval, settle)
     logger.info("Waiting for tasks with status: pending...")
 
-    processed: set[str] = set()
+    # Path → the file's mtime when it was last handed to dispatch. A file that
+    # fails to dispatch and stays pending is not retried every poll, but the
+    # same file set back to `pending` by hand (a new mtime) runs again. Keyed
+    # on the path alone, a rerun waited for the daemon to restart.
+    processed: dict[str, float] = {}
     last_reap_at = 0.0
 
     while True:
@@ -873,13 +981,14 @@ def watch_tasks(
             pending = scan_pending(tasks_dir, settle=settle)
             for filepath in pending:
                 key = str(filepath)
-                if key in processed:
+                mtime = filepath.stat().st_mtime
+                if processed.get(key) == mtime:
                     continue
+                processed[key] = mtime
                 try:
                     dispatch_task(filepath, tmux, claude, repo_paths, vault_path=vault)
                 except Exception as e:
                     logger.error("Dispatch failed for %s: %s", filepath.name, e)
-                processed.add(key)
 
             now = time.time()
             if now - last_reap_at >= reap_interval:

@@ -107,7 +107,7 @@ There are **two `status` concepts** in OpenAugi and they live in different place
 | Where | Field | Values | Owner | Meaning |
 |---|---|---|---|---|
 | A block in your notes | `status/*` tag | `active`, `parked`, `done` | You, manually in Obsidian | Your tracking of the work represented by this thought |
-| A task file in `OpenAugi/Tasks/` | `status:` frontmatter | `pending`, `active`, `done`, `needs-input` | Watcher + remote agent | Dispatch lifecycle: has this been picked up, is it running, did it finish |
+| A task file in `OpenAugi/Tasks/` | `status:` frontmatter | `pending`, `active`, `done`, `needs-input`, `failed` | Watcher + remote agent | Dispatch lifecycle: has this been picked up, is it running, did it finish |
 
 They describe different things:
 

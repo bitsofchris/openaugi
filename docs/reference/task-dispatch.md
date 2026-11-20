@@ -95,10 +95,51 @@ you write `zzz: research deep learning` in a note
     → resolve working dir via OpenAugi/Repos.md
     → build prompt: augi-agent skill + task body + linked notes
     → launch tmux: detached session + `claude "$(cat ctx)"`
+    → 5s later: claude already exited? → status: failed, its output under ## Results
   → agent reads skill file, uses MCP tools, does the work
   → writes output to OpenAugi/ tagged #human-review
   → marks task file status: done
 ```
+
+## When a task fails at launch
+
+`tmux new-session` returns as soon as claude is *started*, so a claude that
+quit a moment later used to look like a successful launch: the task stayed
+`active` with nothing running and nothing in the log. That is how a scheduled
+board once produced nothing: the tmux server had lost macOS permission to read
+the vault folder, and claude exited at once with EPERM.
+
+Now, 5 seconds after each launch (`LAUNCH_CHECK_DELAY`), the same code that
+launched it asks tmux whether claude is still running (`#{pane_dead}`). If it
+has exited, or the session is gone:
+
+- the task note gets `status: failed` and a `### Launch failed` block first
+  under `## Results`, with the exit status and claude's last 40 lines of output;
+- the log gets an ERROR; `openaugi tasks run` prints the reason;
+- the duplicate ledger does not record it, since the work never ran.
+
+`remain-on-exit` is set in the same tmux command as `new-session`, so even a
+claude that quits in its first millisecond leaves its output to read. The
+check runs wherever the launch runs: the watcher in `openaugi up`, or your
+terminal for `openaugi tasks run`. A claude that dies after 5 seconds is not
+caught; its task stays `active`.
+
+**Nothing retries a failed task.** Fix the cause, then set its `status:` back
+to `pending`. The watcher picks it up after the settle window, without a
+restart: it tries each *version* of a file once (path + modified time), so a
+file you edit is new, while one that keeps failing to dispatch is not retried
+every poll. The duplicate ledger lets it through because the file's own
+`task_id` is the one the ledger recorded: the same task, not a copy. A tmux
+session of the same name whose claude has exited is replaced; a running one is
+not. This works for any task you set back to `pending`, not only failed ones.
+
+If the cause is tmux itself (a long-lived server that lost permission to the
+vault folder), `tmux kill-server` and set the task to `pending`. That also
+closes any tmux sessions of your own.
+
+`openaugi tasks` lists failed tasks between pending and active. Code:
+`launch_tmux`, `check_launch`, `mark_failed` in
+[agents/task_watcher.py](../../src/openaugi/agents/task_watcher.py).
 
 ## The daemon runs the code it started with
 
@@ -253,7 +294,7 @@ Process the user instruction(s) above in the context of the source block.
 ```
 
 **Required frontmatter:**
-- `status: pending` — the watcher only picks up pending files. Flows `pending → active → done` (or `needs-input`). **This is the dispatch lifecycle for the task file, not the same as `status/*` tag facet on blocks** — see [taxonomy.md § disambiguation](taxonomy.md#disambiguation--block-status-tag-vs-task-file-status-field).
+- `status: pending` — the watcher only picks up pending files. Flows `pending → active → done` (or `needs-input`, or `failed` when claude exited right after launch). **This is the dispatch lifecycle for the task file, not the same as `status/*` tag facet on blocks** — see [taxonomy.md § disambiguation](taxonomy.md#disambiguation--block-status-tag-vs-task-file-status-field).
 
 **Optional frontmatter:**
 - `workstream` — area slug without `area/` prefix (e.g., `openaugi`)

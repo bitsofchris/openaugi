@@ -9,6 +9,7 @@ and dispatch_task with a monkeypatched launch_tmux so no real tmux runs.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -27,6 +28,65 @@ def _isolate_ledger(tmp_path, monkeypatch):
     skip real tasks.
     """
     monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "ledger.json")
+
+
+# The real post-launch check, kept before the fixture below stubs it out.
+REAL_CHECK_LAUNCH = tw.check_launch
+
+
+@pytest.fixture(autouse=True)
+def _no_launch_wait(monkeypatch):
+    """Dispatch tests fake the launch; the real check would sleep and call tmux."""
+    monkeypatch.setattr(tw, "LAUNCH_CHECK_DELAY", 0.0)
+    monkeypatch.setattr(tw, "check_launch", lambda *a, **k: None)
+
+
+class FakeTmux:
+    """`subprocess.run` stand-in for tmux: sessions by name, each alive or exited.
+
+    `on_launch` is the state a new session starts in: `{"dead": True, ...}`
+    plays a claude that quits at once.
+    """
+
+    def __init__(self, on_launch: dict | None = None):
+        self.sessions: dict[str, dict] = {}
+        self.calls: list[list[str]] = []
+        self.killed: list[str] = []
+        self.on_launch = on_launch or {"dead": False, "status": "", "output": ""}
+
+    def add(self, name, dead=False, status="", output=""):
+        self.sessions[name] = {"dead": dead, "status": status, "output": output}
+
+    def commands(self, name: str) -> list[list[str]]:
+        return [c for c in self.calls if c[1] == name]
+
+    def __call__(self, argv, check=False, capture_output=False, text=False, **kw):
+        argv = list(argv)
+        self.calls.append(argv)
+
+        def done(rc=0, out=""):
+            return subprocess.CompletedProcess(
+                argv, rc, out if text else out.encode(), "" if text else b""
+            )
+
+        def target() -> str:
+            return argv[argv.index("-t") + 1].lstrip("=").rstrip(":")
+
+        cmd = argv[1]
+        if cmd == "new-session":
+            self.add(argv[argv.index("-s") + 1], **self.on_launch)
+            return done()
+        if cmd == "has-session":
+            return done(0 if target() in self.sessions else 1)
+        pane = self.sessions.get(target()) if "-t" in argv else None
+        if cmd == "display-message":
+            return done(0, f"{int(pane['dead'])} {pane['status']}\n") if pane else done(1)
+        if cmd == "capture-pane":
+            return done(0, pane["output"] + "\n\n") if pane else done(1)
+        if cmd == "kill-session":
+            self.sessions.pop(target(), None)
+            self.killed.append(target())
+        return done()
 
 
 # ── Frontmatter parsing ────────────────────────────────────────────────────
@@ -481,8 +541,8 @@ class TestBuildTmuxArgv:
         assert argv[1] == "new-session"
         assert "-d" in argv
         assert "/opt/claude" in argv
-        # The prompt must be the final argv element so no flags consume it.
-        assert argv[-1] == "do the thing"
+        # The prompt ends claude's argv so no flag consumes it; `;` ends the command.
+        assert argv[argv.index(";") - 1] == "do the thing"
 
     def test_working_dir_added_only_if_valid(self, tmp_path: Path):
         real = str(tmp_path)
@@ -893,13 +953,13 @@ class TestRemoteControl:
     def test_argv_without_remote_control_is_unchanged(self):
         argv = tw.build_tmux_argv("tmux", "claude", "S", "do it")
         assert "--remote-control" not in argv
-        assert argv[-1] == "do it"
+        assert argv[argv.index(";") - 1] == "do it"
 
     def test_argv_with_remote_control_names_the_session(self):
         argv = tw.build_tmux_argv("tmux", "claude", "S", "do it", remote_control="GIL short")
         i = argv.index("--remote-control")
         assert argv[i + 1] == "GIL short"
-        assert argv[-1] == "do it"  # the prompt stays the positional argument
+        assert argv[argv.index(";") - 1] == "do it"  # the prompt stays positional
 
     def test_display_name_from_h1_truncated(self):
         body = "\n# Short: the Python GIL, processes vs threads\n\n## Context\n"
@@ -928,23 +988,16 @@ class TestRemoteControl:
         )
         monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "ledger.json")
         monkeypatch.setattr(tw, "CONTEXT_DIR", tmp_path / "ctx")
-        calls: list[list[str]] = []
-
-        def fake_run(argv, check=False, capture_output=False):
-            calls.append(list(argv))
-            if argv[1] == "has-session":
-                return subprocess.CompletedProcess(argv, 1, b"", b"")
-            return subprocess.CompletedProcess(argv, 0, b"", b"")
-
-        monkeypatch.setattr(tw.subprocess, "run", fake_run)
+        fake = FakeTmux()
+        monkeypatch.setattr(tw.subprocess, "run", fake)
         task_id = tw.dispatch_task(
             f, "tmux", "claude", {"videos-repo": str(repo)}, vault_path=vault
         )
         assert task_id
-        new_session = next(c for c in calls if c[1] == "new-session")
+        new_session = fake.commands("new-session")[0]
         assert new_session[new_session.index("-c") + 1] == str(repo)
         assert new_session[new_session.index("--remote-control") + 1] == "Short: the GIL"
-        prompt = new_session[-1]
+        prompt = new_session[new_session.index(";") - 1]
         assert "augi-agent.md" not in prompt
         assert "Read AGENTS.md." in prompt
         assert f"edit {vault / 'OpenAugi' / 'Tasks' / task_id}.md" in prompt
@@ -961,15 +1014,206 @@ class TestRemoteControl:
         f.write_text("---\nstatus: pending\n---\n# Chore\n\n## Task\nTidy.\n", encoding="utf-8")
         monkeypatch.setattr(tw, "LEDGER_PATH", tmp_path / "ledger.json")
         monkeypatch.setattr(tw, "CONTEXT_DIR", tmp_path / "ctx")
-        calls: list[list[str]] = []
-
-        def fake_run(argv, check=False, capture_output=False):
-            calls.append(list(argv))
-            rc = 1 if argv[1] == "has-session" else 0
-            return subprocess.CompletedProcess(argv, rc, b"", b"")
-
-        monkeypatch.setattr(tw.subprocess, "run", fake_run)
+        fake = FakeTmux()
+        monkeypatch.setattr(tw.subprocess, "run", fake)
         assert tw.dispatch_task(f, "tmux", "claude", {}, vault_path=vault)
-        new_session = next(c for c in calls if c[1] == "new-session")
+        new_session = fake.commands("new-session")[0]
         assert "--remote-control" not in new_session
-        assert "augi-agent.md" in new_session[-1]
+        assert "augi-agent.md" in new_session[new_session.index(";") - 1]
+
+
+# ── A launch that dies, and running a task again ──────────────────────────
+
+
+class TestLaunch:
+    def test_remain_on_exit_is_set_in_the_same_tmux_command(self):
+        """Set in a second call, a claude that quits at once takes its session along."""
+        argv = tw.build_tmux_argv("tmux", "claude", "TASK-x", "do it")
+        assert argv[argv.index(";") + 1 :] == [
+            "set-option",
+            "-t",
+            "=TASK-x:",
+            "remain-on-exit",
+            "on",
+        ]
+
+    def test_launches_when_no_session(self, monkeypatch):
+        fake = FakeTmux()
+        monkeypatch.setattr(tw.subprocess, "run", fake)
+        assert tw.launch_tmux("tmux", "claude", "TASK-x", "p") is True
+        assert len(fake.commands("new-session")) == 1
+
+    def test_skips_a_session_still_running(self, monkeypatch):
+        fake = FakeTmux()
+        fake.add("TASK-x", dead=False)
+        monkeypatch.setattr(tw.subprocess, "run", fake)
+        assert tw.launch_tmux("tmux", "claude", "TASK-x", "p") is False
+        assert fake.commands("new-session") == []
+
+    def test_replaces_a_session_whose_claude_exited(self, monkeypatch):
+        """A rerun: the earlier run's dead pane gives way to the new one."""
+        fake = FakeTmux()
+        fake.add("TASK-x", dead=True, status="1")
+        monkeypatch.setattr(tw.subprocess, "run", fake)
+        assert tw.launch_tmux("tmux", "claude", "TASK-x", "p") is True
+        assert fake.killed == ["TASK-x"]
+        assert len(fake.commands("new-session")) == 1
+
+
+class TestCheckLaunch:
+    def test_running_claude_is_fine(self, monkeypatch):
+        fake = FakeTmux()
+        fake.add("TASK-x", dead=False)
+        monkeypatch.setattr(tw.subprocess, "run", fake)
+        assert REAL_CHECK_LAUNCH("tmux", "TASK-x") is None
+
+    def test_exited_claude_reports_status_and_output(self, monkeypatch):
+        fake = FakeTmux()
+        fake.add("TASK-x", dead=True, status="1", output="Error: can't read the directory")
+        monkeypatch.setattr(tw.subprocess, "run", fake)
+        report = REAL_CHECK_LAUNCH("tmux", "TASK-x")
+        assert "exit status 1" in report
+        assert "can't read the directory" in report
+
+    def test_vanished_session_is_a_failure(self, monkeypatch):
+        monkeypatch.setattr(tw.subprocess, "run", FakeTmux())
+        assert "gone" in REAL_CHECK_LAUNCH("tmux", "TASK-x")
+
+    def test_waits_before_checking(self, monkeypatch):
+        fake = FakeTmux()
+        fake.add("TASK-x")
+        slept: list[float] = []
+        monkeypatch.setattr(tw.subprocess, "run", fake)
+        monkeypatch.setattr(tw.time, "sleep", slept.append)
+        monkeypatch.setattr(tw, "LAUNCH_CHECK_DELAY", 5.0)
+        REAL_CHECK_LAUNCH("tmux", "TASK-x")
+        assert slept == [5.0]
+
+
+class TestMarkFailed:
+    def test_status_and_report_first_under_results(self, tmp_path: Path):
+        f = tmp_path / "TASK-x.md"
+        f.write_text("---\nstatus: active\n---\n# T\n\n## Results\n\nold\n")
+        tw.mark_failed(f, "claude exited right after launch (exit status 1).\nboom")
+        fm, body = tw.parse_note(f.read_text())
+        assert fm["status"] == "failed"
+        results = body[body.index("## Results") :]
+        assert results.index("### Launch failed") < results.index("old")
+        assert "```text\nboom\n```" in results
+        assert "set `status: pending`" in results
+        assert f not in tw.scan_pending(tmp_path, settle=0)
+
+    def test_output_with_backticks_gets_a_longer_fence(self, tmp_path: Path):
+        f = tmp_path / "TASK-x.md"
+        f.write_text("---\nstatus: active\n---\n## Results\n")
+        tw.mark_failed(f, "died\n```oops```")
+        assert "````text\n```oops```\n````" in f.read_text()
+
+
+class TestFailedLaunch:
+    """A claude that quits at once leaves a `failed` note, not an `active` one."""
+
+    def _board(self, tmp_path: Path) -> Path:
+        tasks = tmp_path / "OpenAugi" / "Tasks"
+        tasks.mkdir(parents=True)
+        f = tasks / "TASK-2022-01-01-board.md"
+        f.write_text(
+            "---\nstatus: pending\nsource: lens-schedule\nlens: board\nrun: 2022-01-01\n---\n"
+            "# board\n\n## User instruction\n\n> apply lens board\n\n## Results\n"
+        )
+        return f
+
+    def test_marked_failed_and_not_recorded(self, tmp_path: Path, monkeypatch):
+        f = self._board(tmp_path)
+        monkeypatch.setattr(tw, "CONTEXT_DIR", tmp_path / "ctx")
+        monkeypatch.setattr(tw, "check_launch", REAL_CHECK_LAUNCH)
+        fake = FakeTmux(on_launch={"dead": True, "status": "1", "output": "Error: EPERM"})
+        monkeypatch.setattr(tw.subprocess, "run", fake)
+
+        with pytest.raises(tw.TaskLaunchError) as err:
+            tw.dispatch_task(f, "tmux", "claude", {}, vault_path=tmp_path)
+
+        assert err.value.task_id == "TASK-2022-01-01-board"
+        fm, body = tw.parse_note(f.read_text())
+        assert fm["status"] == "failed"
+        assert "Error: EPERM" in body
+        assert tw.load_ledger() == {}  # the work never ran
+
+    def test_set_back_to_pending_it_runs_again(self, tmp_path: Path, monkeypatch):
+        f = self._board(tmp_path)
+        monkeypatch.setattr(tw, "CONTEXT_DIR", tmp_path / "ctx")
+        monkeypatch.setattr(tw, "check_launch", REAL_CHECK_LAUNCH)
+        fake = FakeTmux(on_launch={"dead": True, "status": "1", "output": "Error: EPERM"})
+        monkeypatch.setattr(tw.subprocess, "run", fake)
+        with pytest.raises(tw.TaskLaunchError):
+            tw.dispatch_task(f, "tmux", "claude", {}, vault_path=tmp_path)
+
+        fm, body = tw.parse_note(f.read_text())
+        fm["status"] = "pending"
+        f.write_text(tw.rebuild_note(fm, body))
+        fake.on_launch = {"dead": False, "status": "", "output": ""}
+        assert tw.dispatch_task(f, "tmux", "claude", {}, vault_path=tmp_path)
+        assert tw.parse_note(f.read_text())[0]["status"] == "active"
+        assert fake.killed == ["TASK-2022-01-01-board"]  # the dead pane was replaced
+
+
+class TestRerun:
+    BODY = "# T\n\n## User instruction\n\n> do the thing\n\n## Results\n"
+
+    def _launched(self, tmp_path: Path, monkeypatch) -> Path:
+        monkeypatch.setattr(tw, "launch_tmux", lambda *a, **k: True)
+        monkeypatch.setattr(tw, "write_context_file", lambda *a, **k: Path("/dev/null"))
+        d = tmp_path / "Tasks"
+        d.mkdir()
+        f = d / "a-task.md"
+        f.write_text("---\nstatus: pending\nsource_note: '[[n]]'\n---\n" + self.BODY)
+        task_id = tw.dispatch_task(f, "tmux", "claude", {}, vault_path=tmp_path)
+        return d / f"{task_id}.md"
+
+    def test_same_task_set_back_to_pending_is_not_a_duplicate(self, tmp_path: Path, monkeypatch):
+        path = self._launched(tmp_path, monkeypatch)
+        fm, body = tw.parse_note(path.read_text())
+        fm["status"] = "pending"
+        path.write_text(tw.rebuild_note(fm, body))
+        assert tw.dispatch_task(path, "tmux", "claude", {}, vault_path=tmp_path) == fm["task_id"]
+
+    def test_a_new_file_with_the_same_words_is_still_a_duplicate(
+        self, tmp_path: Path, monkeypatch
+    ):
+        self._launched(tmp_path, monkeypatch)
+        copy = tmp_path / "Tasks" / "copy.md"
+        copy.write_text("---\nstatus: pending\nsource_note: '[[n]]'\n---\n" + self.BODY)
+        assert tw.dispatch_task(copy, "tmux", "claude", {}, vault_path=tmp_path) is None
+        assert tw.parse_note(copy.read_text())[0]["status"] == "duplicate"
+
+
+def test_watcher_reruns_a_file_set_back_to_pending_without_a_restart(tmp_path: Path, monkeypatch):
+    """The watcher tries each version of a pending file once, not each path once."""
+    tasks = tmp_path / "OpenAugi" / "Tasks"
+    tasks.mkdir(parents=True)
+    f = tasks / "TASK-x.md"
+
+    def write_pending(mtime: float) -> None:
+        f.write_text("---\nstatus: pending\n---\nbody\n")
+        os.utime(f, (mtime, mtime))
+
+    write_pending(1_000_000.0)
+    dispatched: list[Path] = []
+
+    def fake_dispatch(path, *a, **k):
+        dispatched.append(path)
+        raise RuntimeError("stays pending")  # a failing dispatch is not retried every poll
+
+    polls = iter(
+        [
+            lambda: None,  # poll 2: unchanged file, skipped
+            lambda: write_pending(1_000_500.0),  # set back to pending by hand
+            lambda: (_ for _ in ()).throw(KeyboardInterrupt),
+        ]
+    )
+    monkeypatch.setattr(tw, "detect_tmux", lambda: "tmux")
+    monkeypatch.setattr(tw, "detect_claude", lambda: "claude")
+    monkeypatch.setattr(tw, "dispatch_task", fake_dispatch)
+    monkeypatch.setattr(tw.time, "sleep", lambda _s: next(polls)())
+    tw.watch_tasks(tmp_path, settle=0)
+    assert dispatched == [f, f]
