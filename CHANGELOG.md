@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**Task dispatch: a launch that dies is caught, and a task can be run again.** Task
+sessions run on OpenAugi's own tmux server (`tmux -L openaugi attach -t <task_id>`; the
+`## Session` line says so), not your default one, and the watcher recycles that server
+when it starts if nothing in it is still running, so tasks inherit the current daemon's
+macOS permissions. Five seconds after each launch the watcher checks the pane: if claude
+already exited, the task note gets `status: failed` with claude's last output under
+`## Results`, and the log an ERROR, instead of staying `active` with nothing running.
+To run a task again, set it back to `status: pending` (no restart needed) or use
+`openaugi tasks run <#> --force`. `openaugi tasks` lists failed tasks. See
+`docs/reference/task-dispatch.md` § The task tmux server.
+
 **augi-ui: capture a task and start a chat on it.** Under `outcome and next`, a field
 adds a task to the end of the anchor note's `# Next` (making the heading, before the
 Journal, when there is none), and `▶` beside a task drafts a request for this chat to
