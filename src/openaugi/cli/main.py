@@ -1621,7 +1621,6 @@ app.add_typer(tasks_app, name="tasks")
 
 _TASK_STATUS_LABEL = {
     "pending": "⏳ pending",
-    "failed": "❌ failed",
     "active": "▶️  active",
     "done": "✅ done",
     "duplicate": "♻️  duplicate",
@@ -1732,9 +1731,7 @@ def tasks_list(
     tasks = list_tasks(tasks_dir, include_finished=show_all)
     pending = sum(t.status == "pending" for t in tasks)
     active = sum(t.status == "active" for t in tasks)
-    failed = sum(t.status == "failed" for t in tasks)
-    counts = f"{pending} pending · {active} active" + (f" · {failed} failed" if failed else "")
-    console.print(f"\n[bold]📋 Tasks[/bold]  [dim]{counts}[/dim]\n")
+    console.print(f"\n[bold]📋 Tasks[/bold]  [dim]{pending} pending · {active} active[/dim]\n")
     if not tasks:
         console.print("  Nothing waiting. Write [cyan]zzz: <instruction>[/cyan] in any note")
         console.print("  and it shows up here on the next [cyan]openaugi tasks[/cyan].\n")
@@ -1744,8 +1741,6 @@ def tasks_list(
     if pending:
         console.print("  [dim]Read one:[/dim]    openaugi tasks show [bold]<#>[/bold]")
         console.print("  [dim]Launch one:[/dim]  openaugi tasks run [bold]<#>[/bold]")
-    if failed:
-        console.print("  [dim]Retry one:[/dim]   set its [bold]status: pending[/bold]")
     if active:
         console.print("  [dim]Attach:[/dim]      tmux attach -t [bold]<task id>[/bold]")
     console.print()
@@ -1780,7 +1775,7 @@ def tasks_run(
     ),
 ):
     """Launch one pending task as a Claude Code agent in tmux."""
-    from openaugi.agents.task_watcher import TaskLaunchError, list_tasks, run_task
+    from openaugi.agents.task_watcher import list_tasks, run_task
 
     _, vault_path, tasks_dir = _tasks_context(path)
     tasks = list_tasks(tasks_dir)
@@ -1815,11 +1810,6 @@ def tasks_run(
         task_id = run_task(task.path, vault_path, repos_note=repos_note)
     except FileNotFoundError as e:
         console.print(f"[red]❌ {e}[/red]")
-        raise typer.Exit(1) from None
-    except TaskLaunchError as e:
-        console.print(f"[red]❌ {e.task_id} failed at launch.[/red]")
-        console.print(f"[dim]{e.report}[/dim]")
-        console.print("   Marked failed. Fix the cause, then set [bold]status: pending[/bold].")
         raise typer.Exit(1) from None
     if task_id is None:
         console.print("[yellow]♻️  Same instruction already ran — marked duplicate.[/yellow]")

@@ -235,38 +235,3 @@ def test_ingest_skips_history_on_first_run(configured, tmp_path: Path):
     assert result.exit_code == 0, result.output
     assert "Skipped 1 zzz" in result.output
     assert "Embeddings off" in result.output
-
-
-# ── failed tasks ───────────────────────────────────────────────────────────
-
-
-def test_list_tasks_shows_failed_between_pending_and_active(tmp_path: Path):
-    d = tmp_path / "Tasks"
-    _task(d, "running", status="active", extra="task_id: TASK-1\n")
-    _task(d, "broken", status="failed", extra="task_id: TASK-2\n")
-    _task(d, "waiting")
-    _task(d, "finished", status="done")
-    assert [t.status for t in list_tasks(d)] == ["pending", "failed", "active"]
-
-
-def test_tasks_list_says_how_to_retry_a_failed_task(configured, vault: Path):
-    _task(vault / "OpenAugi" / "Tasks", "broken", status="failed", extra="task_id: TASK-2\n")
-    result = runner.invoke(app, ["tasks", "--no-sync"])
-    assert result.exit_code == 0, result.output
-    assert "1 failed" in result.output
-    assert "status: pending" in result.output
-
-
-def test_tasks_run_reports_a_launch_that_died(configured, vault: Path, monkeypatch):
-    _task(vault / "OpenAugi" / "Tasks", "memo")
-
-    def died(filepath, vault_path, repos_note=None):
-        raise task_watcher.TaskLaunchError(
-            "TASK-2026-01-01-memo", "claude exited right after launch (exit status 1)."
-        )
-
-    monkeypatch.setattr(task_watcher, "run_task", died)
-    result = runner.invoke(app, ["tasks", "run", "memo", "--yes"])
-    assert result.exit_code == 1
-    assert "failed at launch" in result.output
-    assert "exit status 1" in result.output
