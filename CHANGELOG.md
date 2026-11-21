@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**Task launch: back to the `has-session` check, and tests now run on every push.**
+The 11/20 change that marked failed launches is reverted: its new session check
+asked tmux `display-message`, which exits 0 with empty output for a missing session
+whenever any tmux server is running, so every scheduled task after 11/20 09:07 was
+skipped as "still running". New `tests/test_task_watcher_real_tmux.py` runs real tmux
+on a private socket and fails against that change. The pre-push hook now runs the
+test suite.
+
 **augi-ui: capture a task and start a chat on it.** Under `outcome and next`, a field
 adds a task to the end of the anchor note's `# Next` (making the heading, before the
 Journal, when there is none), and `▶` beside a task drafts a request for this chat to

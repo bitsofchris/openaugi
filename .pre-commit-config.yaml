@@ -38,3 +38,13 @@ repos:
         entry: python3 scripts/check_private_vocab.py
         language: system
         stages: [pre-commit, commit-msg, pre-push]
+
+      # Every push runs the test suite (~8s), including the real-tmux tests.
+      # Lint alone let a broken task launcher reach main on 2026-11-20.
+      - id: pytest
+        name: tests (pytest, incl. real tmux)
+        entry: .venv/bin/python -m pytest -q tests/
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

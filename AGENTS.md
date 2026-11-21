@@ -154,6 +154,10 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 # Run full CI check (lint + types + tests) — ALWAYS run before pushing
 ./scripts/check.sh
 
+# The pre-push hook runs pre-commit plus the whole test suite (incl. real tmux).
+# Re-install hooks after pulling a hook change:
+#   .venv/bin/pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push
+
 # Run tests only
 .venv/bin/python -m pytest tests/ -v
 
@@ -256,6 +260,17 @@ vault's AGENT files (inside personal regions) or in `docs/scratch/`.
 Load Claude Code's built-in `plugin-authoring` skill before changing
 `augi-ui/`; it is the authoritative guide for Claude Code plugins.
 `docs/reference/augi-ui.md` § Developing applies it to this folder.
+
+# Test against the real binary
+
+Code that shells out to an external program (tmux, git, claude) gets at
+least one test that runs the real program, not only a fake. A fake answers
+the way we assume the program answers; on 2026-11-20 that assumption was
+wrong (tmux exits 0 for a missing target while a server runs) and every
+scheduled task was skipped while the faked tests passed. Isolate the real
+run so it never touches the user's own state: tmux on a private
+`TMUX_TMPDIR`, git in a temp repo. Model: `tests/test_task_watcher_real_tmux.py`.
+A real-binary test is skipped only when the binary is absent.
 
 # Document as you go
 Plans are tracked in the user's notes, not in this repo. When behavior
