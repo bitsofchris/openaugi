@@ -171,8 +171,10 @@ where the client has one (numbered options otherwise). Their thoughts
 outrank the draft: where they disagree, offer what they wrote. Priorities
 come third, not first: they are decided after the instructions and the
 context note have been gone through. Every proposed wording (a context
-edit, a lens or template line, a card clause) is shown in chat, before and
-not inside the question: question-card previews do not reach them.
+edit, a lens or template line, a card clause) is shown in chat before the
+question, and its exact text is also quoted in the question itself, with one
+line on why: the chat above the card may not be visible while it is open, and
+question-card previews do not reach them.
 
 1. **Instructions** — open with a short read of the week and the full table
    of the week's `Aaa:` lines with each one's state. Then one question per
