@@ -24,7 +24,7 @@ The user runs one operating system; every surface below is a part of it. In
 order of what a fresh session should read:
 
 1. **[[Slowly Changing Context]]** — north star, season, lane order. This
-   week is the top card of each Board column, which §4 says. Lenses read it
+   week is the Board's Next column (1–2 cards), which §4 says. Lenses read it
    first; it changes only on Sundays, by them.
 2. **[[Dashboard]]** — their hub: taxonomy, active PMOCs via `#status/active`,
    links to the boards and every view.

@@ -12,7 +12,7 @@ consumers: [currency-board, weekly-reflection, review-pass]
 
 **Only the user makes cards.** Agents never add a card to the Board; new cards come up at Sunday triage and are discussed there. Agents may add to the Backlog with a source, as below.
 
-Two boards, opened by the Obsidian Kanban plugin: **the Board** (in progress and next, cap 3 per AMOC column) and **the Backlog** (never lost, no cap). Where they live is the user's choice. A **column is an AMOC** from their taxonomy, plus Household / Other (both). There is no Triage column: capture lands in the daily note, and the daily board carries it forward. A **card is a link** to the note that holds the work, plus at most one clause. The board holds; it never explains. If a card needs a paragraph, the paragraph goes in the linked note and the card stays one line.
+Two boards, opened by the Obsidian Kanban plugin: **the Board** (a **Next** column first, one or two cards: this week's priorities; then in progress per area, cap 3 per AMOC column) and **the Backlog** (never lost, no cap). Where they live is the user's choice. A **column is an AMOC** from their taxonomy, plus Household / Other (both). There is no Triage column: capture lands in the daily note, and the daily board carries it forward. A **card is a link** to the note that holds the work, plus at most one clause. The board holds; it never explains. If a card needs a paragraph, the paragraph goes in the linked note and the card stays one line.
 
 The boards are updated together on Sundays. Design history: [[PMOC - Kanban per Area - Triage, Park, Elevate]].
 
@@ -55,11 +55,12 @@ kanban-plugin: board
 
 ## Columns (current)
 
-Same on both boards, in this order. `list-collapse` needs one boolean per column.
+In this order. `list-collapse` needs one boolean per column.
 
-One column per AMOC in the user's taxonomy, plus a Creative sub-list
-(Backlog only), and Household / Other. The Board caps each
-AMOC column at 3.
+The Board opens with **Next** (Board only, one or two cards: this week's
+priorities). Then, on both boards, one column per AMOC in the user's
+taxonomy, plus a Creative sub-list (Backlog only), and Household / Other.
+The Board caps Next at 2 and each AMOC column at 3.
 
 A Board card in OpenAugi or Research Engineer is a PMOC. The Board is the record of what is active; `#status/active` is a tag the user sets for the Dashboard's query and is not kept in sync with the Board — a card without the tag is not drift. Backlog sub-lists are allowed where an area has real sub-kinds, a few, never on the Board. A new column only when they name it.
 
@@ -67,7 +68,7 @@ A Board card in OpenAugi or Research Engineer is a PMOC. The Board is the record
 
 - **A card is a thing that ends.** A task or a project — something that can be ticked done. A reference note, a system description, an AMOC, a habit, an idea with no next action: never a card. A reference belongs as a link on the area's AMOC journal or the Dashboard. If a card cannot be finished, it is misfiled.
 - **One card, one link, one clause.** `- [ ] [[Note]] — why it is here`. If there is no note, the clause is the whole card and it should be short enough to do in an hour, otherwise it needs a note first.
-- **Order within a column is theirs, and it means something: the top card of each column is this week's focus** ([[Slowly Changing Context]] §4). Agents append at the bottom and never reorder, except the Sunday session performing a reorder they ruled.
+- **This week is the Next column** ([[Slowly Changing Context]] §4): the one or two cards to do next, moved there by the user from their area column. Order within a column is theirs. Agents append at the bottom and never reorder, except the Sunday session performing a reorder they ruled.
 - **No duplicates.** Search the board (all columns and Archive) before adding. A card that exists gets its clause updated, not a twin.
 - **A new card gets its related links.** Any card added — by them in the Sunday session or by an agent to the Backlog — first gets step 4 of `pmoc.md` (*Find related*, OpenAugi search), and what it finds goes into the note the card links to, never onto the card.
 - **Source stays with the card** when an agent adds it: `(from [[2026-09-11]])` at the end of the clause, so they can see why it appeared.
@@ -89,7 +90,7 @@ Sunday session): one question per card decision, each performed before the
 next is asked:
 
 0. **Card instructions** (step 1). Every card carrying an `aaa:` on either board: do what the words ask.
-1. **Top cards** (step 3). The top card of each column, confirmed or reordered, after the week's bottleneck has been agreed.
+1. **Next** (step 3). The Next column's one or two cards, confirmed or swapped, after the week's bottleneck has been agreed.
 2. **Over cap** (step 4). Any AMOC column past 3: one line naming the cards, then talk. Nothing nominated.
 3. **Add** (step 4). At most three of the week's candidates go to the Backlog with their source, one question each. An add to a Board column when they approve it in the session.
 4. **Pull.** Only if they ask to fill a slot: the Backlog cards their writing touched this week.

@@ -213,11 +213,11 @@ question-card previews do not reach them.
    table has rows, one question: show it and ask whether the triggers
    point at anything the week should change, or nothing (the usual
    answer). Record the answer under the table in one line. Then one
-   question: the top card of each Board column,
-   listed in §4 lane order, with *confirm* or a reorder drafted from their
-   thoughts and from the outside view (which card rises, which drops, per
-   column).
-   Perform the reorder on the Board before the next question.
+   question: the Board's **Next** column, the one or two priority cards
+   for the week, with *confirm* or a swap drafted from their thoughts and
+   from the outside view (which card comes in from its area column, which
+   goes back). Never more than two. Perform the move on the Board before
+   the next question.
 4. **Cards** — one question each, in this order: any column over its cap
    (name the cards, ask which moves, nominate nothing); at most three
    Backlog adds from the draft's *Candidates for next week* that step 1 did
@@ -241,8 +241,8 @@ question-card previews do not reach them.
    to `✓ fixed <date>`. Leave the rest.
 7. **Close** — set `last_reviewed: <this Sunday>` and append one change-log
    line to [[Slowly Changing Context]] (`- **<date>** — Sunday pass from
-   [[Weekly Reflection - <date>]]: <the top cards this week, one clause>`).
-   Append `## Applied` to the draft: the top cards, the *Into the week* block as written, the focus-block default (kept or shifted), what the use review cut or changed, each instruction and how
+   [[Weekly Reflection - <date>]]: <the Next cards this week, one clause>`).
+   Append `## Applied` to the draft: the Next cards, the *Into the week* block as written, the focus-block default (kept or shifted), what the use review cut or changed, each instruction and how
    it was ruled (one line each), context edits, cards moved and added, fixes
    run, anything ruled that could not be done. Then write the week's
    **structured row** (below). End in chat with one line and a *what's

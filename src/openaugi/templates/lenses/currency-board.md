@@ -53,9 +53,9 @@ transcripts changed since the previous board are opened.
 
 ## Anchor
 
-Read [[Slowly Changing Context]] first. §4 says: **this week is the top card
-in each column of the Board** (`_private/0-Current Focus/Kanban.md`), plus a
-Work line. §3 is the season: its primary, what is supporting, and what is
+Read [[Slowly Changing Context]] first. §4 says: **this week is the Next
+column of the Board** (`_private/0-Current Focus/Kanban.md`), one or two
+cards, plus a Work line. §3 is the season: its primary, what is supporting, and what is
 parked. Read the Board's current order every run. The board does not render
 the lanes; §5 feeds the Focus block line (step 3b), and §3 and §4 are the
 filter for Spotted. It never edits the Board except by adding a Backlog card:
