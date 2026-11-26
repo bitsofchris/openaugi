@@ -459,9 +459,15 @@ def _build_file_index(files: list[Path], vault_root: Path) -> dict[str, str]:
 def _resolve_wikilink(link_target: str, file_index: dict[str, str]) -> str:
     """Resolve a wikilink title to a relative path using pre-built index.
 
-    O(1) lookup instead of rglob per link.
+    O(1) lookup instead of rglob per link. `[[note#heading]]` and
+    `[[note#^block]]` link to `note`; the part after `#` names a place inside
+    it. A bare `[[#heading]]` is a link within the same note and resolves to
+    nothing.
     """
-    return file_index.get(link_target, f"{link_target}.md")
+    name = link_target.split("#", 1)[0].strip()
+    if not name:
+        return f"{link_target}.md"
+    return file_index.get(name, f"{name}.md")
 
 
 def document_id_for(rel_path: str, augi_id: str | None) -> str:

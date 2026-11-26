@@ -1142,3 +1142,20 @@ class TestFileCreatedTime:
         monkeypatch.setattr(Path, "stat", lambda self: FakeStat())
         expected = datetime.fromtimestamp(FakeStat.st_mtime).strftime("%Y-%m-%dT%H:%M:%SZ")
         assert vault_mod._get_file_created_time(note) == expected
+
+
+class TestResolveWikilinkSubpaths:
+    """`[[note#heading]]` and `[[note#^block]]` link to the note."""
+
+    def test_heading_and_block_resolve_to_the_note(self):
+        from openaugi.adapters.vault import _resolve_wikilink
+
+        index = {"Note": "dir/Note.md"}
+        assert _resolve_wikilink("Note#Heading", index) == "dir/Note.md"
+        assert _resolve_wikilink("Note#^abc123", index) == "dir/Note.md"
+        assert _resolve_wikilink("Note", index) == "dir/Note.md"
+
+    def test_same_note_heading_resolves_to_nothing(self):
+        from openaugi.adapters.vault import _resolve_wikilink
+
+        assert _resolve_wikilink("#Heading", {"Note": "Note.md"}) == "#Heading.md"

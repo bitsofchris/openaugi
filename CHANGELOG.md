@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**`[[note#heading]]` and `[[note#^block]]` link to the note.** The part after `#` was
+taken as part of the file name, so every heading or block link resolved to nothing and
+no edge was stored. Notes ingested before this keep their missing edges until edited;
+`openaugi backfill-document-links --all-links` restores them.
+
 **`openaugi check-graph`: does the stored graph still say what the vault says?** A
 read-only checker for silent drift: duplicate documents, edges with a missing endpoint,
 data blocks no document contains (or the wrong one), documents whose file is gone or

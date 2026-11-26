@@ -247,16 +247,8 @@ LINK_FORMS = [
     pytest.param("See ![[Target]].", id="embed"),
     pytest.param("See [[Keyed]].", id="augi_target"),
     pytest.param("See [[Twin]].", id="same_title_two_folders"),
-    pytest.param(
-        "See [[Target#Heading]].",
-        id="heading",
-        marks=_xfail("[[note#heading]] is looked up as a file named 'note#heading'"),
-    ),
-    pytest.param(
-        "See [[Target#^blk]].",
-        id="block_ref",
-        marks=_xfail("[[note#^block]] is looked up as a file named 'note#^block'"),
-    ),
+    pytest.param("See [[Target#Heading]].", id="heading"),
+    pytest.param("See [[Target#^blk]].", id="block_ref"),
     pytest.param("See [[deep/Nested]].", id="path_form"),
     pytest.param(
         "See [[target]].",
