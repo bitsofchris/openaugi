@@ -797,6 +797,51 @@ def backfill_document_links_cmd(
         store.close()
 
 
+@app.command(name="backfill-orphans")
+def backfill_orphans_cmd(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    path: str | None = typer.Option(None, "--path", "-p", help="Vault path (default: config)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report counts, write nothing"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Remove what deleted, renamed and moved notes left in the store.
+
+    Orphan data blocks with no live source, documents whose file is gone,
+    moved augi-keyed documents still under their old path, and embeddings of
+    blocks that no longer exist. Nothing a fresh parse of the vault produces is
+    deleted. Snapshot the DB first. Idempotent.
+    """
+    _setup_logging(verbose)
+
+    from openaugi.adapters.vault import backfill_orphans
+    from openaugi.config import load_config, resolve_vault_path
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    vault_path = resolve_vault_path(path, config)
+    if not vault_path:
+        console.print("[red]No vault path: pass --path or set [vault] default_path[/red]")
+        raise typer.Exit(1)
+
+    db_path = db or str(_default_db())
+    console.print(f"[bold]Database:[/bold] {db_path}")
+    console.print(f"[bold]Vault:[/bold] {vault_path}")
+    if dry_run:
+        console.print("[yellow]Dry run — no DB writes[/yellow]")
+    store = SQLiteStore(db_path)
+    try:
+        out = backfill_orphans(
+            store,
+            vault_path,
+            exclude_patterns=config.get("vault", {}).get("exclude_patterns"),
+            dry_run=dry_run,
+        )
+    finally:
+        store.close()
+    for key, n in out.items():
+        console.print(f"  {key}: {n}")
+
+
 @app.command(name="backfill-provenance")
 def backfill_provenance_cmd(
     db: str | None = typer.Option(None, "--db", help="Database path"),

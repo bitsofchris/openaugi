@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**`openaugi backfill-orphans` cleans up what deleted and moved notes left behind.**
+Orphan data blocks with no live source, documents whose file is gone, moved augi-keyed
+documents still under their old path, and embedding rows of deleted blocks. Nothing a
+fresh parse of the vault produces is deleted. `check-graph` also compares each unchanged
+note's stored entries with a fresh parse (`entries_missing` / `entries_extra`).
+
 **Deleting a note deletes its blocks.** Removing a note's document cascaded its edges but
 left the data blocks it contained: contained by nothing, still embedded, still found by
 search. Ingest now deletes a removed note's document together with its entries, their

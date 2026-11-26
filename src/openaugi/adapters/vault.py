@@ -920,6 +920,127 @@ def backfill_document_links(
     }
 
 
+def backfill_orphans(
+    store,
+    vault_path: str | Path,
+    exclude_patterns: list[str] | None = None,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Remove what deleted, renamed and moved notes left behind. Idempotent.
+
+    Before ingest deleted a removed note's entries, and recorded a moved
+    augi-keyed note's new path, the store accumulated:
+
+    - **moved documents**: an augi-keyed document still under its old
+      source_path while the vault has it at a new one. Its path and title are
+      updated (the identity and every edge into it are kept).
+    - **documents without a file** whose id no note in the vault produces:
+      deleted with the entries only they contain.
+    - **orphan data blocks**, contained by no document. A block whose id a
+      fresh parse still produces is re-attached to its note's document;
+      every other one has no live source and is deleted.
+    - **stale entries** a moved document still contains under its old path:
+      not produced by a fresh parse, deleted.
+    - **vec_blocks rows** of blocks that no longer exist.
+
+    "No live source" is decided against a fresh parse of the vault: nothing a
+    parse of the current files produces is ever deleted. Deletes go through
+    `SQLiteStore.delete_blocks` (links CASCADE, FTS by trigger, vec rows).
+
+    Returns counts per category.
+    """
+    blocks, _ = parse_vault(vault_path, exclude_patterns=exclude_patterns)
+    parsed_docs = {b.id: b for b in blocks if b.kind == "context_block:document"}
+    parsed_entries = {b.id: b for b in blocks if b.kind == "data_block"}
+    conn = store.conn
+
+    moved: list[tuple[str, str, str | None]] = []
+    docs_to_delete: list[str] = []
+    for doc_id, sp in conn.execute(
+        """SELECT id, json_extract(metadata, '$.source_path') FROM blocks
+           WHERE kind = 'context_block:document' AND source = 'vault'"""
+    ).fetchall():
+        parsed = parsed_docs.get(doc_id)
+        if parsed is None:
+            if not (Path(vault_path).expanduser() / sp).exists():
+                docs_to_delete.append(doc_id)
+        elif parsed.metadata["source_path"] != sp:
+            moved.append((doc_id, parsed.metadata["source_path"], parsed.title))
+
+    doomed_docs = set(docs_to_delete)
+    moved_ids = {m[0] for m in moved}
+    entries_of_deleted_docs: list[str] = []
+    stale_entries: list[str] = []
+    for entry_id, doc_id in conn.execute(
+        """SELECT l.from_id, l.to_id FROM links l
+           JOIN blocks b ON b.id = l.from_id AND b.kind = 'data_block'
+           WHERE l.kind = 'contains'"""
+    ).fetchall():
+        if entry_id in parsed_entries:
+            continue
+        if doc_id in doomed_docs:
+            entries_of_deleted_docs.append(entry_id)
+        elif doc_id in moved_ids:
+            stale_entries.append(entry_id)
+
+    doc_by_path = {d.metadata["source_path"]: d.id for d in parsed_docs.values()}
+    orphans_deleted: list[str] = []
+    reattach: list[Link] = []
+    for (entry_id,) in conn.execute(
+        """SELECT b.id FROM blocks b
+           WHERE b.kind = 'data_block' AND b.source = 'vault' AND NOT EXISTS (
+             SELECT 1 FROM links l WHERE l.from_id = b.id AND l.kind = 'contains')"""
+    ).fetchall():
+        entry = parsed_entries.get(entry_id)
+        if entry is None:
+            orphans_deleted.append(entry_id)
+            continue
+        reattach.append(
+            Link(
+                from_id=entry_id, to_id=doc_by_path[entry.metadata["source_path"]], kind="contains"
+            )
+        )
+
+    def _stale_vec_ids() -> list[str]:
+        if not store._vec_table_exists():
+            return []
+        return [
+            r[0]
+            for r in conn.execute(
+                """SELECT v.block_id FROM vec_blocks v
+                   WHERE NOT EXISTS (SELECT 1 FROM blocks b WHERE b.id = v.block_id)"""
+            )
+        ]
+
+    # Counted before the deletes below, which remove their own blocks' rows.
+    stale_vec = len(_stale_vec_ids())
+
+    if not dry_run:
+        for doc_id, sp, title in moved:
+            store.update_document_path(doc_id, sp, title)
+            # Its entries under the old path are deleted below; clearing the
+            # file hash makes the next ingest re-create them under the new one.
+            store.update_block_hash(doc_id, "")
+        store.delete_blocks(sorted(set(entries_of_deleted_docs) | set(stale_entries)))
+        store.delete_blocks(docs_to_delete)
+        store.delete_blocks(orphans_deleted)
+        store.insert_links([lnk for lnk in reattach if store.get_block(lnk.to_id)])
+        store._delete_vec_rows(_stale_vec_ids())
+        conn.commit()
+
+    result = {
+        "moved_documents": len(moved),
+        "documents_without_file": len(docs_to_delete),
+        "their_entries": len(set(entries_of_deleted_docs)),
+        "stale_entries_of_moved_documents": len(set(stale_entries)),
+        "orphans_deleted": len(orphans_deleted),
+        "orphans_reattached": len(reattach),
+        "stale_vec_rows": stale_vec,
+    }
+    logger.info("Orphan backfill%s: %s", " (dry run)" if dry_run else "", result)
+    return result
+
+
 def _unique_ordered(items: list[str]) -> list[str]:
     """Deduplicate while preserving order."""
     seen: set[str] = set()

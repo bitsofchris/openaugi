@@ -140,6 +140,19 @@ class TestChecker:
         assert "links_to_extra" in _checks(store, ingested)
 
     @pytest.mark.graph_drift_expected(reason="plants each defect on purpose")
+    def test_missing_and_extra_entries(self, ingested: Path, store: SQLiteStore):
+        store.delete_block(_entry(store, "Linker.md"))
+        assert "entries_missing" in _checks(store, ingested)
+        stray = Block(
+            id="stray", kind="data_block", source="vault", metadata={"source_path": "Hub.md"}
+        )
+        store.insert_blocks([stray])
+        store.insert_links(
+            [Link(from_id="stray", to_id=Block.make_document_id("Hub.md"), kind="contains")]
+        )
+        assert "entries_extra" in _checks(store, ingested)
+
+    @pytest.mark.graph_drift_expected(reason="plants each defect on purpose")
     def test_document_identity_and_file(self, ingested: Path, store: SQLiteStore):
         # Hub gains an id on disk; the DB is told the file did not change.
         text = "---\naugi_id: hub-1\n---\n\n" + BASE["Hub.md"]
@@ -485,3 +498,114 @@ class TestDeleteDocument:
         assert store.search_fts("Also") == []
         vec = store.conn.execute("SELECT 1 FROM vec_blocks WHERE block_id = ?", (entry,))
         assert vec.fetchone() is None
+
+
+class TestBackfillOrphans:
+    """Repair a store written before ingest deleted a removed note's entries."""
+
+    def _drifted(self, tmp_path: Path, store: SQLiteStore) -> Path:
+        import numpy as np
+
+        vault = _write(tmp_path / "v", {**BASE, "Hub.md": AUGI_HUB})
+        run_layer0(vault, store)
+        hub_doc = Block.make_document_id("augi:hub-1")
+        # A deleted note, the old way: document gone, entries left behind.
+        other_entry = _entry(store, "Other.md")
+        store.conn.execute(
+            "DELETE FROM blocks WHERE id = ?", (Block.make_document_id("Other.md"),)
+        )
+        (vault / "Other.md").unlink()
+        # A current entry that lost its contains edge (must be re-attached).
+        linker_entry = _entry(store, "Linker.md")
+        store.delete_link(linker_entry, Block.make_document_id("Linker.md"), "contains")
+        # A moved augi note the old way: document still under its old path,
+        # still containing an entry of the old path.
+        (vault / "sub").mkdir()
+        (vault / "Hub.md").rename(vault / "sub" / "Hub.md")
+        old_entry = Block(
+            id="old-hub-entry",
+            kind="data_block",
+            source="vault",
+            content="old",
+            metadata={"source_path": "Hub.md"},
+        )
+        store.insert_blocks([old_entry])
+        store.insert_links([Link(from_id="old-hub-entry", to_id=hub_doc, kind="contains")])
+        # An embedding row whose block is long gone.
+        store.ensure_vec_table(4)
+        store.update_embeddings({other_entry: np.ones(4, dtype=np.float32).tobytes()})
+        store.conn.execute("DELETE FROM blocks WHERE id = ?", (other_entry,))
+        store.conn.commit()
+        # Re-add the orphan that DELETE just removed, as the old pipeline left it.
+        store.insert_blocks(
+            [
+                Block(
+                    id=other_entry,
+                    kind="data_block",
+                    source="vault",
+                    content="Also gone",
+                    metadata={"source_path": "Other.md"},
+                )
+            ]
+        )
+        store.conn.execute(
+            "INSERT INTO vec_blocks(block_id, embedding) VALUES ('ghost', ?)",
+            (np.ones(4, dtype=np.float32).tobytes(),),
+        )
+        store.conn.commit()
+        return vault
+
+    @pytest.mark.graph_drift_expected(reason="the dry run leaves the drift it reports")
+    def test_dry_run_reports_and_writes_nothing(self, tmp_path: Path, store: SQLiteStore):
+        from openaugi.adapters.vault import backfill_orphans
+
+        vault = self._drifted(tmp_path, store)
+        before = store.get_stats()
+        out = backfill_orphans(store, vault, dry_run=True)
+        assert out == {
+            "moved_documents": 1,
+            "documents_without_file": 0,
+            "their_entries": 0,
+            "stale_entries_of_moved_documents": 2,  # the real one and the planted one
+            "orphans_deleted": 1,
+            "orphans_reattached": 1,
+            "stale_vec_rows": 1,
+        }
+        assert store.get_stats() == before
+
+    def test_repairs_to_a_clean_graph_equal_to_a_fresh_ingest(
+        self, tmp_path: Path, store: SQLiteStore
+    ):
+        from openaugi.adapters.vault import backfill_orphans
+
+        vault = self._drifted(tmp_path, store)
+        assert "orphan_data_block" in _checks(store)
+        backfill_orphans(store, vault)
+        run_layer0(vault, store)  # the moved note's file changed path: re-parse
+        assert_graph_integrity(store, vault)
+        assert store.conn.execute("SELECT COUNT(*) FROM vec_blocks").fetchone()[0] == 0
+        again = backfill_orphans(store, vault)
+        assert set(again.values()) == {0}
+
+        full = SQLiteStore(tmp_path / "full.db")
+        try:
+            run_layer0(vault, full)
+            assert not snapshot_diff(graph_snapshot(store), graph_snapshot(full))
+        finally:
+            full.close()
+
+    def test_a_document_whose_file_is_gone_goes_with_its_entries(
+        self, tmp_path: Path, store: SQLiteStore
+    ):
+        from openaugi.adapters.vault import backfill_orphans
+
+        vault = _write(tmp_path / "v", BASE)
+        run_layer0(vault, store)
+        (vault / "Other.md").unlink()  # never ingested since
+        out = backfill_orphans(store, vault)
+        assert out["documents_without_file"] == 1 and out["their_entries"] == 1
+        assert _docs_for_path(store, "Other.md") == []
+
+
+def _docs_for_path(store: SQLiteStore, rel: str) -> list[str]:
+    return store.get_document_ids_by_source_path().get(rel, [])

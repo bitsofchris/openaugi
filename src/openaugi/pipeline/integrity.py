@@ -186,6 +186,37 @@ def _vault_checks(
         in_sync.add(sp)
         if parsed.id != doc_id:
             wrong_id.append(f"{sp}: stored {doc_id}, identity rule gives {parsed.id}")
+    # Entries: an unchanged note's stored entries are exactly a fresh parse's.
+    parsed_by_path: dict[str, set[str]] = {}
+    for bid, sp in entry_path.items():
+        parsed_by_path.setdefault(sp, set()).add(bid)
+    stored_by_path: dict[str, set[str]] = {}
+    for bid, sp in store.conn.execute(
+        """SELECT b.id, json_extract(d.metadata, '$.source_path')
+           FROM blocks b
+           JOIN links l ON l.from_id = b.id AND l.kind = 'contains'
+           JOIN blocks d ON d.id = l.to_id
+           WHERE b.kind = 'data_block'"""
+    ):
+        stored_by_path.setdefault(sp, set()).add(bid)
+    entries_missing: list[str] = []
+    entries_extra: list[str] = []
+    for sp in sorted(in_sync):
+        want, got = parsed_by_path.get(sp, set()), stored_by_path.get(sp, set())
+        entries_missing += [f"{sp} {b}" for b in sorted(want - got)]
+        entries_extra += [f"{sp} {b}" for b in sorted(got - want)]
+    _add(
+        out,
+        "entries_missing",
+        entries_missing,
+        "entry a fresh parse of an unchanged note produces, not stored under it",
+    )
+    _add(
+        out,
+        "entries_extra",
+        entries_extra,
+        "entry stored under an unchanged note that a fresh parse does not produce",
+    )
     _add(out, "document_without_file", no_file, "document whose source_path is not in the vault")
     _add(out, "document_identity", wrong_id, "document id differs from the identity rule")
 

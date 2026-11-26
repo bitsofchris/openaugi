@@ -28,6 +28,16 @@ raises. Known shapes:
 - leftover records (two documents for one source_path, entries of a deleted
   note).
 
+## Repairing a store
+
+`openaugi backfill-orphans` (`--dry-run` first) removes what deleted, renamed
+and moved notes left behind before ingest handled them: orphan data blocks
+with no live source (a block a fresh parse still produces is re-attached
+instead), documents whose file is gone, moved augi-keyed documents still
+under their old path (path updated, entries re-created by the next ingest),
+and embedding rows of blocks that no longer exist. `openaugi
+backfill-document-links --all-links` restores missing `links_to` edges.
+
 ## How it works
 
 ### The invariants — `src/openaugi/pipeline/integrity.py`
@@ -51,6 +61,7 @@ not drift):
 |---|---|
 | `document_without_file` | every stored document still has its file |
 | `document_identity` | every document's id is what the identity rule gives it (`document_id_for`) |
+| `entries_missing` / `entries_extra` | the entries stored under each unchanged note are exactly a fresh parse's |
 | `links_to_missing` / `links_to_extra` | the stored `links_to` edges of each unchanged note equal a fresh parse of it |
 | `unresolved_wikilink` (info) | wikilinks whose target is not a note; no edge is stored for them |
 
