@@ -24,6 +24,20 @@ python3 -m venv .venv
 .venv/bin/pyright src
 ```
 
+## Testing ingest and the graph
+
+Anything that writes blocks or links keeps the graph equal to what the vault
+says. Two rules (details: [docs/reference/graph-integrity.md](docs/reference/graph-integrity.md)):
+
+- **Integrity is checked for you.** Every test that ingests into the `store`
+  fixture ends with `assert_graph_integrity` (`tests/graph_integrity.py`). If
+  your test builds a drifted graph on purpose, mark it
+  `@pytest.mark.graph_drift_expected(reason=...)`.
+- **Incremental equals full.** A new lifecycle case or wikilink form is a new
+  row in `tests/test_graph_integrity.py` (`SCENARIOS`, `LINK_FORMS`), not a
+  one-off test. Known-open drift is `xfail(strict=True)` with its reason;
+  remove the marker in the change that fixes it.
+
 ## Pull Requests
 
 - One focused change per PR

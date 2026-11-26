@@ -100,3 +100,6 @@ venv = ".venv"
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-v --tb=short"
+markers = [
+    "graph_drift_expected(reason): the test builds a drifted graph on purpose; skip the after-ingest integrity check (tests/conftest.py)",
+]

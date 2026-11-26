@@ -85,3 +85,47 @@ def store(tmp_db: Path) -> SQLiteStore:
     s = SQLiteStore(tmp_db)
     yield s
     s.close()
+
+
+@pytest.fixture(autouse=True)
+def _graph_integrity_after_ingest(request):
+    """Every test that ingests a vault into the `store` fixture ends with the
+    graph-integrity invariants (tests/graph_integrity.py).
+
+    The last vault `run_layer0` parsed is recorded by wrapping the runner's
+    parse step on a private MonkeyPatch (a test's own monkeypatch.undo()
+    cannot remove it). Tests that build a drifted graph on purpose opt out
+    with `@pytest.mark.graph_drift_expected(reason=...)`.
+    """
+    if "store" not in request.fixturenames or request.node.get_closest_marker(
+        "graph_drift_expected"
+    ):
+        yield
+        return
+
+    from openaugi.pipeline import runner
+
+    # Taken now: by teardown the store fixture is already finalized (its
+    # connection reopens lazily; the DB file lives in tmp_path).
+    store = request.getfixturevalue("store")
+    seen: list[tuple[Path, list[str] | None]] = []
+    real = runner.parse_vault_incremental
+
+    def spy(vault_path, *args, **kwargs):
+        seen.append((Path(vault_path).expanduser(), kwargs.get("exclude_patterns")))
+        return real(vault_path, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(runner, "parse_vault_incremental", spy)
+        yield
+    if not seen:
+        return
+    from tests.graph_integrity import assert_graph_integrity
+
+    vault, excludes = seen[-1]
+    if not vault.is_dir():
+        return
+    try:
+        assert_graph_integrity(store, vault, excludes)
+    finally:
+        store.close()

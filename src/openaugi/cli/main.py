@@ -669,6 +669,62 @@ def backfill_source_tags_cmd(
         store.close()
 
 
+@app.command(name="check-graph")
+def check_graph_cmd(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    path: str | None = typer.Option(None, "--path", "-p", help="Vault path (default: config)"),
+    no_vault: bool = typer.Option(
+        False, "--no-vault", help="Store-only checks; skip re-parsing the vault"
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable output"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Check that the stored graph still says what the vault says. Read-only.
+
+    Reports duplicate documents, edges with a missing endpoint, data blocks no
+    document contains, documents whose file is gone or whose id breaks the
+    identity rule, and wikilinks in unchanged notes whose stored edges differ
+    from a fresh parse. Exits 1 when any error-level finding exists.
+    """
+    _setup_logging(verbose)
+    import json as json_mod
+
+    from openaugi.config import load_config, resolve_vault_path
+    from openaugi.pipeline.integrity import check_graph_integrity, errors
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    vault_path = None if no_vault else resolve_vault_path(path, config)
+    if not no_vault and not vault_path:
+        console.print(
+            "[red]No vault path: pass --path, set [vault] default_path, or --no-vault[/red]"
+        )
+        raise typer.Exit(2)
+
+    db_path = db or str(_default_db())
+    store = SQLiteStore(db_path, read_only=True)
+    try:
+        findings = check_graph_integrity(
+            store,
+            vault_path,
+            exclude_patterns=config.get("vault", {}).get("exclude_patterns"),
+        )
+    finally:
+        store.close()
+
+    if json_out:
+        print(json_mod.dumps([f.__dict__ for f in findings], indent=2))
+    else:
+        console.print(f"[bold]Database:[/bold] {db_path}")
+        console.print(f"[bold]Vault:[/bold] {vault_path or '(store-only)'}")
+        if not findings:
+            console.print("[green]No findings — the graph matches the vault.[/green]")
+        for f in findings:
+            console.print(str(f), markup=False, highlight=False)
+    if errors(findings):
+        raise typer.Exit(1)
+
+
 @app.command(name="backfill-document-links")
 def backfill_document_links_cmd(
     db: str | None = typer.Option(None, "--db", help="Database path"),

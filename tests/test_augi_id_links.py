@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from openaugi.adapters.vault import parse_vault
 from openaugi.model.block import Block
@@ -276,6 +277,7 @@ class TestBackfillDocumentLinks:
         assert out["relinked"] == {"Later": 1}
         assert _backlinks(store, later) == {_b_block_id(store)}
 
+    @pytest.mark.graph_drift_expected(reason="a dry run leaves the stale DB it reports on")
     def test_cli_dry_run(self, tmp_path: Path, store: SQLiteStore, monkeypatch):
         from typer.testing import CliRunner
 

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**`openaugi check-graph`: does the stored graph still say what the vault says?** A
+read-only checker for silent drift: duplicate documents, edges with a missing endpoint,
+data blocks no document contains (or the wrong one), documents whose file is gone or
+whose id breaks the identity rule, and wikilinks in unchanged notes whose stored edges
+differ from a fresh parse. Exits 1 on drift. Ingest now logs a WARNING when it drops an
+edge for any reason other than a link to a note that does not exist. Tests: every
+ingest test ends with the integrity check, wikilink forms are compared against an
+independent oracle, and a table of lifecycle steps must leave an incremental ingest equal
+to a fresh one; known-open drift is listed as strict xfails. See
+`docs/reference/graph-integrity.md`.
+
 **Wikilinks into a note with an `augi_id` reach it.** A note with `augi_id` in its
 frontmatter is keyed on it, but wikilinks were still resolved by path, so a backlink
 into such a note pointed at an id it no longer had: dropped at ingest when nothing had

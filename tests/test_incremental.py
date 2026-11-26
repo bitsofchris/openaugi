@@ -13,6 +13,8 @@ Uses a mutable temp vault (copied from fixtures) to test:
 import shutil
 from pathlib import Path
 
+import pytest
+
 from openaugi.model.block import Block
 from openaugi.pipeline.runner import run_layer0
 from openaugi.store.sqlite import SQLiteStore
@@ -183,6 +185,10 @@ class TestBlockLevelIncremental:
         assert len(new_entries) == 1
         assert new_entries[0].embedding is None
 
+    @pytest.mark.graph_drift_expected(
+        reason="a deleted file's data_blocks outlive its document; see "
+        "test_graph_integrity.py::test_incremental_equals_full[delete_plain_note]"
+    )
     def test_delete_file_cascades(self, tmp_path: Path, vault_path: Path, store: SQLiteStore):
         """Deleting a file should remove its document, entries, and links."""
         temp_vault = _make_temp_vault(tmp_path, vault_path)

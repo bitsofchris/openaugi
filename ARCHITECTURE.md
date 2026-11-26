@@ -58,6 +58,7 @@ src/openaugi/
 │   └── vault.py          # Obsidian vault → blocks + links (wraps splitter)
 ├── pipeline/              # Data plane — transforms on blocks + zzz dispatch
 │   ├── runner.py          # Layer 0 orchestrator (incremental ingestion)
+│   ├── integrity.py       # Read-only graph-vs-vault invariant checker; `openaugi check-graph` (docs/reference/graph-integrity.md)
 │   ├── kb_sync.py         # sync before read: `openaugi kb` re-indexes changed notes when the index is stale
 │   ├── embed.py           # Layer 1 embedding step → vec_blocks (sqlite-vec)
 │   ├── dispatch.py        # Post-ingest: zzz instructions → task files in OpenAugi/Tasks/
@@ -301,6 +302,7 @@ openaugi serve   ← MCP tools for one client                       (one per cli
 | `openaugi cluster-weather` | Growth/death report over cluster snapshots (feeds the cluster-weather lens; `--json`) |
 | `openaugi lineage "<topic>"` | Time-ordered semantic evidence for one idea (feeds the idea-lineage lens; `--write` emits the mobile timeline sidecar) |
 | `openaugi backfill-source-tags` | Apply `[vault.source_rules]` attribution to existing DB rows (once after adding rules) |
+| `openaugi check-graph` | Read-only: does the stored graph still say what the vault says? Exits 1 on drift (see [graph-integrity](docs/reference/graph-integrity.md)) |
 | `openaugi backfill-document-links` | Fold stale path-keyed documents into augi-keyed ones and restore dropped backlinks (`--dry-run` first; see [data-model](docs/reference/data-model.md) § Document identity) |
 
 ### Transports
@@ -328,6 +330,7 @@ throwaway. Plans are not kept in the repo (they live in the user's notes);
 the old `docs/plans/` is in git history. Reference docs use the skill
 format (`name:`/`description:` frontmatter) so they're scannable.
 
+- [docs/reference/graph-integrity.md](docs/reference/graph-integrity.md) — **Graph integrity:** the invariants the stored graph keeps against the vault, `openaugi check-graph`, and the testing rules (after-ingest check, link oracle, incremental equals full). Read before touching ingest, identity or links.
 - [docs/reference/core-principles.md](docs/reference/core-principles.md) — **The skeleton (read first when designing):** capture grammar, truth/index/cache/render layer model, trust model, promotion — the four invariants everything else hangs on.
 - [docs/reference/agentic-kb-field-guide.md](docs/reference/agentic-kb-field-guide.md) — The portable ruleset: what building this hardened or simplified from the "agent + janitor + flat folder" starting advice; transplantable to any agentic knowledge base.
 - [docs/reference/reading-queue.md](docs/reference/reading-queue.md) — Reading queue: notes flagged `reading_queue: true` pushed to Readwise Reader under a daily cap, highlights harvested back onto the note that produced them. Manual commands, nothing scheduled.

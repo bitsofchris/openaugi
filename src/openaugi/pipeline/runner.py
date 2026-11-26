@@ -171,13 +171,15 @@ def run_layer0(
                     existing_ids.add(bid)
 
         valid_ids = all_block_ids | existing_ids
-        valid_links = [lnk for lnk in links if lnk.from_id in valid_ids and lnk.to_id in valid_ids]
+        valid_links: list = []
+        skipped_links: list = []
+        for lnk in links:
+            ok = lnk.from_id in valid_ids and lnk.to_id in valid_ids
+            (valid_links if ok else skipped_links).append(lnk)
 
         link_count = store.insert_links(valid_links)
-        logger.info(
-            f"Inserted {link_count} links "
-            f"({len(links) - len(valid_links)} skipped — missing endpoints)"
-        )
+        logger.info(f"Inserted {link_count} links")
+        _report_skipped_links(skipped_links, set(current_hashes))
 
     stats = store.get_stats()
     logger.info(f"Store: {stats['total_blocks']} blocks, {stats['total_links']} links")
@@ -197,6 +199,36 @@ def run_layer0(
         "new_data_blocks": new_data_blocks,
         "removed_data_blocks": [b for b in removed_entries if b.kind == "data_block"],
     }
+
+
+def _report_skipped_links(skipped: list, vault_paths: set[str]) -> dict[str, int]:
+    """Say out loud which edges the valid-endpoint filter dropped.
+
+    One kind of drop is expected: a wikilink whose target is not a note in
+    the vault (`vault_paths`, every included file). Every other drop means an
+    edge was keyed by one rule while its endpoint was keyed by another, and
+    the graph silently lost it; that is a WARNING, with examples. Returns the
+    two counts (for tests).
+    """
+    stems = {Path(p).stem for p in vault_paths}
+    unresolved: list = []
+    unexpected: list = []
+    for lnk in skipped:
+        title = lnk.metadata.get("target_title", "")
+        expected = (
+            lnk.kind == "links_to" and title not in stems and f"{title}.md" not in vault_paths
+        )
+        (unresolved if expected else unexpected).append(lnk)
+    if unresolved:
+        logger.info("%d wikilink(s) to notes not in the vault — no edge stored", len(unresolved))
+    if unexpected:
+        logger.warning(
+            "%d edge(s) dropped: an endpoint is missing from the store (e.g. %s). "
+            "Run `openaugi check-graph` to see where the graph drifted.",
+            len(unexpected),
+            ", ".join(f"{lnk.kind} {lnk.from_id}->{lnk.to_id}" for lnk in unexpected[:3]),
+        )
+    return {"unresolved": len(unresolved), "unexpected": len(unexpected)}
 
 
 def _fold_rekeyed_documents(store: SQLiteStore, doc_blocks: dict[str, Block]) -> None:
