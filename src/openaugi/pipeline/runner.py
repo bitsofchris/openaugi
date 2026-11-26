@@ -78,6 +78,8 @@ def run_layer0(
         else:
             other_blocks.append(b)
 
+    _fold_rekeyed_documents(store, doc_blocks)
+
     # Block-level incremental: diff entries within each changed file
     blocks_to_insert: list[Block] = []
     # Entries deleted this cycle. An edit is a delete + an insert, so this is
@@ -195,6 +197,36 @@ def run_layer0(
         "new_data_blocks": new_data_blocks,
         "removed_data_blocks": [b for b in removed_entries if b.kind == "data_block"],
     }
+
+
+def _fold_rekeyed_documents(store: SQLiteStore, doc_blocks: dict[str, Block]) -> None:
+    """Fold a changed note's old document into its new one when its id changed.
+
+    A note that gains (or loses) an `augi_id` gets a new document id while its
+    old document still sits under the same source_path. Left alone, the old
+    one keeps every edge into the note (backlinks from notes that did not
+    change and so are never re-parsed, routes, recaps) and title lookups
+    find two documents. Folding it in before the diff moves those edges and
+    lets the diff below see, and retire, the old entries.
+    """
+    if not doc_blocks:
+        return
+    ids_by_path = store.get_document_ids_by_source_path()
+    for source_path, doc_block in doc_blocks.items():
+        stale = [i for i in ids_by_path.get(source_path, []) if i != doc_block.id]
+        if not stale:
+            continue
+        if not store.get_block(doc_block.id):
+            store.insert_blocks([doc_block])
+        for old_id in stale:
+            moved = store.merge_document(old_id, doc_block.id)
+            logger.info(
+                "%s: document re-keyed %s -> %s, edges moved: %s",
+                source_path,
+                old_id,
+                doc_block.id,
+                moved,
+            )
 
 
 def _get_known_doc_hashes(store: SQLiteStore) -> dict[str, str]:

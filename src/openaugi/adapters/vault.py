@@ -103,6 +103,7 @@ def parse_vault(
     logger.info(f"Found {len(included)} files (excluded {len(all_files) - len(included)})")
 
     file_index = _build_file_index(included, vault)
+    augi_ids = _build_augi_id_index(included, vault)
 
     all_blocks: list[Block] = []
     all_links: list[Link] = []
@@ -110,7 +111,7 @@ def parse_vault(
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_parse_file, f, vault, file_index, rules, prov_rules): f
+            executor.submit(_parse_file, f, vault, file_index, rules, prov_rules, augi_ids): f
             for f in included
         }
         for future in as_completed(futures):
@@ -173,14 +174,21 @@ def parse_vault_incremental(
     # Hash all files, determine which changed
     current_hashes: dict[str, str] = {}
     files_to_parse: list[Path] = []
+    # Every file is read here anyway, so the augi_id index for link
+    # resolution costs no extra I/O (see _resolve_document_id).
+    augi_ids: dict[str, str] = {}
 
     for file_path in included:
         rel_path = str(file_path.relative_to(vault))
         try:
-            content_hash = _hash_file(file_path)
+            raw = file_path.read_bytes()
         except Exception as e:
             logger.warning(f"Failed to hash {file_path}: {e}")
             continue
+        content_hash = _hash_bytes(raw)
+        augi_id = _augi_id_from_bytes(raw)
+        if augi_id:
+            augi_ids[rel_path] = augi_id
         current_hashes[rel_path] = content_hash
         if known_doc_hashes.get(rel_path) != content_hash:
             files_to_parse.append(file_path)
@@ -206,7 +214,7 @@ def parse_vault_incremental(
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_parse_file, f, vault, file_index, rules, prov_rules): f
+            executor.submit(_parse_file, f, vault, file_index, rules, prov_rules, augi_ids): f
             for f in files_to_parse
         }
         for future in as_completed(futures):
@@ -251,8 +259,13 @@ def _parse_file(
     file_index: dict[str, str],
     source_rules: list[tuple[str, str]] | None = None,
     provenance_rules: list[tuple[str, str]] | None = None,
+    augi_ids: dict[str, str] | None = None,
 ) -> tuple[list[Block], list[Link], dict[str, Block]]:
     """Parse a single .md file into blocks + links.
+
+    `augi_ids` is {rel_path: augi_id} for every note that has one, so a
+    wikilink lands on the target's real document id (see
+    `_resolve_document_id`).
 
     Returns (blocks, links, tag_blocks_dict).
     """
@@ -280,7 +293,7 @@ def _parse_file(
     # simply looked emptier than it should.
     file_hash = _hash_content(content)
     augi_id = _extract_augi_id(content)
-    doc_id = Block.make_document_id(f"augi:{augi_id}" if augi_id else rel_path)
+    doc_id = document_id_for(rel_path, augi_id)
     doc_block = Block(
         id=doc_id,
         kind="context_block:document",
@@ -366,7 +379,7 @@ def _parse_file(
             links.append(Link(from_id=entry_id, to_id=tag_id, kind="groups"))
 
         for link_target in seg.links:
-            target_doc_id = Block.make_document_id(_resolve_wikilink(link_target, file_index))
+            target_doc_id = _resolve_document_id(link_target, file_index, augi_ids or {})
             links.append(
                 Link(
                     from_id=entry_id,
@@ -451,6 +464,50 @@ def _resolve_wikilink(link_target: str, file_index: dict[str, str]) -> str:
     return file_index.get(link_target, f"{link_target}.md")
 
 
+def document_id_for(rel_path: str, augi_id: str | None) -> str:
+    """A note's document id: from its `augi_id` when it has one, else its path.
+
+    The one place this rule lives. Anything that turns a note into a document
+    id — the note's own block, a wikilink into it — goes through here, or
+    edges land on an id the note no longer has.
+    """
+    return Block.make_document_id(f"augi:{augi_id}" if augi_id else rel_path)
+
+
+def _resolve_document_id(
+    link_target: str, file_index: dict[str, str], augi_ids: dict[str, str]
+) -> str:
+    """The document id a wikilink points at.
+
+    Resolving to a path and hashing it is wrong for a target that carries an
+    `augi_id`: its document is keyed on that, so the edge pointed at an id that
+    either did not exist (and was dropped at insert) or belonged to a stale
+    path-keyed record left over from before the note was given its id.
+    """
+    rel_path = _resolve_wikilink(link_target, file_index)
+    return document_id_for(rel_path, augi_ids.get(rel_path))
+
+
+def _augi_id_from_bytes(raw: bytes) -> str | None:
+    """`augi_id` from a file's raw bytes; cheap when there is no frontmatter."""
+    if not raw.startswith(b"---"):
+        return None
+    return _extract_augi_id(raw.decode("utf-8", errors="replace"))
+
+
+def _build_augi_id_index(files: list[Path], vault_root: Path) -> dict[str, str]:
+    """{rel_path: augi_id} for every file that declares one."""
+    index: dict[str, str] = {}
+    for f in files:
+        try:
+            augi_id = _augi_id_from_bytes(f.read_bytes())
+        except OSError:
+            continue
+        if augi_id:
+            index[str(f.relative_to(vault_root))] = augi_id
+    return index
+
+
 # Document hashes gate file-level incremental parsing, so they are salted
 # with the splitter version: a segmentation-rule change re-parses every file
 # once (block-level diffing keeps unchanged segments, so only notes whose
@@ -461,7 +518,12 @@ _DOC_HASH_SALT = f"splitter-v{_splitter.SPLITTER_VERSION}:".encode()
 def _hash_file(file_path: Path) -> str:
     """Salted SHA-256 hash of file content (truncated to 16 hex chars)."""
     with open(file_path, "rb") as f:
-        return hashlib.sha256(_DOC_HASH_SALT + f.read()).hexdigest()[:16]
+        return _hash_bytes(f.read())
+
+
+def _hash_bytes(raw: bytes) -> str:
+    """Salted SHA-256 hash of raw file bytes — must match `_hash_file`."""
+    return hashlib.sha256(_DOC_HASH_SALT + raw).hexdigest()[:16]
 
 
 def _hash_content(content: str) -> str:

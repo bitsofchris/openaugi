@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+**Wikilinks into a note with an `augi_id` reach it.** A note with `augi_id` in its
+frontmatter is keyed on it, but wikilinks were still resolved by path, so a backlink
+into such a note pointed at an id it no longer had: dropped at ingest when nothing had
+that id, or attached to a stale path-keyed document left from before the note got its
+id (which also made title lookups and routing see two documents for one note). Links
+now resolve to the target's real document id. When a note gains an `augi_id`, ingest
+folds its old document into the new one, moving backlinks from notes that did not
+change, routes and recaps. Document-level clustering looks the id up instead of
+hashing the path.
+
 **Task launch: back to the `has-session` check, and tests now run on every push.**
 The 11/20 change that marked failed launches is reverted: its new session check
 asked tmux `display-message`, which exits 0 with empty output for a missing session

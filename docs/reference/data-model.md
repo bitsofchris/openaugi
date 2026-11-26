@@ -79,10 +79,24 @@ survives renames and moves. The value is opaque — any stable token works; it i
 a name, not a structure.
 
 **Give one to any note that receives `routed_to` edges** (containers), and skip
-it everywhere else. Adding one to a note that is already ingested changes its
-ID, which re-keys its edges — see
-`scripts/migrate_container_augi_id.py`, which does that remap and verifies no
-edge is lost.
+it everywhere else.
+
+**Everything that turns a note into a document ID goes through one rule**
+(`document_id_for` in `adapters/vault.py`): the note's `augi_id` if it has one,
+else its path. That includes wikilinks: a `links_to` edge into a note with an
+`augi_id` targets the augi-keyed document, so the vault adapter indexes every
+file's `augi_id` before parsing (from the same read that hashes the file for
+change detection, so it costs no extra I/O). Code that needs a stored note's
+document ID looks it up (`SQLiteStore.get_document_ids_by_source_path`) rather
+than hashing the path.
+
+**Adding one to a note that is already ingested changes its ID.** Ingest
+handles that: when a changed note's new document ID differs from the one
+already stored under the same `source_path`, the old document is folded into
+the new one (`SQLiteStore.merge_document`) before the block diff, so backlinks
+from notes that did not change, routes and recaps move with it, and entries
+the edit removed are retired as usual. `scripts/migrate_container_augi_id.py`
+is the original one-shot re-key from when `augi_id` was introduced.
 
 ### Tags as blocks
 

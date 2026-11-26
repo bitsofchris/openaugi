@@ -190,20 +190,21 @@ def load_document_embeddings(
     # Only include documents whose context_block:document actually exists in the DB.
     # Data ingested before document blocks were added, or from deleted files, may
     # have data_blocks with no corresponding document block — skip those to avoid
-    # FK violations when writing groups links.
-    existing_doc_ids: set[str] = {
-        r[0]
-        for r in store.conn.execute(
-            "SELECT id FROM blocks WHERE kind = 'context_block:document'"
-        ).fetchall()
-    }
+    # FK violations when writing groups links. The id is looked up, not derived
+    # from the path: a note with an `augi_id` is keyed on that.
+    doc_ids_by_path = store.get_document_ids_by_source_path()
 
     result: dict[str, np.ndarray] = {}
     skipped = 0
     for source_path, vecs in source_vecs.items():
-        doc_id = BlockModel.make_document_id(source_path)
-        if doc_id in existing_doc_ids:
-            result[doc_id] = np.mean(np.stack(vecs), axis=0).astype(np.float32)
+        ids = doc_ids_by_path.get(source_path, [])
+        if len(ids) > 1:
+            # A stale path-keyed document left behind when the note gained an
+            # augi_id; the other one is current.
+            path_id = BlockModel.make_document_id(source_path)
+            ids = [i for i in ids if i != path_id] or ids
+        if ids:
+            result[ids[0]] = np.mean(np.stack(vecs), axis=0).astype(np.float32)
         else:
             skipped += 1
 
