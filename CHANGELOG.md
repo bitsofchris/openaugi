@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**A `#` in a file name no longer breaks links to it.** The heading fix split every target
+at `#`, so a path-form link to an imported file named like `#828 Episode` resolved to
+nothing (the new dropped-edge WARNING caught it on the first live ingest). The whole
+target is now tried first, and every file is also indexed by its vault path, so
+`[[folder/note#heading]]` resolves too.
+
 **`openaugi backfill-orphans` cleans up what deleted and moved notes left behind.**
 Orphan data blocks with no live source, documents whose file is gone, moved augi-keyed
 documents still under their old path, and embedding rows of deleted blocks. Nothing a

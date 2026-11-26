@@ -1155,6 +1155,24 @@ class TestResolveWikilinkSubpaths:
         assert _resolve_wikilink("Note#^abc123", index) == "dir/Note.md"
         assert _resolve_wikilink("Note", index) == "dir/Note.md"
 
+    def test_a_hash_in_the_file_name_wins_over_a_heading(self):
+        from openaugi.adapters.vault import _resolve_wikilink
+
+        index = {
+            "#828 Episode": "pods/#828 Episode.md",
+            "pods/#828 Episode": "pods/#828 Episode.md",
+        }
+        assert _resolve_wikilink("#828 Episode", index) == "pods/#828 Episode.md"
+        assert _resolve_wikilink("pods/#828 Episode", index) == "pods/#828 Episode.md"
+
+    def test_path_form_with_heading(self, tmp_path: Path):
+        from openaugi.adapters.vault import _build_file_index, _resolve_wikilink
+
+        (tmp_path / "deep").mkdir()
+        (tmp_path / "deep" / "Nested.md").write_text("x")
+        index = _build_file_index([tmp_path / "deep" / "Nested.md"], tmp_path)
+        assert _resolve_wikilink("deep/Nested#Heading", index) == "deep/Nested.md"
+
     def test_same_note_heading_resolves_to_nothing(self):
         from openaugi.adapters.vault import _resolve_wikilink
 

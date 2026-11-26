@@ -201,7 +201,10 @@ def oracle_links(vault: Path) -> tuple[set[tuple[str, str]], set[tuple[str, str]
     for src in notes:
         text = _FENCE.sub("", (vault / src).read_text(encoding="utf-8"))
         for raw in _WIKILINK.findall(text):
-            target = raw.split("|")[0].split("#")[0].strip()
+            whole = raw.split("|")[0].strip()
+            # A file name may contain `#`; otherwise `#` starts a heading/block.
+            exists = any(n.removesuffix(".md").endswith(whole) for n in notes)
+            target = whole if exists else whole.split("#")[0].strip()
             if not target:
                 continue  # [[#heading]] — a link within the same note
             target = target.removesuffix(".md")
@@ -252,6 +255,7 @@ TARGETS = {
     "Keyed.md": "---\naugi_id: keyed-1\n---\n\n### 2022-01-01\nKeyed.\n",
     "Twin.md": "### 2022-01-01\nThe root twin.\n",
     "folder/Twin.md": "### 2022-01-01\nThe nested twin.\n",
+    "pods/#42 Episode.md": "### 2022-01-01\nAn imported episode.\n",
 }
 
 LINK_FORMS = [
@@ -263,6 +267,9 @@ LINK_FORMS = [
     pytest.param("See [[Target#Heading]].", id="heading"),
     pytest.param("See [[Target#^blk]].", id="block_ref"),
     pytest.param("See [[deep/Nested]].", id="path_form"),
+    pytest.param("See [[deep/Nested#Heading]].", id="path_form_with_heading"),
+    pytest.param("See [[#42 Episode]].", id="hash_in_file_name"),
+    pytest.param("See [[pods/#42 Episode]].", id="hash_in_file_name_path_form"),
     pytest.param(
         "See [[target]].",
         id="case_insensitive",

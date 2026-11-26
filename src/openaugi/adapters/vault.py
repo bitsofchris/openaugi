@@ -446,13 +446,16 @@ def _build_file_index(files: list[Path], vault_root: Path) -> dict[str, str]:
     """Build {stem → relative_path} index for fast wikilink resolution.
 
     If multiple files share a stem, the first one wins (matches Obsidian behavior
-    for shortest-path resolution).
+    for shortest-path resolution). Every file is also indexed by its path
+    without `.md`, for path-form links (`[[folder/note]]`); a stem never
+    contains `/`, so the two kinds of key cannot collide.
     """
     index: dict[str, str] = {}
     for f in files:
-        stem = f.stem
-        if stem not in index:
-            index[stem] = str(f.relative_to(vault_root))
+        rel = str(f.relative_to(vault_root))
+        index.setdefault(f.stem, rel)
+        if "/" in rel:
+            index.setdefault(rel.removesuffix(".md"), rel)
     return index
 
 
@@ -461,13 +464,17 @@ def _resolve_wikilink(link_target: str, file_index: dict[str, str]) -> str:
 
     O(1) lookup instead of rglob per link. `[[note#heading]]` and
     `[[note#^block]]` link to `note`; the part after `#` names a place inside
-    it. A bare `[[#heading]]` is a link within the same note and resolves to
-    nothing.
+    it, unless the whole target names a file (some importers put `#` in file
+    names). A bare `[[#heading]]` is a link within the same note and resolves
+    to nothing.
     """
+    if link_target in file_index:
+        # Whole target first: a file name may itself contain `#`.
+        return file_index[link_target]
     name = link_target.split("#", 1)[0].strip()
-    if not name:
-        return f"{link_target}.md"
-    return file_index.get(name, f"{name}.md")
+    if name and name in file_index:
+        return file_index[name]
+    return f"{link_target}.md"
 
 
 def document_id_for(rel_path: str, augi_id: str | None) -> str:
