@@ -787,6 +787,133 @@ def backfill_source_tags(
     return stats
 
 
+def backfill_document_links(
+    store,
+    vault_path: str | Path,
+    exclude_patterns: list[str] | None = None,
+    dry_run: bool = False,
+    all_links: bool = False,
+) -> dict[str, Any]:
+    """Repair a DB ingested while wikilinks into augi-keyed notes resolved by path.
+
+    Two kinds of damage, both silent:
+
+    1. **Stale documents.** A note that gained an `augi_id` after it was first
+       ingested has two document blocks under one source_path: the old
+       path-keyed one, which kept every backlink, route, cluster edge and
+       recap, and the augi-keyed one ingest has updated since. Each stale
+       document is folded into the current one (`SQLiteStore.merge_document`).
+       Entries contained only by the stale document and absent from the file
+       today are edits ingest never retired (it diffed against the new
+       document); they are deleted first, as an ingest would have.
+    2. **Dropped links.** A wikilink into a note whose document was already
+       augi-keyed resolved to a path id nothing had, so ingest dropped it.
+       The vault is re-parsed with the current resolver and every `links_to`
+       edge whose target is an augi-keyed document, whose endpoints both
+       exist and which is missing, is inserted. With `all_links`, every
+       missing `links_to` edge is inserted (e.g. links written before their
+       target note existed, which ingest also never revisits).
+
+    Only notes whose current document is in the DB are touched; a note edited
+    since the last ingest is left to the next ingest. Idempotent.
+
+    Returns {"merged": [...], "relinked": {title: n}, "relinked_total": n,
+    "other_missing_links": n, "skipped_not_ingested": [source_path]}.
+    """
+    blocks, links = parse_vault(vault_path, exclude_patterns=exclude_patterns)
+    parsed_docs = {
+        b.metadata["source_path"]: b for b in blocks if b.kind == "context_block:document"
+    }
+    parsed_entry_ids = {b.id for b in blocks if b.kind == "data_block"}
+    augi_doc_ids = {b.id for b in parsed_docs.values() if b.metadata.get("augi_id")}
+    existing_ids = {r[0] for r in store.conn.execute("SELECT id FROM blocks")}
+
+    # ── 1. Fold stale documents into the current one ──
+    merged: list[dict[str, Any]] = []
+    skipped: list[str] = []
+    redirect: dict[str, str] = {}  # stale id → current id
+    for source_path, doc_ids in store.get_document_ids_by_source_path().items():
+        current = parsed_docs.get(source_path)
+        if current is None:
+            continue
+        stale_ids = [i for i in doc_ids if i != current.id]
+        if not stale_ids:
+            continue
+        if current.id not in existing_ids:
+            skipped.append(source_path)
+            continue
+        current_entries = {e.id for e in store.get_entries_for_document(current.id)}
+        for stale_id in stale_ids:
+            orphans = [
+                e.id
+                for e in store.get_entries_for_document(stale_id)
+                if e.id not in current_entries and e.id not in parsed_entry_ids
+            ]
+            moved = store.count_document_merge(stale_id, current.id)
+            if orphans:
+                moved["contains"] = moved.get("contains", 0) - len(orphans)
+                if not moved["contains"]:
+                    del moved["contains"]
+            if not dry_run:
+                for orphan_id in orphans:
+                    store.delete_block(orphan_id)
+                moved = store.merge_document(stale_id, current.id)
+                existing_ids.discard(stale_id)
+            redirect[stale_id] = current.id
+            merged.append(
+                {
+                    "source_path": source_path,
+                    "title": current.title,
+                    "old_id": stale_id,
+                    "new_id": current.id,
+                    "moved": moved,
+                    "orphans_removed": len(orphans),
+                }
+            )
+
+    # ── 2. Insert the links_to edges ingest dropped ──
+    have: set[tuple[str, str]] = {
+        (f, redirect.get(t) or t)
+        for f, t in store.conn.execute("SELECT from_id, to_id FROM links WHERE kind = 'links_to'")
+    }
+    titles = {b.id: b.title or "" for b in parsed_docs.values()}
+    to_insert: list[Link] = []
+    relinked: dict[str, int] = {}
+    other_missing = 0
+    seen: set[tuple[str, str]] = set()
+    for lnk in links:
+        if lnk.kind != "links_to":
+            continue
+        key = (lnk.from_id, lnk.to_id)
+        if key in have or key in seen:
+            continue
+        if lnk.from_id not in existing_ids or lnk.to_id not in existing_ids:
+            continue
+        seen.add(key)
+        if lnk.to_id not in augi_doc_ids and not all_links:
+            other_missing += 1
+            continue
+        to_insert.append(lnk)
+        title = titles.get(lnk.to_id, lnk.to_id)
+        relinked[title] = relinked.get(title, 0) + 1
+
+    if to_insert and not dry_run:
+        store.insert_links(to_insert)
+    logger.info(
+        "Document links backfill: %d stale documents folded, %d links_to restored%s",
+        len(merged),
+        len(to_insert),
+        " (dry run)" if dry_run else "",
+    )
+    return {
+        "merged": merged,
+        "relinked": relinked,
+        "relinked_total": len(to_insert),
+        "other_missing_links": other_missing,
+        "skipped_not_ingested": skipped,
+    }
+
+
 def _unique_ordered(items: list[str]) -> list[str]:
     """Deduplicate while preserving order."""
     seen: set[str] = set()

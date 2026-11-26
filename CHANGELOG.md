@@ -10,7 +10,9 @@ id (which also made title lookups and routing see two documents for one note). L
 now resolve to the target's real document id. When a note gains an `augi_id`, ingest
 folds its old document into the new one, moving backlinks from notes that did not
 change, routes and recaps. Document-level clustering looks the id up instead of
-hashing the path.
+hashing the path. `openaugi backfill-document-links` (`--dry-run` first) repairs a
+database written before this: it folds the stale documents and restores the dropped
+backlinks.
 
 **Task launch: back to the `has-session` check, and tests now run on every push.**
 The 11/20 change that marked failed launches is reverted: its new session check

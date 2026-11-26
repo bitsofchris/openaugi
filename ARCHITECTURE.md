@@ -301,6 +301,7 @@ openaugi serve   ← MCP tools for one client                       (one per cli
 | `openaugi cluster-weather` | Growth/death report over cluster snapshots (feeds the cluster-weather lens; `--json`) |
 | `openaugi lineage "<topic>"` | Time-ordered semantic evidence for one idea (feeds the idea-lineage lens; `--write` emits the mobile timeline sidecar) |
 | `openaugi backfill-source-tags` | Apply `[vault.source_rules]` attribution to existing DB rows (once after adding rules) |
+| `openaugi backfill-document-links` | Fold stale path-keyed documents into augi-keyed ones and restore dropped backlinks (`--dry-run` first; see [data-model](docs/reference/data-model.md) § Document identity) |
 
 ### Transports
 

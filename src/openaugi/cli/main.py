@@ -669,6 +669,78 @@ def backfill_source_tags_cmd(
         store.close()
 
 
+@app.command(name="backfill-document-links")
+def backfill_document_links_cmd(
+    db: str | None = typer.Option(None, "--db", help="Database path"),
+    path: str | None = typer.Option(None, "--path", "-p", help="Vault path (default: config)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Report per note, write nothing"),
+    all_links: bool = typer.Option(
+        False,
+        "--all-links",
+        help="Also restore missing links_to edges into notes without an augi_id",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+):
+    """Repair backlinks into notes that carry an augi_id.
+
+    Folds a note's stale path-keyed document into its augi-keyed one (moving
+    backlinks, routes, cluster edges and recaps), then re-parses the vault and
+    restores the links_to edges ingest dropped because they resolved to a
+    path id. Snapshot the DB first. Idempotent.
+    """
+    _setup_logging(verbose)
+
+    from openaugi.adapters.vault import backfill_document_links
+    from openaugi.config import load_config, resolve_vault_path
+    from openaugi.store.sqlite import SQLiteStore
+
+    config = load_config()
+    vault_path = resolve_vault_path(path, config)
+    if not vault_path:
+        console.print("[red]No vault path: pass --path or set [vault] default_path[/red]")
+        raise typer.Exit(1)
+
+    db_path = db or str(_default_db())
+    console.print(f"[bold]Database:[/bold] {db_path}")
+    console.print(f"[bold]Vault:[/bold] {vault_path}")
+    if dry_run:
+        console.print("[yellow]Dry run — no DB writes[/yellow]")
+
+    store = SQLiteStore(db_path)
+    try:
+        out = backfill_document_links(
+            store,
+            vault_path,
+            exclude_patterns=config.get("vault", {}).get("exclude_patterns"),
+            dry_run=dry_run,
+            all_links=all_links,
+        )
+        verb = "Would fold" if dry_run else "Folded"
+        console.print(f"\n[bold]{verb} {len(out['merged'])} stale document(s)[/bold]")
+        for m in out["merged"]:
+            moved = ", ".join(f"{k} {n}" for k, n in sorted(m["moved"].items())) or "no edges"
+            console.print(
+                f"  {m['title']}: {m['old_id']} -> {m['new_id']} — {moved}; "
+                f"{m['orphans_removed']} retired entries"
+            )
+        verb = "Would restore" if dry_run else "Restored"
+        console.print(f"\n[bold]{verb} {out['relinked_total']} links_to edge(s)[/bold]")
+        for title, n in sorted(out["relinked"].items(), key=lambda kv: -kv[1]):
+            console.print(f"  {title}: {n}")
+        if out["other_missing_links"]:
+            console.print(
+                f"\n{out['other_missing_links']} other links_to edge(s) into notes without an "
+                "augi_id are missing too (--all-links restores them)"
+            )
+        if out["skipped_not_ingested"]:
+            console.print(
+                f"\n[yellow]Skipped {len(out['skipped_not_ingested'])} note(s) changed since "
+                "the last ingest; the next ingest folds them.[/yellow]"
+            )
+    finally:
+        store.close()
+
+
 @app.command(name="backfill-provenance")
 def backfill_provenance_cmd(
     db: str | None = typer.Option(None, "--db", help="Database path"),

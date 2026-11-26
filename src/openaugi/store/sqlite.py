@@ -428,6 +428,30 @@ class SQLiteStore:
                 out.setdefault(source_path, []).append(doc_id)
         return out
 
+    def count_document_merge(self, old_id: str, new_id: str) -> dict[str, int]:
+        """{kind: edges} that `merge_document(old_id, new_id)` would re-point.
+
+        Edges the new document already has are not counted (they are dropped).
+        """
+        moved: dict[str, int] = {}
+        if old_id == new_id:
+            return moved
+        for sql in (
+            """SELECT kind, COUNT(*) FROM links l
+               WHERE to_id = :old AND from_id != :new AND NOT EXISTS (
+                 SELECT 1 FROM links x
+                 WHERE x.from_id = l.from_id AND x.to_id = :new AND x.kind = l.kind)
+               GROUP BY kind""",
+            """SELECT kind, COUNT(*) FROM links l
+               WHERE from_id = :old AND to_id != :new AND NOT EXISTS (
+                 SELECT 1 FROM links x
+                 WHERE x.from_id = :new AND x.to_id = l.to_id AND x.kind = l.kind)
+               GROUP BY kind""",
+        ):
+            for kind, n in self.conn.execute(sql, {"old": old_id, "new": new_id}):
+                moved[kind] = moved.get(kind, 0) + n
+        return moved
+
     def merge_document(self, old_id: str, new_id: str) -> dict[str, int]:
         """Fold document `old_id` into `new_id`, then delete `old_id`.
 
@@ -442,22 +466,8 @@ class SQLiteStore:
         """
         if old_id == new_id:
             return {}
-        moved: dict[str, int] = {}
+        moved = self.count_document_merge(old_id, new_id)
         with self.conn:
-            for sql in (
-                """SELECT kind, COUNT(*) FROM links l
-                   WHERE to_id = :old AND from_id != :new AND NOT EXISTS (
-                     SELECT 1 FROM links x
-                     WHERE x.from_id = l.from_id AND x.to_id = :new AND x.kind = l.kind)
-                   GROUP BY kind""",
-                """SELECT kind, COUNT(*) FROM links l
-                   WHERE from_id = :old AND to_id != :new AND NOT EXISTS (
-                     SELECT 1 FROM links x
-                     WHERE x.from_id = :new AND x.to_id = l.to_id AND x.kind = l.kind)
-                   GROUP BY kind""",
-            ):
-                for kind, n in self.conn.execute(sql, {"old": old_id, "new": new_id}):
-                    moved[kind] = moved.get(kind, 0) + n
             self.conn.execute(
                 """INSERT OR IGNORE INTO links
                    (from_id, to_id, kind, weight, metadata, ingested_at)

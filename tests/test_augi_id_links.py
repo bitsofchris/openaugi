@@ -184,3 +184,110 @@ class TestClusterDocumentEmbeddings:
         store.conn.execute("UPDATE blocks SET embedding = ? WHERE kind = 'data_block'", (vec,))
         store.conn.commit()
         assert A_AUGI in load_document_embeddings(store)
+
+
+class TestBackfillDocumentLinks:
+    """Repair a DB written by the old resolver (see the module docstring)."""
+
+    def _stale_db(self, tmp_path: Path, store: SQLiteStore, monkeypatch) -> Path:
+        """A gained an augi_id (and lost a section) under the old pipeline:
+        a new augi-keyed document, the old one keeping B's backlink."""
+        from openaugi.pipeline import runner
+
+        v = _write_vault(tmp_path / "v", a_has_id=False)
+        run_layer0(v, store)
+        store.insert_links([Link(from_id=_b_block_id(store), to_id=A_PATH, kind="routed_to")])
+        (v / "Hub A.md").write_text(A_FM + "### 2022-01-01\nFirst thought.\n")
+        monkeypatch.setattr(runner, "_fold_rekeyed_documents", lambda *_: None)
+        run_layer0(v, store)
+        monkeypatch.undo()
+        assert sorted(_docs_for(store, "Hub A.md")) == sorted([A_PATH, A_AUGI])
+        assert _backlinks(store, A_AUGI) == set()
+        return v
+
+    def test_folds_the_stale_document(self, tmp_path: Path, store: SQLiteStore, monkeypatch):
+        from openaugi.adapters.vault import backfill_document_links
+
+        v = self._stale_db(tmp_path, store, monkeypatch)
+        out = backfill_document_links(store, v)
+        (m,) = out["merged"]
+        assert (m["old_id"], m["new_id"]) == (A_PATH, A_AUGI)
+        assert m["moved"] == {"links_to": 1, "routed_to": 1}
+        assert m["orphans_removed"] == 1
+        assert _docs_for(store, "Hub A.md") == [A_AUGI]
+        assert _backlinks(store, A_AUGI) == {_b_block_id(store)}
+        assert len(store.get_entries_for_document(A_AUGI)) == 1
+
+    def test_dry_run_writes_nothing_and_reports_the_same(
+        self, tmp_path: Path, store: SQLiteStore, monkeypatch
+    ):
+        from openaugi.adapters.vault import backfill_document_links
+
+        v = self._stale_db(tmp_path, store, monkeypatch)
+        before = store.get_stats()
+        dry = backfill_document_links(store, v, dry_run=True)
+        assert store.get_stats() == before
+        real = backfill_document_links(store, v)
+        assert dry == real
+
+    def test_idempotent(self, tmp_path: Path, store: SQLiteStore, monkeypatch):
+        from openaugi.adapters.vault import backfill_document_links
+
+        v = self._stale_db(tmp_path, store, monkeypatch)
+        backfill_document_links(store, v)
+        again = backfill_document_links(store, v)
+        assert again["merged"] == [] and again["relinked_total"] == 0
+
+    def test_restores_links_the_old_resolver_dropped(
+        self, tmp_path: Path, store: SQLiteStore, monkeypatch
+    ):
+        from openaugi.adapters import vault
+        from openaugi.adapters.vault import backfill_document_links
+
+        v = _write_vault(tmp_path / "v")
+        monkeypatch.setattr(
+            vault,
+            "_resolve_document_id",
+            lambda t, idx, _ids: Block.make_document_id(vault._resolve_wikilink(t, idx)),
+        )
+        run_layer0(v, store)
+        monkeypatch.undo()
+        assert _backlinks(store, A_AUGI) == set()
+
+        out = backfill_document_links(store, v)
+        assert out["relinked"] == {"Hub A": 1}
+        assert _backlinks(store, A_AUGI) == {_b_block_id(store)}
+
+    def test_other_missing_links_only_with_all_links(self, tmp_path: Path, store: SQLiteStore):
+        """A link written before its target existed is never revisited by ingest."""
+        from openaugi.adapters.vault import backfill_document_links
+
+        v = _write_vault(tmp_path / "v")
+        (v / "Note B.md").write_text(B_BODY + "Also [[Later]].\n")
+        run_layer0(v, store)
+        (v / "Later.md").write_text("Arrived.\n")
+        run_layer0(v, store)
+        later = Block.make_document_id("Later.md")
+        assert _backlinks(store, later) == set()
+
+        out = backfill_document_links(store, v)
+        assert out["other_missing_links"] == 1 and out["relinked_total"] == 0
+        out = backfill_document_links(store, v, all_links=True)
+        assert out["relinked"] == {"Later": 1}
+        assert _backlinks(store, later) == {_b_block_id(store)}
+
+    def test_cli_dry_run(self, tmp_path: Path, store: SQLiteStore, monkeypatch):
+        from typer.testing import CliRunner
+
+        from openaugi.cli.main import app
+
+        v = self._stale_db(tmp_path, store, monkeypatch)
+        before = store.get_stats()
+        result = CliRunner().invoke(
+            app,
+            ["backfill-document-links", "--db", str(store.db_path), "--path", str(v), "--dry-run"],
+        )
+        assert result.exit_code == 0, result.output
+        assert "Would fold 1 stale document" in result.output
+        assert "links_to 1" in result.output
+        assert store.get_stats() == before

@@ -98,6 +98,15 @@ from notes that did not change, routes and recaps move with it, and entries
 the edit removed are retired as usual. `scripts/migrate_container_augi_id.py`
 is the original one-shot re-key from when `augi_id` was introduced.
 
+**Repairing a DB ingested before the fold and the resolver fix:**
+`openaugi backfill-document-links --dry-run`, then without `--dry-run` (snapshot
+the DB first). It folds every stale document into the current one, deleting
+entries only the stale document contained that are no longer in the file, and
+re-parses the vault to insert the `links_to` edges into augi-keyed notes that
+ingest dropped. `--all-links` also restores other missing `links_to` edges,
+such as a link written before its target note existed (ingest only re-parses
+the note that changed, so such a link is never revisited).
+
 ### Tags as blocks
 
 Tags are first-class graph nodes, not string annotations. This means hub scoring, traversal, and entity resolution work uniformly across all block kinds. A tag like `#data-engineering` is a block that connects to every document and entry tagged with it — making it a natural navigation hub.
