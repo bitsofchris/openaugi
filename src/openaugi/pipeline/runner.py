@@ -51,14 +51,22 @@ def run_layer0(
         provenance_rules=provenance_rules,
     )
 
-    # Handle deleted files — CASCADE removes entries and their links
+    # Handle deleted files: the document and the entries it contains. The
+    # document is found by its stored source_path, not by hashing the path (a
+    # note with an augi_id is keyed on that). A document this run re-parsed
+    # under another path was moved or renamed, not deleted: it keeps its
+    # identity and its edges, and the diff below records the new path.
+    parsed_doc_ids = {b.id for b in blocks if b.kind == "context_block:document"}
+    ids_by_path = store.get_document_ids_by_source_path() if deleted_paths else {}
     deleted_count = 0
     for rel_path in deleted_paths:
-        doc_id = Block.make_document_id(rel_path)
-        if store.delete_block(doc_id):
-            deleted_count += 1
+        for doc_id in ids_by_path.get(rel_path, []):
+            if doc_id in parsed_doc_ids:
+                continue
+            if store.delete_document(doc_id):
+                deleted_count += 1
     if deleted_count:
-        logger.info(f"Removed {deleted_count} deleted document blocks")
+        logger.info(f"Removed {deleted_count} deleted documents and their entries")
 
     # Group new blocks by document for block-level diffing
     doc_blocks: dict[str, Block] = {}  # source_path → document block
@@ -103,8 +111,13 @@ def run_layer0(
             old_entries = store.get_entries_for_document(doc_id)
             old_hashes = {e.content_hash for e in old_entries}
 
-            # Entries to keep (hash in both old and new) — don't touch them
-            kept_hashes = old_hashes & new_hashes
+            # Entries to keep (hash in both old and new) — don't touch them.
+            # A moved note (same augi_id, new path) keeps none: an entry's id
+            # and metadata carry its path, so every entry is re-created.
+            moved = existing_doc.metadata.get("source_path") != source_path
+            if moved:
+                store.update_document_path(doc_id, source_path, doc_block.title)
+            kept_hashes = set() if moved else old_hashes & new_hashes
             blocks_kept += len(kept_hashes)
 
             # Entries to remove (hash in old but not new). An edited block IS
@@ -113,7 +126,7 @@ def run_layer0(
             # review queue and the next pass re-decides (aaa: instructions in
             # the text carry the durable human intent). DB is a projection;
             # decisions are re-derived, never fuzzily migrated.
-            removed_hashes = old_hashes - new_hashes
+            removed_hashes = old_hashes - kept_hashes
             dropped_routes = 0
             for old_entry in old_entries:
                 if old_entry.content_hash in removed_hashes:

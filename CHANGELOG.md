@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**Deleting a note deletes its blocks.** Removing a note's document cascaded its edges but
+left the data blocks it contained: contained by nothing, still embedded, still found by
+search. Ingest now deletes a removed note's document together with its entries, their
+embeddings (`vec_blocks` rows, which no foreign key reaches, were also left behind by
+every edited block) and their search rows. A note with an `augi_id` that is moved or
+renamed keeps its document and edges and records the new path; its entries are
+re-created under it (routing on the entries themselves is not carried over). A deleted
+note with an `augi_id` is now found and removed.
+
 **`[[note#heading]]` and `[[note#^block]]` link to the note.** The part after `#` was
 taken as part of the file name, so every heading or block link resolved to nothing and
 no edge was stored. Notes ingested before this keep their missing edges until edited;

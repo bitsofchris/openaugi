@@ -95,7 +95,12 @@ handles that: when a changed note's new document ID differs from the one
 already stored under the same `source_path`, the old document is folded into
 the new one (`SQLiteStore.merge_document`) before the block diff, so backlinks
 from notes that did not change, routes and recaps move with it, and entries
-the edit removed are retired as usual. `scripts/migrate_container_augi_id.py`
+the edit removed are retired as usual. **Moving or renaming** a note with an
+`augi_id` keeps its document (and every edge into it) and records the new
+`source_path` and title; its entries are re-created, since an entry's id carries
+its path. **Deleting** a note deletes its document and the entries it contains
+(`SQLiteStore.delete_document`), embeddings and search rows included.
+`scripts/migrate_container_augi_id.py`
 is the original one-shot re-key from when `augi_id` was introduced.
 
 **Repairing a DB ingested before the fold and the resolver fix:**

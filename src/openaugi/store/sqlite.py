@@ -380,10 +380,57 @@ class SQLiteStore:
         return [_row_to_block(r) for r in rows], total
 
     def delete_block(self, block_id: str) -> bool:
-        """Delete a block by ID. CASCADE deletes its links."""
+        """Delete a block by ID. CASCADE deletes its links, the FTS trigger its
+        index row; its vec_blocks row (a virtual table, no FK) is deleted here."""
         cursor = self.conn.execute("DELETE FROM blocks WHERE id = ?", (block_id,))
+        self._delete_vec_rows([block_id])
         self.conn.commit()
         return cursor.rowcount > 0
+
+    def delete_blocks(self, block_ids: list[str]) -> int:
+        """Delete many blocks (links CASCADE, FTS by trigger, vec rows here)."""
+        if not block_ids:
+            return 0
+        deleted = 0
+        for i in range(0, len(block_ids), 500):
+            chunk = block_ids[i : i + 500]
+            q = ",".join("?" * len(chunk))
+            deleted += self.conn.execute(f"DELETE FROM blocks WHERE id IN ({q})", chunk).rowcount
+        self._delete_vec_rows(block_ids)
+        self.conn.commit()
+        return deleted
+
+    def _delete_vec_rows(self, block_ids: list[str]) -> None:
+        if block_ids and self._vec_table_exists():
+            self.conn.executemany(
+                "DELETE FROM vec_blocks WHERE block_id = ?", [(b,) for b in block_ids]
+            )
+
+    def delete_document(self, doc_id: str) -> int:
+        """Delete a document and the data_blocks it contains. Returns blocks removed.
+
+        Deleting only the document CASCADEs its `contains` edges and leaves its
+        entries behind, contained by nothing but still embedded and searchable.
+        An entry some other document also contains is kept.
+        """
+        entry_ids = [
+            r[0]
+            for r in self.conn.execute(
+                """SELECT l.from_id FROM links l
+                   JOIN blocks b ON b.id = l.from_id AND b.kind = 'data_block'
+                   WHERE l.to_id = ? AND l.kind = 'contains'
+                     AND NOT EXISTS (SELECT 1 FROM links x WHERE x.from_id = l.from_id
+                                     AND x.kind = 'contains' AND x.to_id != l.to_id)""",
+                (doc_id,),
+            )
+        ]
+        return self.delete_blocks([*entry_ids, doc_id])
+
+    def update_document_path(self, doc_id: str, source_path: str, title: str | None) -> None:
+        """Record a document's new path and title after its note moved."""
+        self.update_block_metadata(doc_id, {"source_path": source_path})
+        self.conn.execute("UPDATE blocks SET title = ? WHERE id = ?", (title, doc_id))
+        self.conn.commit()
 
     def delete_blocks_by_source_path(self, source_path: str) -> int:
         """Delete all blocks from a source path (via metadata). Returns count."""

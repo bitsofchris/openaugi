@@ -305,15 +305,22 @@ def move(src: str, dst: str) -> Step:
     return step
 
 
+def together(*steps: Step) -> Step:
+    """Several changes landing before one ingest."""
+
+    def step(v: Path) -> None:
+        for one in steps:
+            one(v)
+
+    return step
+
+
 AUGI_HUB = "---\naugi_id: hub-1\n---\n\n" + BASE["Hub.md"]
 
-DELETE_LEAVES_ENTRIES = (
-    "a deleted (or renamed, or moved) note's data_blocks outlive its document: "
-    "deleting the document cascades its contains edges, not its entries"
-)
-AUGI_PATH_IS_STALE = (
-    "an augi-keyed document keeps its first source_path: a move or rename is "
-    "never recorded and a delete never finds the document (it looks up the path id)"
+STALE_RESOLUTION = (
+    "an unchanged note's links are never re-resolved when their target is "
+    "renamed away: its edges keep following the augi_id while a fresh parse "
+    "finds [[Hub]] unresolved"
 )
 LINK_BEFORE_TARGET = (
     "a link to a note that does not exist yet is dropped, and the linking note "
@@ -352,29 +359,27 @@ SCENARIOS = [
         [write("Linker.md", "### 2022-01-02\n[[Hub|the hub]], [[Hub#Heading]].\n")],
         id="alias_and_heading_forms",
     ),
+    pytest.param([delete("Other.md")], id="delete_plain_note"),
+    pytest.param([move("Hub.md", "Hub Renamed.md")], id="rename_plain_note"),
     pytest.param(
-        [delete("Other.md")], id="delete_plain_note", marks=_xfail(DELETE_LEAVES_ENTRIES)
-    ),
-    pytest.param(
-        [move("Hub.md", "Hub Renamed.md")],
-        id="rename_plain_note",
-        marks=_xfail(DELETE_LEAVES_ENTRIES),
+        [
+            write("Hub.md", AUGI_HUB),
+            # One step, as Obsidian does it: rename and rewrite the links into it.
+            together(
+                move("Hub.md", "Hub Renamed.md"),
+                write("Linker.md", "### 2022-01-02\nSee [[Hub Renamed]].\n"),
+                write("Other.md", "### 2022-01-03\nAlso [[Hub Renamed]] and [[Linker]].\n"),
+            ),
+        ],
+        id="rename_augi_note",
     ),
     pytest.param(
         [write("Hub.md", AUGI_HUB), move("Hub.md", "Hub Renamed.md")],
-        id="rename_augi_note",
-        marks=_xfail(AUGI_PATH_IS_STALE),
+        id="rename_augi_note_links_not_rewritten",
+        marks=_xfail(STALE_RESOLUTION),
     ),
-    pytest.param(
-        [write("Hub.md", AUGI_HUB), move("Hub.md", "sub/Hub.md")],
-        id="move_augi_note",
-        marks=_xfail(AUGI_PATH_IS_STALE),
-    ),
-    pytest.param(
-        [write("Hub.md", AUGI_HUB), delete("Hub.md")],
-        id="delete_augi_note",
-        marks=_xfail(AUGI_PATH_IS_STALE),
-    ),
+    pytest.param([write("Hub.md", AUGI_HUB), move("Hub.md", "sub/Hub.md")], id="move_augi_note"),
+    pytest.param([write("Hub.md", AUGI_HUB), delete("Hub.md")], id="delete_augi_note"),
     pytest.param(
         [
             write("Linker.md", "### 2022-01-02\nSee [[Hub]] and [[Later]].\n"),
@@ -462,3 +467,21 @@ class TestCheckGraphCli:
         assert result.exit_code == 1, result.output
         assert "links_to_missing" in result.output
         assert store.get_stats() == before
+
+
+class TestDeleteDocument:
+    def test_removes_entries_embeddings_and_fts(self, ingested: Path, store: SQLiteStore):
+        import numpy as np
+
+        store.ensure_vec_table(4)
+        entry = _entry(store, "Other.md")
+        store.update_embeddings({entry: np.ones(4, dtype=np.float32).tobytes()})
+        assert store.search_fts("Also")
+
+        (ingested / "Other.md").unlink()
+        run_layer0(ingested, store)
+
+        assert store.get_block(entry) is None
+        assert store.search_fts("Also") == []
+        vec = store.conn.execute("SELECT 1 FROM vec_blocks WHERE block_id = ?", (entry,))
+        assert vec.fetchone() is None
